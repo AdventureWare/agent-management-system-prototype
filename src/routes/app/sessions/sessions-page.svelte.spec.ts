@@ -75,15 +75,8 @@ function createRun(overrides: Partial<AgentRunDetail>): AgentRunDetail {
 }
 
 describe('/app/sessions/+page.svelte', () => {
-	it('shows the latest reply preview and lets you inspect older turns', async () => {
-		const initialRun = createRun({
-			id: 'run-initial',
-			prompt:
-				'Read the repository and implement a session detail inspector that preserves the full conversation context all the way through the last sentence without hiding the final clue for older turns.',
-			lastMessage:
-				'Initial response with the older run sentinel that should only be visible in the selected run detail after choosing the first turn.'
-		});
-		const followUpRun = createRun({
+	it('shows session previews and links each row to the dedicated detail page', async () => {
+		const run = createRun({
 			id: 'run-follow-up',
 			mode: 'message',
 			requestedThreadId: 'thread-1',
@@ -110,8 +103,8 @@ describe('/app/sessions/+page.svelte', () => {
 			statusSummary: 'Completed and ready for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
-			latestRun: followUpRun,
-			runs: [followUpRun, initialRun]
+			latestRun: run,
+			runs: [run]
 		};
 
 		render(Page, {
@@ -127,20 +120,97 @@ describe('/app/sessions/+page.svelte', () => {
 		await expect
 			.element(page.getByText('Last reply: Follow-up response from the agent.'))
 			.toBeVisible();
-		await expect.element(page.getByText('Refine the implementation and add coverage.')).toBeVisible();
-		await expect.element(page.getByText('Follow-up response from the agent.')).toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: /View details for Session detail inspector/i }))
+			.toHaveAttribute('href', '/app/sessions/session-1');
+		await expect
+			.element(page.getByRole('link', { name: /View details for Session detail inspector/i }))
+			.toHaveAttribute('data-sveltekit-reload', '');
+		await expect.element(page.getByRole('link', { name: 'View session' })).toBeVisible();
+	});
 
-		await page.getByRole('button', { name: /Turn 1/i }).click();
+	it('renders separate links for active and past sessions', async () => {
+		const activeRun = createRun({
+			id: 'run-active',
+			sessionId: 'session-active',
+			lastMessage: null,
+			state: {
+				status: 'running',
+				pid: 123,
+				startedAt: '2026-03-27T14:00:30.000Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: 'thread-active'
+			}
+		});
+		const activeSession: AgentSessionDetail = {
+			id: 'session-active',
+			name: 'Active session',
+			cwd: '/tmp/active-project',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4',
+			threadId: 'thread-active',
+			createdAt: '2026-03-27T14:00:00.000Z',
+			updatedAt: '2026-03-27T14:01:00.000Z',
+			status: 'running',
+			hasActiveRun: true,
+			canResume: false,
+			runCount: 1,
+			lastActivityAt: '2026-03-27T14:01:00.000Z',
+			lastActivityLabel: 'just now',
+			statusSummary: 'Codex is actively working right now.',
+			lastExitCode: null,
+			runTimeline: timeline,
+			latestRun: activeRun,
+			runs: [activeRun]
+		};
+
+		const completedRun = createRun({
+			id: 'run-completed',
+			sessionId: 'session-past',
+			lastMessage: 'Archived reply with the follow-up sentinel.'
+		});
+		const completedSession: AgentSessionDetail = {
+			id: 'session-past',
+			name: 'Past session',
+			cwd: '/tmp/past-project',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4',
+			threadId: 'thread-past',
+			createdAt: '2026-03-27T13:00:00.000Z',
+			updatedAt: '2026-03-27T13:10:00.000Z',
+			status: 'completed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-27T13:10:00.000Z',
+			lastActivityLabel: '50m ago',
+			statusSummary: 'Completed and ready for a follow-up instruction.',
+			lastExitCode: 0,
+			runTimeline: timeline,
+			latestRun: completedRun,
+			runs: [completedRun]
+		};
+
+		render(Page, {
+			data: {
+				sessions: [activeSession, completedSession],
+				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				folderOptions: [],
+				projects: []
+			} as never,
+			form: null as never
+		});
 
 		await expect
-			.element(page.getByText(/without hiding the final clue for older turns\./i))
-			.toBeVisible();
+			.element(page.getByRole('link', { name: /View details for Active session/i }))
+			.toHaveAttribute('href', '/app/sessions/session-active');
 		await expect
-			.element(
-				page.getByText(
-					/Initial response with the older run sentinel that should only be visible in the selected run detail after choosing the first turn\./i
-				)
-			)
-			.toBeVisible();
+			.element(page.getByRole('link', { name: /View details for Active session/i }))
+			.toHaveAttribute('data-sveltekit-reload', '');
+		await expect
+			.element(page.getByRole('link', { name: /View details for Past session/i }))
+			.toHaveAttribute('href', '/app/sessions/session-past');
 	});
 });
