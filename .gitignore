@@ -27,3 +27,4 @@ test-results
 # Runtime session artifacts
 data/agent-sessions/
 data
+agent_output/

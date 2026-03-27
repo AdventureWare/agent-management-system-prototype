@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { buildCodexArgs } from './agent-session-runner-args.mjs';
 
 const configPath = process.argv[2];
 
@@ -45,39 +46,6 @@ async function writeState(statePath, patch) {
 	};
 
 	await writeFile(statePath, JSON.stringify(next, null, 2));
-}
-
-function buildCodexArgs(config) {
-	const args = [];
-
-	if (config.mode === 'message') {
-		args.push('exec', 'resume', config.threadId, '--json', '--skip-git-repo-check');
-
-		if (config.model) {
-			args.push('-m', config.model);
-		}
-
-		args.push('-o', config.messagePath, config.prompt);
-		return args;
-	}
-
-	args.push(
-		'exec',
-		'--json',
-		'--skip-git-repo-check',
-		'-C',
-		config.cwd,
-		'--sandbox',
-		config.sandbox
-	);
-
-	if (config.model) {
-		args.push('-m', config.model);
-	}
-
-	args.push('-o', config.messagePath, config.prompt);
-
-	return args;
 }
 
 const config = JSON.parse(await readFile(configPath, 'utf8'));

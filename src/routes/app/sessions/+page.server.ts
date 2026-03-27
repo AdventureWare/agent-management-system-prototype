@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
+import { loadControlPlane } from '$lib/server/control-plane';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import {
 	cancelAgentSession,
@@ -13,12 +14,16 @@ import {
 
 export const load: PageServerLoad = async () => {
 	const sessions = await listAgentSessions();
+	const controlPlane = await loadControlPlane();
 
 	return {
 		sessions,
 		summary: summarizeAgentSessions(sessions),
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
-		folderOptions: await loadFolderPickerOptions()
+		folderOptions: await loadFolderPickerOptions(),
+		projects: [...controlPlane.projects]
+			.filter((project) => project.projectRootFolder)
+			.sort((a, b) => a.name.localeCompare(b.name))
 	};
 };
 

@@ -1,5 +1,82 @@
-import type { PageServerLoad } from './$types';
-import { loadControlPlane } from '$lib/server/control-plane';
+import { fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
+import {
+	PROVIDER_AUTH_MODE_OPTIONS,
+	PROVIDER_KIND_OPTIONS,
+	PROVIDER_SETUP_STATUS_OPTIONS
+} from '$lib/types/control-plane';
+import {
+	createProvider,
+	loadControlPlane,
+	parseProviderAuthMode,
+	parseProviderKind,
+	parseProviderSetupStatus,
+	updateControlPlane
+} from '$lib/server/control-plane';
+
+const starterProfiles = [
+	{
+		name: 'OpenAI Codex CLI',
+		service: 'OpenAI',
+		kind: 'local',
+		authMode: 'local_cli',
+		setupStatus: 'connected',
+		defaultModel: 'gpt-5.4',
+		launcher: 'codex',
+		description: 'Best for local repo work, terminal tasks, and file-aware execution.',
+		capabilities: ['repo edits', 'terminal', 'local files']
+	},
+	{
+		name: 'ChatGPT Workspace',
+		service: 'OpenAI',
+		kind: 'cloud',
+		authMode: 'oauth',
+		setupStatus: 'needs_setup',
+		defaultModel: '',
+		launcher: '',
+		description: 'Useful for higher-level planning, synthesis, and conversational review loops.',
+		capabilities: ['planning', 'review', 'writing']
+	},
+	{
+		name: 'Anthropic Claude',
+		service: 'Anthropic',
+		kind: 'api',
+		authMode: 'api_key',
+		setupStatus: 'planned',
+		defaultModel: '',
+		launcher: '',
+		description: 'Optional second provider when you want comparison or a fallback path.',
+		capabilities: ['reasoning', 'writing', 'fallback']
+	}
+] as const;
+
+function parseListField(value: FormDataEntryValue | null) {
+	return (
+		value
+			?.toString()
+			.split(',')
+			.map((item) => item.trim())
+			.filter(Boolean) ?? []
+	);
+}
+
+function readProviderForm(form: FormData) {
+	return {
+		name: form.get('name')?.toString().trim() ?? '',
+		service: form.get('service')?.toString().trim() ?? '',
+		kind: parseProviderKind(form.get('kind')?.toString() ?? '', 'cloud'),
+		description: form.get('description')?.toString().trim() ?? '',
+		enabled: form.get('enabled')?.toString() === 'on',
+		setupStatus: parseProviderSetupStatus(form.get('setupStatus')?.toString() ?? '', 'planned'),
+		authMode: parseProviderAuthMode(form.get('authMode')?.toString() ?? '', 'custom'),
+		defaultModel: form.get('defaultModel')?.toString().trim() ?? '',
+		baseUrl: form.get('baseUrl')?.toString().trim() ?? '',
+		launcher: form.get('launcher')?.toString().trim() ?? '',
+		envVars: parseListField(form.get('envVars')),
+		capabilities: parseListField(form.get('capabilities')),
+		notes: form.get('notes')?.toString().trim() ?? ''
+	};
+}
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
@@ -15,6 +92,68 @@ export const load: PageServerLoad = async () => {
 				...provider,
 				workerCount: workerCounts.get(provider.id) ?? 0
 			}))
-			.sort((a, b) => a.name.localeCompare(b.name))
+			.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)),
+		kindOptions: PROVIDER_KIND_OPTIONS,
+		setupStatusOptions: PROVIDER_SETUP_STATUS_OPTIONS,
+		authModeOptions: PROVIDER_AUTH_MODE_OPTIONS,
+		starterProfiles
 	};
+};
+
+export const actions: Actions = {
+	createProvider: async ({ request }) => {
+		const provider = readProviderForm(await request.formData());
+
+		if (!provider.name || !provider.service) {
+			return fail(400, { message: 'Provider name and service are required.' });
+		}
+
+		await updateControlPlane((data) => ({
+			...data,
+			providers: [createProvider(provider), ...data.providers]
+		}));
+
+		return { ok: true, successAction: 'createProvider' };
+	},
+
+	updateProvider: async ({ request }) => {
+		const form = await request.formData();
+		const providerId = form.get('providerId')?.toString().trim() ?? '';
+		const providerUpdates = readProviderForm(form);
+
+		if (!providerId) {
+			return fail(400, { message: 'Provider ID is required.' });
+		}
+
+		if (!providerUpdates.name || !providerUpdates.service) {
+			return fail(400, { message: 'Provider name and service are required.' });
+		}
+
+		let providerUpdated = false;
+
+		await updateControlPlane((data) => ({
+			...data,
+			providers: data.providers.map((provider) => {
+				if (provider.id !== providerId) {
+					return provider;
+				}
+
+				providerUpdated = true;
+				return {
+					...provider,
+					...providerUpdates
+				};
+			})
+		}));
+
+		if (!providerUpdated) {
+			return fail(404, { message: 'Provider not found.' });
+		}
+
+		return {
+			ok: true,
+			successAction: 'updateProvider',
+			providerId
+		};
+	}
 };

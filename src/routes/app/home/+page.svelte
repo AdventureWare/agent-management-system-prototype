@@ -77,6 +77,19 @@
 		}
 	}
 
+	function timelineCardClass(state: AgentTimelineStep['state']) {
+		switch (state) {
+			case 'complete':
+				return 'border-emerald-900/60 bg-emerald-950/20';
+			case 'current':
+				return 'border-sky-900/60 bg-sky-950/20';
+			case 'attention':
+				return 'border-rose-900/60 bg-rose-950/20';
+			default:
+				return 'border-slate-800 bg-slate-950/60';
+		}
+	}
+
 	$effect(() => {
 		if (!autoRefresh || activeSessions.length === 0) {
 			return;
@@ -95,10 +108,10 @@
 {#snippet timeline(session: AgentSessionDetail)}
 	<ol class="flex flex-col gap-2 lg:flex-row lg:items-start">
 		{#each session.runTimeline as step, index (step.key)}
-			<li class="flex min-w-0 flex-1 items-start gap-2">
+			<li class="flex min-w-0 flex-1 items-start gap-3 lg:basis-0">
 				<div class="flex min-w-0 flex-1 items-start gap-2">
-					<span class={`mt-1.5 h-2 w-2 rounded-full ${timelineDotClass(step.state)}`}></span>
-					<div class="min-w-0 flex-1">
+					<span class={`mt-1.5 h-2.5 w-2.5 rounded-full ${timelineDotClass(step.state)}`}></span>
+					<div class={`min-w-0 flex-1 rounded-lg border p-3 ${timelineCardClass(step.state)}`}>
 						<p class="text-xs font-medium text-white">{step.label}</p>
 						<p class="mt-0.5 text-[11px] text-slate-400">{step.detail}</p>
 					</div>
@@ -106,7 +119,7 @@
 
 				{#if index < session.runTimeline.length - 1}
 					<div
-						class={`mt-[0.65rem] hidden h-px flex-1 rounded-full lg:block ${timelineConnectorClass(step.state)}`}
+						class={`mt-5 hidden w-6 shrink-0 rounded-full lg:block lg:h-px xl:w-8 ${timelineConnectorClass(step.state)}`}
 					></div>
 				{/if}
 			</li>
@@ -392,7 +405,8 @@
 										</div>
 										<p class="mt-2 text-sm text-slate-300">{task.summary}</p>
 										<p class="mt-2 text-xs text-slate-500">
-											{task.goalName} · {task.assigneeName} · approval {task.approvalMode}
+											{task.projectName !== 'No project' ? task.projectName : task.goalName} · {task.assigneeName}
+											· approval {task.approvalMode}
 										</p>
 										{#if task.blockedReason}
 											<p class="mt-2 text-sm text-rose-200">{task.blockedReason}</p>

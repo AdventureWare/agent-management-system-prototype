@@ -9,6 +9,19 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 
+function readProjectForm(form: FormData) {
+	return {
+		name: form.get('name')?.toString().trim() ?? '',
+		summary: form.get('summary')?.toString().trim() ?? '',
+		lane: parseLane(form.get('lane')?.toString() ?? '', 'product'),
+		projectRootFolder: form.get('projectRootFolder')?.toString().trim() ?? '',
+		defaultArtifactRoot: form.get('defaultArtifactRoot')?.toString().trim() ?? '',
+		defaultRepoPath: form.get('defaultRepoPath')?.toString().trim() ?? '',
+		defaultRepoUrl: form.get('defaultRepoUrl')?.toString().trim() ?? '',
+		defaultBranch: form.get('defaultBranch')?.toString().trim() ?? ''
+	};
+}
+
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 
@@ -22,15 +35,16 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	createProject: async ({ request }) => {
 		const form = await request.formData();
-		const name = form.get('name')?.toString().trim() ?? '';
-		const summary = form.get('summary')?.toString().trim() ?? '';
-		const lane = parseLane(form.get('lane')?.toString() ?? '', 'product');
-		const defaultCoordinationFolder =
-			form.get('defaultCoordinationFolder')?.toString().trim() ?? '';
-		const defaultArtifactRoot = form.get('defaultArtifactRoot')?.toString().trim() ?? '';
-		const defaultRepoPath = form.get('defaultRepoPath')?.toString().trim() ?? '';
-		const defaultRepoUrl = form.get('defaultRepoUrl')?.toString().trim() ?? '';
-		const defaultBranch = form.get('defaultBranch')?.toString().trim() ?? '';
+		const {
+			name,
+			summary,
+			lane,
+			projectRootFolder,
+			defaultArtifactRoot,
+			defaultRepoPath,
+			defaultRepoUrl,
+			defaultBranch
+		} = readProjectForm(form);
 
 		if (!name || !summary) {
 			return fail(400, { message: 'Name and summary are required.' });
@@ -43,7 +57,7 @@ export const actions: Actions = {
 					name,
 					summary,
 					lane,
-					defaultCoordinationFolder,
+					projectRootFolder,
 					defaultArtifactRoot,
 					defaultRepoPath,
 					defaultRepoUrl,
@@ -53,6 +67,47 @@ export const actions: Actions = {
 			]
 		}));
 
-		return { ok: true };
+		return { ok: true, successAction: 'createProject' };
+	},
+
+	updateProject: async ({ request }) => {
+		const form = await request.formData();
+		const projectId = form.get('projectId')?.toString().trim() ?? '';
+		const projectUpdates = readProjectForm(form);
+
+		if (!projectId) {
+			return fail(400, { message: 'Project ID is required.' });
+		}
+
+		if (!projectUpdates.name || !projectUpdates.summary) {
+			return fail(400, { message: 'Name and summary are required.' });
+		}
+
+		let projectUpdated = false;
+
+		await updateControlPlane((data) => ({
+			...data,
+			projects: data.projects.map((project) => {
+				if (project.id !== projectId) {
+					return project;
+				}
+
+				projectUpdated = true;
+				return {
+					...project,
+					...projectUpdates
+				};
+			})
+		}));
+
+		if (!projectUpdated) {
+			return fail(404, { message: 'Project not found.' });
+		}
+
+		return {
+			ok: true,
+			successAction: 'updateProject',
+			projectId
+		};
 	}
 };

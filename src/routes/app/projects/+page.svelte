@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import PathField from '$lib/components/PathField.svelte';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
 
 	let { data, form } = $props();
-	let defaultCoordinationFolder = $state('');
+	let projectRootFolder = $state('');
 	let defaultArtifactRoot = $state('');
 	let defaultRepoPath = $state('');
 
@@ -10,39 +12,33 @@
 		data.projects.filter((project) => project.lane === 'product').length
 	);
 	let configuredFolderCount = $derived(
-		data.projects.filter(
-			(project) => project.defaultCoordinationFolder || project.defaultArtifactRoot
-		).length
+		data.projects.filter((project) => project.projectRootFolder || project.defaultArtifactRoot)
+			.length
 	);
 	let configuredRepoCount = $derived(
 		data.projects.filter((project) => project.defaultRepoPath || project.defaultRepoUrl).length
 	);
 	let defaultLane = $derived(data.laneOptions[0] ?? 'product');
+	let createSuccess = $derived(form?.ok && form?.successAction === 'createProject');
+	let updatedProjectId = $derived(
+		form?.successAction === 'updateProject' ? (form.projectId?.toString() ?? '') : ''
+	);
 	let projectsByLane = $derived.by(() =>
 		data.laneOptions.map((lane) => ({
 			lane,
 			projects: data.projects.filter((project) => project.lane === lane)
 		}))
 	);
-
-	function applyFolderSelection(event: Event, setValue: (value: string) => void) {
-		const value = (event.currentTarget as HTMLSelectElement).value;
-		if (value) {
-			setValue(value);
-		}
-	}
 </script>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
 	<div class="flex flex-col gap-3">
 		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Projects</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">
-			Default folders and repo context
-		</h1>
+		<h1 class="text-3xl font-semibold tracking-tight text-white">Project roots and repo context</h1>
 		<p class="max-w-3xl text-sm text-slate-300">
-			Projects are the durable config layer. Add a project once, then keep its default folders, repo
-			location, and branch choice in one place so future goals and tasks can inherit cleaner
-			starting context.
+			Projects are the durable config layer. Add a project once, then keep its root folder, repo
+			location, and branch choice in one place so future agent work can start from the right entry
+			point without retyping context.
 		</p>
 	</div>
 
@@ -61,7 +57,7 @@
 			</p>
 			<p class="mt-3 text-3xl font-semibold text-white">{configuredFolderCount}</p>
 			<p class="mt-2 text-sm text-slate-400">
-				Projects with a coordination folder or artifact root already defined.
+				Projects with a root folder or artifact root already defined.
 			</p>
 		</article>
 
@@ -82,11 +78,17 @@
 		</p>
 	{/if}
 
-	{#if form?.ok}
+	{#if createSuccess}
 		<p
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Project created and saved into the control plane.
+		</p>
+	{:else if form?.ok && form?.successAction === 'updateProject'}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Project updates saved.
 		</p>
 	{/if}
 
@@ -132,79 +134,44 @@
 			</label>
 
 			<div class="grid gap-4 lg:grid-cols-2">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">
-						Default coordination folder
-					</span>
-					<select
-						class="select mb-2 text-white"
-						onchange={(event) => {
-							applyFolderSelection(event, (value) => {
-								defaultCoordinationFolder = value;
-							});
-						}}
-					>
-						<option value="">Choose a project folder</option>
-						{#each data.folderOptions as option (option.path)}
-							<option value={option.path}>{option.label}</option>
-						{/each}
-					</select>
-					<input
-						bind:value={defaultCoordinationFolder}
-						class="input text-white placeholder:text-slate-500"
-						list="project-folder-path-options"
-						name="defaultCoordinationFolder"
-						placeholder="/absolute/path/to/coordination"
+				<div>
+					<PathField
+						bind:value={projectRootFolder}
+						createMode="folder"
+						helperText="Sets the default folder agents should enter for this project."
+						inputId="create-project-root-folder"
+						label="Project root folder"
+						name="projectRootFolder"
+						options={data.folderOptions}
+						placeholder="/absolute/path/to/project/root"
 					/>
-				</label>
+				</div>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Default artifact root</span>
-					<select
-						class="select mb-2 text-white"
-						onchange={(event) => {
-							applyFolderSelection(event, (value) => {
-								defaultArtifactRoot = value;
-							});
-						}}
-					>
-						<option value="">Choose a project folder</option>
-						{#each data.folderOptions as option (option.path)}
-							<option value={option.path}>{option.label}</option>
-						{/each}
-					</select>
-					<input
+				<div>
+					<PathField
 						bind:value={defaultArtifactRoot}
-						class="input text-white placeholder:text-slate-500"
-						list="project-folder-path-options"
+						createMode="folder"
+						helperText="Create this upfront if you want downstream work to reuse one artifact root."
+						inputId="create-default-artifact-root"
+						label="Default artifact root"
 						name="defaultArtifactRoot"
+						options={data.folderOptions}
 						placeholder="/absolute/path/to/project/artifacts"
 					/>
-				</label>
+				</div>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Default repo path</span>
-					<select
-						class="select mb-2 text-white"
-						onchange={(event) => {
-							applyFolderSelection(event, (value) => {
-								defaultRepoPath = value;
-							});
-						}}
-					>
-						<option value="">Choose a project folder</option>
-						{#each data.folderOptions as option (option.path)}
-							<option value={option.path}>{option.label}</option>
-						{/each}
-					</select>
-					<input
+				<div>
+					<PathField
 						bind:value={defaultRepoPath}
-						class="input text-white placeholder:text-slate-500"
-						list="project-folder-path-options"
+						createMode="folder"
+						helperText="Useful when the repo checkout folder does not exist yet."
+						inputId="create-default-repo-path"
+						label="Default repo path"
 						name="defaultRepoPath"
+						options={data.folderOptions}
 						placeholder="/absolute/path/to/local/checkout"
 					/>
-				</label>
+				</div>
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Default repo URL</span>
@@ -215,12 +182,6 @@
 					/>
 				</label>
 			</div>
-
-			<datalist id="project-folder-path-options">
-				{#each data.folderOptions as option (option.path)}
-					<option value={option.path}>{option.label}</option>
-				{/each}
-			</datalist>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Default branch</span>
@@ -242,7 +203,8 @@
 					<div>
 						<h2 class="text-xl font-semibold text-white">Configured projects</h2>
 						<p class="mt-1 text-sm text-slate-400">
-							Review defaults by lane before you spin up new goals or assign repo-scoped work.
+							Review defaults by lane before you spin up new agent sessions or assign repo-scoped
+							work.
 						</p>
 					</div>
 
@@ -266,56 +228,144 @@
 							{#if group.projects.length > 0}
 								<div class="space-y-3">
 									{#each group.projects as project (project.id)}
-										<article class="card border border-slate-800 bg-slate-900/60 p-4">
+										<form
+											class="space-y-4 card border border-slate-800 bg-slate-900/60 p-4"
+											method="POST"
+											action="?/updateProject"
+										>
+											<input name="projectId" type="hidden" value={project.id} />
+
 											<div class="flex flex-wrap items-start justify-between gap-3">
 												<div>
-													<h3 class="font-medium text-white">{project.name}</h3>
+													<div class="flex flex-wrap items-center gap-3">
+														<h3 class="font-medium text-white">{project.name}</h3>
+														<a
+															class="text-xs font-medium tracking-[0.18em] text-sky-300 uppercase transition hover:text-sky-200"
+															href={resolve(`/app/projects/${project.id}`)}
+														>
+															View details
+														</a>
+													</div>
 													<p class="mt-2 text-sm text-slate-300">{project.summary}</p>
 												</div>
-												<span
-													class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+												<div class="flex flex-wrap items-center gap-2">
+													{#if updatedProjectId === project.id}
+														<span
+															class="badge border border-emerald-900/70 bg-emerald-950/50 text-[0.7rem] tracking-[0.2em] text-emerald-200 uppercase"
+														>
+															Saved
+														</span>
+													{/if}
+													<span
+														class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+													>
+														{project.lane}
+													</span>
+												</div>
+											</div>
+
+											<div class="grid gap-4 lg:grid-cols-2">
+												<label class="block">
+													<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+													<input
+														class="input text-white placeholder:text-slate-500"
+														name="name"
+														required
+														value={project.name}
+													/>
+												</label>
+
+												<label class="block">
+													<span class="mb-2 block text-sm font-medium text-slate-200">Lane</span>
+													<select class="select text-white" name="lane">
+														{#each data.laneOptions as lane (lane)}
+															<option value={lane} selected={project.lane === lane}>{lane}</option>
+														{/each}
+													</select>
+												</label>
+											</div>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
+												<textarea
+													class="textarea min-h-28 text-white placeholder:text-slate-500"
+													name="summary"
+													placeholder="What this project covers and what defaults other work should inherit."
+													required>{project.summary}</textarea
 												>
-													{project.lane}
-												</span>
-											</div>
+											</label>
 
-											<div class="mt-4 grid gap-3 lg:grid-cols-2">
-												<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-													<p
-														class="text-[11px] font-medium tracking-[0.16em] text-slate-500 uppercase"
-													>
-														Default folders
-													</p>
-													<p class="mt-3 text-xs text-slate-400">Coordination</p>
-													<p class="mt-1 text-sm break-all text-white">
-														{project.defaultCoordinationFolder || 'Not set'}
-													</p>
-													<p class="mt-3 text-xs text-slate-400">Artifact root</p>
-													<p class="mt-1 text-sm break-all text-white">
-														{project.defaultArtifactRoot || 'Not set'}
-													</p>
+											<div class="grid gap-4 lg:grid-cols-2">
+												<div>
+													<PathField
+														createMode="folder"
+														helperText="Agents will start here when this project is selected later."
+														inputId={`project-root-folder-${project.id}`}
+														label="Project root folder"
+														name="projectRootFolder"
+														options={data.folderOptions}
+														placeholder="/absolute/path/to/project/root"
+														value={project.projectRootFolder}
+													/>
 												</div>
 
-												<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-													<p
-														class="text-[11px] font-medium tracking-[0.16em] text-slate-500 uppercase"
-													>
-														Repo defaults
-													</p>
-													<p class="mt-3 text-xs text-slate-400">Checkout path</p>
-													<p class="mt-1 text-sm break-all text-white">
-														{project.defaultRepoPath || 'Not set'}
-													</p>
-													<p class="mt-3 text-xs text-slate-400">Remote + branch</p>
-													<p class="mt-1 text-sm break-all text-white">
-														{project.defaultRepoUrl || 'Not set'}
-													</p>
-													<p class="mt-2 text-xs text-slate-400">
-														Branch: {project.defaultBranch || 'Not set'}
-													</p>
+												<div>
+													<PathField
+														createMode="folder"
+														helperText="Create the shared artifact folder if you want it reserved now."
+														inputId={`project-artifact-root-${project.id}`}
+														label="Default artifact root"
+														name="defaultArtifactRoot"
+														options={data.folderOptions}
+														placeholder="/absolute/path/to/project/artifacts"
+														value={project.defaultArtifactRoot}
+													/>
 												</div>
+
+												<div>
+													<PathField
+														createMode="folder"
+														helperText="Creates the checkout folder if the repo is not cloned yet."
+														inputId={`project-repo-path-${project.id}`}
+														label="Default repo path"
+														name="defaultRepoPath"
+														options={data.folderOptions}
+														placeholder="/absolute/path/to/local/checkout"
+														value={project.defaultRepoPath}
+													/>
+												</div>
+
+												<label class="block">
+													<span class="mb-2 block text-sm font-medium text-slate-200">
+														Default repo URL
+													</span>
+													<input
+														class="input text-white placeholder:text-slate-500"
+														name="defaultRepoUrl"
+														placeholder="git@github.com:org/repo.git"
+														value={project.defaultRepoUrl}
+													/>
+												</label>
 											</div>
-										</article>
+
+											<div class="flex flex-wrap items-end justify-between gap-3">
+												<label class="block w-full max-w-xs">
+													<span class="mb-2 block text-sm font-medium text-slate-200">
+														Default branch
+													</span>
+													<input
+														class="input text-white placeholder:text-slate-500"
+														name="defaultBranch"
+														placeholder="main"
+														value={project.defaultBranch}
+													/>
+												</label>
+
+												<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+													Save changes
+												</button>
+											</div>
+										</form>
 									{/each}
 								</div>
 							{:else}

@@ -2,8 +2,10 @@
 	import { resolve } from '$app/paths';
 	import {
 		ArrowLeftRightIcon,
+		CpuIcon,
 		FolderOpenIcon,
 		LayoutDashboardIcon,
+		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
 		XIcon
@@ -15,6 +17,8 @@
 	const links = [
 		{ label: 'Dashboard', href: '/app/home', icon: LayoutDashboardIcon },
 		{ label: 'Projects', href: '/app/projects', icon: FolderOpenIcon },
+		{ label: 'Tasks', href: '/app/tasks', icon: ListTodoIcon },
+		{ label: 'Providers', href: '/app/providers', icon: CpuIcon },
 		{ label: 'Remote Work', href: '/app/sessions', icon: MessagesSquareIcon }
 	] as const;
 

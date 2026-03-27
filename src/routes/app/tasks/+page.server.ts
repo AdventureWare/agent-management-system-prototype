@@ -1,52 +1,68 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import {
-	LANE_OPTIONS,
-	PRIORITY_OPTIONS,
-	TASK_APPROVAL_MODE_OPTIONS,
-	TASK_RISK_LEVEL_OPTIONS,
-	TASK_STATUS_OPTIONS
-} from '$lib/types/control-plane';
+import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createTask,
 	loadControlPlane,
-	parseLane,
-	parseTaskApprovalMode,
-	parseTaskRiskLevel,
-	parsePriority,
 	parseTaskStatus,
-	taskHasUnmetDependencies,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { startAgentSession } from '$lib/server/agent-sessions';
+
+function readTaskForm(form: FormData) {
+	return {
+		name: form.get('name')?.toString().trim() ?? '',
+		instructions: form.get('instructions')?.toString().trim() ?? '',
+		projectId: form.get('projectId')?.toString().trim() ?? '',
+		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? ''
+	};
+}
+
+function buildTaskSessionPrompt(input: {
+	taskName: string;
+	taskInstructions: string;
+	projectName: string;
+	projectRootFolder: string;
+	defaultArtifactRoot: string;
+}) {
+	const contextLines = [
+		`Task: ${input.taskName}`,
+		`Project: ${input.projectName}`,
+		`Project root: ${input.projectRootFolder}`
+	];
+
+	if (input.defaultArtifactRoot) {
+		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
+	}
+
+	return [
+		'You are executing a queued task from the agent management system.',
+		'',
+		...contextLines,
+		'',
+		'Instructions:',
+		input.taskInstructions,
+		'',
+		'Work from the project root, make the requested changes, and report progress and outcomes clearly.'
+	].join('\n');
+}
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
-	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
-	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
-	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 
 	return {
-		laneOptions: LANE_OPTIONS,
-		priorityOptions: PRIORITY_OPTIONS,
-		riskLevelOptions: TASK_RISK_LEVEL_OPTIONS,
-		approvalModeOptions: TASK_APPROVAL_MODE_OPTIONS,
 		statusOptions: TASK_STATUS_OPTIONS,
-		goals: [...data.goals].sort((a, b) => a.name.localeCompare(b.name)),
-		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
+		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		tasks: [...data.tasks]
 			.map((task) => ({
 				...task,
-				goalName: goalMap.get(task.goalId)?.name ?? 'Unknown goal',
-				roleName: roleMap.get(task.desiredRoleId)?.name ?? 'Unknown role',
+				projectName: projectMap.get(task.projectId)?.name ?? 'No project',
 				assigneeName: task.assigneeWorkerId
 					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
-					: 'Unassigned',
-				dependencyTaskNames: task.dependencyTaskIds.map(
-					(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
-				),
-				hasUnmetDependencies: taskHasUnmetDependencies(data, task)
+					: 'Unassigned'
 			}))
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 	};
@@ -55,93 +71,210 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	createTask: async ({ request }) => {
 		const form = await request.formData();
-		const title = form.get('title')?.toString().trim() ?? '';
-		const summary = form.get('summary')?.toString().trim() ?? '';
-		const artifactPath = form.get('artifactPath')?.toString().trim() ?? '';
-		const goalId = form.get('goalId')?.toString().trim() ?? '';
-		const desiredRoleId = form.get('desiredRoleId')?.toString().trim() ?? '';
-		const lane = parseLane(form.get('lane')?.toString() ?? '', 'product');
-		const priority = parsePriority(form.get('priority')?.toString() ?? '', 'medium');
-		const riskLevel = parseTaskRiskLevel(form.get('riskLevel')?.toString() ?? '', 'medium');
-		const approvalMode = parseTaskApprovalMode(form.get('approvalMode')?.toString() ?? '', 'none');
-		const requiresReview = form.get('requiresReview') === 'on';
-		const blockedReason = form.get('blockedReason')?.toString().trim() ?? '';
-		const dependencyTaskIds = form
-			.getAll('dependencyTaskIds')
-			.map((value) => value.toString().trim())
-			.filter(Boolean);
-		const assigneeWorkerId = form.get('assigneeWorkerId')?.toString().trim() || null;
+		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
 
-		if (!title || !summary || !artifactPath || !goalId || !desiredRoleId) {
+		if (!name || !instructions || !projectId) {
 			return fail(400, {
-				message: 'Title, summary, goal, desired role, and artifact path are required.'
+				message: 'Name, instructions, and project are required.'
 			});
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			tasks: [
-				createTask({
-					title,
-					summary,
-					artifactPath,
-					goalId,
-					desiredRoleId,
-					lane,
-					priority,
-					riskLevel,
-					approvalMode,
-					requiresReview,
-					blockedReason,
-					dependencyTaskIds,
-					assigneeWorkerId
-				}),
-				...data.tasks
-			]
-		}));
+		const current = await loadControlPlane();
+		const project = current.projects.find((candidate) => candidate.id === projectId);
+		const assigneeWorker = assigneeWorkerId
+			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+			: null;
 
-		return { ok: true };
+		if (!project) {
+			return fail(400, { message: 'Project not found.' });
+		}
+
+		if (assigneeWorkerId && !assigneeWorker) {
+			return fail(400, { message: 'Worker not found.' });
+		}
+
+		const coordinatorRoleId =
+			current.roles.find((role) => role.id === 'role_coordinator')?.id ??
+			current.roles[0]?.id ??
+			'';
+
+		await updateControlPlane((data) => {
+			return {
+				...data,
+				tasks: [
+					createTask({
+						title: name,
+						summary: instructions,
+						projectId: project.id,
+						lane: project.lane,
+						goalId: '',
+						priority: 'medium',
+						riskLevel: 'medium',
+						approvalMode: 'none',
+						requiresReview: true,
+						desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
+						assigneeWorkerId: assigneeWorker?.id ?? null,
+						artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
+					}),
+					...data.tasks
+				]
+			};
+		});
+
+		return { ok: true, successAction: 'createTask' };
 	},
 
 	updateTask: async ({ request }) => {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
-		const riskLevel = parseTaskRiskLevel(form.get('riskLevel')?.toString() ?? '', 'medium');
-		const approvalMode = parseTaskApprovalMode(form.get('approvalMode')?.toString() ?? '', 'none');
-		const requiresReview = form.get('requiresReview') === 'on';
-		const blockedReason = form.get('blockedReason')?.toString().trim() ?? '';
-		const dependencyTaskIds = form
-			.getAll('dependencyTaskIds')
-			.map((value) => value.toString().trim())
-			.filter(Boolean);
-		const assigneeWorkerId = form.get('assigneeWorkerId')?.toString().trim() || null;
+		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
 		}
 
+		if (!name || !instructions || !projectId) {
+			return fail(400, {
+				message: 'Name, instructions, and project are required.'
+			});
+		}
+
+		let taskUpdated = false;
+
+		const current = await loadControlPlane();
+		const project = current.projects.find((candidate) => candidate.id === projectId);
+		const assigneeWorker = assigneeWorkerId
+			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+			: null;
+
+		if (!project) {
+			return fail(400, { message: 'Project not found.' });
+		}
+
+		if (assigneeWorkerId && !assigneeWorker) {
+			return fail(400, { message: 'Worker not found.' });
+		}
+
+		await updateControlPlane((data) => {
+			return {
+				...data,
+				tasks: data.tasks.map((task) => {
+					if (task.id !== taskId) {
+						return task;
+					}
+
+					taskUpdated = true;
+
+					return {
+						...task,
+						title: name,
+						summary: instructions,
+						projectId: project.id,
+						lane: project.lane,
+						status,
+						assigneeWorkerId: assigneeWorker?.id ?? null,
+						desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
+						artifactPath:
+							task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
+						updatedAt: new Date().toISOString()
+					};
+				})
+			};
+		});
+
+		if (!taskUpdated) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		return {
+			ok: true,
+			successAction: 'updateTask',
+			taskId
+		};
+	},
+
+	launchTaskSession: async ({ request }) => {
+		const form = await request.formData();
+		const taskId = form.get('taskId')?.toString().trim() ?? '';
+		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
+
+		if (!taskId) {
+			return fail(400, { message: 'Task ID is required.' });
+		}
+
+		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === taskId);
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		const effectiveName = name || task.title;
+		const effectiveInstructions = instructions || task.summary;
+		const effectiveProjectId = projectId || task.projectId;
+		const assigneeWorker = assigneeWorkerId
+			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+			: null;
+		const project = current.projects.find((candidate) => candidate.id === effectiveProjectId);
+
+		if (!project) {
+			return fail(400, { message: 'Task project not found.' });
+		}
+
+		if (assigneeWorkerId && !assigneeWorker) {
+			return fail(400, { message: 'Worker not found.' });
+		}
+
+		if (!project.projectRootFolder) {
+			return fail(400, {
+				message: 'This task cannot launch a session until its project has a root folder.'
+			});
+		}
+
+		const session = await startAgentSession({
+			name: `Task: ${effectiveName}`,
+			cwd: project.projectRootFolder,
+			prompt: buildTaskSessionPrompt({
+				taskName: effectiveName,
+				taskInstructions: effectiveInstructions,
+				projectName: project.name,
+				projectRootFolder: project.projectRootFolder,
+				defaultArtifactRoot: project.defaultArtifactRoot
+			}),
+			sandbox: 'workspace-write',
+			model: null
+		});
+
 		await updateControlPlane((data) => ({
 			...data,
-			tasks: data.tasks.map((task) =>
-				task.id === taskId
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === taskId
 					? {
-							...task,
-							status,
-							riskLevel,
-							approvalMode,
-							requiresReview,
-							assigneeWorkerId,
-							blockedReason,
-							dependencyTaskIds: dependencyTaskIds.filter(
-								(dependencyTaskId) => dependencyTaskId !== taskId
-							),
+							...candidate,
+							title: effectiveName,
+							summary: effectiveInstructions,
+							projectId: project.id,
+							lane: project.lane,
+							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
+							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
+							artifactPath:
+								candidate.artifactPath ||
+								project.defaultArtifactRoot ||
+								project.projectRootFolder ||
+								'',
+							status: 'running',
 							updatedAt: new Date().toISOString()
 						}
-					: task
+					: candidate
 			)
 		}));
 
-		return { ok: true };
+		return {
+			ok: true,
+			successAction: 'launchTaskSession',
+			taskId,
+			sessionId: session.sessionId
+		};
 	}
 };

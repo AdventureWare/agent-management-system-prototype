@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
 import {
 	createGoal,
@@ -15,7 +16,8 @@ export const load: PageServerLoad = async () => {
 	return {
 		goals: [...data.goals].sort((a, b) => a.name.localeCompare(b.name)),
 		laneOptions: LANE_OPTIONS,
-		statusOptions: GOAL_STATUS_OPTIONS
+		statusOptions: GOAL_STATUS_OPTIONS,
+		folderOptions: await loadFolderPickerOptions()
 	};
 };
 

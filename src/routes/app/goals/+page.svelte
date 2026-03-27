@@ -1,7 +1,9 @@
 <script lang="ts">
+	import PathField from '$lib/components/PathField.svelte';
 	import { Progress, Tabs } from '@skeletonlabs/skeleton-svelte';
 
 	let { data, form } = $props();
+	let artifactPath = $state('');
 
 	let activeGoalCount = $derived(data.goals.filter((goal) => goal.status !== 'done').length);
 	let defaultStatus = $derived(data.statusOptions[0] ?? '');
@@ -111,15 +113,19 @@
 				></textarea>
 			</label>
 
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Artifact path</span>
-				<input
-					class="input text-white placeholder:text-slate-500"
+			<div>
+				<PathField
+					bind:value={artifactPath}
+					createMode="folder"
+					helperText="Creates the goal folder if you are defining a new effort workspace."
+					inputId="create-goal-artifact-path"
+					label="Artifact path"
 					name="artifactPath"
+					options={data.folderOptions}
 					placeholder="/absolute/path/to/coordination/or/growth/folder"
 					required
 				/>
-			</label>
+			</div>
 
 			<button class="btn preset-filled-primary-500 font-semibold" type="submit">
 				Create goal

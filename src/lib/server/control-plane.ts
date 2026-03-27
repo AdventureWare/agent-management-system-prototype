@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto';
 import {
 	GOAL_STATUS_OPTIONS,
 	LANE_OPTIONS,
+	PROVIDER_AUTH_MODE_OPTIONS,
+	PROVIDER_KIND_OPTIONS,
+	PROVIDER_SETUP_STATUS_OPTIONS,
 	PRIORITY_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
@@ -14,6 +17,10 @@ import {
 	type Goal,
 	type GoalStatus,
 	type Lane,
+	type Provider,
+	type ProviderAuthMode,
+	type ProviderKind,
+	type ProviderSetupStatus,
 	type Project,
 	type Priority,
 	type TaskApprovalMode,
@@ -59,6 +66,18 @@ function isWorkerLocation(value: string): value is WorkerLocation {
 	return WORKER_LOCATION_OPTIONS.includes(value as WorkerLocation);
 }
 
+function isProviderKind(value: string): value is ProviderKind {
+	return PROVIDER_KIND_OPTIONS.includes(value as ProviderKind);
+}
+
+function isProviderSetupStatus(value: string): value is ProviderSetupStatus {
+	return PROVIDER_SETUP_STATUS_OPTIONS.includes(value as ProviderSetupStatus);
+}
+
+function isProviderAuthMode(value: string): value is ProviderAuthMode {
+	return PROVIDER_AUTH_MODE_OPTIONS.includes(value as ProviderAuthMode);
+}
+
 function defaultData(): ControlPlaneData {
 	return {
 		providers: [],
@@ -70,35 +89,223 @@ function defaultData(): ControlPlaneData {
 	};
 }
 
-function normalizeProject(project: Project): Project {
+type LegacyProject = Project & {
+	defaultCoordinationFolder?: unknown;
+	projectRootFolder?: unknown;
+};
+
+type LegacyProvider = Partial<Provider> & {
+	service?: unknown;
+	kind?: unknown;
+	description?: unknown;
+	enabled?: unknown;
+	setupStatus?: unknown;
+	authMode?: unknown;
+	defaultModel?: unknown;
+	baseUrl?: unknown;
+	launcher?: unknown;
+	envVars?: unknown;
+	capabilities?: unknown;
+	notes?: unknown;
+};
+
+type LegacyTask = Partial<Task> & {
+	projectId?: unknown;
+};
+
+function inferProviderService(provider: LegacyProvider) {
+	const haystack = `${provider.id ?? ''} ${provider.name ?? ''} ${provider.description ?? ''}`
+		.toLowerCase()
+		.trim();
+
+	if (haystack.includes('openai') || haystack.includes('codex') || haystack.includes('chatgpt')) {
+		return 'OpenAI';
+	}
+
+	if (haystack.includes('anthropic') || haystack.includes('claude')) {
+		return 'Anthropic';
+	}
+
+	if (haystack.includes('google') || haystack.includes('gemini')) {
+		return 'Google';
+	}
+
+	return 'Custom';
+}
+
+function inferProviderAuthMode(provider: LegacyProvider, kind: ProviderKind): ProviderAuthMode {
+	const haystack = `${provider.id ?? ''} ${provider.name ?? ''}`.toLowerCase();
+
+	if (haystack.includes('codex') && kind === 'local') {
+		return 'local_cli';
+	}
+
+	if (haystack.includes('chatgpt')) {
+		return 'oauth';
+	}
+
+	if (kind === 'api') {
+		return 'api_key';
+	}
+
+	return 'custom';
+}
+
+function normalizeProviderList(value: unknown) {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.filter(
+			(candidate): candidate is string =>
+				typeof candidate === 'string' && candidate.trim().length > 0
+		)
+		.map((candidate) => candidate.trim());
+}
+
+function normalizeProvider(provider: LegacyProvider): Provider {
+	const providerKindValue = typeof provider.kind === 'string' ? provider.kind : '';
+	const kind: ProviderKind = isProviderKind(providerKindValue) ? providerKindValue : 'cloud';
+	const providerAuthModeValue = typeof provider.authMode === 'string' ? provider.authMode : '';
+	const authMode: ProviderAuthMode = isProviderAuthMode(providerAuthModeValue)
+		? providerAuthModeValue
+		: inferProviderAuthMode(provider, kind);
+	const providerSetupStatusValue =
+		typeof provider.setupStatus === 'string' ? provider.setupStatus : '';
+	const setupStatus: ProviderSetupStatus = isProviderSetupStatus(providerSetupStatusValue)
+		? providerSetupStatusValue
+		: 'connected';
+
 	return {
-		...project,
-		lane: isLane(project.lane) ? project.lane : 'product',
-		summary: typeof project.summary === 'string' ? project.summary : '',
-		defaultCoordinationFolder:
-			typeof project.defaultCoordinationFolder === 'string'
-				? project.defaultCoordinationFolder
-				: '',
-		defaultArtifactRoot:
-			typeof project.defaultArtifactRoot === 'string' ? project.defaultArtifactRoot : '',
-		defaultRepoPath: typeof project.defaultRepoPath === 'string' ? project.defaultRepoPath : '',
-		defaultRepoUrl: typeof project.defaultRepoUrl === 'string' ? project.defaultRepoUrl : '',
-		defaultBranch: typeof project.defaultBranch === 'string' ? project.defaultBranch : ''
+		id: typeof provider.id === 'string' ? provider.id : createProviderId(),
+		name: typeof provider.name === 'string' ? provider.name : '',
+		service:
+			typeof provider.service === 'string' && provider.service.trim()
+				? provider.service
+				: inferProviderService(provider),
+		kind,
+		description: typeof provider.description === 'string' ? provider.description : '',
+		enabled: typeof provider.enabled === 'boolean' ? provider.enabled : true,
+		setupStatus,
+		authMode,
+		defaultModel: typeof provider.defaultModel === 'string' ? provider.defaultModel : '',
+		baseUrl: typeof provider.baseUrl === 'string' ? provider.baseUrl : '',
+		launcher:
+			typeof provider.launcher === 'string'
+				? provider.launcher
+				: authMode === 'local_cli' && typeof provider.name === 'string'
+					? provider.name.toLowerCase().includes('codex')
+						? 'codex'
+						: ''
+					: '',
+		envVars: normalizeProviderList(provider.envVars),
+		capabilities: normalizeProviderList(provider.capabilities),
+		notes: typeof provider.notes === 'string' ? provider.notes : ''
 	};
 }
 
-function normalizeTask(task: Task): Task {
+function normalizeProject(
+	project: Partial<Project> & { defaultCoordinationFolder?: unknown }
+): Project {
+	const legacyProject = project as LegacyProject;
+
 	return {
-		...task,
-		riskLevel: isTaskRiskLevel(task.riskLevel) ? task.riskLevel : 'medium',
-		approvalMode: isTaskApprovalMode(task.approvalMode) ? task.approvalMode : 'none',
+		id: typeof legacyProject.id === 'string' ? legacyProject.id : createProjectId(),
+		name: typeof legacyProject.name === 'string' ? legacyProject.name : '',
+		lane: isLane(legacyProject.lane) ? legacyProject.lane : 'product',
+		summary: typeof legacyProject.summary === 'string' ? legacyProject.summary : '',
+		projectRootFolder:
+			typeof legacyProject.projectRootFolder === 'string'
+				? legacyProject.projectRootFolder
+				: typeof legacyProject.defaultCoordinationFolder === 'string'
+					? legacyProject.defaultCoordinationFolder
+					: '',
+		defaultArtifactRoot:
+			typeof legacyProject.defaultArtifactRoot === 'string'
+				? legacyProject.defaultArtifactRoot
+				: '',
+		defaultRepoPath:
+			typeof legacyProject.defaultRepoPath === 'string' ? legacyProject.defaultRepoPath : '',
+		defaultRepoUrl:
+			typeof legacyProject.defaultRepoUrl === 'string' ? legacyProject.defaultRepoUrl : '',
+		defaultBranch:
+			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : ''
+	};
+}
+
+function inferTaskProjectId(task: LegacyTask, projects: Project[]) {
+	if (typeof task.projectId === 'string' && task.projectId.trim()) {
+		return task.projectId;
+	}
+
+	const artifactPath = typeof task.artifactPath === 'string' ? task.artifactPath : '';
+
+	if (!artifactPath) {
+		return '';
+	}
+
+	const matches = projects
+		.flatMap((project) =>
+			[project.projectRootFolder, project.defaultArtifactRoot, project.defaultRepoPath]
+				.filter((candidate) => candidate && artifactPath.startsWith(candidate))
+				.map((candidate) => ({
+					projectId: project.id,
+					matchLength: candidate.length
+				}))
+		)
+		.sort((a, b) => b.matchLength - a.matchLength);
+
+	return matches[0]?.projectId ?? '';
+}
+
+function normalizeTask(task: LegacyTask, projects: Project[]): Task {
+	const laneValue = task.lane;
+	const priorityValue = task.priority;
+	const statusValue = task.status;
+	const riskLevelValue = task.riskLevel;
+	const approvalModeValue = task.approvalMode;
+
+	const lane: Lane = typeof laneValue === 'string' && isLane(laneValue) ? laneValue : 'product';
+	const priority: Priority =
+		typeof priorityValue === 'string' && isPriority(priorityValue) ? priorityValue : 'medium';
+	const status: TaskStatus =
+		typeof statusValue === 'string' && isTaskStatus(statusValue) ? statusValue : 'ready';
+	const riskLevel: TaskRiskLevel =
+		typeof riskLevelValue === 'string' && isTaskRiskLevel(riskLevelValue)
+			? riskLevelValue
+			: 'medium';
+	const approvalMode: TaskApprovalMode =
+		typeof approvalModeValue === 'string' && isTaskApprovalMode(approvalModeValue)
+			? approvalModeValue
+			: 'none';
+
+	return {
+		id: typeof task.id === 'string' ? task.id : createTaskId(),
+		title: typeof task.title === 'string' ? task.title : '',
+		summary: typeof task.summary === 'string' ? task.summary : '',
+		projectId: inferTaskProjectId(task, projects),
+		lane,
+		goalId: typeof task.goalId === 'string' ? task.goalId : '',
+		priority,
+		status,
+		riskLevel,
+		approvalMode,
 		requiresReview: typeof task.requiresReview === 'boolean' ? task.requiresReview : true,
+		desiredRoleId: typeof task.desiredRoleId === 'string' ? task.desiredRoleId : '',
+		assigneeWorkerId:
+			typeof task.assigneeWorkerId === 'string' && task.assigneeWorkerId.trim()
+				? task.assigneeWorkerId
+				: null,
 		blockedReason: typeof task.blockedReason === 'string' ? task.blockedReason : '',
 		dependencyTaskIds: Array.isArray(task.dependencyTaskIds)
 			? task.dependencyTaskIds.filter(
 					(candidate) => typeof candidate === 'string' && candidate.trim()
 				)
-			: []
+			: [],
+		artifactPath: typeof task.artifactPath === 'string' ? task.artifactPath : '',
+		createdAt: typeof task.createdAt === 'string' ? task.createdAt : new Date().toISOString(),
+		updatedAt: typeof task.updatedAt === 'string' ? task.updatedAt : new Date().toISOString()
 	};
 }
 
@@ -117,16 +324,21 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 
 	try {
 		const parsed = JSON.parse(raw) as Partial<ControlPlaneData>;
+		const providers = Array.isArray(parsed.providers)
+			? parsed.providers.map((provider) => normalizeProvider(provider as LegacyProvider))
+			: [];
+		const projects = Array.isArray(parsed.projects)
+			? parsed.projects.map((project) => normalizeProject(project as Project))
+			: [];
+
 		return {
-			providers: Array.isArray(parsed.providers) ? parsed.providers : [],
+			providers,
 			roles: Array.isArray(parsed.roles) ? parsed.roles : [],
-			projects: Array.isArray(parsed.projects)
-				? parsed.projects.map((project) => normalizeProject(project as Project))
-				: [],
+			projects,
 			goals: Array.isArray(parsed.goals) ? parsed.goals : [],
 			workers: Array.isArray(parsed.workers) ? parsed.workers : [],
 			tasks: Array.isArray(parsed.tasks)
-				? parsed.tasks.map((task) => normalizeTask(task as Task))
+				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects))
 				: []
 		};
 	} catch {
@@ -196,6 +408,10 @@ export function createGoalId() {
 	return `goal_${randomUUID()}`;
 }
 
+export function createProviderId() {
+	return `provider_${randomUUID()}`;
+}
+
 export function createProjectId() {
 	return `project_${randomUUID()}`;
 }
@@ -240,6 +456,54 @@ export function parseWorkerLocation(value: string, fallback: WorkerLocation): Wo
 	return isWorkerLocation(value) ? value : fallback;
 }
 
+export function parseProviderKind(value: string, fallback: ProviderKind): ProviderKind {
+	return isProviderKind(value) ? value : fallback;
+}
+
+export function parseProviderSetupStatus(
+	value: string,
+	fallback: ProviderSetupStatus
+): ProviderSetupStatus {
+	return isProviderSetupStatus(value) ? value : fallback;
+}
+
+export function parseProviderAuthMode(value: string, fallback: ProviderAuthMode): ProviderAuthMode {
+	return isProviderAuthMode(value) ? value : fallback;
+}
+
+export function createProvider(input: {
+	name: string;
+	service: string;
+	kind: ProviderKind;
+	description: string;
+	enabled: boolean;
+	setupStatus: ProviderSetupStatus;
+	authMode: ProviderAuthMode;
+	defaultModel?: string;
+	baseUrl?: string;
+	launcher?: string;
+	envVars?: string[];
+	capabilities?: string[];
+	notes?: string;
+}): Provider {
+	return {
+		id: createProviderId(),
+		name: input.name,
+		service: input.service,
+		kind: input.kind,
+		description: input.description,
+		enabled: input.enabled,
+		setupStatus: input.setupStatus,
+		authMode: input.authMode,
+		defaultModel: input.defaultModel ?? '',
+		baseUrl: input.baseUrl ?? '',
+		launcher: input.launcher ?? '',
+		envVars: input.envVars ?? [],
+		capabilities: input.capabilities ?? [],
+		notes: input.notes ?? ''
+	};
+}
+
 export function createGoal(input: {
 	name: string;
 	summary: string;
@@ -261,7 +525,7 @@ export function createProject(input: {
 	name: string;
 	summary: string;
 	lane: Lane;
-	defaultCoordinationFolder?: string;
+	projectRootFolder?: string;
 	defaultArtifactRoot?: string;
 	defaultRepoPath?: string;
 	defaultRepoUrl?: string;
@@ -272,7 +536,7 @@ export function createProject(input: {
 		name: input.name,
 		summary: input.summary,
 		lane: input.lane,
-		defaultCoordinationFolder: input.defaultCoordinationFolder ?? '',
+		projectRootFolder: input.projectRootFolder ?? '',
 		defaultArtifactRoot: input.defaultArtifactRoot ?? '',
 		defaultRepoPath: input.defaultRepoPath ?? '',
 		defaultRepoUrl: input.defaultRepoUrl ?? '',
@@ -280,9 +544,31 @@ export function createProject(input: {
 	};
 }
 
+export function projectMatchesPath(project: Project, path: string) {
+	if (!path) {
+		return false;
+	}
+
+	const projectPaths = [
+		project.projectRootFolder,
+		project.defaultArtifactRoot,
+		project.defaultRepoPath
+	].filter((candidate): candidate is string => Boolean(candidate));
+
+	return projectPaths.some((projectPath) => {
+		if (path === projectPath) {
+			return true;
+		}
+
+		const prefix = projectPath.endsWith('/') ? projectPath : `${projectPath}/`;
+		return path.startsWith(prefix);
+	});
+}
+
 export function createTask(input: {
 	title: string;
 	summary: string;
+	projectId: string;
 	lane: Lane;
 	goalId: string;
 	priority: Priority;
@@ -302,6 +588,7 @@ export function createTask(input: {
 		id: createTaskId(),
 		title: input.title,
 		summary: input.summary,
+		projectId: input.projectId,
 		lane: input.lane,
 		goalId: input.goalId,
 		priority: input.priority,

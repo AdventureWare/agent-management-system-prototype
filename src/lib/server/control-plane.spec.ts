@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createProvider,
 	createProject,
 	createTask,
+	projectMatchesPath,
 	summarizeControlPlane,
 	taskHasUnmetDependencies
 } from './control-plane';
@@ -19,6 +21,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'task_done',
 				title: 'Done task',
 				summary: 'finished dependency',
+				projectId: 'project_1',
 				lane: 'product',
 				goalId: 'goal_1',
 				priority: 'medium',
@@ -38,6 +41,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'task_review',
 				title: 'Review task',
 				summary: 'needs review',
+				projectId: 'project_1',
 				lane: 'product',
 				goalId: 'goal_1',
 				priority: 'high',
@@ -57,6 +61,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'task_waiting',
 				title: 'Waiting task',
 				summary: 'dependency is not done',
+				projectId: 'project_2',
 				lane: 'growth',
 				goalId: 'goal_2',
 				priority: 'urgent',
@@ -81,6 +86,7 @@ describe('control-plane helpers', () => {
 		const task = createTask({
 			title: 'Governed task',
 			summary: 'has review and approval settings',
+			projectId: 'project_1',
 			lane: 'ops',
 			goalId: 'goal_1',
 			priority: 'high',
@@ -126,10 +132,50 @@ describe('control-plane helpers', () => {
 		});
 
 		expect(project.id).toMatch(/^project_/);
-		expect(project.defaultCoordinationFolder).toBe('');
+		expect(project.projectRootFolder).toBe('');
 		expect(project.defaultArtifactRoot).toBe('');
 		expect(project.defaultRepoPath).toBe('');
 		expect(project.defaultRepoUrl).toBe('');
 		expect(project.defaultBranch).toBe('');
+	});
+
+	it('matches project paths against configured roots with path boundaries', () => {
+		const project = createProject({
+			name: 'Prototype',
+			summary: 'holds reusable paths and repo defaults',
+			lane: 'product',
+			projectRootFolder: '/tmp/prototype',
+			defaultArtifactRoot: '/tmp/prototype/agent_output',
+			defaultRepoPath: '/tmp/checkouts/prototype'
+		});
+
+		expect(projectMatchesPath(project, '/tmp/prototype')).toBe(true);
+		expect(projectMatchesPath(project, '/tmp/prototype/docs/brief.md')).toBe(true);
+		expect(projectMatchesPath(project, '/tmp/prototype-app')).toBe(false);
+		expect(projectMatchesPath(project, '/tmp/checkouts/prototype/src')).toBe(true);
+		expect(projectMatchesPath(project, '/tmp/unrelated/output')).toBe(false);
+	});
+
+	it('creates providers with configurable setup defaults', () => {
+		const provider = createProvider({
+			name: 'OpenAI Codex CLI',
+			service: 'OpenAI',
+			kind: 'local',
+			description: 'Local repo-aware coding surface',
+			enabled: true,
+			setupStatus: 'connected',
+			authMode: 'local_cli',
+			defaultModel: 'gpt-5.4',
+			launcher: 'codex',
+			envVars: ['OPENAI_API_KEY'],
+			capabilities: ['repo edits', 'terminal'],
+			notes: 'Primary local coding path'
+		});
+
+		expect(provider.id).toMatch(/^provider_/);
+		expect(provider.enabled).toBe(true);
+		expect(provider.authMode).toBe('local_cli');
+		expect(provider.envVars).toEqual(['OPENAI_API_KEY']);
+		expect(provider.capabilities).toEqual(['repo edits', 'terminal']);
 	});
 });
