@@ -1,0 +1,10 @@
+I do not have write access right now. The session is in `read-only` sandbox mode, so I can inspect files but not modify them.
+
+To let me implement it, switch the session sandbox to `workspace-write` and send the same request again. In most setups that means either:
+1. Start a new Codex session with filesystem mode set to `workspace-write`, or
+2. Change the current session/tool setting from `read-only` to `workspace-write` if your client supports live reconfiguration.
+
+Once that is enabled, send:
+`Add folder picker/select support to the Projects page using the same folder-options pattern as Sessions`
+
+and I’ll make the change directly.

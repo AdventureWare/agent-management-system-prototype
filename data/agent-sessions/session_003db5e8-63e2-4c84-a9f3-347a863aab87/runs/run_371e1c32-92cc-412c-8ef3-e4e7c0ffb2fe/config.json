@@ -1,0 +1,14 @@
+{
+	"codexBin": "codex",
+	"sessionId": "session_003db5e8-63e2-4c84-a9f3-347a863aab87",
+	"runId": "run_371e1c32-92cc-412c-8ef3-e4e7c0ffb2fe",
+	"mode": "start",
+	"cwd": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype",
+	"sandbox": "read-only",
+	"model": null,
+	"prompt": "Inspect the project and analyze it, give me your findings",
+	"threadId": null,
+	"logPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_003db5e8-63e2-4c84-a9f3-347a863aab87/runs/run_371e1c32-92cc-412c-8ef3-e4e7c0ffb2fe/codex.log",
+	"statePath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_003db5e8-63e2-4c84-a9f3-347a863aab87/runs/run_371e1c32-92cc-412c-8ef3-e4e7c0ffb2fe/state.json",
+	"messagePath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_003db5e8-63e2-4c84-a9f3-347a863aab87/runs/run_371e1c32-92cc-412c-8ef3-e4e7c0ffb2fe/last-message.txt"
+}

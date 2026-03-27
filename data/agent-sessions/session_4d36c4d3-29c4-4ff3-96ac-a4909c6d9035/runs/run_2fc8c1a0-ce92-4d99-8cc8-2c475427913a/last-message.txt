@@ -1,0 +1,7 @@
+Added the Sessions-style folder picker flow to Projects.
+
+`[projects +page.svelte](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src/routes/app/projects/+page.svelte)` now has bound state for `defaultCoordinationFolder`, `defaultArtifactRoot`, and `defaultRepoPath`, plus a select above each field that copies a chosen folder into the input. Those three inputs also share a datalist, matching the Sessions pattern.
+
+I pulled the folder discovery logic into `[folder-options.ts](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src/lib/server/folder-options.ts)` and switched both `[sessions +page.server.ts](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src/routes/app/sessions/+page.server.ts)` and `[projects +page.server.ts](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src/routes/app/projects/+page.server.ts)` to use it, so the folder list stays consistent across both pages. I also added coverage in `[folder-options.spec.ts](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src/lib/server/folder-options.spec.ts)`.
+
+Verification: `npm run check` passed, and `npm run test:unit -- --run src/lib/server/folder-options.spec.ts src/lib/server/control-plane.spec.ts` passed.

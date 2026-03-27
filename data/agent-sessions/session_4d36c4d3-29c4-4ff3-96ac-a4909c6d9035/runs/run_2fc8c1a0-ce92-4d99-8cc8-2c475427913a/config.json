@@ -1,0 +1,14 @@
+{
+  "codexBin": "codex",
+  "sessionId": "session_4d36c4d3-29c4-4ff3-96ac-a4909c6d9035",
+  "runId": "run_2fc8c1a0-ce92-4d99-8cc8-2c475427913a",
+  "mode": "start",
+  "cwd": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype",
+  "sandbox": "workspace-write",
+  "model": null,
+  "prompt": "`Add folder picker/select support to the Projects page using the same folder-options pattern as Sessions`",
+  "threadId": null,
+  "logPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_4d36c4d3-29c4-4ff3-96ac-a4909c6d9035/runs/run_2fc8c1a0-ce92-4d99-8cc8-2c475427913a/codex.log",
+  "statePath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_4d36c4d3-29c4-4ff3-96ac-a4909c6d9035/runs/run_2fc8c1a0-ce92-4d99-8cc8-2c475427913a/state.json",
+  "messagePath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data/agent-sessions/session_4d36c4d3-29c4-4ff3-96ac-a4909c6d9035/runs/run_2fc8c1a0-ce92-4d99-8cc8-2c475427913a/last-message.txt"
+}

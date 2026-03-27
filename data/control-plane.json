@@ -1,0 +1,220 @@
+{
+  "providers": [
+    {
+      "id": "provider_local_codex",
+      "name": "Local Codex Worker",
+      "kind": "local",
+      "description": "Runs on the Mac and can access local repos, simulators, certs, and file paths."
+    },
+    {
+      "id": "provider_cloud_codex",
+      "name": "Cloud Codex Worker",
+      "kind": "cloud",
+      "description": "General cloud worker for planning, coding, and document synthesis."
+    },
+    {
+      "id": "provider_web_research",
+      "name": "Web Research Worker",
+      "kind": "api",
+      "description": "Research-oriented worker for sourcing, market scans, and public-web lead discovery."
+    }
+  ],
+  "roles": [
+    {
+      "id": "role_coordinator",
+      "name": "Coordinator",
+      "lane": "shared",
+      "description": "Owns the brief, splits the work, tracks status, and closes the effort."
+    },
+    {
+      "id": "role_app_worker",
+      "name": "App Worker",
+      "lane": "product",
+      "description": "Implements repo-scoped product changes in the application codebase."
+    },
+    {
+      "id": "role_researcher",
+      "name": "Market Researcher",
+      "lane": "growth",
+      "description": "Finds segments, competitor patterns, and market signals with citations."
+    },
+    {
+      "id": "role_sourcer",
+      "name": "Lead Sourcer",
+      "lane": "growth",
+      "description": "Builds raw lead lists with provenance and public contact paths."
+    },
+    {
+      "id": "role_reviewer",
+      "name": "Reviewer",
+      "lane": "ops",
+      "description": "Checks completeness, provenance, duplicates, and handoff quality."
+    }
+  ],
+  "projects": [
+    {
+      "id": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
+      "name": "Kwipoo",
+      "summary": "The Kwipoo App",
+      "lane": "product",
+      "defaultCoordinationFolder": "",
+      "defaultArtifactRoot": "",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": ""
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal_kwipoo_release_sync",
+      "name": "Kwipoo app + website release sync",
+      "lane": "product",
+      "status": "running",
+      "summary": "Coordinate release-facing content and cross-repo app and website alignment.",
+      "artifactPath": "/Users/colinfreed/Projects/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync"
+    },
+    {
+      "id": "goal_kwipoo_market_research",
+      "name": "Kwipoo B2C market research",
+      "lane": "growth",
+      "status": "running",
+      "summary": "Define the first ICP and source reachable public communities and creators.",
+      "artifactPath": "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research"
+    }
+  ],
+  "workers": [
+    {
+      "id": "worker_colin_mac_local",
+      "name": "Colin Mac Local",
+      "providerId": "provider_local_codex",
+      "roleId": "role_app_worker",
+      "location": "local",
+      "status": "idle",
+      "capacity": 2,
+      "registeredAt": "2026-03-26T17:50:00.000Z",
+      "lastSeenAt": "2026-03-26T18:00:00.000Z",
+      "note": "Best for repo changes that need local files or simulator access.",
+      "tags": [
+        "kwipoo",
+        "ios",
+        "android",
+        "svelte"
+      ],
+      "authTokenHash": "bootstrap-pending"
+    },
+    {
+      "id": "worker_cloud_coordinator",
+      "name": "Cloud Coordinator",
+      "providerId": "provider_cloud_codex",
+      "roleId": "role_coordinator",
+      "location": "cloud",
+      "status": "busy",
+      "capacity": 4,
+      "registeredAt": "2026-03-26T17:52:00.000Z",
+      "lastSeenAt": "2026-03-26T18:04:00.000Z",
+      "note": "Owns task routing, artifact checks, and final handoff prep.",
+      "tags": [
+        "planning",
+        "coordination",
+        "handoffs"
+      ],
+      "authTokenHash": "bootstrap-pending"
+    },
+    {
+      "id": "worker_research_cloud",
+      "name": "Research Cloud",
+      "providerId": "provider_web_research",
+      "roleId": "role_researcher",
+      "location": "cloud",
+      "status": "busy",
+      "capacity": 3,
+      "registeredAt": "2026-03-26T17:55:00.000Z",
+      "lastSeenAt": "2026-03-26T18:02:00.000Z",
+      "note": "Use for market scans, competitor pulls, and source logs.",
+      "tags": [
+        "research",
+        "citations",
+        "growth"
+      ],
+      "authTokenHash": "bootstrap-pending"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_kwipoo_release_brief",
+      "title": "Prepare release sync brief",
+      "summary": "Update the current release-sync effort with the final app-to-website release checklist.",
+      "lane": "product",
+      "goalId": "goal_kwipoo_release_sync",
+      "priority": "high",
+      "status": "review",
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": "worker_cloud_coordinator",
+      "artifactPath": "/Users/colinfreed/Projects/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync/task-brief.md",
+      "createdAt": "2026-03-26T17:30:00.000Z",
+      "updatedAt": "2026-03-26T18:01:00.000Z",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "blockedReason": "",
+      "dependencyTaskIds": []
+    },
+    {
+      "id": "task_kwipoo_app_changes",
+      "title": "Implement app-side release work",
+      "summary": "Handle application changes needed for the coordinated release sync effort.",
+      "lane": "product",
+      "goalId": "goal_kwipoo_release_sync",
+      "priority": "high",
+      "status": "running",
+      "desiredRoleId": "role_app_worker",
+      "assigneeWorkerId": "worker_colin_mac_local",
+      "artifactPath": "/Users/colinfreed/Projects/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync/worker-app.md",
+      "createdAt": "2026-03-26T17:35:00.000Z",
+      "updatedAt": "2026-03-26T18:03:00.000Z",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "blockedReason": "",
+      "dependencyTaskIds": []
+    },
+    {
+      "id": "task_kwipoo_icp_refine",
+      "title": "Refine first Kwipoo ICP",
+      "summary": "Turn current product language into a tighter B2C ICP with segment fit signals and objections.",
+      "lane": "growth",
+      "goalId": "goal_kwipoo_market_research",
+      "priority": "urgent",
+      "status": "ready",
+      "desiredRoleId": "role_researcher",
+      "assigneeWorkerId": "worker_colin_mac_local",
+      "artifactPath": "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/icp/kwipoo-initial-icp.md",
+      "createdAt": "2026-03-26T17:40:00.000Z",
+      "updatedAt": "2026-03-27T13:16:00.464Z",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "blockedReason": "",
+      "dependencyTaskIds": []
+    },
+    {
+      "id": "task_kwipoo_source_first_leads",
+      "title": "Source first public lead surfaces",
+      "summary": "Build the first raw lead list of communities, creators, and public partnership surfaces.",
+      "lane": "growth",
+      "goalId": "goal_kwipoo_market_research",
+      "priority": "high",
+      "status": "ready",
+      "desiredRoleId": "role_sourcer",
+      "assigneeWorkerId": null,
+      "artifactPath": "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research/raw-leads.csv",
+      "createdAt": "2026-03-26T17:45:00.000Z",
+      "updatedAt": "2026-03-26T17:45:00.000Z",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "blockedReason": "",
+      "dependencyTaskIds": []
+    }
+  ]
+}
