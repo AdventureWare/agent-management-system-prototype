@@ -83,6 +83,17 @@
   ],
   "projects": [
     {
+      "id": "project_1ef6aafb-6d6b-4384-943e-ecc0ea93c4b6",
+      "name": "Animal Welfare Monitoring System",
+      "lane": "product",
+      "summary": "Animal Welfare Monitoring System",
+      "projectRootFolder": "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system",
+      "defaultArtifactRoot": "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system/agent_output",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": ""
+    },
+    {
       "id": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "name": "Agent Management System Prototype",
       "lane": "product",
