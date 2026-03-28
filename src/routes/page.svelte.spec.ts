@@ -9,6 +9,11 @@ describe('/+page.svelte', () => {
 			data: {
 				summary: {
 					taskCount: 0,
+					runCount: 0,
+					activeRunCount: 0,
+					blockedRunCount: 0,
+					openReviewCount: 0,
+					pendingApprovalCount: 0,
 					runningTaskCount: 0,
 					blockedTaskCount: 0,
 					readyTaskCount: 0,

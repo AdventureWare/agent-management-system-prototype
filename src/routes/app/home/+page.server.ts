@@ -1,5 +1,7 @@
 import { listAgentSessions, summarizeAgentSessions } from '$lib/server/agent-sessions';
 import {
+	getOpenReviewForTask,
+	getPendingApprovalForTask,
 	loadControlPlane,
 	summarizeControlPlane,
 	taskHasUnmetDependencies
@@ -20,6 +22,8 @@ export const load = async () => {
 				? (controlPlane.workers.find((worker) => worker.id === task.assigneeWorkerId)?.name ??
 					'Unknown worker')
 				: 'Unassigned',
+			openReview: getOpenReviewForTask(controlPlane, task.id),
+			pendingApproval: getPendingApprovalForTask(controlPlane, task.id),
 			hasUnmetDependencies: taskHasUnmetDependencies(controlPlane, task),
 			dependencyTaskNames: task.dependencyTaskIds.map(
 				(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
@@ -28,7 +32,8 @@ export const load = async () => {
 		.filter(
 			(task) =>
 				task.status === 'blocked' ||
-				(task.status === 'review' && task.requiresReview) ||
+				Boolean(task.openReview) ||
+				Boolean(task.pendingApproval) ||
 				task.hasUnmetDependencies
 		)
 		.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

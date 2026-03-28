@@ -13,13 +13,36 @@ export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+	const assignedTaskCounts = new Map<string, number>();
+	const latestRunByWorker = new Map<string, string>();
+
+	for (const task of data.tasks) {
+		if (!task.assigneeWorkerId) {
+			continue;
+		}
+
+		assignedTaskCounts.set(
+			task.assigneeWorkerId,
+			(assignedTaskCounts.get(task.assigneeWorkerId) ?? 0) + 1
+		);
+	}
+
+	for (const run of [...data.runs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
+		if (!run.workerId || latestRunByWorker.has(run.workerId)) {
+			continue;
+		}
+
+		latestRunByWorker.set(run.workerId, run.updatedAt);
+	}
 
 	return {
 		workers: [...data.workers]
 			.map((worker) => ({
 				...worker,
 				providerName: providerMap.get(worker.providerId)?.name ?? 'Unknown provider',
-				roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role'
+				roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
+				assignedTaskCount: assignedTaskCounts.get(worker.id) ?? 0,
+				latestRunAt: latestRunByWorker.get(worker.id) ?? null
 			}))
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),

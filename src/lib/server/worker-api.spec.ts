@@ -35,6 +35,28 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 			projects: [],
 			goals: [],
 			workers: [worker],
+			runs: [
+				{
+					id: 'run_running_assigned',
+					taskId: 'task_running_assigned',
+					workerId: 'worker_one',
+					providerId: 'provider_cloud_codex',
+					status: 'running',
+					createdAt: '2026-03-26T00:00:00.000Z',
+					updatedAt: '2026-03-26T00:00:00.000Z',
+					startedAt: '2026-03-26T00:00:00.000Z',
+					endedAt: null,
+					threadId: null,
+					sessionId: null,
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Already running.',
+					lastHeartbeatAt: '2026-03-26T00:00:00.000Z',
+					errorSummary: ''
+				}
+			],
+			reviews: [],
+			approvals: [],
 			tasks: [
 				{
 					id: 'task_ready_match',
@@ -52,6 +74,8 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					assigneeWorkerId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
 					artifactPath: '/tmp/one',
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
@@ -72,6 +96,8 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					assigneeWorkerId: 'worker_one',
 					blockedReason: '',
 					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_running_assigned',
 					artifactPath: '/tmp/two',
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
@@ -92,6 +118,8 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					assigneeWorkerId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
 					artifactPath: '/tmp/three',
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
@@ -123,9 +151,21 @@ describe('worker-api helpers', () => {
 		const { data, worker } = buildFixture();
 		const next = claimTaskForWorker(data, worker, 'task_ready_match');
 		const claimed = next.tasks.find((task) => task.id === 'task_ready_match');
+		const run = next.runs.find((candidate) => candidate.taskId === 'task_ready_match');
 
 		expect(claimed?.assigneeWorkerId).toBe(worker.id);
 		expect(claimed?.status).toBe('running');
+		expect(claimed?.runCount).toBe(1);
+		expect(claimed?.latestRunId).toBe(run?.id);
+		expect(run?.workerId).toBe(worker.id);
+		expect(run?.status).toBe('running');
+	});
+
+	it('does not create a duplicate run when the same worker reclaims an active task', () => {
+		const { data, worker } = buildFixture();
+		const next = claimTaskForWorker(data, worker, 'task_running_assigned');
+
+		expect(next).toEqual(data);
 	});
 
 	it('updates worker heartbeat fields', () => {
@@ -146,13 +186,29 @@ describe('worker-api helpers', () => {
 
 	it('updates an assigned task status from the worker', () => {
 		const { data, worker } = buildFixture();
+		const runningTask = data.tasks.find((task) => task.id === 'task_running_assigned');
+
+		if (!runningTask) {
+			throw new Error('Expected running task fixture.');
+		}
+
+		runningTask.approvalMode = 'before_complete';
 		const next = updateTaskFromWorker(data, worker, {
 			taskId: 'task_running_assigned',
 			status: 'review'
 		});
 		const updatedTask = next.tasks.find((task) => task.id === 'task_running_assigned');
+		const updatedRun = next.runs.find((run) => run.id === 'run_running_assigned');
+		const review = next.reviews.find((candidate) => candidate.taskId === 'task_running_assigned');
+		const approval = next.approvals.find(
+			(candidate) => candidate.taskId === 'task_running_assigned'
+		);
 
 		expect(updatedTask?.status).toBe('review');
+		expect(updatedRun?.status).toBe('completed');
+		expect(updatedRun?.endedAt).not.toBeNull();
+		expect(review?.status).toBe('open');
+		expect(approval?.status).toBe('pending');
 	});
 
 	it('checks worker role eligibility correctly', () => {
@@ -180,6 +236,8 @@ describe('worker-api helpers', () => {
 			assigneeWorkerId: null,
 			blockedReason: '',
 			dependencyTaskIds: ['task_running_assigned'],
+			runCount: 0,
+			latestRunId: null,
 			artifactPath: '/tmp/four',
 			createdAt: '2026-03-26T00:00:00.000Z',
 			updatedAt: '2026-03-26T00:00:00.000Z'
@@ -188,5 +246,33 @@ describe('worker-api helpers', () => {
 		const view = getWorkerTaskView(data, worker);
 
 		expect(view.available.map((task) => task.id)).not.toContain('task_waiting_on_dependency');
+	});
+
+	it('does not expose ready tasks waiting on before-run approval', () => {
+		const { data, worker } = buildFixture();
+		const readyTask = data.tasks.find((task) => task.id === 'task_ready_match');
+
+		if (!readyTask) {
+			throw new Error('Expected ready task fixture.');
+		}
+
+		readyTask.approvalMode = 'before_run';
+		data.approvals.push({
+			id: 'approval_before_run',
+			taskId: readyTask.id,
+			runId: null,
+			mode: 'before_run',
+			status: 'pending',
+			createdAt: '2026-03-26T00:00:00.000Z',
+			updatedAt: '2026-03-26T00:00:00.000Z',
+			resolvedAt: null,
+			requestedByWorkerId: null,
+			approverWorkerId: null,
+			summary: 'Waiting on before-run approval.'
+		});
+
+		const view = getWorkerTaskView(data, worker);
+
+		expect(view.available.map((task) => task.id)).not.toContain('task_ready_match');
 	});
 });

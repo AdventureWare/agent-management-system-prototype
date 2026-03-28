@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createApproval,
 	createProvider,
 	createProject,
+	createReview,
+	createRun,
 	createTask,
 	projectMatchesPath,
+	syncGovernanceQueues,
 	summarizeControlPlane,
 	taskHasUnmetDependencies
 } from './control-plane';
@@ -33,6 +37,8 @@ function buildFixture(): ControlPlaneData {
 				assigneeWorkerId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
+				runCount: 1,
+				latestRunId: 'run_done',
 				artifactPath: '/tmp/done',
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
@@ -53,6 +59,8 @@ function buildFixture(): ControlPlaneData {
 				assigneeWorkerId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_done'],
+				runCount: 0,
+				latestRunId: null,
 				artifactPath: '/tmp/review',
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
@@ -73,9 +81,60 @@ function buildFixture(): ControlPlaneData {
 				assigneeWorkerId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_review'],
+				runCount: 0,
+				latestRunId: null,
 				artifactPath: '/tmp/waiting',
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
+			}
+		],
+		runs: [
+			{
+				id: 'run_done',
+				taskId: 'task_done',
+				workerId: 'worker_one',
+				providerId: 'provider_local_codex',
+				status: 'completed',
+				createdAt: '2026-03-26T00:00:00.000Z',
+				updatedAt: '2026-03-26T00:10:00.000Z',
+				startedAt: '2026-03-26T00:00:00.000Z',
+				endedAt: '2026-03-26T00:10:00.000Z',
+				threadId: 'thread_1',
+				sessionId: 'session_1',
+				promptDigest: 'abc123',
+				artifactPaths: ['/tmp/done'],
+				summary: 'Completed work.',
+				lastHeartbeatAt: '2026-03-26T00:05:00.000Z',
+				errorSummary: ''
+			}
+		],
+		reviews: [
+			{
+				id: 'review_open',
+				taskId: 'task_review',
+				runId: null,
+				status: 'open',
+				createdAt: '2026-03-26T00:00:00.000Z',
+				updatedAt: '2026-03-26T00:00:00.000Z',
+				resolvedAt: null,
+				requestedByWorkerId: null,
+				reviewerWorkerId: null,
+				summary: 'Waiting for review.'
+			}
+		],
+		approvals: [
+			{
+				id: 'approval_pending',
+				taskId: 'task_review',
+				runId: null,
+				mode: 'before_complete',
+				status: 'pending',
+				createdAt: '2026-03-26T00:00:00.000Z',
+				updatedAt: '2026-03-26T00:00:00.000Z',
+				resolvedAt: null,
+				requestedByWorkerId: null,
+				approverWorkerId: null,
+				summary: 'Waiting for final approval.'
 			}
 		]
 	};
@@ -103,6 +162,44 @@ describe('control-plane helpers', () => {
 		expect(task.requiresReview).toBe(true);
 		expect(task.dependencyTaskIds).toEqual(['task_alpha']);
 		expect(task.blockedReason).toBe('');
+		expect(task.runCount).toBe(0);
+		expect(task.latestRunId).toBeNull();
+	});
+
+	it('creates runs as first-class execution records', () => {
+		const run = createRun({
+			taskId: 'task_1',
+			workerId: 'worker_1',
+			providerId: 'provider_1',
+			status: 'running',
+			sessionId: 'session_1',
+			summary: 'Executing task.'
+		});
+
+		expect(run.id).toMatch(/^run_/);
+		expect(run.taskId).toBe('task_1');
+		expect(run.workerId).toBe('worker_1');
+		expect(run.status).toBe('running');
+		expect(run.sessionId).toBe('session_1');
+	});
+
+	it('creates review and approval records for governance queues', () => {
+		const review = createReview({
+			taskId: 'task_1',
+			runId: 'run_1',
+			summary: 'Waiting on review.'
+		});
+		const approval = createApproval({
+			taskId: 'task_1',
+			runId: 'run_1',
+			mode: 'before_complete',
+			summary: 'Waiting on final approval.'
+		});
+
+		expect(review.id).toMatch(/^review_/);
+		expect(review.status).toBe('open');
+		expect(approval.id).toMatch(/^approval_/);
+		expect(approval.status).toBe('pending');
 	});
 
 	it('detects unmet dependencies', () => {
@@ -116,12 +213,38 @@ describe('control-plane helpers', () => {
 		const summary = summarizeControlPlane(buildFixture());
 
 		expect(summary.taskCount).toBe(3);
+		expect(summary.runCount).toBe(1);
+		expect(summary.activeRunCount).toBe(0);
+		expect(summary.openReviewCount).toBe(1);
+		expect(summary.pendingApprovalCount).toBe(1);
 		expect(summary.projectCount).toBe(0);
 		expect(summary.readyTaskCount).toBe(1);
 		expect(summary.reviewTaskCount).toBe(1);
 		expect(summary.reviewRequiredTaskCount).toBe(1);
 		expect(summary.dependencyBlockedTaskCount).toBe(1);
 		expect(summary.highRiskTaskCount).toBe(1);
+	});
+
+	it('synthesizes missing governance queue records from task state', () => {
+		const fixture = buildFixture();
+		fixture.reviews = [];
+		fixture.approvals = [];
+
+		const next = syncGovernanceQueues(fixture);
+
+		expect(next.reviews).toEqual([
+			expect.objectContaining({
+				taskId: 'task_review',
+				status: 'open'
+			})
+		]);
+		expect(next.approvals).toEqual([
+			expect.objectContaining({
+				taskId: 'task_review',
+				mode: 'before_complete',
+				status: 'pending'
+			})
+		]);
 	});
 
 	it('creates projects with blank config defaults when omitted', () => {

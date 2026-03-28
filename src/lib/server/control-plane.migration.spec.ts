@@ -48,7 +48,8 @@ describe('control-plane project migration', () => {
 				],
 				goals: [],
 				workers: [],
-				tasks: []
+				tasks: [],
+				runs: []
 			})
 		);
 

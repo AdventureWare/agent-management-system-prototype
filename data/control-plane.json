@@ -83,6 +83,17 @@
   ],
   "projects": [
     {
+      "id": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
+      "name": "Personal Knowledge",
+      "lane": "product",
+      "summary": "Increasing my own knowledge",
+      "projectRootFolder": "'/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault'",
+      "defaultArtifactRoot": "'/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault'",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": ""
+    },
+    {
       "id": "project_1ef6aafb-6d6b-4384-943e-ecc0ea93c4b6",
       "name": "Animal Welfare Monitoring System",
       "lane": "product",
@@ -193,6 +204,28 @@
   ],
   "tasks": [
     {
+      "id": "task_6d2dfc58-2a4e-4021-b173-2d1d8f69cd1d",
+      "title": "Research Kwipoo competitors",
+      "summary": "Create notes in my obsidian vault under Kwipoo/Competitors, well by researching and documenting potential competitors in addition to the ones there are already notes for. I'd like at least 10 additional potential competitors to be identified and have notes filled out for",
+      "projectId": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "running",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "runCount": 1,
+      "latestRunId": "run_ad4db002-21b3-4139-acc8-5e8b1d734ca5",
+      "artifactPath": "'/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault'",
+      "createdAt": "2026-03-27T23:47:19.306Z",
+      "updatedAt": "2026-03-27T23:47:36.694Z"
+    },
+    {
       "id": "task_15897fb1-63ab-4f3f-acc8-a543a253633d",
       "title": "Need to be able to view details of sessions",
       "summary": "Need to be able to view the details of sessions and the convos, or at least the last response",
@@ -208,6 +241,8 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "createdAt": "2026-03-27T22:02:06.757Z",
       "updatedAt": "2026-03-27T22:02:10.214Z"
@@ -228,6 +263,8 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "createdAt": "2026-03-27T21:56:56.879Z",
       "updatedAt": "2026-03-27T21:57:02.602Z"
@@ -248,6 +285,8 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "createdAt": "2026-03-27T21:50:21.540Z",
       "updatedAt": "2026-03-27T21:50:28.498Z"
@@ -268,6 +307,8 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "createdAt": "2026-03-27T21:48:39.654Z",
       "updatedAt": "2026-03-27T21:48:56.295Z"
@@ -288,6 +329,8 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "createdAt": "2026-03-27T21:38:58.789Z",
       "updatedAt": "2026-03-27T21:45:18.289Z"
@@ -308,6 +351,8 @@
       "assigneeWorkerId": "worker_cloud_coordinator",
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync/task-brief.md",
       "createdAt": "2026-03-26T17:30:00.000Z",
       "updatedAt": "2026-03-26T18:01:00.000Z"
@@ -328,6 +373,8 @@
       "assigneeWorkerId": "worker_colin_mac_local",
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Projects/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync/worker-app.md",
       "createdAt": "2026-03-26T17:35:00.000Z",
       "updatedAt": "2026-03-26T18:03:00.000Z"
@@ -348,6 +395,8 @@
       "assigneeWorkerId": "worker_colin_mac_local",
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/icp/kwipoo-initial-icp.md",
       "createdAt": "2026-03-26T17:40:00.000Z",
       "updatedAt": "2026-03-27T13:16:00.464Z"
@@ -368,9 +417,33 @@
       "assigneeWorkerId": null,
       "blockedReason": "",
       "dependencyTaskIds": [],
+      "runCount": 0,
+      "latestRunId": null,
       "artifactPath": "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research/raw-leads.csv",
       "createdAt": "2026-03-26T17:45:00.000Z",
       "updatedAt": "2026-03-26T17:45:00.000Z"
+    }
+  ],
+  "runs": [
+    {
+      "id": "run_ad4db002-21b3-4139-acc8-5e8b1d734ca5",
+      "taskId": "task_6d2dfc58-2a4e-4021-b173-2d1d8f69cd1d",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "running",
+      "createdAt": "2026-03-27T23:47:36.693Z",
+      "updatedAt": "2026-03-27T23:47:36.693Z",
+      "startedAt": "2026-03-27T23:47:36.692Z",
+      "endedAt": null,
+      "threadId": null,
+      "sessionId": "session_6b043027-0858-415a-948f-9550973ad388",
+      "promptDigest": "12bb539e0c5911c3",
+      "artifactPaths": [
+        "'/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault'"
+      ],
+      "summary": "Launched from the task board into a resumable Codex session.",
+      "lastHeartbeatAt": "2026-03-27T23:47:36.693Z",
+      "errorSummary": ""
     }
   ]
 }

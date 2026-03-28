@@ -8,6 +8,18 @@ export const TASK_APPROVAL_MODE_OPTIONS = [
 	'before_apply',
 	'before_complete'
 ] as const;
+export const RUN_STATUS_OPTIONS = [
+	'queued',
+	'starting',
+	'running',
+	'awaiting_approval',
+	'blocked',
+	'failed',
+	'canceled',
+	'completed'
+] as const;
+export const REVIEW_STATUS_OPTIONS = ['open', 'approved', 'changes_requested', 'dismissed'] as const;
+export const APPROVAL_STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'canceled'] as const;
 export const GOAL_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
 export const WORKER_STATUS_OPTIONS = ['idle', 'busy', 'offline'] as const;
 export const WORKER_LOCATION_OPTIONS = ['local', 'cloud'] as const;
@@ -20,6 +32,9 @@ export type Priority = (typeof PRIORITY_OPTIONS)[number];
 export type TaskStatus = (typeof TASK_STATUS_OPTIONS)[number];
 export type TaskRiskLevel = (typeof TASK_RISK_LEVEL_OPTIONS)[number];
 export type TaskApprovalMode = (typeof TASK_APPROVAL_MODE_OPTIONS)[number];
+export type RunStatus = (typeof RUN_STATUS_OPTIONS)[number];
+export type ReviewStatus = (typeof REVIEW_STATUS_OPTIONS)[number];
+export type ApprovalStatus = (typeof APPROVAL_STATUS_OPTIONS)[number];
 export type GoalStatus = (typeof GOAL_STATUS_OPTIONS)[number];
 export type WorkerStatus = (typeof WORKER_STATUS_OPTIONS)[number];
 export type WorkerLocation = (typeof WORKER_LOCATION_OPTIONS)[number];
@@ -103,9 +118,57 @@ export type Task = {
 	assigneeWorkerId: string | null;
 	blockedReason: string;
 	dependencyTaskIds: string[];
+	runCount: number;
+	latestRunId: string | null;
 	artifactPath: string;
 	createdAt: string;
 	updatedAt: string;
+};
+
+export type Run = {
+	id: string;
+	taskId: string;
+	workerId: string | null;
+	providerId: string | null;
+	status: RunStatus;
+	createdAt: string;
+	updatedAt: string;
+	startedAt: string | null;
+	endedAt: string | null;
+	threadId: string | null;
+	sessionId: string | null;
+	promptDigest: string;
+	artifactPaths: string[];
+	summary: string;
+	lastHeartbeatAt: string | null;
+	errorSummary: string;
+};
+
+export type Review = {
+	id: string;
+	taskId: string;
+	runId: string | null;
+	status: ReviewStatus;
+	createdAt: string;
+	updatedAt: string;
+	resolvedAt: string | null;
+	requestedByWorkerId: string | null;
+	reviewerWorkerId: string | null;
+	summary: string;
+};
+
+export type Approval = {
+	id: string;
+	taskId: string;
+	runId: string | null;
+	mode: TaskApprovalMode;
+	status: ApprovalStatus;
+	createdAt: string;
+	updatedAt: string;
+	resolvedAt: string | null;
+	requestedByWorkerId: string | null;
+	approverWorkerId: string | null;
+	summary: string;
 };
 
 export type ControlPlaneData = {
@@ -115,4 +178,7 @@ export type ControlPlaneData = {
 	goals: Goal[];
 	workers: Worker[];
 	tasks: Task[];
+	runs: Run[];
+	reviews: Review[];
+	approvals: Approval[];
 };

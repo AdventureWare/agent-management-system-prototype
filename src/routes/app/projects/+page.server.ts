@@ -6,6 +6,7 @@ import {
 	createProject,
 	loadControlPlane,
 	parseLane,
+	projectMatchesPath,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -24,10 +25,38 @@ function readProjectForm(form: FormData) {
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
+	const taskCounts = new Map<string, number>();
+
+	for (const task of data.tasks) {
+		taskCounts.set(task.projectId, (taskCounts.get(task.projectId) ?? 0) + 1);
+	}
 
 	return {
 		laneOptions: LANE_OPTIONS,
-		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
+		projects: [...data.projects]
+			.map((project) => {
+				const relatedTaskGoalIds = new Set(
+					data.tasks
+						.filter((task) => task.projectId === project.id && task.goalId)
+						.map((task) => task.goalId)
+				);
+				const goalCount = data.goals.filter(
+					(goal) => relatedTaskGoalIds.has(goal.id) || projectMatchesPath(project, goal.artifactPath)
+				).length;
+
+				return {
+					...project,
+					taskCount: taskCounts.get(project.id) ?? 0,
+					goalCount,
+					readinessCount: [
+						project.projectRootFolder,
+						project.defaultArtifactRoot,
+						project.defaultRepoPath || project.defaultRepoUrl,
+						project.defaultBranch
+					].filter(Boolean).length
+				};
+			})
+			.sort((a, b) => a.name.localeCompare(b.name)),
 		folderOptions: await loadFolderPickerOptions()
 	};
 };

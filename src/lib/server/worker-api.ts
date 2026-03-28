@@ -1,9 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { dev } from '$app/environment';
 import { error } from '@sveltejs/kit';
-import { taskHasUnmetDependencies } from '$lib/server/control-plane';
+import {
+	createRun,
+	getPendingApprovalForTask,
+	syncGovernanceQueues,
+	taskHasUnmetDependencies
+} from '$lib/server/control-plane';
 import type {
 	ControlPlaneData,
+	RunStatus,
 	Task,
 	TaskStatus,
 	Worker,
@@ -78,6 +84,7 @@ export function getWorkerTaskView(data: ControlPlaneData, worker: Worker) {
 			task.assigneeWorkerId === null &&
 			task.status === 'ready' &&
 			isWorkerEligibleForTask(worker, task) &&
+			getPendingApprovalForTask(data, task.id)?.mode !== 'before_run' &&
 			!taskHasUnmetDependencies(data, task)
 	);
 
@@ -155,19 +162,52 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 		throw error(409, 'Task dependencies are not complete.');
 	}
 
-	return {
+	if (getPendingApprovalForTask(data, task.id)?.mode === 'before_run') {
+		throw error(409, 'Task is waiting on before-run approval.');
+	}
+
+	if (task.assigneeWorkerId === worker.id && task.status === 'running') {
+		return data;
+	}
+
+	const run = createRun({
+		taskId,
+		workerId: worker.id,
+		providerId: worker.providerId,
+		status: 'running',
+		startedAt: new Date().toISOString(),
+		summary: 'Task claimed by worker.',
+		lastHeartbeatAt: new Date().toISOString()
+	});
+
+	return syncGovernanceQueues({
 		...data,
+		runs: [run, ...data.runs],
 		tasks: data.tasks.map((candidate) =>
 			candidate.id === taskId
 				? {
 						...candidate,
 						assigneeWorkerId: worker.id,
+						runCount: candidate.runCount + 1,
+						latestRunId: run.id,
 						status: 'running' as const,
 						updatedAt: new Date().toISOString()
 					}
 				: candidate
 		)
-	};
+	});
+}
+
+function taskStatusToRunStatus(status: TaskStatus): RunStatus {
+	switch (status) {
+		case 'blocked':
+			return 'blocked';
+		case 'done':
+		case 'review':
+			return 'completed';
+		default:
+			return 'running';
+	}
 }
 
 export function updateTaskFromWorker(
@@ -188,8 +228,23 @@ export function updateTaskFromWorker(
 		throw error(403, 'Task is not assigned to this worker.');
 	}
 
-	return {
+	return syncGovernanceQueues({
 		...data,
+		runs: data.runs.map((candidate) =>
+			candidate.id === task.latestRunId && candidate.workerId === worker.id
+				? {
+						...candidate,
+						status: taskStatusToRunStatus(input.status),
+						updatedAt: new Date().toISOString(),
+						lastHeartbeatAt: new Date().toISOString(),
+						endedAt:
+							input.status === 'running'
+								? null
+								: (candidate.endedAt ?? new Date().toISOString()),
+						summary: `Worker updated task to ${input.status}.`
+					}
+				: candidate
+		),
 		tasks: data.tasks.map((candidate) =>
 			candidate.id === input.taskId
 				? {
@@ -199,5 +254,5 @@ export function updateTaskFromWorker(
 					}
 				: candidate
 		)
-	};
+	});
 }

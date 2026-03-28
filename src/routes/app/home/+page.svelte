@@ -18,9 +18,8 @@
 	);
 	let latestSessions = $derived(data.sessions.slice(0, 5));
 	let blockedTasks = $derived(data.taskAttention.filter((task) => task.status === 'blocked'));
-	let reviewTasks = $derived(
-		data.taskAttention.filter((task) => task.status === 'review' && task.requiresReview)
-	);
+	let reviewTasks = $derived(data.taskAttention.filter((task) => task.openReview));
+	let approvalTasks = $derived(data.taskAttention.filter((task) => task.pendingApproval));
 	let dependencyTasks = $derived(data.taskAttention.filter((task) => task.hasUnmetDependencies));
 
 	function userIsEditingFormControl() {
@@ -263,7 +262,7 @@
 		</div>
 	</div>
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Ready tasks</p>
 			<p class="mt-2 text-3xl font-semibold text-white">{data.controlSummary.readyTaskCount}</p>
@@ -273,9 +272,15 @@
 			<p class="mt-2 text-3xl font-semibold text-white">{data.controlSummary.blockedTaskCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Review needed</p>
+			<p class="text-sm text-slate-400">Open reviews</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{data.controlSummary.reviewRequiredTaskCount}
+				{data.controlSummary.openReviewCount}
+			</p>
+		</div>
+		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-sm text-slate-400">Pending approvals</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{data.controlSummary.pendingApprovalCount}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
@@ -337,23 +342,27 @@
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<h2 class="text-xl font-semibold text-white">Task attention queue</h2>
-						<p class="text-sm text-slate-400">
-							Blocked work, review-required tasks, and items waiting on dependencies.
-						</p>
+					<p class="text-sm text-slate-400">
+						Blocked work, open reviews, pending approvals, and items waiting on dependencies.
+					</p>
 					</div>
 					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
 						>Open task board</a
 					>
 				</div>
 
-				<div class="grid gap-3 sm:grid-cols-3">
+				<div class="grid gap-3 sm:grid-cols-4">
 					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
 						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Blocked</p>
 						<p class="mt-2 text-2xl font-semibold text-white">{blockedTasks.length}</p>
 					</div>
 					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Needs review</p>
+						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Open reviews</p>
 						<p class="mt-2 text-2xl font-semibold text-white">{reviewTasks.length}</p>
+					</div>
+					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Approvals</p>
+						<p class="mt-2 text-2xl font-semibold text-white">{approvalTasks.length}</p>
 					</div>
 					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
 						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Dependencies</p>
@@ -388,11 +397,18 @@
 											>
 												{task.riskLevel} risk
 											</span>
-											{#if task.requiresReview}
+											{#if task.openReview}
 												<span
 													class="rounded-full border border-sky-800/70 bg-sky-950/40 px-2 py-1 text-[11px] text-sky-200 uppercase"
 												>
-													review gate
+													review open
+												</span>
+											{/if}
+											{#if task.pendingApproval}
+												<span
+													class="rounded-full border border-amber-800/70 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200 uppercase"
+												>
+													approval {task.pendingApproval.mode}
 												</span>
 											{/if}
 											{#if task.hasUnmetDependencies}
@@ -416,10 +432,16 @@
 												Depends on: {task.dependencyTaskNames.join(', ')}
 											</p>
 										{/if}
+										{#if task.openReview}
+											<p class="mt-2 text-xs text-sky-200">{task.openReview.summary}</p>
+										{/if}
+										{#if task.pendingApproval}
+											<p class="mt-2 text-xs text-amber-200">{task.pendingApproval.summary}</p>
+										{/if}
 									</div>
 									<a
 										class="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white"
-										href={resolve('/app/tasks')}
+										href={resolve(`/app/tasks/${task.id}`)}
 									>
 										Inspect task
 									</a>

@@ -1,10 +1,16 @@
+import { createHash } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
+	createRun,
 	createTask,
+	formatRelativeTime,
+	getOpenReviewForTask,
+	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
+	taskHasUnmetDependencies,
 	updateControlPlane
 } from '$lib/server/control-plane';
 import { startAgentSession } from '$lib/server/agent-sessions';
@@ -47,10 +53,15 @@ function buildTaskSessionPrompt(input: {
 	].join('\n');
 }
 
+function buildPromptDigest(prompt: string) {
+	return createHash('sha256').update(prompt).digest('hex').slice(0, 16);
+}
+
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const runMap = new Map(data.runs.map((run) => [run.id, run]));
 
 	return {
 		statusOptions: TASK_STATUS_OPTIONS,
@@ -62,7 +73,12 @@ export const load: PageServerLoad = async () => {
 				projectName: projectMap.get(task.projectId)?.name ?? 'No project',
 				assigneeName: task.assigneeWorkerId
 					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
-					: 'Unassigned'
+					: 'Unassigned',
+				latestRun: task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null,
+				updatedAtLabel: formatRelativeTime(task.updatedAt),
+				hasUnmetDependencies: taskHasUnmetDependencies(data, task),
+				openReview: getOpenReviewForTask(data, task.id),
+				pendingApproval: getPendingApprovalForTask(data, task.id)
 			}))
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 	};
@@ -232,22 +248,50 @@ export const actions: Actions = {
 			});
 		}
 
+		if (getPendingApprovalForTask(current, task.id)?.mode === 'before_run') {
+			return fail(409, {
+				message: 'This task is waiting on before-run approval before a session can start.'
+			});
+		}
+
+		const prompt = buildTaskSessionPrompt({
+			taskName: effectiveName,
+			taskInstructions: effectiveInstructions,
+			projectName: project.name,
+			projectRootFolder: project.projectRootFolder,
+			defaultArtifactRoot: project.defaultArtifactRoot
+		});
 		const session = await startAgentSession({
 			name: `Task: ${effectiveName}`,
 			cwd: project.projectRootFolder,
-			prompt: buildTaskSessionPrompt({
-				taskName: effectiveName,
-				taskInstructions: effectiveInstructions,
-				projectName: project.name,
-				projectRootFolder: project.projectRootFolder,
-				defaultArtifactRoot: project.defaultArtifactRoot
-			}),
+			prompt,
 			sandbox: 'workspace-write',
 			model: null
+		});
+		const providerId =
+			assigneeWorker?.providerId ??
+			current.providers.find((provider) => provider.kind === 'local' && provider.enabled)?.id ??
+			current.providers[0]?.id ??
+			null;
+		const run = createRun({
+			taskId,
+			workerId: assigneeWorker?.id ?? task.assigneeWorkerId ?? null,
+			providerId,
+			status: 'running',
+			startedAt: new Date().toISOString(),
+			sessionId: session.sessionId,
+			promptDigest: buildPromptDigest(prompt),
+			artifactPaths:
+				project.defaultArtifactRoot || project.projectRootFolder
+					? [project.defaultArtifactRoot || project.projectRootFolder]
+					: [],
+			summary: 'Launched from the task board into a resumable Codex session.',
+			lastHeartbeatAt: new Date().toISOString()
 		});
 
 		await updateControlPlane((data) => ({
 			...data,
+			runs: [run, ...data.runs],
 			tasks: data.tasks.map((candidate) =>
 				candidate.id === taskId
 					? {
@@ -263,6 +307,8 @@ export const actions: Actions = {
 								project.defaultArtifactRoot ||
 								project.projectRootFolder ||
 								'',
+							runCount: candidate.runCount + 1,
+							latestRunId: run.id,
 							status: 'running',
 							updatedAt: new Date().toISOString()
 						}

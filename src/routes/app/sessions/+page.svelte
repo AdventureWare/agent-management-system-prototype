@@ -301,13 +301,13 @@
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
 	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Sessions</p>
+		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Remote Work</p>
 		<h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-			See what is running now and what already happened
+			Browse active and historical background sessions
 		</h1>
 		<p class="max-w-3xl text-sm text-slate-300">
-			Use this page as the session registry. The top tables separate active work from history, and
-			each session now opens on its own detail page for logs, conversation turns, and follow-up work.
+			Use this page as the remote-work registry. The tables separate active runs from history, and
+			each session opens on its own detail page for logs, conversation turns, and follow-up work.
 		</p>
 		<div
 			class="flex flex-col gap-3 text-sm text-slate-400 sm:flex-row sm:flex-wrap sm:items-center"
