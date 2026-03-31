@@ -63,15 +63,15 @@ The prototype is successful when:
 The current repo already contains the first useful slice of the system:
 
 - remote-backed Codex session launching
-- resumable sessions
-- session logs and last-message capture
+- resumable threads
+- thread logs and last-message capture
 - work-centered control-plane entities for goals, tasks, workers, providers, and roles
 - worker registration, heartbeat, task polling, task claiming, and task status updates
 
 Existing product surfaces:
 
 - `/app/home`: operator dashboard
-- `/app/sessions`: direct session control
+- `/app/sessions`: direct thread control
 - `/app/goals`: top-level efforts
 - `/app/tasks`: queue and assignment
 - `/app/workers`: execution capacity

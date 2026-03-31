@@ -63,7 +63,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
 		<form
 			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
 			method="POST"

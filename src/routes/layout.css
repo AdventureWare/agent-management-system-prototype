@@ -32,3 +32,29 @@ body {
 a {
 	color: inherit;
 }
+
+:global(.ui-wrap-anywhere) {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+:global(.ui-clamp-2) {
+	display: -webkit-box;
+	min-width: 0;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+}
+
+:global(.ui-clamp-3) {
+	display: -webkit-box;
+	min-width: 0;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}

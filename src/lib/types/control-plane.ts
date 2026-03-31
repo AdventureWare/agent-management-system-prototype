@@ -1,6 +1,13 @@
 export const LANE_OPTIONS = ['product', 'growth', 'ops'] as const;
 export const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const;
-export const TASK_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
+export const TASK_STATUS_OPTIONS = [
+	'in_draft',
+	'ready',
+	'in_progress',
+	'review',
+	'blocked',
+	'done'
+] as const;
 export const TASK_RISK_LEVEL_OPTIONS = ['low', 'medium', 'high'] as const;
 export const TASK_APPROVAL_MODE_OPTIONS = [
 	'none',
@@ -18,7 +25,12 @@ export const RUN_STATUS_OPTIONS = [
 	'canceled',
 	'completed'
 ] as const;
-export const REVIEW_STATUS_OPTIONS = ['open', 'approved', 'changes_requested', 'dismissed'] as const;
+export const REVIEW_STATUS_OPTIONS = [
+	'open',
+	'approved',
+	'changes_requested',
+	'dismissed'
+] as const;
 export const APPROVAL_STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'canceled'] as const;
 export const GOAL_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
 export const WORKER_STATUS_OPTIONS = ['idle', 'busy', 'offline'] as const;
@@ -41,6 +53,49 @@ export type WorkerLocation = (typeof WORKER_LOCATION_OPTIONS)[number];
 export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
+
+export type TaskAttachment = {
+	id: string;
+	name: string;
+	path: string;
+	contentType: string;
+	sizeBytes: number;
+	attachedAt: string;
+};
+
+export function normalizeTaskStatus(value: string): TaskStatus | null {
+	const normalized = value.trim().toLowerCase().replace(/\s+/g, '_');
+
+	switch (normalized) {
+		case 'draft':
+			return 'in_draft';
+		case 'running':
+			return 'in_progress';
+		default:
+			return TASK_STATUS_OPTIONS.includes(normalized as TaskStatus)
+				? (normalized as TaskStatus)
+				: null;
+	}
+}
+
+export function formatTaskStatusLabel(status: string): string {
+	switch (status) {
+		case 'in_draft':
+			return 'In Draft';
+		case 'ready':
+			return 'Ready';
+		case 'in_progress':
+			return 'In Progress';
+		case 'review':
+			return 'In Review';
+		case 'blocked':
+			return 'Blocked';
+		case 'done':
+			return 'Done';
+		default:
+			return status.replace(/_/g, ' ');
+	}
+}
 
 export type Provider = {
 	id: string;
@@ -78,7 +133,6 @@ export type Goal = {
 export type Project = {
 	id: string;
 	name: string;
-	lane: Lane;
 	summary: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
@@ -116,11 +170,13 @@ export type Task = {
 	requiresReview: boolean;
 	desiredRoleId: string;
 	assigneeWorkerId: string | null;
+	threadSessionId: string | null;
 	blockedReason: string;
 	dependencyTaskIds: string[];
 	runCount: number;
 	latestRunId: string | null;
 	artifactPath: string;
+	attachments: TaskAttachment[];
 	createdAt: string;
 	updatedAt: string;
 };

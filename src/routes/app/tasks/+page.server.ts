@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
 	createTask,
+	deleteTask as removeTaskFromControlPlane,
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
@@ -13,7 +13,28 @@ import {
 	taskHasUnmetDependencies,
 	updateControlPlane
 } from '$lib/server/control-plane';
-import { startAgentSession } from '$lib/server/agent-sessions';
+import {
+	cancelAgentSession,
+	getAgentSession,
+	listAgentSessions,
+	sendAgentSessionMessage,
+	startAgentSession
+} from '$lib/server/agent-sessions';
+import { selectTaskThreadContext } from '$lib/task-thread-context';
+import {
+	buildPromptDigest,
+	buildTaskThreadName,
+	buildTaskThreadPrompt
+} from '$lib/server/task-threads';
+import {
+	buildProjectTaskIdeationPrompt,
+	buildProjectTaskIdeationThreadName,
+	findProjectForTaskIdeationThread,
+	findProjectTaskIdeationThread,
+	getProjectTaskIdeationWorkspace,
+	parseIdeationTaskSuggestions
+} from '$lib/server/task-ideation';
+import type { ControlPlaneData, Project, Role } from '$lib/types/control-plane';
 
 function readTaskForm(form: FormData) {
 	return {
@@ -24,67 +45,169 @@ function readTaskForm(form: FormData) {
 	};
 }
 
-function buildTaskSessionPrompt(input: {
-	taskName: string;
-	taskInstructions: string;
-	projectName: string;
-	projectRootFolder: string;
-	defaultArtifactRoot: string;
-}) {
-	const contextLines = [
-		`Task: ${input.taskName}`,
-		`Project: ${input.projectName}`,
-		`Project root: ${input.projectRootFolder}`
-	];
+function getDefaultDraftRole(data: ControlPlaneData): Role | null {
+	return data.roles.find((role) => role.id === 'role_coordinator') ?? data.roles[0] ?? null;
+}
 
-	if (input.defaultArtifactRoot) {
-		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
-	}
+function getDefaultDraftArtifactPath(project: Project) {
+	return project.defaultArtifactRoot || project.projectRootFolder || '';
+}
 
+function parseSuggestionIndexes(form: FormData) {
 	return [
-		'You are executing a queued task from the agent management system.',
-		'',
-		...contextLines,
-		'',
-		'Instructions:',
-		input.taskInstructions,
-		'',
-		'Work from the project root, make the requested changes, and report progress and outcomes clearly.'
-	].join('\n');
+		...new Set(
+			form
+				.getAll('suggestionIndex')
+				.map((value) => Number.parseInt(value.toString(), 10))
+				.filter((value) => Number.isInteger(value) && value >= 0)
+		)
+	];
 }
 
-function buildPromptDigest(prompt: string) {
-	return createHash('sha256').update(prompt).digest('hex').slice(0, 16);
-}
-
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
+	const sessions = await listAgentSessions({ includeArchived: true });
 	const data = await loadControlPlane();
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
 	const runMap = new Map(data.runs.map((run) => [run.id, run]));
+	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const defaultDraftRole = getDefaultDraftRole(data);
+	const ideationReviews = [...data.projects]
+		.map((project) => {
+			const ideationSession = findProjectTaskIdeationThread(project, sessions);
+			if (!ideationSession) {
+				return null;
+			}
+
+			const lastMessage = ideationSession.latestRun?.lastMessage ?? '';
+			const suggestions = parseIdeationTaskSuggestions(lastMessage);
+
+			return {
+				projectId: project.id,
+				projectName: project.name,
+				sessionId: ideationSession.id,
+				sessionState: ideationSession.sessionState,
+				lastActivityAt: ideationSession.lastActivityAt,
+				lastActivityLabel: ideationSession.lastActivityLabel,
+				sessionSummary: ideationSession.sessionSummary,
+				hasActiveRun: ideationSession.hasActiveRun,
+				canResume: ideationSession.canResume,
+				suggestionCount: suggestions.length,
+				hasSavedReply: Boolean(lastMessage),
+				defaultDraftRoleId: defaultDraftRole?.id ?? '',
+				defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
+				defaultArtifactPath: getDefaultDraftArtifactPath(project),
+				suggestions
+			};
+		})
+		.filter((review): review is NonNullable<typeof review> =>
+			Boolean(review && (review.suggestionCount > 0 || review.hasActiveRun || review.hasSavedReply))
+		)
+		.sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
 
 	return {
+		deleted: url.searchParams.get('deleted') === '1',
 		statusOptions: TASK_STATUS_OPTIONS,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
+		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
+		ideationReviews,
 		tasks: [...data.tasks]
-			.map((task) => ({
-				...task,
-				projectName: projectMap.get(task.projectId)?.name ?? 'No project',
-				assigneeName: task.assigneeWorkerId
-					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
-					: 'Unassigned',
-				latestRun: task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null,
-				updatedAtLabel: formatRelativeTime(task.updatedAt),
-				hasUnmetDependencies: taskHasUnmetDependencies(data, task),
-				openReview: getOpenReviewForTask(data, task.id),
-				pendingApproval: getPendingApprovalForTask(data, task.id)
-			}))
+			.map((task) => {
+				const latestRun = task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null;
+				const assignedThread = task.threadSessionId
+					? (sessionMap.get(task.threadSessionId) ?? null)
+					: null;
+				const latestRunThread = latestRun?.sessionId
+					? (sessionMap.get(latestRun.sessionId) ?? null)
+					: null;
+
+				return {
+					...task,
+					projectName: projectMap.get(task.projectId)?.name ?? 'No project',
+					assigneeName: task.assigneeWorkerId
+						? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+						: 'Unassigned',
+					latestRun,
+					...selectTaskThreadContext({
+						assignedThread,
+						latestRunThread
+					}),
+					updatedAtLabel: formatRelativeTime(task.updatedAt),
+					hasUnmetDependencies: taskHasUnmetDependencies(data, task),
+					openReview: getOpenReviewForTask(data, task.id),
+					pendingApproval: getPendingApprovalForTask(data, task.id)
+				};
+			})
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 	};
 };
 
 export const actions: Actions = {
+	runTaskIdeationAssistant: async ({ request }) => {
+		const form = await request.formData();
+		const projectId = form.get('projectId')?.toString().trim() ?? '';
+
+		if (!projectId) {
+			return fail(400, { message: 'Select a project before running task ideation.' });
+		}
+
+		const [current, sessions] = await Promise.all([loadControlPlane(), listAgentSessions()]);
+		const project = current.projects.find((candidate) => candidate.id === projectId);
+
+		if (!project) {
+			return fail(404, { message: 'Project not found.' });
+		}
+
+		const workspace = getProjectTaskIdeationWorkspace(project);
+
+		if (!workspace) {
+			return fail(400, {
+				message:
+					'Configure a project root folder or default repo path before running task ideation.'
+			});
+		}
+
+		const prompt = buildProjectTaskIdeationPrompt({
+			data: current,
+			project
+		});
+		const ideationThread = findProjectTaskIdeationThread(project, sessions);
+
+		if (ideationThread?.hasActiveRun) {
+			return fail(409, {
+				message:
+					'The task ideation assistant is already running for this project. Open the existing thread instead of starting another run.'
+			});
+		}
+
+		let sessionId = ideationThread?.id ?? null;
+		let reusedThread = false;
+
+		if (ideationThread?.canResume) {
+			await sendAgentSessionMessage(ideationThread.id, prompt);
+			reusedThread = true;
+		} else {
+			const session = await startAgentSession({
+				name: buildProjectTaskIdeationThreadName(project.name),
+				cwd: workspace,
+				prompt,
+				sandbox: 'workspace-write',
+				model: null
+			});
+			sessionId = session.sessionId;
+		}
+
+		return {
+			ok: true,
+			successAction: 'runTaskIdeationAssistant',
+			projectId: project.id,
+			projectName: project.name,
+			sessionId,
+			reusedThread
+		};
+	},
+
 	createTask: async ({ request }) => {
 		const form = await request.formData();
 		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
@@ -122,7 +245,7 @@ export const actions: Actions = {
 						title: name,
 						summary: instructions,
 						projectId: project.id,
-						lane: project.lane,
+						lane: 'product',
 						goalId: '',
 						priority: 'medium',
 						riskLevel: 'medium',
@@ -138,6 +261,96 @@ export const actions: Actions = {
 		});
 
 		return { ok: true, successAction: 'createTask' };
+	},
+
+	createDraftTasksFromIdeation: async ({ request }) => {
+		const form = await request.formData();
+		const sessionId = form.get('sessionId')?.toString().trim() ?? '';
+		const selectedIndexes = parseSuggestionIndexes(form);
+
+		if (!sessionId) {
+			return fail(400, { message: 'Ideation session is required.' });
+		}
+
+		if (selectedIndexes.length === 0) {
+			return fail(400, { message: 'Select at least one suggested task to create.' });
+		}
+
+		const [current, session] = await Promise.all([loadControlPlane(), getAgentSession(sessionId)]);
+
+		if (!session) {
+			return fail(404, { message: 'Ideation session not found.' });
+		}
+
+		const project = findProjectForTaskIdeationThread(session, current.projects);
+
+		if (!project) {
+			return fail(400, { message: 'Could not match the ideation session to a project.' });
+		}
+
+		const suggestions = parseIdeationTaskSuggestions(session.latestRun?.lastMessage ?? '');
+		const selectedSuggestions = selectedIndexes
+			.map((index) => suggestions[index] ?? null)
+			.filter((suggestion): suggestion is NonNullable<typeof suggestion> => Boolean(suggestion));
+
+		if (selectedSuggestions.length === 0) {
+			return fail(400, { message: 'The selected suggestions are no longer available.' });
+		}
+
+		const defaultDraftRole = getDefaultDraftRole(current);
+		const existingTitleKeys = new Set(
+			current.tasks
+				.filter((task) => task.projectId === project.id)
+				.map((task) => task.title.trim().toLowerCase())
+		);
+		const tasksToCreate = selectedSuggestions.filter((suggestion) => {
+			const titleKey = suggestion.title.trim().toLowerCase();
+			if (!titleKey || existingTitleKeys.has(titleKey)) {
+				return false;
+			}
+
+			existingTitleKeys.add(titleKey);
+			return true;
+		});
+
+		if (tasksToCreate.length === 0) {
+			return fail(409, {
+				message: 'Selected suggestions already exist as tasks for this project.'
+			});
+		}
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: [
+				...tasksToCreate.map((suggestion) =>
+					createTask({
+						title: suggestion.title,
+						summary: suggestion.suggestedInstructions,
+						projectId: project.id,
+						lane: 'product',
+						goalId: '',
+						priority: 'medium',
+						riskLevel: 'medium',
+						approvalMode: 'none',
+						requiresReview: true,
+						desiredRoleId: defaultDraftRole?.id ?? '',
+						assigneeWorkerId: null,
+						artifactPath: getDefaultDraftArtifactPath(project),
+						status: 'in_draft'
+					})
+				),
+				...data.tasks
+			]
+		}));
+
+		return {
+			ok: true,
+			successAction: 'createDraftTasksFromIdeation',
+			projectName: project.name,
+			sessionId,
+			createdCount: tasksToCreate.length,
+			skippedCount: selectedSuggestions.length - tasksToCreate.length
+		};
 	},
 
 	updateTask: async ({ request }) => {
@@ -187,7 +400,6 @@ export const actions: Actions = {
 						title: name,
 						summary: instructions,
 						projectId: project.id,
-						lane: project.lane,
 						status,
 						assigneeWorkerId: assigneeWorker?.id ?? null,
 						desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
@@ -244,30 +456,54 @@ export const actions: Actions = {
 
 		if (!project.projectRootFolder) {
 			return fail(400, {
-				message: 'This task cannot launch a session until its project has a root folder.'
+				message: 'This task cannot launch a work thread until its project has a root folder.'
 			});
 		}
 
 		if (getPendingApprovalForTask(current, task.id)?.mode === 'before_run') {
 			return fail(409, {
-				message: 'This task is waiting on before-run approval before a session can start.'
+				message: 'This task is waiting on before-run approval before a work thread can start.'
 			});
 		}
 
-		const prompt = buildTaskSessionPrompt({
+		const prompt = buildTaskThreadPrompt({
 			taskName: effectiveName,
 			taskInstructions: effectiveInstructions,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot
 		});
-		const session = await startAgentSession({
-			name: `Task: ${effectiveName}`,
-			cwd: project.projectRootFolder,
-			prompt,
-			sandbox: 'workspace-write',
-			model: null
-		});
+		const assignedThread = task.threadSessionId
+			? await getAgentSession(task.threadSessionId)
+			: null;
+		let sessionId = task.threadSessionId;
+		let threadId = assignedThread?.threadId ?? null;
+		let reusedAssignedThread = false;
+
+		if (assignedThread?.hasActiveRun) {
+			return fail(409, {
+				message:
+					'This task is assigned to a busy work thread. Wait for that run to finish or change the thread assignment first.'
+			});
+		}
+
+		if (assignedThread?.canResume) {
+			await sendAgentSessionMessage(assignedThread.id, prompt);
+			sessionId = assignedThread.id;
+			threadId = assignedThread.threadId;
+			reusedAssignedThread = true;
+		} else {
+			const session = await startAgentSession({
+				name: buildTaskThreadName(project.name),
+				cwd: project.projectRootFolder,
+				prompt,
+				sandbox: 'workspace-write',
+				model: null
+			});
+			sessionId = session.sessionId;
+			threadId = null;
+		}
+
 		const providerId =
 			assigneeWorker?.providerId ??
 			current.providers.find((provider) => provider.kind === 'local' && provider.enabled)?.id ??
@@ -279,13 +515,16 @@ export const actions: Actions = {
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),
-			sessionId: session.sessionId,
+			threadId,
+			sessionId,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
 					? [project.defaultArtifactRoot || project.projectRootFolder]
 					: [],
-			summary: 'Launched from the task board into a resumable Codex session.',
+			summary: reusedAssignedThread
+				? 'Queued in the task’s assigned work thread.'
+				: 'Started a new work thread from the task board.',
 			lastHeartbeatAt: new Date().toISOString()
 		});
 
@@ -299,9 +538,9 @@ export const actions: Actions = {
 							title: effectiveName,
 							summary: effectiveInstructions,
 							projectId: project.id,
-							lane: project.lane,
 							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
 							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
+							threadSessionId: sessionId,
 							artifactPath:
 								candidate.artifactPath ||
 								project.defaultArtifactRoot ||
@@ -309,7 +548,7 @@ export const actions: Actions = {
 								'',
 							runCount: candidate.runCount + 1,
 							latestRunId: run.id,
-							status: 'running',
+							status: 'in_progress',
 							updatedAt: new Date().toISOString()
 						}
 					: candidate
@@ -320,7 +559,54 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'launchTaskSession',
 			taskId,
-			sessionId: session.sessionId
+			sessionId
+		};
+	},
+
+	deleteTasks: async ({ request }) => {
+		const form = await request.formData();
+		const taskIds = [
+			...new Set(
+				form
+					.getAll('taskId')
+					.map((value) => value.toString().trim())
+					.filter(Boolean)
+			)
+		];
+
+		if (taskIds.length === 0) {
+			return fail(400, { message: 'Select at least one task to delete.' });
+		}
+
+		const current = await loadControlPlane();
+		const existingTaskIds = new Set(current.tasks.map((task) => task.id));
+		const deletableTaskIds = taskIds.filter((taskId) => existingTaskIds.has(taskId));
+
+		if (deletableTaskIds.length === 0) {
+			return fail(404, { message: 'Selected tasks were not found.' });
+		}
+
+		const relatedSessionIds = [
+			...new Set(
+				current.runs
+					.filter((run) => deletableTaskIds.includes(run.taskId))
+					.map((run) => run.sessionId)
+					.filter((sessionId): sessionId is string => Boolean(sessionId))
+			)
+		];
+
+		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentSession(sessionId)));
+		await updateControlPlane((data) =>
+			deletableTaskIds.reduce(
+				(currentData, taskId) => removeTaskFromControlPlane(currentData, taskId),
+				data
+			)
+		);
+
+		return {
+			ok: true,
+			successAction: 'deleteTasks',
+			deletedCount: deletableTaskIds.length
 		};
 	}
 };

@@ -14,42 +14,6 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 
-const starterProfiles = [
-	{
-		name: 'OpenAI Codex CLI',
-		service: 'OpenAI',
-		kind: 'local',
-		authMode: 'local_cli',
-		setupStatus: 'connected',
-		defaultModel: 'gpt-5.4',
-		launcher: 'codex',
-		description: 'Best for local repo work, terminal tasks, and file-aware execution.',
-		capabilities: ['repo edits', 'terminal', 'local files']
-	},
-	{
-		name: 'ChatGPT Workspace',
-		service: 'OpenAI',
-		kind: 'cloud',
-		authMode: 'oauth',
-		setupStatus: 'needs_setup',
-		defaultModel: '',
-		launcher: '',
-		description: 'Useful for higher-level planning, synthesis, and conversational review loops.',
-		capabilities: ['planning', 'review', 'writing']
-	},
-	{
-		name: 'Anthropic Claude',
-		service: 'Anthropic',
-		kind: 'api',
-		authMode: 'api_key',
-		setupStatus: 'planned',
-		defaultModel: '',
-		launcher: '',
-		description: 'Optional second provider when you want comparison or a fallback path.',
-		capabilities: ['reasoning', 'writing', 'fallback']
-	}
-] as const;
-
 function parseListField(value: FormDataEntryValue | null) {
 	return (
 		value
@@ -95,8 +59,7 @@ export const load: PageServerLoad = async () => {
 			.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)),
 		kindOptions: PROVIDER_KIND_OPTIONS,
 		setupStatusOptions: PROVIDER_SETUP_STATUS_OPTIONS,
-		authModeOptions: PROVIDER_AUTH_MODE_OPTIONS,
-		starterProfiles
+		authModeOptions: PROVIDER_AUTH_MODE_OPTIONS
 	};
 };
 

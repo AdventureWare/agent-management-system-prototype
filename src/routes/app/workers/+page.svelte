@@ -86,7 +86,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
 		<form
 			class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-6"
 			method="POST"
@@ -211,9 +211,11 @@
 								href={resolve(`/app/workers/${worker.id}`)}
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
+									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="text-lg font-semibold text-white transition group-hover:text-sky-200">
+											<h3
+												class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
+											>
 												{worker.name}
 											</h3>
 											<span
@@ -227,11 +229,13 @@
 												{worker.location}
 											</span>
 										</div>
-										<p class="mt-2 text-sm text-slate-300">{worker.note || 'No note saved.'}</p>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+											{worker.note || 'No note saved.'}
+										</p>
 									</div>
-									<div class="text-left text-xs text-slate-500 sm:text-right">
-										<p>{worker.providerName}</p>
-										<p class="mt-1">{worker.roleName}</p>
+									<div class="min-w-0 text-left text-xs text-slate-500 sm:max-w-56 sm:text-right">
+										<p class="ui-wrap-anywhere">{worker.providerName}</p>
+										<p class="ui-wrap-anywhere mt-1">{worker.roleName}</p>
 									</div>
 								</div>
 
@@ -248,7 +252,7 @@
 									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last run</p>
-										<p class="mt-2 text-sm text-white">
+										<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 											{worker.latestRunAt ? new Date(worker.latestRunAt).toLocaleString() : 'None'}
 										</p>
 									</div>
@@ -258,7 +262,7 @@
 									<div class="mt-4 flex flex-wrap gap-2">
 										{#each worker.tags as tag (tag)}
 											<span
-												class="rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
+												class="ui-wrap-anywhere rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
 											>
 												{tag}
 											</span>

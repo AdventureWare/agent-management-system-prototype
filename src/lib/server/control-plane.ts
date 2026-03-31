@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { normalizePathInput } from '$lib/server/path-tools';
 import {
 	APPROVAL_STATUS_OPTIONS,
 	GOAL_STATUS_OPTIONS,
@@ -13,9 +14,9 @@ import {
 	RUN_STATUS_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
-	TASK_STATUS_OPTIONS,
 	WORKER_LOCATION_OPTIONS,
 	WORKER_STATUS_OPTIONS,
+	normalizeTaskStatus,
 	type Approval,
 	type ApprovalStatus,
 	type ControlPlaneData,
@@ -35,6 +36,7 @@ import {
 	type TaskApprovalMode,
 	type TaskRiskLevel,
 	type Task,
+	type TaskAttachment,
 	type TaskStatus,
 	type Worker,
 	type WorkerLocation,
@@ -49,10 +51,6 @@ function isLane(value: string): value is Lane {
 
 function isPriority(value: string): value is Priority {
 	return PRIORITY_OPTIONS.includes(value as Priority);
-}
-
-function isTaskStatus(value: string): value is TaskStatus {
-	return TASK_STATUS_OPTIONS.includes(value as TaskStatus);
 }
 
 function isTaskRiskLevel(value: string): value is TaskRiskLevel {
@@ -113,7 +111,8 @@ function defaultData(): ControlPlaneData {
 	};
 }
 
-type LegacyProject = Project & {
+type LegacyProject = Partial<Project> & {
+	lane?: unknown;
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
 };
@@ -135,6 +134,7 @@ type LegacyProvider = Partial<Provider> & {
 
 type LegacyTask = Partial<Task> & {
 	projectId?: unknown;
+	attachments?: unknown;
 };
 
 type LegacyRun = Partial<Run> & {
@@ -144,6 +144,8 @@ type LegacyRun = Partial<Run> & {
 type LegacyReview = Partial<Review>;
 
 type LegacyApproval = Partial<Approval>;
+
+type LegacyTaskAttachment = Partial<TaskAttachment>;
 
 function inferProviderService(provider: LegacyProvider) {
 	const haystack = `${provider.id ?? ''} ${provider.name ?? ''} ${provider.description ?? ''}`
@@ -241,24 +243,24 @@ function normalizeProject(
 	project: Partial<Project> & { defaultCoordinationFolder?: unknown }
 ): Project {
 	const legacyProject = project as LegacyProject;
+	const projectRootFolder =
+		typeof legacyProject.projectRootFolder === 'string'
+			? legacyProject.projectRootFolder
+			: typeof legacyProject.defaultCoordinationFolder === 'string'
+				? legacyProject.defaultCoordinationFolder
+				: '';
+	const defaultArtifactRoot =
+		typeof legacyProject.defaultArtifactRoot === 'string' ? legacyProject.defaultArtifactRoot : '';
+	const defaultRepoPath =
+		typeof legacyProject.defaultRepoPath === 'string' ? legacyProject.defaultRepoPath : '';
 
 	return {
 		id: typeof legacyProject.id === 'string' ? legacyProject.id : createProjectId(),
 		name: typeof legacyProject.name === 'string' ? legacyProject.name : '',
-		lane: isLane(legacyProject.lane) ? legacyProject.lane : 'product',
 		summary: typeof legacyProject.summary === 'string' ? legacyProject.summary : '',
-		projectRootFolder:
-			typeof legacyProject.projectRootFolder === 'string'
-				? legacyProject.projectRootFolder
-				: typeof legacyProject.defaultCoordinationFolder === 'string'
-					? legacyProject.defaultCoordinationFolder
-					: '',
-		defaultArtifactRoot:
-			typeof legacyProject.defaultArtifactRoot === 'string'
-				? legacyProject.defaultArtifactRoot
-				: '',
-		defaultRepoPath:
-			typeof legacyProject.defaultRepoPath === 'string' ? legacyProject.defaultRepoPath : '',
+		projectRootFolder: normalizePathInput(projectRootFolder),
+		defaultArtifactRoot: normalizePathInput(defaultArtifactRoot),
+		defaultRepoPath: normalizePathInput(defaultRepoPath),
 		defaultRepoUrl:
 			typeof legacyProject.defaultRepoUrl === 'string' ? legacyProject.defaultRepoUrl : '',
 		defaultBranch:
@@ -298,10 +300,8 @@ function normalizeRun(run: LegacyRun): Run {
 	return {
 		id: typeof run.id === 'string' ? run.id : createRunId(),
 		taskId: typeof run.taskId === 'string' ? run.taskId : '',
-		workerId:
-			typeof run.workerId === 'string' && run.workerId.trim() ? run.workerId : null,
-		providerId:
-			typeof run.providerId === 'string' && run.providerId.trim() ? run.providerId : null,
+		workerId: typeof run.workerId === 'string' && run.workerId.trim() ? run.workerId : null,
+		providerId: typeof run.providerId === 'string' && run.providerId.trim() ? run.providerId : null,
 		status: isRunStatus(statusValue) ? statusValue : 'queued',
 		createdAt: typeof run.createdAt === 'string' ? run.createdAt : now,
 		updatedAt: typeof run.updatedAt === 'string' ? run.updatedAt : now,
@@ -369,6 +369,40 @@ function normalizeApproval(approval: LegacyApproval): Approval {
 	};
 }
 
+function normalizeTaskAttachment(attachment: LegacyTaskAttachment): TaskAttachment | null {
+	if (typeof attachment.path !== 'string' || !attachment.path.trim()) {
+		return null;
+	}
+
+	const attachedAt =
+		typeof attachment.attachedAt === 'string' && attachment.attachedAt.trim()
+			? attachment.attachedAt
+			: new Date().toISOString();
+
+	return {
+		id:
+			typeof attachment.id === 'string' && attachment.id.trim()
+				? attachment.id
+				: createTaskAttachmentId(),
+		name:
+			typeof attachment.name === 'string' && attachment.name.trim()
+				? attachment.name
+				: attachment.path.trim().split('/').pop() || 'Attachment',
+		path: normalizePathInput(attachment.path),
+		contentType:
+			typeof attachment.contentType === 'string' && attachment.contentType.trim()
+				? attachment.contentType
+				: 'application/octet-stream',
+		sizeBytes:
+			typeof attachment.sizeBytes === 'number' &&
+			Number.isFinite(attachment.sizeBytes) &&
+			attachment.sizeBytes >= 0
+				? attachment.sizeBytes
+				: 0,
+		attachedAt
+	};
+}
+
 function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task {
 	const laneValue = task.lane;
 	const priorityValue = task.priority;
@@ -382,8 +416,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 	const lane: Lane = typeof laneValue === 'string' && isLane(laneValue) ? laneValue : 'product';
 	const priority: Priority =
 		typeof priorityValue === 'string' && isPriority(priorityValue) ? priorityValue : 'medium';
-	const status: TaskStatus =
-		typeof statusValue === 'string' && isTaskStatus(statusValue) ? statusValue : 'ready';
+	const status = typeof statusValue === 'string' ? normalizeTaskStatus(statusValue) : null;
 	const riskLevel: TaskRiskLevel =
 		typeof riskLevelValue === 'string' && isTaskRiskLevel(riskLevelValue)
 			? riskLevelValue
@@ -392,6 +425,12 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		typeof approvalModeValue === 'string' && isTaskApprovalMode(approvalModeValue)
 			? approvalModeValue
 			: 'none';
+	const latestRunId =
+		typeof task.latestRunId === 'string' && task.latestRunId.trim() ? task.latestRunId : null;
+	const inferredThreadSessionId =
+		(latestRunId ? (taskRuns.find((run) => run.id === latestRunId)?.sessionId ?? null) : null) ??
+		taskRuns.find((run) => run.sessionId)?.sessionId ??
+		null;
 
 	return {
 		id: typeof task.id === 'string' ? task.id : createTaskId(),
@@ -401,7 +440,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		lane,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
 		priority,
-		status,
+		status: status ?? 'ready',
 		riskLevel,
 		approvalMode,
 		requiresReview: typeof task.requiresReview === 'boolean' ? task.requiresReview : true,
@@ -410,6 +449,10 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 			typeof task.assigneeWorkerId === 'string' && task.assigneeWorkerId.trim()
 				? task.assigneeWorkerId
 				: null,
+		threadSessionId:
+			typeof task.threadSessionId === 'string' && task.threadSessionId.trim()
+				? task.threadSessionId
+				: inferredThreadSessionId,
 		blockedReason: typeof task.blockedReason === 'string' ? task.blockedReason : '',
 		dependencyTaskIds: Array.isArray(task.dependencyTaskIds)
 			? task.dependencyTaskIds.filter(
@@ -420,11 +463,14 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 			typeof task.runCount === 'number' && Number.isFinite(task.runCount) && task.runCount >= 0
 				? task.runCount
 				: taskRuns.length,
-		latestRunId:
-			typeof task.latestRunId === 'string' && task.latestRunId.trim()
-				? task.latestRunId
-				: (taskRuns[0]?.id ?? null),
+		latestRunId: latestRunId ?? taskRuns[0]?.id ?? null,
 		artifactPath: typeof task.artifactPath === 'string' ? task.artifactPath : '',
+		attachments: Array.isArray(task.attachments)
+			? task.attachments
+					.map((attachment) => normalizeTaskAttachment(attachment as LegacyTaskAttachment))
+					.filter((attachment): attachment is TaskAttachment => attachment !== null)
+					.sort((left, right) => right.attachedAt.localeCompare(left.attachedAt))
+			: [],
 		createdAt: typeof task.createdAt === 'string' ? task.createdAt : new Date().toISOString(),
 		updatedAt: typeof task.updatedAt === 'string' ? task.updatedAt : new Date().toISOString()
 	};
@@ -435,7 +481,7 @@ function taskNeedsApproval(task: Task) {
 		case 'before_run':
 			return task.runCount === 0 && task.status === 'ready';
 		case 'before_apply':
-			return task.status === 'running';
+			return task.status === 'in_progress';
 		case 'before_complete':
 			return task.status === 'review' || task.status === 'done';
 		default:
@@ -448,15 +494,21 @@ function sortNewestFirst<T extends { createdAt: string }>(items: T[]) {
 }
 
 export function getOpenReviewForTask(data: ControlPlaneData, taskId: string) {
-	return sortNewestFirst(
-		data.reviews.filter((review) => review.taskId === taskId && review.status === 'open')
-	)[0] ?? null;
+	return (
+		sortNewestFirst(
+			data.reviews.filter((review) => review.taskId === taskId && review.status === 'open')
+		)[0] ?? null
+	);
 }
 
 export function getPendingApprovalForTask(data: ControlPlaneData, taskId: string) {
-	return sortNewestFirst(
-		data.approvals.filter((approval) => approval.taskId === taskId && approval.status === 'pending')
-	)[0] ?? null;
+	return (
+		sortNewestFirst(
+			data.approvals.filter(
+				(approval) => approval.taskId === taskId && approval.status === 'pending'
+			)
+		)[0] ?? null
+	);
 }
 
 export function syncGovernanceQueues(data: ControlPlaneData): ControlPlaneData {
@@ -607,7 +659,7 @@ export function formatRelativeTime(iso: string) {
 }
 
 export function summarizeControlPlane(data: ControlPlaneData) {
-	const runningTasks = data.tasks.filter((task) => task.status === 'running');
+	const runningTasks = data.tasks.filter((task) => task.status === 'in_progress');
 	const blockedTasks = data.tasks.filter((task) => task.status === 'blocked');
 	const readyTasks = data.tasks.filter((task) => task.status === 'ready');
 	const reviewTasks = data.tasks.filter((task) => task.status === 'review');
@@ -616,7 +668,9 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 	const highRiskTasks = data.tasks.filter(
 		(task) => task.riskLevel === 'high' && task.status !== 'done'
 	);
-	const activeRuns = data.runs.filter((run) => run.status === 'starting' || run.status === 'running');
+	const activeRuns = data.runs.filter(
+		(run) => run.status === 'starting' || run.status === 'running'
+	);
 	const blockedRuns = data.runs.filter((run) => run.status === 'blocked');
 	const openReviews = data.reviews.filter((review) => review.status === 'open');
 	const pendingApprovals = data.approvals.filter((approval) => approval.status === 'pending');
@@ -661,6 +715,10 @@ export function createTaskId() {
 	return `task_${randomUUID()}`;
 }
 
+export function createTaskAttachmentId() {
+	return `attachment_${randomUUID()}`;
+}
+
 export function createRunId() {
 	return `run_${randomUUID()}`;
 }
@@ -686,7 +744,7 @@ export function parsePriority(value: string, fallback: Priority): Priority {
 }
 
 export function parseTaskStatus(value: string, fallback: TaskStatus): TaskStatus {
-	return isTaskStatus(value) ? value : fallback;
+	return normalizeTaskStatus(value) ?? fallback;
 }
 
 export function parseTaskRiskLevel(value: string, fallback: TaskRiskLevel): TaskRiskLevel {
@@ -789,7 +847,6 @@ export function createGoal(input: {
 export function createProject(input: {
 	name: string;
 	summary: string;
-	lane: Lane;
 	projectRootFolder?: string;
 	defaultArtifactRoot?: string;
 	defaultRepoPath?: string;
@@ -800,10 +857,9 @@ export function createProject(input: {
 		id: createProjectId(),
 		name: input.name,
 		summary: input.summary,
-		lane: input.lane,
-		projectRootFolder: input.projectRootFolder ?? '',
-		defaultArtifactRoot: input.defaultArtifactRoot ?? '',
-		defaultRepoPath: input.defaultRepoPath ?? '',
+		projectRootFolder: normalizePathInput(input.projectRootFolder),
+		defaultArtifactRoot: normalizePathInput(input.defaultArtifactRoot),
+		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
 		defaultRepoUrl: input.defaultRepoUrl ?? '',
 		defaultBranch: input.defaultBranch ?? ''
 	};
@@ -845,7 +901,9 @@ export function createTask(input: {
 	blockedReason?: string;
 	dependencyTaskIds?: string[];
 	assigneeWorkerId?: string | null;
+	threadSessionId?: string | null;
 	status?: TaskStatus;
+	attachments?: TaskAttachment[];
 }): Task {
 	const now = new Date().toISOString();
 
@@ -863,11 +921,13 @@ export function createTask(input: {
 		requiresReview: input.requiresReview,
 		desiredRoleId: input.desiredRoleId,
 		assigneeWorkerId: input.assigneeWorkerId ?? null,
+		threadSessionId: input.threadSessionId ?? null,
 		blockedReason: input.blockedReason ?? '',
 		dependencyTaskIds: input.dependencyTaskIds ?? [],
 		runCount: 0,
 		latestRunId: null,
 		artifactPath: input.artifactPath,
+		attachments: input.attachments ?? [],
 		createdAt: now,
 		updatedAt: now
 	};
@@ -972,6 +1032,38 @@ export function taskHasUnmetDependencies(data: ControlPlaneData, task: Task) {
 	);
 
 	return task.dependencyTaskIds.some((dependencyTaskId) => !doneTaskIds.has(dependencyTaskId));
+}
+
+export function deleteTask(data: ControlPlaneData, taskId: string): ControlPlaneData {
+	const relatedRunIds = new Set(
+		data.runs.filter((candidate) => candidate.taskId === taskId).map((candidate) => candidate.id)
+	);
+	const now = new Date().toISOString();
+
+	return {
+		...data,
+		tasks: data.tasks
+			.filter((task) => task.id !== taskId)
+			.map((task) =>
+				task.dependencyTaskIds.includes(taskId)
+					? {
+							...task,
+							dependencyTaskIds: task.dependencyTaskIds.filter(
+								(dependencyTaskId) => dependencyTaskId !== taskId
+							),
+							updatedAt: now
+						}
+					: task
+			),
+		runs: data.runs.filter((run) => run.taskId !== taskId),
+		reviews: data.reviews.filter(
+			(review) => review.taskId !== taskId && !(review.runId && relatedRunIds.has(review.runId))
+		),
+		approvals: data.approvals.filter(
+			(approval) =>
+				approval.taskId !== taskId && !(approval.runId && relatedRunIds.has(approval.runId))
+		)
+	};
 }
 
 export function createWorker(input: {

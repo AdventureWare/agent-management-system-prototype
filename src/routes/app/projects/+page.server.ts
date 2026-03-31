@@ -1,11 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
-import { LANE_OPTIONS } from '$lib/types/control-plane';
+import { normalizePathInput } from '$lib/server/path-tools';
 import {
 	createProject,
 	loadControlPlane,
-	parseLane,
 	projectMatchesPath,
 	updateControlPlane
 } from '$lib/server/control-plane';
@@ -14,10 +13,9 @@ function readProjectForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
-		lane: parseLane(form.get('lane')?.toString() ?? '', 'product'),
-		projectRootFolder: form.get('projectRootFolder')?.toString().trim() ?? '',
-		defaultArtifactRoot: form.get('defaultArtifactRoot')?.toString().trim() ?? '',
-		defaultRepoPath: form.get('defaultRepoPath')?.toString().trim() ?? '',
+		projectRootFolder: normalizePathInput(form.get('projectRootFolder')?.toString()),
+		defaultArtifactRoot: normalizePathInput(form.get('defaultArtifactRoot')?.toString()),
+		defaultRepoPath: normalizePathInput(form.get('defaultRepoPath')?.toString()),
 		defaultRepoUrl: form.get('defaultRepoUrl')?.toString().trim() ?? '',
 		defaultBranch: form.get('defaultBranch')?.toString().trim() ?? ''
 	};
@@ -32,7 +30,6 @@ export const load: PageServerLoad = async () => {
 	}
 
 	return {
-		laneOptions: LANE_OPTIONS,
 		projects: [...data.projects]
 			.map((project) => {
 				const relatedTaskGoalIds = new Set(
@@ -67,7 +64,6 @@ export const actions: Actions = {
 		const {
 			name,
 			summary,
-			lane,
 			projectRootFolder,
 			defaultArtifactRoot,
 			defaultRepoPath,
@@ -85,7 +81,6 @@ export const actions: Actions = {
 				createProject({
 					name,
 					summary,
-					lane,
 					projectRootFolder,
 					defaultArtifactRoot,
 					defaultRepoPath,

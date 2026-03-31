@@ -70,6 +70,7 @@ function createRun(overrides: Partial<AgentRunDetail>): AgentRunDetail {
 		},
 		lastMessage: 'Default response',
 		logTail: [],
+		activityAt: '2026-03-27T12:05:00.000Z',
 		...overrides
 	};
 }
@@ -98,18 +99,29 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			cwd: '/tmp/project',
 			sandbox: 'workspace-write',
 			model: 'gpt-5.4',
+			origin: 'external',
 			threadId: 'thread-1',
+			archivedAt: null,
 			createdAt: '2026-03-27T12:00:00.000Z',
 			updatedAt: '2026-03-27T13:03:00.000Z',
-			status: 'completed',
+			sessionState: 'ready',
+			latestRunStatus: 'completed',
 			hasActiveRun: false,
 			canResume: true,
 			runCount: 2,
 			lastActivityAt: '2026-03-27T13:03:00.000Z',
 			lastActivityLabel: 'moments ago',
-			statusSummary: 'Completed and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
+			relatedTasks: [
+				{
+					id: 'task-1',
+					title: 'Session detail inspector task',
+					status: 'running',
+					isPrimary: true
+				}
+			],
 			latestRun: followUpRun,
 			runs: [followUpRun, initialRun]
 		};
@@ -123,10 +135,22 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('heading', { name: 'Session detail inspector' }))
 			.toBeVisible();
-		await expect.element(page.getByRole('link', { name: /Back to sessions/i })).toHaveAttribute(
-			'href',
-			'/app/sessions'
-		);
+		await expect.element(page.getByText('Thread status')).toBeVisible();
+		await expect.element(page.getByRole('heading', { name: 'Ready' })).toBeVisible();
+		await expect.element(page.getByText('Ready for follow-up')).toBeVisible();
+		await expect.element(page.getByText('Imported from Codex')).toBeVisible();
+		await expect.element(page.getByText('latest run completed')).toBeVisible();
+		await expect
+			.element(
+				page.getByText(/A work thread keeps one Codex conversation and all of its runs together\./i)
+			)
+			.toBeVisible();
+		await expect
+			.element(page.getByText(/Related tasks: Session detail inspector task/i))
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: /Back to threads/i }))
+			.toHaveAttribute('href', '/app/sessions');
 		await expect
 			.element(
 				page
@@ -135,7 +159,9 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 					.first()
 			)
 			.toBeVisible();
-		await expect.element(page.getByRole('button', { name: 'Send follow-up instruction' })).toBeEnabled();
+		await expect
+			.element(page.getByRole('button', { name: 'Send follow-up instruction' }))
+			.toBeEnabled();
 
 		await page.getByRole('button', { name: /Turn 1/i }).click();
 

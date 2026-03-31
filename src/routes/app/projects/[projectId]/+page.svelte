@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import PathField from '$lib/components/PathField.svelte';
+	import { formatTaskStatusLabel } from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 
@@ -14,7 +15,7 @@
 				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
 			case 'review':
 				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
-			case 'running':
+			case 'in_progress':
 				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
 			default:
 				return 'border-slate-700 bg-slate-950/70 text-slate-300';
@@ -46,18 +47,13 @@
 			>
 				Projects
 			</a>
-			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="text-3xl font-semibold tracking-tight text-white">{data.project.name}</h1>
-				<span
-					class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
-				>
-					{data.project.lane}
-				</span>
-			</div>
-			<p class="max-w-3xl text-sm text-slate-300">{data.project.summary}</p>
+			<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
+				{data.project.name}
+			</h1>
+			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">{data.project.summary}</p>
 		</div>
 
-		<div class="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:max-w-4xl">
+		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-4xl xl:grid-cols-3">
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Open tasks</p>
 				<p class="mt-3 text-3xl font-semibold text-white">{data.metrics.activeTasks}</p>
@@ -104,7 +100,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
 		<section class="space-y-6">
 			<form
 				class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
@@ -125,15 +121,6 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 						<input class="input text-white" name="name" required value={data.project.name} />
-					</label>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Lane</span>
-						<select class="select text-white" name="lane">
-							{#each data.laneOptions as lane (lane)}
-								<option value={lane} selected={data.project.lane === lane}>{lane}</option>
-							{/each}
-						</select>
 					</label>
 				</div>
 
@@ -233,7 +220,7 @@
 						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
 							Project root folder
 						</p>
-						<p class="mt-2 text-sm break-all text-slate-200">
+						<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
 							{data.project.projectRootFolder || 'Not configured'}
 						</p>
 					</div>
@@ -242,7 +229,7 @@
 						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
 							Default artifact root
 						</p>
-						<p class="mt-2 text-sm break-all text-slate-200">
+						<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
 							{data.project.defaultArtifactRoot || 'Not configured'}
 						</p>
 					</div>
@@ -251,7 +238,7 @@
 						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
 							Default repo path
 						</p>
-						<p class="mt-2 text-sm break-all text-slate-200">
+						<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
 							{data.project.defaultRepoPath || 'Not configured'}
 						</p>
 					</div>
@@ -261,7 +248,7 @@
 							<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
 								Default repo URL
 							</p>
-							<p class="mt-2 text-sm break-all text-slate-200">
+							<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
 								{data.project.defaultRepoUrl || 'Not configured'}
 							</p>
 						</div>
@@ -312,13 +299,13 @@
 								href={resolve(`/app/tasks/${task.id}`)}
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
+									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="font-medium text-white">{task.title}</h3>
+											<h3 class="ui-wrap-anywhere font-medium text-white">{task.title}</h3>
 											<span
 												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusClass(task.status)}`}
 											>
-												{task.status}
+												{formatTaskStatusLabel(task.status)}
 											</span>
 											{#if task.hasUnmetDependencies}
 												<span
@@ -342,30 +329,28 @@
 												</span>
 											{/if}
 										</div>
-										<p class="mt-2 text-sm text-slate-300">{task.summary}</p>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{task.summary}</p>
 									</div>
-									<div class="text-left text-xs text-slate-500 sm:text-right">
+									<div class="min-w-0 text-left text-xs text-slate-500 sm:max-w-56 sm:text-right">
 										<p>Updated {task.updatedAtLabel}</p>
-										<p class="mt-1 text-slate-400">{task.assigneeName}</p>
+										<p class="ui-wrap-anywhere mt-1 text-slate-400">{task.assigneeName}</p>
 									</div>
 								</div>
 
 								<div class="mt-4 grid gap-3 sm:grid-cols-3">
 									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Goal</p>
-										<p class="mt-2 text-sm text-white">{task.goalName}</p>
+										<p class="ui-wrap-anywhere mt-2 text-sm text-white">{task.goalName}</p>
 									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-											Priority
-										</p>
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Priority</p>
 										<p class="mt-2 text-sm text-white">{task.priority}</p>
 									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 											Artifact path
 										</p>
-										<p class="mt-2 text-sm break-all text-white">
+										<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 											{task.artifactPath || 'Not set'}
 										</p>
 									</div>
@@ -397,20 +382,20 @@
 						{#each data.relatedGoals as goal (goal.id)}
 							<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
+									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="font-medium text-white">{goal.name}</h3>
+											<h3 class="ui-wrap-anywhere font-medium text-white">{goal.name}</h3>
 											<span
 												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusClass(goal.status)}`}
 											>
 												{goal.status}
 											</span>
 										</div>
-										<p class="mt-2 text-sm text-slate-300">{goal.summary}</p>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{goal.summary}</p>
 									</div>
 									<p class="text-xs text-slate-500">{goal.taskCount} linked task(s)</p>
 								</div>
-								<p class="mt-3 text-xs break-all text-slate-500">{goal.artifactPath}</p>
+								<p class="ui-wrap-anywhere mt-3 text-xs text-slate-500">{goal.artifactPath}</p>
 							</article>
 						{/each}
 					{/if}

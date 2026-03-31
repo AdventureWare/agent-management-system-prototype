@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { fetchAgentSession } from '$lib/client/agent-data';
+	import {
+		ACTIVE_REFRESH_INTERVAL_MS,
+		ACTIVITY_CLOCK_INTERVAL_MS,
+		formatActivityAge
+	} from '$lib/session-activity';
+	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
 	import type {
 		AgentRunDetail,
 		AgentRunStatus,
-		AgentSessionDetail,
-		AgentTimelineStep
+		AgentSessionDetail
 	} from '$lib/types/agent-session';
 	import { fade } from 'svelte/transition';
 
@@ -17,6 +23,7 @@
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
 	let isCanceling = $state(false);
+	let now = $state(Date.now());
 	let selectedRunId = $state('');
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
@@ -25,6 +32,11 @@
 		dateStyle: 'medium',
 		timeStyle: 'short'
 	});
+	type SessionStateDescriptor = {
+		label: string;
+		detail: string;
+		className: string;
+	};
 
 	let selectedRun = $derived.by(() => {
 		if (!session) {
@@ -39,6 +51,7 @@
 		);
 	});
 	let chronologicalRuns = $derived.by(() => (session ? [...session.runs].reverse() : []));
+	let sessionState = $derived.by(() => (session ? describeSessionState(session) : null));
 
 	$effect(() => {
 		session = sessionProp;
@@ -69,7 +82,17 @@
 
 		const intervalId = window.setInterval(() => {
 			void refreshSession();
-		}, 10000);
+		}, ACTIVE_REFRESH_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
+
+	$effect(() => {
+		const intervalId = window.setInterval(() => {
+			now = Date.now();
+		}, ACTIVITY_CLOCK_INTERVAL_MS);
 
 		return () => {
 			window.clearInterval(intervalId);
@@ -95,18 +118,7 @@
 			throw new Error('Session not found.');
 		}
 
-		const response = await fetch(resolve(`/api/agents/sessions/${session.id}`));
-
-		if (response.status === 404) {
-			throw new Error('Session not found.');
-		}
-
-		if (!response.ok) {
-			throw new Error('Could not refresh the session.');
-		}
-
-		const payload = (await response.json()) as { session: AgentSessionDetail };
-		session = payload.session;
+		session = await fetchAgentSession(session.id);
 	}
 
 	async function refreshSession(options: { force?: boolean } = {}) {
@@ -126,7 +138,7 @@
 		} catch (err) {
 			pageNotice = {
 				tone: 'error',
-				message: err instanceof Error ? err.message : 'Could not refresh the session.'
+				message: err instanceof Error ? err.message : 'Could not refresh the thread.'
 			};
 		} finally {
 			isRefreshing = false;
@@ -246,56 +258,37 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function timelineDotClass(state: AgentTimelineStep['state']) {
+	function sessionStateLabel(state: AgentSessionDetail['sessionState']) {
 		switch (state) {
-			case 'complete':
-				return 'bg-emerald-400 ring-4 ring-emerald-950/60';
-			case 'current':
-				return 'bg-sky-400 ring-4 ring-sky-950/60';
+			case 'starting':
+				return 'Starting';
+			case 'waiting':
+				return 'Waiting for response';
+			case 'working':
+				return 'Working';
+			case 'ready':
+				return 'Ready';
 			case 'attention':
-				return 'bg-rose-400 ring-4 ring-rose-950/60';
+				return 'Needs attention';
+			case 'unavailable':
+				return 'Not resumable';
 			default:
-				return 'bg-slate-700 ring-4 ring-slate-950/60';
+				return 'Idle';
 		}
 	}
 
-	function timelineCardClass(state: AgentTimelineStep['state']) {
+	function sessionStatusClass(state: AgentSessionDetail['sessionState']) {
 		switch (state) {
-			case 'complete':
-				return 'border-emerald-900/60 bg-emerald-950/20';
-			case 'current':
-				return 'border-sky-900/60 bg-sky-950/20';
-			case 'attention':
-				return 'border-rose-900/60 bg-rose-950/20';
-			default:
-				return 'border-slate-800 bg-slate-950/60';
-		}
-	}
-
-	function timelineConnectorClass(state: AgentTimelineStep['state']) {
-		switch (state) {
-			case 'complete':
-				return 'bg-emerald-900/70';
-			case 'current':
-				return 'bg-sky-900/70';
-			case 'attention':
-				return 'bg-rose-900/70';
-			default:
-				return 'bg-slate-800';
-		}
-	}
-
-	function sessionStatusClass(status: AgentSessionDetail['status']) {
-		switch (status) {
-			case 'running':
+			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
-			case 'queued':
+			case 'starting':
 				return 'border border-amber-800/70 bg-amber-950/50 text-amber-300';
-			case 'failed':
-			case 'canceled':
-				return 'border border-rose-900/70 bg-rose-950/40 text-rose-300';
-			case 'completed':
+			case 'waiting':
+			case 'ready':
 				return 'border border-sky-800/70 bg-sky-950/50 text-sky-300';
+			case 'attention':
+				return 'border border-rose-900/70 bg-rose-950/40 text-rose-300';
+			case 'unavailable':
 			default:
 				return 'border border-slate-700 bg-slate-900 text-slate-300';
 		}
@@ -341,6 +334,54 @@
 		return run.mode === 'message' ? 'Follow-up' : 'Start';
 	}
 
+	function describeSessionState(detail: AgentSessionDetail): SessionStateDescriptor {
+		return {
+			label: sessionStateLabel(detail.sessionState),
+			detail: detail.sessionSummary,
+			className: sessionStatusClass(detail.sessionState)
+		};
+	}
+
+	function replyStateLabel(detail: AgentSessionDetail) {
+		if (detail.latestRun?.lastMessage) {
+			return 'Captured';
+		}
+
+		if (detail.latestRunStatus === 'running') {
+			return 'Waiting';
+		}
+
+		if (detail.latestRunStatus === 'queued') {
+			return 'Pending';
+		}
+
+		if (detail.latestRunStatus === 'failed' || detail.latestRunStatus === 'canceled') {
+			return 'Missing';
+		}
+
+		return 'None';
+	}
+
+	function replyStateDetail(detail: AgentSessionDetail) {
+		if (detail.latestRun?.lastMessage) {
+			return 'A saved reply is available in the selected run.';
+		}
+
+		if (detail.latestRunStatus === 'running') {
+			return 'Waiting for the first saved reply from the current run.';
+		}
+
+		if (detail.latestRunStatus === 'queued') {
+			return 'The current run has not started yet.';
+		}
+
+		if (detail.latestRunStatus === 'failed' || detail.latestRunStatus === 'canceled') {
+			return 'The latest run ended before a reply was captured.';
+		}
+
+		return 'No reply has been captured for the latest run.';
+	}
+
 	function responseStateLabel(run: AgentRunDetail) {
 		switch (latestRunStatus(run)) {
 			case 'queued':
@@ -360,7 +401,7 @@
 		return run.lastMessage ?? responseStateLabel(run);
 	}
 
-function compactText(value: string, maxLength = 180) {
+	function compactText(value: string, maxLength = 180) {
 		const normalized = value.replace(/\s+/g, ' ').trim();
 
 		if (normalized.length <= maxLength) {
@@ -368,37 +409,91 @@ function compactText(value: string, maxLength = 180) {
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
-}
+	}
 </script>
 
-{#snippet sessionTimeline(detail: AgentSessionDetail)}
-	<div class="space-y-3 rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-			<p class="text-xs font-medium tracking-[0.16em] text-slate-400 uppercase">Run timeline</p>
-			<p class="text-xs text-slate-500">
-				{detail.latestRun?.mode === 'message' ? 'Follow-up run' : 'Initial run'}
-			</p>
+{#snippet sessionStatus(detail: AgentSessionDetail)}
+	<div class="space-y-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4">
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p class="text-xs font-medium tracking-[0.16em] text-slate-400 uppercase">Thread status</p>
+				<h2 class="mt-1 text-lg font-semibold text-white">{sessionState?.label ?? 'Unknown'}</h2>
+			</div>
+			{#if sessionState}
+				<span
+					class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionState.className}`}
+				>
+					{sessionState.label}
+				</span>
+			{/if}
 		</div>
 
-		<ol class="flex flex-col gap-3 lg:flex-row lg:items-start">
-			{#each detail.runTimeline as step, index (step.key)}
-				<li class="flex min-w-0 flex-1 items-start gap-3 lg:basis-0">
-					<div class="flex min-w-0 flex-1 items-start gap-3">
-						<span class={`mt-1 h-2.5 w-2.5 rounded-full ${timelineDotClass(step.state)}`}></span>
-						<div class={`min-w-0 flex-1 rounded-lg border p-3 ${timelineCardClass(step.state)}`}>
-							<p class="text-sm font-medium text-white">{step.label}</p>
-							<p class="mt-1 text-xs text-slate-400">{step.detail}</p>
-						</div>
-					</div>
+		<p class="ui-wrap-anywhere text-sm text-slate-300">
+			{sessionState?.detail ?? detail.sessionSummary}
+		</p>
+		<SessionActivityIndicator session={detail} {now} />
+		<p class="text-xs text-slate-500">
+			A work thread keeps one Codex conversation and all of its runs together. Each run in the
+			history below is one start or follow-up execution inside this thread.
+		</p>
 
-					{#if index < detail.runTimeline.length - 1}
-						<div
-							class={`mt-5 hidden w-6 shrink-0 rounded-full lg:block lg:h-px xl:w-8 ${timelineConnectorClass(step.state)}`}
-						></div>
-					{/if}
-				</li>
-			{/each}
-		</ol>
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Latest run</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{detail.latestRun ? runModeLabel(detail.latestRun) : 'None yet'}
+				</p>
+				<p class="mt-1 text-xs text-slate-500">
+					{detail.latestRun ? latestRunStatus(detail.latestRun) : 'No runs recorded'}
+				</p>
+			</div>
+			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Reply state</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{replyStateLabel(detail)}
+				</p>
+				<p class="mt-1 text-xs text-slate-500">{replyStateDetail(detail)}</p>
+			</div>
+			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Thread</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{threadLabel(detail)}</p>
+				<p class="mt-1 text-xs text-slate-500">
+					{detail.threadId
+						? 'A Codex thread id is available for follow-up work.'
+						: 'No thread id yet.'}
+				</p>
+			</div>
+			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Follow-up</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{resumeLabel(detail)}</p>
+				<p class="mt-1 text-xs text-slate-500">
+					{detail.canResume
+						? 'You can send the next instruction now.'
+						: detail.hasActiveRun
+							? 'Wait for the active run to finish first.'
+							: 'This thread cannot accept a follow-up yet.'}
+				</p>
+			</div>
+		</div>
+
+		<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+			<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Related tasks</p>
+			{#if detail.relatedTasks.length > 0}
+				<div class="mt-3 flex flex-wrap gap-2">
+					{#each detail.relatedTasks as task (task.id)}
+						<a
+							class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+							href={resolve(`/app/tasks/${task.id}`)}
+						>
+							{task.title}
+							{task.isPrimary ? ' · primary' : ''}
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<p class="mt-2 text-sm text-slate-400">No tasks are linked to this thread yet.</p>
+			{/if}
+		</div>
 	</div>
 {/snippet}
 
@@ -411,28 +506,51 @@ function compactText(value: string, maxLength = 180) {
 			<div class="min-w-0 space-y-3">
 				<a
 					class="inline-flex items-center gap-2 text-xs font-medium tracking-[0.18em] text-sky-300 uppercase transition hover:text-sky-200"
-					href={backHref}
+					href={resolve(backHref)}
 				>
-					Back to sessions
+					Back to threads
 				</a>
 				<div class="flex flex-wrap items-center gap-2">
 					<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">
-						Session detail
+						Thread detail
 					</p>
-					<span class={`rounded-full px-2 py-1 text-[11px] uppercase ${sessionStatusClass(session.status)}`}>
-						{session.status}
+					<span
+						class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+					>
+						{sessionStateLabel(session.sessionState)}
 					</span>
 					<span
-						class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+						class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session.latestRunStatus)}`}
+					>
+						latest run {session.latestRunStatus}
+					</span>
+					<span
+						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 					>
 						{session.sandbox}
 					</span>
+					{#if session.origin === 'external'}
+						<span
+							class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
+						>
+							Imported from Codex
+						</span>
+					{/if}
 				</div>
 				<div>
-					<h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{session.name}</h1>
-					<p class="mt-2 max-w-3xl text-sm text-slate-300">{session.statusSummary}</p>
+					<h1 class="ui-wrap-anywhere text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+						{session.name}
+					</h1>
+					<p class="ui-wrap-anywhere mt-2 max-w-3xl text-sm text-slate-300">
+						{session.sessionSummary}
+					</p>
+					{#if session.relatedTasks.length > 0}
+						<p class="ui-clamp-3 mt-2 max-w-3xl text-xs text-slate-500">
+							Related tasks: {session.relatedTasks.map((task) => task.title).join(', ')}
+						</p>
+					{/if}
 				</div>
-				<p class="max-w-4xl text-xs break-all text-slate-500">{session.cwd}</p>
+				<p class="ui-wrap-anywhere max-w-4xl text-xs text-slate-500">{session.cwd}</p>
 			</div>
 
 			<div class="flex flex-col gap-3 sm:items-end">
@@ -440,7 +558,7 @@ function compactText(value: string, maxLength = 180) {
 					class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
 				>
 					<input bind:checked={autoRefresh} type="checkbox" />
-					<span>Auto-refresh while active</span>
+					<span>Auto-refresh active runs every 4s</span>
 				</label>
 				<div class="flex flex-col gap-3 sm:flex-row">
 					<button
@@ -450,11 +568,11 @@ function compactText(value: string, maxLength = 180) {
 							void refreshSession({ force: true });
 						}}
 					>
-						{isRefreshing ? 'Refreshing...' : 'Refresh session'}
+						{isRefreshing ? 'Refreshing...' : 'Refresh thread'}
 					</button>
 					{#if session.hasActiveRun}
 						<button
-							class="w-full rounded-lg border border-rose-900/70 bg-rose-950/30 px-4 py-2 text-sm font-medium text-rose-200 sm:w-auto disabled:opacity-50"
+							class="w-full rounded-lg border border-rose-900/70 bg-rose-950/30 px-4 py-2 text-sm font-medium text-rose-200 disabled:opacity-50 sm:w-auto"
 							type="button"
 							onclick={() => {
 								void cancelActiveRun();
@@ -486,18 +604,22 @@ function compactText(value: string, maxLength = 180) {
 		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Started</p>
-				<p class="mt-2 text-sm font-medium text-white">{formatTimestamp(session.createdAt)}</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{formatTimestamp(session.createdAt)}
+				</p>
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Last activity</p>
-				<p class="mt-2 text-sm font-medium text-white">{session.lastActivityLabel}</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{formatActivityAge(session.lastActivityAt, now)}
+				</p>
 				<p class="mt-1 text-xs text-slate-500">{formatTimestamp(session.lastActivityAt)}</p>
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Thread</p>
-				<p class="mt-2 text-sm font-medium text-white">{threadLabel(session)}</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{threadLabel(session)}</p>
 				{#if session.threadId}
-					<p class="mt-1 max-w-full text-xs break-all text-slate-500">{session.threadId}</p>
+					<p class="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500">{session.threadId}</p>
 				{/if}
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
@@ -506,13 +628,15 @@ function compactText(value: string, maxLength = 180) {
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Resume</p>
-				<p class="mt-2 text-sm font-medium text-white">{resumeLabel(session)}</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{resumeLabel(session)}
+				</p>
 			</div>
 		</div>
 
-		<div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+		<div class="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
 			<div class="space-y-4">
-				{@render sessionTimeline(session)}
+				{@render sessionStatus(session)}
 
 				{#if selectedRun}
 					<div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
@@ -525,12 +649,12 @@ function compactText(value: string, maxLength = 180) {
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
 								<span
-									class={`rounded-full px-2 py-1 text-[11px] uppercase ${runStatusClass(latestRunStatus(selectedRun))}`}
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(selectedRun))}`}
 								>
 									{latestRunStatus(selectedRun)}
 								</span>
 								<span
-									class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 								>
 									{selectedRun.mode}
 								</span>
@@ -540,17 +664,19 @@ function compactText(value: string, maxLength = 180) {
 						<div class="grid gap-3 sm:grid-cols-3">
 							<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 								<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Queued</p>
-								<p class="mt-2 text-sm text-white">{formatTimestamp(selectedRun.createdAt)}</p>
+								<p class="ui-wrap-anywhere mt-2 text-sm text-white">
+									{formatTimestamp(selectedRun.createdAt)}
+								</p>
 							</div>
 							<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 								<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Finished</p>
-								<p class="mt-2 text-sm text-white">
+								<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 									{formatTimestamp(selectedRun.state?.finishedAt ?? null)}
 								</p>
 							</div>
 							<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 								<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Thread target</p>
-								<p class="mt-2 text-sm text-white">
+								<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 									{selectedRun.requestedThreadId ?? 'Start a new thread'}
 								</p>
 							</div>
@@ -559,12 +685,14 @@ function compactText(value: string, maxLength = 180) {
 						<div class="space-y-3">
 							<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 								<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Instruction</p>
-								<p class="mt-2 text-sm whitespace-pre-wrap text-slate-200">{selectedRun.prompt}</p>
+								<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-200">
+									{selectedRun.prompt}
+								</p>
 							</div>
 
 							<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 								<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Agent response</p>
-								<p class="mt-2 text-sm whitespace-pre-wrap text-slate-200">
+								<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-200">
 									{responseText(selectedRun)}
 								</p>
 							</div>
@@ -578,7 +706,7 @@ function compactText(value: string, maxLength = 180) {
 					</summary>
 					{#if selectedRun?.logTail?.length}
 						<pre
-							class="mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-slate-300">{selectedRun.logTail.join(
+							class="ui-wrap-anywhere mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-slate-300">{selectedRun.logTail.join(
 								'\n'
 							)}</pre>
 					{:else}
@@ -595,7 +723,7 @@ function compactText(value: string, maxLength = 180) {
 					<div class="flex flex-col gap-1">
 						<h2 class="text-lg font-semibold text-white">Send follow-up</h2>
 						<p class="text-sm text-slate-400">
-							Queue the next instruction into the same session thread when it is ready.
+							Queue the next instruction into the same work thread when it is ready.
 						</p>
 					</div>
 					<textarea
@@ -604,8 +732,8 @@ function compactText(value: string, maxLength = 180) {
 						placeholder={session.canResume
 							? 'Send the next instruction.'
 							: session.hasActiveRun
-								? 'This session is busy until the current run finishes.'
-								: 'This session cannot resume until a thread id is discovered.'}
+								? 'This thread is busy until the current run finishes.'
+								: 'This thread cannot resume until a Codex thread id is discovered.'}
 						disabled={!session.canResume || sendState?.status === 'sending'}
 					></textarea>
 					{#if sendState}
@@ -635,15 +763,16 @@ function compactText(value: string, maxLength = 180) {
 					<div class="flex flex-col gap-1">
 						<h2 class="text-lg font-semibold text-white">Conversation history</h2>
 						<p class="text-sm text-slate-400">
-							Inspect each turn in the session and open any run to read the full prompt and
-							response.
+							Inspect each turn in the thread and open any run to read the full prompt and response.
 						</p>
 					</div>
 
 					<div class="mt-4 space-y-3">
 						{#if chronologicalRuns.length === 0}
-							<p class="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400">
-								No runs have been recorded for this session yet.
+							<p
+								class="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
+							>
+								No runs have been recorded for this thread yet.
 							</p>
 						{:else}
 							{#each chronologicalRuns as run, index (run.id)}
@@ -662,13 +791,15 @@ function compactText(value: string, maxLength = 180) {
 								>
 									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 										<div>
-											<p class="text-sm font-medium text-white">Turn {index + 1} · {runModeLabel(run)}</p>
+											<p class="text-sm font-medium text-white">
+												Turn {index + 1} · {runModeLabel(run)}
+											</p>
 											<p class="mt-1 text-xs text-slate-500">
 												Queued {formatTimestamp(run.createdAt)}
 											</p>
 										</div>
 										<span
-											class={`inline-flex rounded-full px-2 py-1 text-[11px] uppercase ${runStatusClass(latestRunStatus(run))}`}
+											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(run))}`}
 										>
 											{latestRunStatus(run)}
 										</span>
@@ -679,13 +810,13 @@ function compactText(value: string, maxLength = 180) {
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 												Instruction
 											</p>
-											<p class="mt-2 text-sm text-slate-300">{compactText(run.prompt, 180)}</p>
+											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+												{compactText(run.prompt, 180)}
+											</p>
 										</div>
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Response
-											</p>
-											<p class="mt-2 text-sm text-slate-300">
+											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Response</p>
+											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
 												{compactText(responseText(run), 180)}
 											</p>
 										</div>
@@ -694,8 +825,8 @@ function compactText(value: string, maxLength = 180) {
 							{/each}
 						{/if}
 					</div>
-					</section>
-				</div>
+				</section>
 			</div>
-		</section>
+		</div>
+	</section>
 {/if}

@@ -20,11 +20,27 @@ export function parsePathTarget(value: string | null | undefined, fallback: Path
 	return value && isPathTarget(value) ? value : fallback;
 }
 
+export function normalizePathInput(value: string | null | undefined) {
+	let path = value?.trim() ?? '';
+
+	while (path.length >= 2) {
+		const wrapper = path[0];
+
+		if ((wrapper !== "'" && wrapper !== '"') || path.at(-1) !== wrapper) {
+			break;
+		}
+
+		path = path.slice(1, -1).trim();
+	}
+
+	return path;
+}
+
 export async function ensurePathTarget(input: {
 	path: string;
 	target: PathTarget;
 }): Promise<EnsurePathResult> {
-	const path = input.path.trim();
+	const path = normalizePathInput(input.path);
 
 	if (!path) {
 		throw new Error('Path is required.');

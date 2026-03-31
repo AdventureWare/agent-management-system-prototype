@@ -100,7 +100,7 @@ export function getWorkerQueueSummary(data: ControlPlaneData, worker: Worker) {
 	return {
 		assignedCount: tasks.assigned.length,
 		availableCount: tasks.available.length,
-		runningAssignedCount: tasks.assigned.filter((task) => task.status === 'running').length
+		runningAssignedCount: tasks.assigned.filter((task) => task.status === 'in_progress').length
 	};
 }
 
@@ -153,7 +153,7 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 
 	if (
 		task.status !== 'ready' &&
-		!(task.assigneeWorkerId === worker.id && task.status === 'running')
+		!(task.assigneeWorkerId === worker.id && task.status === 'in_progress')
 	) {
 		throw error(409, 'Only ready tasks can be claimed.');
 	}
@@ -166,7 +166,7 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 		throw error(409, 'Task is waiting on before-run approval.');
 	}
 
-	if (task.assigneeWorkerId === worker.id && task.status === 'running') {
+	if (task.assigneeWorkerId === worker.id && task.status === 'in_progress') {
 		return data;
 	}
 
@@ -190,7 +190,7 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 						assigneeWorkerId: worker.id,
 						runCount: candidate.runCount + 1,
 						latestRunId: run.id,
-						status: 'running' as const,
+						status: 'in_progress' as const,
 						updatedAt: new Date().toISOString()
 					}
 				: candidate
@@ -200,11 +200,16 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 
 function taskStatusToRunStatus(status: TaskStatus): RunStatus {
 	switch (status) {
+		case 'in_draft':
+		case 'ready':
+			return 'completed';
 		case 'blocked':
 			return 'blocked';
 		case 'done':
 		case 'review':
 			return 'completed';
+		case 'in_progress':
+			return 'running';
 		default:
 			return 'running';
 	}
@@ -238,7 +243,7 @@ export function updateTaskFromWorker(
 						updatedAt: new Date().toISOString(),
 						lastHeartbeatAt: new Date().toISOString(),
 						endedAt:
-							input.status === 'running'
+							input.status === 'in_progress'
 								? null
 								: (candidate.endedAt ?? new Date().toISOString()),
 						summary: `Worker updated task to ${input.status}.`

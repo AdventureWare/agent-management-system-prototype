@@ -6,6 +6,7 @@ import {
 	createReview,
 	createRun,
 	createTask,
+	deleteTask,
 	projectMatchesPath,
 	syncGovernanceQueues,
 	summarizeControlPlane,
@@ -35,11 +36,13 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: false,
 				desiredRoleId: 'role_app_worker',
 				assigneeWorkerId: null,
+				threadSessionId: 'session_1',
 				blockedReason: '',
 				dependencyTaskIds: [],
 				runCount: 1,
 				latestRunId: 'run_done',
 				artifactPath: '/tmp/done',
+				attachments: [],
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
 			},
@@ -57,11 +60,13 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: true,
 				desiredRoleId: 'role_app_worker',
 				assigneeWorkerId: null,
+				threadSessionId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_done'],
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/review',
+				attachments: [],
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
 			},
@@ -79,11 +84,13 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: true,
 				desiredRoleId: 'role_researcher',
 				assigneeWorkerId: null,
+				threadSessionId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_review'],
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/waiting',
+				attachments: [],
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z'
 			}
@@ -164,6 +171,8 @@ describe('control-plane helpers', () => {
 		expect(task.blockedReason).toBe('');
 		expect(task.runCount).toBe(0);
 		expect(task.latestRunId).toBeNull();
+		expect(task.threadSessionId).toBeNull();
+		expect(task.attachments).toEqual([]);
 	});
 
 	it('creates runs as first-class execution records', () => {
@@ -209,6 +218,50 @@ describe('control-plane helpers', () => {
 		expect(taskHasUnmetDependencies(data, data.tasks[2]!)).toBe(true);
 	});
 
+	it('deletes a task and cleans up related execution state', () => {
+		const data = buildFixture();
+		data.runs.push({
+			id: 'run_review',
+			taskId: 'task_review',
+			workerId: 'worker_two',
+			providerId: 'provider_local_codex',
+			status: 'running',
+			createdAt: '2026-03-26T00:20:00.000Z',
+			updatedAt: '2026-03-26T00:25:00.000Z',
+			startedAt: '2026-03-26T00:20:00.000Z',
+			endedAt: null,
+			threadId: 'thread_2',
+			sessionId: 'session_2',
+			promptDigest: 'def456',
+			artifactPaths: ['/tmp/review'],
+			summary: 'Still executing.',
+			lastHeartbeatAt: '2026-03-26T00:24:00.000Z',
+			errorSummary: ''
+		});
+		data.tasks[1] = {
+			...data.tasks[1]!,
+			latestRunId: 'run_review',
+			runCount: 1
+		};
+		data.reviews[0] = {
+			...data.reviews[0]!,
+			runId: 'run_review'
+		};
+		data.approvals[0] = {
+			...data.approvals[0]!,
+			runId: 'run_review'
+		};
+
+		const next = deleteTask(data, 'task_review');
+		const waitingTask = next.tasks.find((task) => task.id === 'task_waiting');
+
+		expect(next.tasks.map((task) => task.id)).toEqual(['task_done', 'task_waiting']);
+		expect(waitingTask?.dependencyTaskIds).toEqual([]);
+		expect(next.runs.map((run) => run.id)).toEqual(['run_done']);
+		expect(next.reviews).toEqual([]);
+		expect(next.approvals).toEqual([]);
+	});
+
 	it('summarizes review, dependency, and risk counts', () => {
 		const summary = summarizeControlPlane(buildFixture());
 
@@ -250,8 +303,7 @@ describe('control-plane helpers', () => {
 	it('creates projects with blank config defaults when omitted', () => {
 		const project = createProject({
 			name: 'Prototype',
-			summary: 'holds reusable paths and repo defaults',
-			lane: 'product'
+			summary: 'holds reusable paths and repo defaults'
 		});
 
 		expect(project.id).toMatch(/^project_/);
@@ -262,11 +314,24 @@ describe('control-plane helpers', () => {
 		expect(project.defaultBranch).toBe('');
 	});
 
+	it('strips shell-style wrapping quotes from project paths', () => {
+		const project = createProject({
+			name: 'Quoted project',
+			summary: 'holds reusable paths and repo defaults',
+			projectRootFolder: "'/tmp/prototype'",
+			defaultArtifactRoot: '"/tmp/prototype/agent_output"',
+			defaultRepoPath: "'/tmp/checkouts/prototype'"
+		});
+
+		expect(project.projectRootFolder).toBe('/tmp/prototype');
+		expect(project.defaultArtifactRoot).toBe('/tmp/prototype/agent_output');
+		expect(project.defaultRepoPath).toBe('/tmp/checkouts/prototype');
+	});
+
 	it('matches project paths against configured roots with path boundaries', () => {
 		const project = createProject({
 			name: 'Prototype',
 			summary: 'holds reusable paths and repo defaults',
-			lane: 'product',
 			projectRootFolder: '/tmp/prototype',
 			defaultArtifactRoot: '/tmp/prototype/agent_output',
 			defaultRepoPath: '/tmp/checkouts/prototype'

@@ -33,7 +33,9 @@
 				Providers
 			</a>
 			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="text-3xl font-semibold tracking-tight text-white">{data.provider.name}</h1>
+				<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
+					{data.provider.name}
+				</h1>
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${enabledClass(data.provider.enabled)}`}
 				>
@@ -45,7 +47,7 @@
 					{data.provider.setupStatus.replace('_', ' ')}
 				</span>
 			</div>
-			<p class="max-w-3xl text-sm text-slate-300">
+			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
 				{data.provider.description || 'No description saved for this provider yet.'}
 			</p>
 		</div>
@@ -53,13 +55,19 @@
 		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Service</p>
-				<p class="mt-3 text-lg font-semibold text-white">{data.provider.service}</p>
+				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+					{data.provider.service}
+				</p>
 				<p class="mt-2 text-sm text-slate-400">{data.provider.kind} surface</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Auth mode</p>
-				<p class="mt-3 text-lg font-semibold text-white">{data.provider.authMode}</p>
-				<p class="mt-2 text-sm text-slate-400">Launcher: {data.provider.launcher || 'Not set'}</p>
+				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+					{data.provider.authMode}
+				</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+					Launcher: {data.provider.launcher || 'Not set'}
+				</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Workers</p>
@@ -88,7 +96,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
 		<form
 			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
 			method="POST"
@@ -217,7 +225,7 @@
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 							Environment variables
 						</p>
-						<p class="mt-2 text-sm text-white">
+						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 							{data.provider.envVars.length > 0 ? data.provider.envVars.join(', ') : 'None listed'}
 						</p>
 					</div>
@@ -226,7 +234,7 @@
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 							Capabilities
 						</p>
-						<p class="mt-2 text-sm text-white">
+						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 							{data.provider.capabilities.length > 0
 								? data.provider.capabilities.join(', ')
 								: 'None listed'}
@@ -235,7 +243,9 @@
 
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Notes</p>
-						<p class="mt-2 text-sm text-white">{data.provider.notes || 'No notes saved.'}</p>
+						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
+							{data.provider.notes || 'No notes saved.'}
+						</p>
 					</div>
 				</div>
 			</section>
@@ -270,9 +280,9 @@
 								href={resolve(`/app/workers/${worker.id}`)}
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<h3 class="font-medium text-white">{worker.name}</h3>
-										<p class="mt-1 text-sm text-slate-400">{worker.roleName}</p>
+									<div class="min-w-0 flex-1">
+										<h3 class="ui-wrap-anywhere font-medium text-white">{worker.name}</h3>
+										<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">{worker.roleName}</p>
 									</div>
 									<span
 										class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
@@ -280,7 +290,9 @@
 										{worker.status}
 									</span>
 								</div>
-								<p class="mt-3 text-sm text-slate-300">{worker.note || 'No note saved.'}</p>
+								<p class="ui-clamp-3 mt-3 text-sm text-slate-300">
+									{worker.note || 'No note saved.'}
+								</p>
 							</a>
 						{/each}
 					{/if}
@@ -302,15 +314,23 @@
 						{#each data.recentRuns as run (run.id)}
 							<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p class="font-medium text-white">{run.taskTitle}</p>
-										<p class="mt-1 text-sm text-slate-400">{run.summary || 'No summary recorded.'}</p>
+									<div class="min-w-0 flex-1">
+										<p class="ui-wrap-anywhere font-medium text-white">{run.taskTitle}</p>
+										<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
+											{run.summary || 'No summary recorded.'}
+										</p>
 									</div>
 									<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
 								</div>
 								<div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
-									<span>{run.status}</span>
-									<span>{run.sessionId || 'No session'}</span>
+									<span class="ui-wrap-anywhere">{run.status}</span>
+									<span class="ui-wrap-anywhere">{run.sessionId || 'No thread'}</span>
+									<a
+										class="text-sky-300 transition hover:text-sky-200"
+										href={resolve(`/app/runs/${run.id}`)}
+									>
+										Open run
+									</a>
 									<a
 										class="text-sky-300 transition hover:text-sky-200"
 										href={resolve(`/app/tasks/${run.taskId}`)}

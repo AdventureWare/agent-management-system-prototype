@@ -12,8 +12,20 @@ export const AGENT_RUN_STATUS_OPTIONS = [
 	'canceled'
 ] as const;
 
+export const AGENT_SESSION_STATE_OPTIONS = [
+	'idle',
+	'starting',
+	'waiting',
+	'working',
+	'ready',
+	'attention',
+	'unavailable'
+] as const;
+
 export type AgentSandbox = (typeof AGENT_SANDBOX_OPTIONS)[number];
 export type AgentRunStatus = (typeof AGENT_RUN_STATUS_OPTIONS)[number];
+export type AgentSessionState = (typeof AGENT_SESSION_STATE_OPTIONS)[number];
+export type AgentSessionOrigin = 'managed' | 'external';
 
 export type AgentSession = {
 	id: string;
@@ -22,8 +34,16 @@ export type AgentSession = {
 	sandbox: AgentSandbox;
 	model: string | null;
 	threadId: string | null;
+	archivedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
+};
+
+export type AgentSessionTaskLink = {
+	id: string;
+	title: string;
+	status: string;
+	isPrimary: boolean;
 };
 
 export type AgentRun = {
@@ -59,6 +79,7 @@ export type AgentRunDetail = AgentRun & {
 	state: AgentRunState | null;
 	lastMessage: string | null;
 	logTail: string[];
+	activityAt: string | null;
 };
 
 export type AgentTimelineStep = {
@@ -70,16 +91,19 @@ export type AgentTimelineStep = {
 };
 
 export type AgentSessionDetail = AgentSession & {
+	origin: AgentSessionOrigin;
 	threadId: string | null;
-	status: AgentRunStatus | 'idle';
+	sessionState: AgentSessionState;
+	latestRunStatus: AgentRunStatus | 'idle';
 	hasActiveRun: boolean;
 	canResume: boolean;
 	runCount: number;
 	lastActivityAt: string | null;
 	lastActivityLabel: string;
-	statusSummary: string;
+	sessionSummary: string;
 	lastExitCode: number | null;
 	runTimeline: AgentTimelineStep[];
+	relatedTasks: AgentSessionTaskLink[];
 	latestRun: AgentRunDetail | null;
 	runs: AgentRunDetail[];
 };

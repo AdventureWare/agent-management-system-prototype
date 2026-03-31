@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { formatTaskStatusLabel } from '$lib/types/control-plane';
 
 	let { data } = $props();
 </script>
@@ -42,7 +43,7 @@
 			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.goalCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Tasks running</p>
+			<p class="text-sm text-slate-400">Tasks in progress</p>
 			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.runningTaskCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
@@ -108,7 +109,7 @@
 							<span
 								class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300 uppercase"
 							>
-								{task.status}
+								{formatTaskStatusLabel(task.status)}
 							</span>
 						</div>
 						<p class="mt-2 text-sm text-slate-300">{task.summary}</p>

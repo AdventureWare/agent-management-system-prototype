@@ -76,4 +76,116 @@ describe('control-plane project migration', () => {
 			})
 		]);
 	});
+
+	it('normalizes quoted project paths while loading persisted data', async () => {
+		readFile.mockResolvedValue(
+			JSON.stringify({
+				providers: [],
+				roles: [],
+				projects: [
+					{
+						id: 'project_quoted',
+						name: 'Quoted project',
+						summary: 'saved from copied shell output',
+						projectRootFolder: "'/tmp/quoted-root'",
+						defaultArtifactRoot: '"/tmp/quoted-root/agent_output"',
+						defaultRepoPath: "'/tmp/checkouts/quoted'"
+					}
+				],
+				goals: [],
+				workers: [],
+				tasks: [],
+				runs: [],
+				reviews: [],
+				approvals: []
+			})
+		);
+
+		const data = await loadControlPlane();
+
+		expect(data.projects).toEqual([
+			expect.objectContaining({
+				id: 'project_quoted',
+				projectRootFolder: '/tmp/quoted-root',
+				defaultArtifactRoot: '/tmp/quoted-root/agent_output',
+				defaultRepoPath: '/tmp/checkouts/quoted'
+			})
+		]);
+	});
+
+	it('infers a task thread assignment from its latest run session when missing', async () => {
+		readFile.mockResolvedValue(
+			JSON.stringify({
+				providers: [],
+				roles: [],
+				projects: [
+					{
+						id: 'project_1',
+						name: 'Prototype',
+						summary: 'project',
+						projectRootFolder: '/tmp/project'
+					}
+				],
+				goals: [],
+				workers: [],
+				tasks: [
+					{
+						id: 'task_1',
+						title: 'Follow-up work',
+						summary: 'continue the same context',
+						projectId: 'project_1',
+						lane: 'product',
+						goalId: '',
+						priority: 'medium',
+						status: 'running',
+						riskLevel: 'medium',
+						approvalMode: 'none',
+						requiresReview: true,
+						desiredRoleId: '',
+						assigneeWorkerId: null,
+						blockedReason: '',
+						dependencyTaskIds: [],
+						runCount: 1,
+						latestRunId: 'run_1',
+						artifactPath: '/tmp/project/out',
+						createdAt: '2026-03-26T00:00:00.000Z',
+						updatedAt: '2026-03-26T00:00:00.000Z'
+					}
+				],
+				runs: [
+					{
+						id: 'run_1',
+						taskId: 'task_1',
+						workerId: null,
+						providerId: null,
+						status: 'completed',
+						createdAt: '2026-03-26T00:00:00.000Z',
+						updatedAt: '2026-03-26T00:10:00.000Z',
+						startedAt: '2026-03-26T00:00:00.000Z',
+						endedAt: '2026-03-26T00:10:00.000Z',
+						threadId: 'thread_1',
+						sessionId: 'session_1',
+						promptDigest: 'abc123',
+						artifactPaths: [],
+						summary: 'Completed.',
+						lastHeartbeatAt: null,
+						errorSummary: ''
+					}
+				],
+				reviews: [],
+				approvals: []
+			})
+		);
+
+		const data = await loadControlPlane();
+
+		expect(data.tasks).toEqual([
+			expect.objectContaining({
+				id: 'task_1',
+				status: 'in_progress',
+				threadSessionId: 'session_1',
+				attachments: []
+			})
+		]);
+	});
 });

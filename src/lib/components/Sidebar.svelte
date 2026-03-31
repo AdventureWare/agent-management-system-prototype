@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import {
+		ActivityIcon,
 		ArrowLeftRightIcon,
 		CpuIcon,
 		FolderOpenIcon,
@@ -18,8 +19,9 @@
 		{ label: 'Dashboard', href: '/app/home', icon: LayoutDashboardIcon },
 		{ label: 'Projects', href: '/app/projects', icon: FolderOpenIcon },
 		{ label: 'Tasks', href: '/app/tasks', icon: ListTodoIcon },
+		{ label: 'Runs', href: '/app/runs', icon: ActivityIcon },
 		{ label: 'Providers', href: '/app/providers', icon: CpuIcon },
-		{ label: 'Remote Work', href: '/app/sessions', icon: MessagesSquareIcon }
+		{ label: 'Sessions', href: '/app/sessions', icon: MessagesSquareIcon }
 	] as const;
 
 	let layoutRail = $state(true);
@@ -60,7 +62,7 @@
 />
 
 <div
-	class="flex min-h-screen w-full flex-col bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_1fr]"
+	class="flex min-h-screen w-full flex-col bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_minmax(0,1fr)]"
 >
 	<header
 		class="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden"
@@ -68,7 +70,7 @@
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
 			<div class="min-w-0">
 				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">Agent Ops</p>
-				<p class="truncate text-sm text-slate-300">Remote dashboard and session control</p>
+				<p class="truncate text-sm text-slate-300">Remote dashboard and thread control</p>
 			</div>
 			<button
 				class="inline-flex items-center justify-center rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-200"
@@ -158,7 +160,7 @@
 	</Navigation>
 
 	<div
-		class="min-h-[calc(100vh-65px)] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))] md:h-screen md:min-h-screen"
+		class="min-w-0 min-h-[calc(100vh-65px)] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))] md:h-screen md:min-h-screen"
 	>
 		{@render children()}
 	</div>

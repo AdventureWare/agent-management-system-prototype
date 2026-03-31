@@ -5,9 +5,11 @@ import {
 	startAgentSession
 } from '$lib/server/agent-sessions';
 
-export const GET = async () => {
+export const GET = async ({ url }) => {
 	return json({
-		sessions: await listAgentSessions()
+		sessions: await listAgentSessions({
+			includeArchived: url.searchParams.get('includeArchived') === '1'
+		})
 	});
 };
 

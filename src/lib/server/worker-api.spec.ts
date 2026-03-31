@@ -72,11 +72,13 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					requiresReview: true,
 					desiredRoleId: 'role_researcher',
 					assigneeWorkerId: null,
+					threadSessionId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					runCount: 0,
 					latestRunId: null,
 					artifactPath: '/tmp/one',
+					attachments: [],
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
 				},
@@ -88,17 +90,19 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					lane: 'growth',
 					goalId: 'goal_1',
 					priority: 'high',
-					status: 'running',
+					status: 'in_progress',
 					riskLevel: 'medium',
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_researcher',
 					assigneeWorkerId: 'worker_one',
+					threadSessionId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					runCount: 1,
 					latestRunId: 'run_running_assigned',
 					artifactPath: '/tmp/two',
+					attachments: [],
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
 				},
@@ -116,11 +120,13 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					requiresReview: false,
 					desiredRoleId: 'role_app_worker',
 					assigneeWorkerId: null,
+					threadSessionId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					runCount: 0,
 					latestRunId: null,
 					artifactPath: '/tmp/three',
+					attachments: [],
 					createdAt: '2026-03-26T00:00:00.000Z',
 					updatedAt: '2026-03-26T00:00:00.000Z'
 				}
@@ -154,7 +160,7 @@ describe('worker-api helpers', () => {
 		const run = next.runs.find((candidate) => candidate.taskId === 'task_ready_match');
 
 		expect(claimed?.assigneeWorkerId).toBe(worker.id);
-		expect(claimed?.status).toBe('running');
+		expect(claimed?.status).toBe('in_progress');
 		expect(claimed?.runCount).toBe(1);
 		expect(claimed?.latestRunId).toBe(run?.id);
 		expect(run?.workerId).toBe(worker.id);
@@ -189,7 +195,7 @@ describe('worker-api helpers', () => {
 		const runningTask = data.tasks.find((task) => task.id === 'task_running_assigned');
 
 		if (!runningTask) {
-			throw new Error('Expected running task fixture.');
+			throw new Error('Expected in-progress task fixture.');
 		}
 
 		runningTask.approvalMode = 'before_complete';
@@ -234,11 +240,13 @@ describe('worker-api helpers', () => {
 			requiresReview: true,
 			desiredRoleId: 'role_researcher',
 			assigneeWorkerId: null,
+			threadSessionId: null,
 			blockedReason: '',
 			dependencyTaskIds: ['task_running_assigned'],
 			runCount: 0,
 			latestRunId: null,
 			artifactPath: '/tmp/four',
+			attachments: [],
 			createdAt: '2026-03-26T00:00:00.000Z',
 			updatedAt: '2026-03-26T00:00:00.000Z'
 		});

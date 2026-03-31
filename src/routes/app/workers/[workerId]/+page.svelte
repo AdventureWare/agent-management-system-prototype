@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { formatTaskStatusLabel } from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 
@@ -27,29 +28,41 @@
 				Workers
 			</a>
 			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="text-3xl font-semibold tracking-tight text-white">{data.worker.name}</h1>
+				<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
+					{data.worker.name}
+				</h1>
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(data.worker.status)}`}
 				>
 					{data.worker.status}
 				</span>
 			</div>
-			<p class="max-w-3xl text-sm text-slate-300">{data.worker.note || 'No note saved for this worker yet.'}</p>
+			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
+				{data.worker.note || 'No note saved for this worker yet.'}
+			</p>
 		</div>
 
 		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider</p>
-				<p class="mt-3 text-lg font-semibold text-white">{data.worker.providerName}</p>
-				<p class="mt-2 text-sm text-slate-400">{data.worker.location} execution surface</p>
+				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+					{data.worker.providerName}
+				</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+					{data.worker.location} execution surface
+				</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Role</p>
-				<p class="mt-3 text-lg font-semibold text-white">{data.worker.roleName}</p>
+				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+					{data.worker.roleName}
+				</p>
 				<p class="mt-2 text-sm text-slate-400">Capacity {data.worker.capacity}</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Assigned tasks</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+					Assigned tasks
+				</p>
 				<p class="mt-3 text-3xl font-semibold text-white">{data.assignedTasks.length}</p>
 				<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to this worker.</p>
 			</article>
@@ -75,14 +88,16 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
 		<form
 			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
 			method="POST"
 			action="?/updateWorker"
 		>
 			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Worker details</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+					Worker details
+				</p>
 				<h2 class="text-xl font-semibold text-white">Edit worker status and routing context</h2>
 			</div>
 
@@ -136,7 +151,13 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Capacity</span>
-					<input class="input text-white" name="capacity" type="number" min="1" value={data.worker.capacity} />
+					<input
+						class="input text-white"
+						name="capacity"
+						type="number"
+						min="1"
+						value={data.worker.capacity}
+					/>
 				</label>
 			</div>
 
@@ -152,15 +173,11 @@
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
-					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-						Registered
-					</p>
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Registered</p>
 					<p class="mt-2">{new Date(data.worker.registeredAt).toLocaleString()}</p>
 				</div>
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
-					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-						Last seen
-					</p>
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Last seen</p>
 					<p class="mt-2">{new Date(data.worker.lastSeenAt).toLocaleString()}</p>
 				</div>
 			</div>
@@ -201,14 +218,14 @@
 								href={resolve(`/app/tasks/${task.id}`)}
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p class="font-medium text-white">{task.title}</p>
+									<div class="min-w-0 flex-1">
+										<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
 										<p class="mt-1 text-sm text-slate-400">Updated {task.updatedAtLabel}</p>
 									</div>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(task.status === 'done' ? 'idle' : task.status === 'blocked' ? 'offline' : task.status === 'running' ? 'busy' : 'idle')}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(task.status === 'done' ? 'idle' : task.status === 'blocked' ? 'offline' : task.status === 'in_progress' ? 'busy' : 'idle')}`}
 									>
-										{task.status}
+										{formatTaskStatusLabel(task.status)}
 									</span>
 								</div>
 							</a>
@@ -232,20 +249,28 @@
 						{#each data.recentRuns as run (run.id)}
 							<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p class="font-medium text-white">{run.taskTitle}</p>
-										<p class="mt-1 text-sm text-slate-400">{run.summary || 'No summary recorded.'}</p>
+									<div class="min-w-0 flex-1">
+										<p class="ui-wrap-anywhere font-medium text-white">{run.taskTitle}</p>
+										<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
+											{run.summary || 'No summary recorded.'}
+										</p>
 									</div>
 									<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
 								</div>
 								<div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
 									<span>{run.status}</span>
+									<a
+										class="text-sky-300 transition hover:text-sky-200"
+										href={resolve(`/app/runs/${run.id}`)}
+									>
+										Open run
+									</a>
 									{#if run.sessionId}
 										<a
 											class="text-sky-300 transition hover:text-sky-200"
 											href={resolve(`/app/sessions/${run.sessionId}`)}
 										>
-											Open session
+											Open thread
 										</a>
 									{/if}
 									<a

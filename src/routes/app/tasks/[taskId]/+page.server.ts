@@ -1,17 +1,33 @@
-import { createHash } from 'node:crypto';
-import { error, fail } from '@sveltejs/kit';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { TASK_STATUS_OPTIONS, type Run } from '$lib/types/control-plane';
+import { TASK_STATUS_OPTIONS, type Project, type Run, type Task } from '$lib/types/control-plane';
 import {
+	createTaskAttachmentId,
 	createRun,
+	deleteTask as removeTaskFromControlPlane,
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
+	projectMatchesPath,
 	updateControlPlane
 } from '$lib/server/control-plane';
-import { startAgentSession } from '$lib/server/agent-sessions';
+import {
+	cancelAgentSession,
+	getAgentSession,
+	listAgentSessions,
+	sendAgentSessionMessage,
+	startAgentSession
+} from '$lib/server/agent-sessions';
+import {
+	buildPromptDigest,
+	buildTaskThreadName,
+	buildTaskThreadPrompt
+} from '$lib/server/task-threads';
+import { selectTaskThreadContext } from '$lib/task-thread-context';
 
 function readTaskForm(form: FormData) {
 	return {
@@ -20,39 +36,6 @@ function readTaskForm(form: FormData) {
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? ''
 	};
-}
-
-function buildTaskSessionPrompt(input: {
-	taskName: string;
-	taskInstructions: string;
-	projectName: string;
-	projectRootFolder: string;
-	defaultArtifactRoot: string;
-}) {
-	const contextLines = [
-		`Task: ${input.taskName}`,
-		`Project: ${input.projectName}`,
-		`Project root: ${input.projectRootFolder}`
-	];
-
-	if (input.defaultArtifactRoot) {
-		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
-	}
-
-	return [
-		'You are executing a queued task from the agent management system.',
-		'',
-		...contextLines,
-		'',
-		'Instructions:',
-		input.taskInstructions,
-		'',
-		'Work from the project root, make the requested changes, and report progress and outcomes clearly.'
-	].join('\n');
-}
-
-function buildPromptDigest(prompt: string) {
-	return createHash('sha256').update(prompt).digest('hex').slice(0, 16);
 }
 
 function updateLatestRunForTask(
@@ -76,7 +59,27 @@ function updateLatestRunForTask(
 			: run;
 }
 
+function getTaskAttachmentRoot(task: Task, project: Project | null) {
+	return task.artifactPath || project?.defaultArtifactRoot || project?.projectRootFolder || '';
+}
+
+function sanitizeAttachmentName(name: string) {
+	const basename =
+		name
+			.split(/[/\\]+/)
+			.at(-1)
+			?.trim() ?? '';
+	const normalized = basename
+		.replace(/[^A-Za-z0-9._-]+/g, '-')
+		.replace(/^\.+/, '')
+		.replace(/-+/g, '-')
+		.replace(/^[-_.]+|[-_.]+$/g, '');
+
+	return normalized || 'attachment';
+}
+
 export const load: PageServerLoad = async ({ params }) => {
+	const sessions = await listAgentSessions({ includeArchived: true });
 	const data = await loadControlPlane();
 	const task = data.tasks.find((candidate) => candidate.id === params.taskId);
 
@@ -92,7 +95,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		.filter((run) => run.taskId === task.id)
 		.map((run) => ({
 			...run,
-			workerName: run.workerId ? (workerMap.get(run.workerId)?.name ?? 'Unknown worker') : 'Unassigned',
+			workerName: run.workerId
+				? (workerMap.get(run.workerId)?.name ?? 'Unknown worker')
+				: 'Unassigned',
 			providerName: run.providerId
 				? (providerMap.get(run.providerId)?.name ?? 'Unknown provider')
 				: 'No provider',
@@ -109,6 +114,45 @@ export const load: PageServerLoad = async ({ params }) => {
 		.sort((a, b) => a.title.localeCompare(b.title));
 	const openReview = getOpenReviewForTask(data, task.id);
 	const pendingApproval = getPendingApprovalForTask(data, task.id);
+	const project = projectMap.get(task.projectId) ?? null;
+	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const assignedThread = task.threadSessionId
+		? (sessions.find((session) => session.id === task.threadSessionId) ?? null)
+		: null;
+	const latestRun = task.latestRunId
+		? (relatedRuns.find((run) => run.id === task.latestRunId) ?? null)
+		: null;
+	const latestRunThread = latestRun?.sessionId
+		? (sessionMap.get(latestRun.sessionId) ?? null)
+		: null;
+	const candidateThreads = sessions
+		.filter((session) => {
+			if (assignedThread?.id === session.id) {
+				return true;
+			}
+
+			return project ? projectMatchesPath(project, session.cwd) : false;
+		})
+		.map((session) => ({
+			id: session.id,
+			name: session.name,
+			sessionState: session.sessionState,
+			canResume: session.canResume,
+			hasActiveRun: session.hasActiveRun,
+			relatedTasks: session.relatedTasks,
+			previewText: session.latestRun?.lastMessage ?? session.sessionSummary
+		}))
+		.sort((left, right) => {
+			if (left.id === assignedThread?.id) {
+				return -1;
+			}
+
+			if (right.id === assignedThread?.id) {
+				return 1;
+			}
+
+			return left.name.localeCompare(right.name);
+		});
 
 	return {
 		task: {
@@ -117,17 +161,23 @@ export const load: PageServerLoad = async ({ params }) => {
 			assigneeName: task.assigneeWorkerId
 				? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
 				: 'Unassigned',
-			latestRun: task.latestRunId ? (relatedRuns.find((run) => run.id === task.latestRunId) ?? null) : null,
+			latestRun,
+			...selectTaskThreadContext({
+				assignedThread,
+				latestRunThread
+			}),
 			updatedAtLabel: formatRelativeTime(task.updatedAt),
 			openReview,
 			pendingApproval
 		},
-		project: projectMap.get(task.projectId) ?? null,
+		attachmentRoot: getTaskAttachmentRoot(task, project),
+		project,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		statusOptions: TASK_STATUS_OPTIONS,
 		relatedRuns,
-		dependencyTasks
+		dependencyTasks,
+		candidateThreads
 	};
 };
 
@@ -173,7 +223,6 @@ export const actions: Actions = {
 					title: name,
 					summary: instructions,
 					projectId: project.id,
-					lane: project.lane,
 					status,
 					assigneeWorkerId: assigneeWorker?.id ?? null,
 					desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
@@ -191,6 +240,149 @@ export const actions: Actions = {
 		return {
 			ok: true,
 			successAction: 'updateTask',
+			taskId: params.taskId
+		};
+	},
+
+	attachTaskFile: async ({ params, request }) => {
+		const form = await request.formData();
+		const upload = form.get('attachment');
+		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(400, { message: 'Choose a file to attach.' });
+		}
+
+		const project = current.projects.find((candidate) => candidate.id === task.projectId) ?? null;
+		const attachmentRoot = getTaskAttachmentRoot(task, project);
+
+		if (!attachmentRoot) {
+			return fail(400, {
+				message: 'This task needs an artifact root before files can be attached.'
+			});
+		}
+
+		const attachmentId = createTaskAttachmentId();
+		const safeName = sanitizeAttachmentName(upload.name);
+		const attachmentFolder = join(attachmentRoot, 'task-attachments', task.id);
+		const attachmentPath = join(attachmentFolder, `${attachmentId}-${safeName}`);
+
+		await mkdir(attachmentFolder, { recursive: true });
+		await writeFile(attachmentPath, Buffer.from(await upload.arrayBuffer()));
+
+		const now = new Date().toISOString();
+		const nextAttachment = {
+			id: attachmentId,
+			name: upload.name.trim() || safeName,
+			path: attachmentPath,
+			contentType: upload.type || 'application/octet-stream',
+			sizeBytes: upload.size,
+			attachedAt: now
+		};
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === params.taskId
+					? {
+							...candidate,
+							attachments: [nextAttachment, ...candidate.attachments],
+							updatedAt: now
+						}
+					: candidate
+			)
+		}));
+
+		return {
+			ok: true,
+			successAction: 'attachTaskFile',
+			taskId: params.taskId,
+			attachmentId
+		};
+	},
+
+	removeTaskAttachment: async ({ params, request }) => {
+		const form = await request.formData();
+		const attachmentId = form.get('attachmentId')?.toString().trim() ?? '';
+		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		if (!attachmentId) {
+			return fail(400, { message: 'Attachment ID is required.' });
+		}
+
+		if (!task.attachments.some((attachment) => attachment.id === attachmentId)) {
+			return fail(404, { message: 'Attachment not found.' });
+		}
+
+		const now = new Date().toISOString();
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === params.taskId
+					? {
+							...candidate,
+							attachments: candidate.attachments.filter(
+								(attachment) => attachment.id !== attachmentId
+							),
+							updatedAt: now
+						}
+					: candidate
+			)
+		}));
+
+		return {
+			ok: true,
+			successAction: 'removeTaskAttachment',
+			taskId: params.taskId,
+			attachmentId
+		};
+	},
+
+	updateTaskThread: async ({ params, request }) => {
+		const form = await request.formData();
+		const threadSessionId = form.get('threadSessionId')?.toString().trim() ?? '';
+		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		if (threadSessionId) {
+			const session = await getAgentSession(threadSessionId);
+
+			if (!session) {
+				return fail(400, { message: 'Selected work thread was not found.' });
+			}
+		}
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === params.taskId
+					? {
+							...candidate,
+							threadSessionId: threadSessionId || null,
+							updatedAt: new Date().toISOString()
+						}
+					: candidate
+			)
+		}));
+
+		return {
+			ok: true,
+			successAction: 'updateTaskThread',
 			taskId: params.taskId
 		};
 	},
@@ -223,30 +415,53 @@ export const actions: Actions = {
 
 		if (!project.projectRootFolder) {
 			return fail(400, {
-				message: 'This task cannot launch a session until its project has a root folder.'
+				message: 'This task cannot launch a work thread until its project has a root folder.'
 			});
 		}
 
 		if (getPendingApprovalForTask(current, task.id)?.mode === 'before_run') {
 			return fail(409, {
-				message: 'This task is waiting on before-run approval before a session can start.'
+				message: 'This task is waiting on before-run approval before a work thread can start.'
 			});
 		}
 
-		const prompt = buildTaskSessionPrompt({
+		const prompt = buildTaskThreadPrompt({
 			taskName: effectiveName,
 			taskInstructions: effectiveInstructions,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot
 		});
-		const session = await startAgentSession({
-			name: `Task: ${effectiveName}`,
-			cwd: project.projectRootFolder,
-			prompt,
-			sandbox: 'workspace-write',
-			model: null
-		});
+		const assignedThread = task.threadSessionId
+			? await getAgentSession(task.threadSessionId)
+			: null;
+		let sessionId = task.threadSessionId;
+		let threadId = assignedThread?.threadId ?? null;
+		let reusedAssignedThread = false;
+
+		if (assignedThread?.hasActiveRun) {
+			return fail(409, {
+				message:
+					'This task is assigned to a busy work thread. Wait for that run to finish or change the thread assignment first.'
+			});
+		}
+
+		if (assignedThread?.canResume) {
+			await sendAgentSessionMessage(assignedThread.id, prompt);
+			sessionId = assignedThread.id;
+			threadId = assignedThread.threadId;
+			reusedAssignedThread = true;
+		} else {
+			const session = await startAgentSession({
+				name: buildTaskThreadName(project.name),
+				cwd: project.projectRootFolder,
+				prompt,
+				sandbox: 'workspace-write',
+				model: null
+			});
+			sessionId = session.sessionId;
+			threadId = null;
+		}
 		const providerId =
 			assigneeWorker?.providerId ??
 			current.providers.find((provider) => provider.kind === 'local' && provider.enabled)?.id ??
@@ -258,13 +473,16 @@ export const actions: Actions = {
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),
-			sessionId: session.sessionId,
+			threadId,
+			sessionId,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
 					? [project.defaultArtifactRoot || project.projectRootFolder]
 					: [],
-			summary: 'Launched from the task detail page into a resumable Codex session.',
+			summary: reusedAssignedThread
+				? 'Queued in the task’s assigned work thread.'
+				: 'Started a new work thread from the task detail page.',
 			lastHeartbeatAt: new Date().toISOString()
 		});
 
@@ -278,9 +496,9 @@ export const actions: Actions = {
 							title: effectiveName,
 							summary: effectiveInstructions,
 							projectId: project.id,
-							lane: project.lane,
 							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
 							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
+							threadSessionId: sessionId,
 							artifactPath:
 								candidate.artifactPath ||
 								project.defaultArtifactRoot ||
@@ -288,7 +506,7 @@ export const actions: Actions = {
 								'',
 							runCount: candidate.runCount + 1,
 							latestRunId: run.id,
-							status: 'running',
+							status: 'in_progress',
 							updatedAt: new Date().toISOString()
 						}
 					: candidate
@@ -299,7 +517,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'launchTaskSession',
 			taskId: params.taskId,
-			sessionId: session.sessionId
+			sessionId
 		};
 	},
 
@@ -331,11 +549,7 @@ export const actions: Actions = {
 			),
 			runs: shouldCloseTask
 				? data.runs.map(
-						updateLatestRunForTask(
-							task.latestRunId,
-							'done',
-							'Task closed after review approval.'
-						)
+						updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after review approval.')
 					)
 				: data.runs,
 			tasks: data.tasks.map((task) =>
@@ -432,11 +646,7 @@ export const actions: Actions = {
 			),
 			runs: shouldCloseTask
 				? data.runs.map(
-						updateLatestRunForTask(
-							task.latestRunId,
-							'done',
-							'Task closed after approval.'
-						)
+						updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after approval.')
 					)
 				: data.runs,
 			tasks: data.tasks.map((task) =>
@@ -503,5 +713,28 @@ export const actions: Actions = {
 			successAction: 'rejectApproval',
 			taskId: params.taskId
 		};
+	},
+
+	deleteTask: async ({ params }) => {
+		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		const relatedSessionIds = [
+			...new Set(
+				current.runs
+					.filter((run) => run.taskId === params.taskId)
+					.map((run) => run.sessionId)
+					.filter((sessionId): sessionId is string => Boolean(sessionId))
+			)
+		];
+
+		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentSession(sessionId)));
+		await updateControlPlane((data) => removeTaskFromControlPlane(data, params.taskId));
+
+		throw redirect(303, '/app/tasks?deleted=1');
 	}
 };

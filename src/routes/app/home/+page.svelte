@@ -1,26 +1,44 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { AgentSessionDetail, AgentTimelineStep } from '$lib/types/agent-session';
+	import { fetchHomeDashboard } from '$lib/client/agent-data';
+	import type { AgentSessionDetail } from '$lib/types/agent-session';
+	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import type { DashboardTaskAttentionItem, HomeDashboardData } from '$lib/types/home-dashboard';
 
-	let { data } = $props();
+	let { data } = $props<{ data: HomeDashboardData }>();
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
+	let refreshedDashboard = $state.raw<HomeDashboardData | null>(null);
+	let refreshError = $state<string | null>(null);
+	let dashboard: HomeDashboardData = $derived(refreshedDashboard ?? data);
 
 	let activeSessions = $derived(
-		data.sessions.filter((session) => session.status === 'running' || session.status === 'queued')
+		dashboard.sessions.filter(
+			(session: AgentSessionDetail) =>
+				session.sessionState === 'starting' ||
+				session.sessionState === 'waiting' ||
+				session.sessionState === 'working'
+		)
 	);
 	let attentionSessions = $derived(
-		data.sessions.filter((session) => session.status === 'failed' || session.status === 'canceled')
+		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'attention')
 	);
 	let followUpSessions = $derived(
-		data.sessions.filter((session) => session.status === 'completed' && session.canResume)
+		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'ready')
 	);
-	let latestSessions = $derived(data.sessions.slice(0, 5));
-	let blockedTasks = $derived(data.taskAttention.filter((task) => task.status === 'blocked'));
-	let reviewTasks = $derived(data.taskAttention.filter((task) => task.openReview));
-	let approvalTasks = $derived(data.taskAttention.filter((task) => task.pendingApproval));
-	let dependencyTasks = $derived(data.taskAttention.filter((task) => task.hasUnmetDependencies));
+	let latestSessions = $derived(dashboard.sessions.slice(0, 5));
+	let blockedTasks = $derived(
+		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.status === 'blocked')
+	);
+	let reviewTasks = $derived(
+		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.openReview)
+	);
+	let approvalTasks = $derived(
+		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.pendingApproval)
+	);
+	let dependencyTasks = $derived(
+		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.hasUnmetDependencies)
+	);
 
 	function userIsEditingFormControl() {
 		const activeElement = document.activeElement;
@@ -36,56 +54,60 @@
 		return ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
 	}
 
-	async function refreshDashboard() {
-		if (isRefreshing || document.hidden || userIsEditingFormControl()) {
+	async function refreshDashboard(options: { force?: boolean } = {}) {
+		if (isRefreshing) {
+			return;
+		}
+
+		if (!options.force && (document.hidden || userIsEditingFormControl())) {
 			return;
 		}
 
 		isRefreshing = true;
 
 		try {
-			await invalidateAll();
+			refreshedDashboard = await fetchHomeDashboard();
+			refreshError = null;
+		} catch (err) {
+			refreshError = err instanceof Error ? err.message : 'Could not refresh dashboard.';
 		} finally {
 			isRefreshing = false;
 		}
 	}
 
-	function timelineDotClass(state: AgentTimelineStep['state']) {
+	function sessionStateLabel(state: AgentSessionDetail['sessionState']) {
 		switch (state) {
-			case 'complete':
-				return 'bg-emerald-400 ring-4 ring-emerald-950/60';
-			case 'current':
-				return 'bg-sky-400 ring-4 ring-sky-950/60';
+			case 'starting':
+				return 'Starting';
+			case 'waiting':
+				return 'Waiting';
+			case 'working':
+				return 'Working';
+			case 'ready':
+				return 'Ready';
 			case 'attention':
-				return 'bg-rose-400 ring-4 ring-rose-950/60';
+				return 'Attention';
+			case 'unavailable':
+				return 'Not resumable';
 			default:
-				return 'bg-slate-700 ring-4 ring-slate-950/60';
+				return 'Idle';
 		}
 	}
 
-	function timelineConnectorClass(state: AgentTimelineStep['state']) {
+	function sessionStateClass(state: AgentSessionDetail['sessionState']) {
 		switch (state) {
-			case 'complete':
-				return 'bg-emerald-900/70';
-			case 'current':
-				return 'bg-sky-900/70';
+			case 'working':
+				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
+			case 'starting':
+				return 'border border-amber-800/70 bg-amber-950/50 text-amber-300';
+			case 'waiting':
+			case 'ready':
+				return 'border border-sky-800/70 bg-sky-950/50 text-sky-300';
 			case 'attention':
-				return 'bg-rose-900/70';
+				return 'border border-rose-900/70 bg-rose-950/40 text-rose-300';
+			case 'unavailable':
 			default:
-				return 'bg-slate-800';
-		}
-	}
-
-	function timelineCardClass(state: AgentTimelineStep['state']) {
-		switch (state) {
-			case 'complete':
-				return 'border-emerald-900/60 bg-emerald-950/20';
-			case 'current':
-				return 'border-sky-900/60 bg-sky-950/20';
-			case 'attention':
-				return 'border-rose-900/60 bg-rose-950/20';
-			default:
-				return 'border-slate-800 bg-slate-950/60';
+				return 'border border-slate-700 bg-slate-900 text-slate-300';
 		}
 	}
 
@@ -104,28 +126,6 @@
 	});
 </script>
 
-{#snippet timeline(session: AgentSessionDetail)}
-	<ol class="flex flex-col gap-2 lg:flex-row lg:items-start">
-		{#each session.runTimeline as step, index (step.key)}
-			<li class="flex min-w-0 flex-1 items-start gap-3 lg:basis-0">
-				<div class="flex min-w-0 flex-1 items-start gap-2">
-					<span class={`mt-1.5 h-2.5 w-2.5 rounded-full ${timelineDotClass(step.state)}`}></span>
-					<div class={`min-w-0 flex-1 rounded-lg border p-3 ${timelineCardClass(step.state)}`}>
-						<p class="text-xs font-medium text-white">{step.label}</p>
-						<p class="mt-0.5 text-[11px] text-slate-400">{step.detail}</p>
-					</div>
-				</div>
-
-				{#if index < session.runTimeline.length - 1}
-					<div
-						class={`mt-5 hidden w-6 shrink-0 rounded-full lg:block lg:h-px xl:w-8 ${timelineConnectorClass(step.state)}`}
-					></div>
-				{/if}
-			</li>
-		{/each}
-	</ol>
-{/snippet}
-
 {#snippet sessionCard(session: AgentSessionDetail)}
 	<article class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
 		<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
@@ -133,27 +133,26 @@
 				<div class="flex flex-wrap items-center gap-2">
 					<h3 class="font-medium text-white">{session.name}</h3>
 					<span
-						class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 					>
 						{session.sandbox}
 					</span>
 					<span
 						class={[
-							'rounded-full px-2 py-1 text-[11px] uppercase',
-							session.status === 'running'
-								? 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300'
-								: session.status === 'queued'
-									? 'border border-amber-800/70 bg-amber-950/50 text-amber-300'
-									: session.status === 'failed' || session.status === 'canceled'
-										? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
-										: 'border border-sky-800/70 bg-sky-950/50 text-sky-300'
+							'inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase',
+							sessionStateClass(session.sessionState)
 						]}
 					>
-						{session.status}
+						{sessionStateLabel(session.sessionState)}
+					</span>
+					<span
+						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+					>
+						latest run {session.latestRunStatus}
 					</span>
 				</div>
-				<p class="text-sm text-slate-300">{session.statusSummary}</p>
-				<p class="text-xs break-all text-slate-500">{session.cwd}</p>
+				<p class="ui-clamp-3 text-sm text-slate-300">{session.sessionSummary}</p>
+				<p class="ui-wrap-anywhere text-xs text-slate-500">{session.cwd}</p>
 			</div>
 
 			<div class="text-left text-xs text-slate-500 sm:text-right">
@@ -176,16 +175,11 @@
 				<p class="mt-2 text-sm font-medium text-white">{session.lastExitCode ?? 'n/a'}</p>
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Resume</p>
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Follow-up</p>
 				<p class="mt-2 text-sm font-medium text-white">
 					{session.canResume ? 'Available' : 'Blocked'}
 				</p>
 			</div>
-		</div>
-
-		<div class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-			<p class="text-[11px] font-medium tracking-[0.16em] text-slate-400 uppercase">Run timeline</p>
-			{@render timeline(session)}
 		</div>
 
 		{#if session.latestRun?.lastMessage}
@@ -193,7 +187,7 @@
 				<p class="text-[11px] font-medium tracking-[0.16em] text-slate-400 uppercase">
 					Last agent message
 				</p>
-				<p class="text-sm break-words whitespace-pre-wrap text-slate-200">
+				<p class="ui-wrap-anywhere text-sm whitespace-pre-wrap text-slate-200">
 					{session.latestRun.lastMessage}
 				</p>
 			</div>
@@ -224,7 +218,7 @@
 				class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
 				type="button"
 				onclick={() => {
-					void refreshDashboard();
+					void refreshDashboard({ force: true });
 				}}
 				disabled={isRefreshing}
 			>
@@ -234,68 +228,85 @@
 				class="w-full rounded-2xl border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sky-200 transition hover:border-sky-700 hover:text-white sm:w-auto sm:rounded-full"
 				href={resolve('/app/sessions')}
 			>
-				Open detailed session controls
+				Open detailed thread controls
 			</a>
 		</div>
+		{#if refreshError}
+			<p
+				class="rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+			>
+				{refreshError}
+			</p>
+		{/if}
 	</div>
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Running</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.sessionSummary.runningCount}</p>
+			<p class="text-sm text-slate-400">Active</p>
+			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.activeCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Queued</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.sessionSummary.queuedCount}</p>
+			<p class="text-sm text-slate-400">Ready</p>
+			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.readyCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Needs attention</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{attentionSessions.length}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboard.sessionSummary.attentionCount}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Ready to resume</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{followUpSessions.length}</p>
+			<p class="text-sm text-slate-400">Not resumable / idle</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboard.sessionSummary.unavailableCount}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Total sessions</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.sessionSummary.totalCount}</p>
+			<p class="text-sm text-slate-400">Total threads</p>
+			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.totalCount}</p>
 		</div>
 	</div>
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Ready tasks</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.controlSummary.readyTaskCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboard.controlSummary.readyTaskCount}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Blocked tasks</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.controlSummary.blockedTaskCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboard.controlSummary.blockedTaskCount}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Open reviews</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{data.controlSummary.openReviewCount}
+				{dashboard.controlSummary.openReviewCount}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Pending approvals</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{data.controlSummary.pendingApprovalCount}
+				{dashboard.controlSummary.pendingApprovalCount}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Dependency blocked</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{data.controlSummary.dependencyBlockedTaskCount}
+				{dashboard.controlSummary.dependencyBlockedTaskCount}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">High risk open</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.controlSummary.highRiskTaskCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboard.controlSummary.highRiskTaskCount}
+			</p>
 		</div>
 	</div>
 
-	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
 		<div class="space-y-6">
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -303,7 +314,7 @@
 						<h2 class="text-xl font-semibold text-white">Live workload</h2>
 						<p class="text-sm text-slate-400">Running and queued work on this laptop.</p>
 					</div>
-					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/sessions')}
+					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/runs')}
 						>Manage runs</a
 					>
 				</div>
@@ -342,9 +353,9 @@
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<h2 class="text-xl font-semibold text-white">Task attention queue</h2>
-					<p class="text-sm text-slate-400">
-						Blocked work, open reviews, pending approvals, and items waiting on dependencies.
-					</p>
+						<p class="text-sm text-slate-400">
+							Blocked work, open reviews, pending approvals, and items waiting on dependencies.
+						</p>
 					</div>
 					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
 						>Open task board</a
@@ -370,24 +381,24 @@
 					</div>
 				</div>
 
-				{#if data.taskAttention.length === 0}
+				{#if dashboard.taskAttention.length === 0}
 					<p class="text-sm text-slate-400">No task-level intervention points right now.</p>
 				{:else}
 					<div class="space-y-3">
-						{#each data.taskAttention as task (task.id)}
+						{#each dashboard.taskAttention as task (task.id)}
 							<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div class="min-w-0">
 										<div class="flex flex-wrap items-center gap-2">
 											<p class="font-medium text-white">{task.title}</p>
 											<span
-												class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 											>
-												{task.status}
+												{formatTaskStatusLabel(task.status)}
 											</span>
 											<span
 												class={[
-													'rounded-full px-2 py-1 text-[11px] uppercase',
+													'inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase',
 													task.riskLevel === 'high'
 														? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
 														: task.riskLevel === 'medium'
@@ -399,28 +410,28 @@
 											</span>
 											{#if task.openReview}
 												<span
-													class="rounded-full border border-sky-800/70 bg-sky-950/40 px-2 py-1 text-[11px] text-sky-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
 												>
 													review open
 												</span>
 											{/if}
 											{#if task.pendingApproval}
 												<span
-													class="rounded-full border border-amber-800/70 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-amber-800/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 												>
 													approval {task.pendingApproval.mode}
 												</span>
 											{/if}
 											{#if task.hasUnmetDependencies}
 												<span
-													class="rounded-full border border-violet-800/70 bg-violet-950/40 px-2 py-1 text-[11px] text-violet-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-violet-800/70 bg-violet-950/40 px-2 py-1 text-center text-[11px] leading-none text-violet-200 uppercase"
 												>
 													waiting on dependency
 												</span>
 											{/if}
 										</div>
-										<p class="mt-2 text-sm text-slate-300">{task.summary}</p>
-										<p class="mt-2 text-xs text-slate-500">
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{task.summary}</p>
+										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
 											{task.projectName !== 'No project' ? task.projectName : task.goalName} · {task.assigneeName}
 											· approval {task.approvalMode}
 										</p>
@@ -428,7 +439,7 @@
 											<p class="mt-2 text-sm text-rose-200">{task.blockedReason}</p>
 										{/if}
 										{#if task.dependencyTaskNames.length > 0}
-											<p class="mt-2 text-xs text-slate-400">
+											<p class="ui-wrap-anywhere mt-2 text-xs text-slate-400">
 												Depends on: {task.dependencyTaskNames.join(', ')}
 											</p>
 										{/if}
@@ -440,7 +451,7 @@
 										{/if}
 									</div>
 									<a
-										class="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white"
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white"
 										href={resolve(`/app/tasks/${task.id}`)}
 									>
 										Inspect task
@@ -458,12 +469,12 @@
 				<div>
 					<h2 class="text-xl font-semibold text-white">Ready for follow-up</h2>
 					<p class="text-sm text-slate-400">
-						Completed sessions that can take another instruction.
+						Work threads that are idle and can take another instruction.
 					</p>
 				</div>
 
 				{#if followUpSessions.length === 0}
-					<p class="text-sm text-slate-400">No completed resumable sessions yet.</p>
+					<p class="text-sm text-slate-400">No resumable threads right now.</p>
 				{:else}
 					<div class="space-y-3">
 						{#each followUpSessions as session (session.id)}
@@ -474,8 +485,8 @@
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div class="min-w-0">
 										<p class="font-medium text-white">{session.name}</p>
-										<p class="mt-1 text-sm text-slate-300">{session.statusSummary}</p>
-										<p class="mt-1 text-xs break-all text-slate-500">{session.cwd}</p>
+										<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>
+										<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">{session.cwd}</p>
 									</div>
 									<div class="text-left text-xs text-slate-500 sm:text-right">
 										<p>Last activity</p>
@@ -491,7 +502,7 @@
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div>
 					<h2 class="text-xl font-semibold text-white">Recent sessions</h2>
-					<p class="text-sm text-slate-400">Newest sessions across all states.</p>
+					<p class="text-sm text-slate-400">Newest threads across all states.</p>
 				</div>
 
 				<div class="space-y-3">
@@ -502,12 +513,12 @@
 									<div class="flex flex-wrap items-center gap-2">
 										<p class="font-medium text-white">{session.name}</p>
 										<span
-											class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
-											{session.status}
+											{sessionStateLabel(session.sessionState)}
 										</span>
 									</div>
-									<p class="mt-1 text-sm text-slate-300">{session.statusSummary}</p>
+									<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>
 								</div>
 								<p class="text-xs text-slate-500 sm:text-right">{session.lastActivityLabel}</p>
 							</div>

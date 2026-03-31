@@ -115,7 +115,7 @@
 
 <label class="block">
 	<span class="mb-2 block text-sm font-medium text-slate-200">{label}</span>
-	<select class="select mb-2 text-white" onchange={applyOption}>
+	<select class="select mb-2 w-full text-white" onchange={applyOption}>
 		<option value="">Choose a known path</option>
 		{#each options as option (option.path)}
 			<option value={option.path}>{option.label}</option>
@@ -123,7 +123,7 @@
 	</select>
 	<input
 		bind:value
-		class="input text-white placeholder:text-slate-500"
+		class="input w-full text-white placeholder:text-slate-500"
 		id={inputId}
 		list={listId}
 		name={name}
@@ -155,7 +155,7 @@
 		{isCreating ? 'Creating...' : actionLabel}
 	</button>
 
-	<p aria-live="polite" class={`text-xs ${feedbackClass}`}>
+	<p aria-live="polite" class={`ui-wrap-anywhere min-w-0 flex-1 text-xs ${feedbackClass}`}>
 		{feedbackMessage || helperText}
 	</p>
 </div>
