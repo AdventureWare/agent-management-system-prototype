@@ -61,7 +61,9 @@
 			</article>
 
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Session</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+					Thread record
+				</p>
 				{#if data.run.sessionId}
 					<a
 						class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
@@ -75,8 +77,10 @@
 							• archived{/if}
 					</p>
 				{:else}
-					<p class="mt-3 text-lg font-semibold text-white">No session linked</p>
-					<p class="mt-2 text-sm text-slate-400">This run was recorded without a thread session.</p>
+					<p class="mt-3 text-lg font-semibold text-white">No thread record linked</p>
+					<p class="mt-2 text-sm text-slate-400">
+						This run was recorded without a managed thread record.
+					</p>
 				{/if}
 			</article>
 
@@ -250,11 +254,13 @@
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
 					Thread access
 				</p>
-				<h2 class="mt-2 text-xl font-semibold text-white">Session and thread links</h2>
+				<h2 class="mt-2 text-xl font-semibold text-white">Thread record and thread id</h2>
 
 				<div class="mt-5 space-y-4">
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Session</p>
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Thread record
+						</p>
 						{#if data.run.sessionId}
 							<a
 								class="ui-wrap-inline mt-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
@@ -263,7 +269,7 @@
 								{data.run.sessionName ?? data.run.sessionId}
 							</a>
 						{:else}
-							<p class="mt-2 text-sm text-white">No session linked</p>
+							<p class="mt-2 text-sm text-white">No thread record linked</p>
 						{/if}
 					</div>
 

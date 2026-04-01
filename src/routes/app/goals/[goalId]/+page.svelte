@@ -14,7 +14,6 @@
 	type GoalFormValues = {
 		name?: string;
 		summary?: string;
-		horizon?: string;
 		successSignal?: string;
 		artifactPath?: string;
 		parentGoalId?: string;
@@ -54,16 +53,12 @@
 
 		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-4xl xl:grid-cols-4">
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Linked tasks
-				</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Linked tasks</p>
 				<p class="mt-3 text-3xl font-semibold text-white">{data.metrics.relatedTaskCount}</p>
 				<p class="mt-2 text-sm text-slate-400">Tasks assigned to this goal.</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Active tasks
-				</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Active tasks</p>
 				<p class="mt-3 text-3xl font-semibold text-white">{data.metrics.activeTaskCount}</p>
 				<p class="mt-2 text-sm text-slate-400">Open or in-flight work under this goal.</p>
 			</article>
@@ -119,12 +114,10 @@
 						goalId: data.goal.id,
 						name: formValues?.name ?? data.goal.name,
 						summary: formValues?.summary ?? data.goal.summary,
-						horizon: formValues?.horizon ?? data.goal.horizon,
 						successSignal: formValues?.successSignal ?? data.goal.successSignal,
 						artifactPath: formValues?.artifactPath ?? data.goal.artifactPath,
-						parentGoalId: formValues?.parentGoalId ?? (data.goal.parentGoalId ?? ''),
-						projectIds:
-							formValues?.projectIds ?? data.linkedProjects.map((project) => project.id),
+						parentGoalId: formValues?.parentGoalId ?? data.goal.parentGoalId ?? '',
+						projectIds: formValues?.projectIds ?? data.linkedProjects.map((project) => project.id),
 						taskIds: formValues?.taskIds ?? data.relatedTasks.map((task) => task.id),
 						lane: formValues?.lane ?? data.goal.lane,
 						status: formValues?.status ?? data.goal.status
@@ -133,9 +126,7 @@
 			</div>
 
 			<article class="card border border-slate-800 bg-slate-950/70 p-6">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Workspace
-				</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Workspace</p>
 				<h2 class="mt-2 text-xl font-semibold text-white">Goal artifact browser</h2>
 				<p class="mt-2 text-sm text-slate-400">
 					Use one durable workspace for planning notes, related briefs, and downstream outputs.
@@ -152,14 +143,14 @@
 
 		<section class="space-y-6">
 			<article class="card border border-slate-800 bg-slate-950/70 p-6">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Structure
-				</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Structure</p>
 				<h2 class="mt-2 text-xl font-semibold text-white">Parent and subgoal context</h2>
 
 				<div class="mt-5 space-y-4">
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Parent goal</p>
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Parent goal
+						</p>
 						{#if data.goal.parentGoalId}
 							<a
 								class="mt-2 inline-flex text-sm font-medium text-sky-300 transition hover:text-sky-200"
@@ -212,7 +203,9 @@
 
 				<div class="mt-5 space-y-3">
 					{#if data.linkedProjects.length === 0}
-						<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
+						<p
+							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+						>
 							No projects linked yet.
 						</p>
 					{:else}
@@ -225,7 +218,9 @@
 									<p class="ui-wrap-anywhere text-sm font-medium text-white">{project.name}</p>
 									<p class="ui-clamp-2 mt-2 text-sm text-slate-300">{project.summary}</p>
 									<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
-										{project.defaultArtifactRoot || project.projectRootFolder || 'No workspace default'}
+										{project.defaultArtifactRoot ||
+											project.projectRootFolder ||
+											'No workspace default'}
 									</p>
 								</div>
 								<span class="text-xs font-medium tracking-[0.16em] text-sky-300 uppercase">
@@ -238,14 +233,14 @@
 			</article>
 
 			<article class="card border border-slate-800 bg-slate-950/70 p-6">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Linked tasks
-				</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Linked tasks</p>
 				<h2 class="mt-2 text-xl font-semibold text-white">Execution under this goal</h2>
 
 				<div class="mt-5 space-y-3">
 					{#if data.relatedTasks.length === 0}
-						<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
+						<p
+							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+						>
 							No tasks are assigned to this goal yet.
 						</p>
 					{:else}

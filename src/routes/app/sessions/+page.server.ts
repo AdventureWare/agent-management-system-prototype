@@ -1,8 +1,8 @@
 import type { PageServerLoad } from './$types';
-import { listAgentSessions } from '$lib/server/agent-sessions';
+import { listAgentThreads } from '$lib/server/agent-threads';
 
 export const load: PageServerLoad = async () => {
 	return {
-		sessions: await listAgentSessions({ includeArchived: true })
+		sessions: await listAgentThreads({ includeArchived: true })
 	};
 };

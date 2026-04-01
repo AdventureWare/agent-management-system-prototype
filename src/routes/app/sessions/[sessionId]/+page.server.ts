@@ -2,10 +2,10 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
 import {
-	getAgentSession,
+	getAgentThread,
 	parseAgentSandbox,
-	updateAgentSessionSandbox
-} from '$lib/server/agent-sessions';
+	updateAgentThreadSandbox
+} from '$lib/server/agent-threads';
 import {
 	createApproval,
 	createReview,
@@ -27,10 +27,7 @@ type SessionTaskResponseAction = {
 	disabledReason: string;
 };
 
-function updateLatestRunForTask(
-	runId: string | null,
-	summary: string
-) {
+function updateLatestRunForTask(runId: string | null, summary: string) {
 	const now = new Date().toISOString();
 
 	return (run: Run): Run =>
@@ -90,7 +87,7 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 
 function buildTaskResponseAction(input: {
 	sessionId: string;
-	session: Awaited<ReturnType<typeof getAgentSession>>;
+	session: Awaited<ReturnType<typeof getAgentThread>>;
 	data: ControlPlaneData;
 }): SessionTaskResponseAction | null {
 	const task = resolveSessionTask(input.data, input.sessionId);
@@ -121,7 +118,10 @@ function buildTaskResponseAction(input: {
 		disabledReason = 'Wait for the active run to finish before approving this response.';
 	} else if (!input.session?.latestRun) {
 		disabledReason = 'No thread output is available yet.';
-	} else if (!input.session.latestRun.lastMessage && input.session.latestRunStatus !== 'completed') {
+	} else if (
+		!input.session.latestRun.lastMessage &&
+		input.session.latestRunStatus !== 'completed'
+	) {
 		disabledReason = 'This thread has not captured a response yet.';
 	}
 
@@ -138,7 +138,7 @@ function buildTaskResponseAction(input: {
 }
 
 export const load: PageServerLoad = async ({ params }) => {
-	const [session, data] = await Promise.all([getAgentSession(params.sessionId), loadControlPlane()]);
+	const [session, data] = await Promise.all([getAgentThread(params.sessionId), loadControlPlane()]);
 
 	if (!session) {
 		throw error(404, 'Session not found.');
@@ -158,17 +158,14 @@ export const load: PageServerLoad = async ({ params }) => {
 export const actions: Actions = {
 	updateSessionSandbox: async ({ params, request }) => {
 		const form = await request.formData();
-		const nextSandbox = parseAgentSandbox(
-			form.get('sandbox')?.toString(),
-			'workspace-write'
-		);
-		const session = await getAgentSession(params.sessionId);
+		const nextSandbox = parseAgentSandbox(form.get('sandbox')?.toString(), 'workspace-write');
+		const session = await getAgentThread(params.sessionId);
 
 		if (!session) {
 			return fail(404, { message: 'Session not found.' });
 		}
 
-		await updateAgentSessionSandbox(params.sessionId, nextSandbox);
+		await updateAgentThreadSandbox(params.sessionId, nextSandbox);
 
 		return {
 			ok: true,
@@ -179,7 +176,7 @@ export const actions: Actions = {
 
 	approveTaskResponse: async ({ params }) => {
 		const [session, current] = await Promise.all([
-			getAgentSession(params.sessionId),
+			getAgentThread(params.sessionId),
 			loadControlPlane()
 		]);
 
@@ -203,7 +200,10 @@ export const actions: Actions = {
 			});
 		}
 
-		if (!session.latestRun || (!session.latestRun.lastMessage && session.latestRunStatus !== 'completed')) {
+		if (
+			!session.latestRun ||
+			(!session.latestRun.lastMessage && session.latestRunStatus !== 'completed')
+		) {
 			return fail(409, { message: 'No saved thread response is available to approve yet.' });
 		}
 

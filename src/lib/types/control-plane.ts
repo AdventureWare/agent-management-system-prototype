@@ -40,11 +40,7 @@ export const WORKER_LOCATION_OPTIONS = ['local', 'cloud'] as const;
 export const PROVIDER_KIND_OPTIONS = ['local', 'cloud', 'api'] as const;
 export const PROVIDER_SETUP_STATUS_OPTIONS = ['connected', 'needs_setup', 'planned'] as const;
 export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'custom'] as const;
-export const PLANNING_HORIZON_KIND_OPTIONS = ['week', 'month', 'quarter', 'custom'] as const;
-export const PLANNING_HORIZON_STATUS_OPTIONS = ['draft', 'active', 'closed'] as const;
-export const PLANNING_CAPACITY_UNIT_OPTIONS = ['hours', 'points', 'slots'] as const;
 export const PLANNING_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'] as const;
-export const TASK_PLANNING_SOURCE_OPTIONS = ['manual', 'ai_proposed', 'ai_accepted'] as const;
 
 export type Lane = (typeof LANE_OPTIONS)[number];
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
@@ -60,11 +56,7 @@ export type WorkerLocation = (typeof WORKER_LOCATION_OPTIONS)[number];
 export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
-export type PlanningHorizonKind = (typeof PLANNING_HORIZON_KIND_OPTIONS)[number];
-export type PlanningHorizonStatus = (typeof PLANNING_HORIZON_STATUS_OPTIONS)[number];
-export type PlanningCapacityUnit = (typeof PLANNING_CAPACITY_UNIT_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
-export type TaskPlanningSource = (typeof TASK_PLANNING_SOURCE_OPTIONS)[number];
 
 export type StatusTone = 'neutral' | 'ready' | 'progress' | 'decision' | 'success' | 'attention';
 
@@ -274,26 +266,6 @@ export function providerSetupStatusToneClass(status: string): string {
 	}
 }
 
-export function formatPlanningHorizonKindLabel(kind: string): string {
-	return formatEnumLabel(kind);
-}
-
-export function formatPlanningHorizonStatusLabel(status: string): string {
-	return formatEnumLabel(status);
-}
-
-export function planningHorizonStatusToneClass(status: string): string {
-	switch (status) {
-		case 'active':
-			return statusToneClass('ready');
-		case 'closed':
-			return statusToneClass('success');
-		case 'draft':
-		default:
-			return statusToneClass('neutral');
-	}
-}
-
 export type Provider = {
 	id: string;
 	name: string;
@@ -319,19 +291,6 @@ export type Role = {
 	description: string;
 };
 
-export type PlanningHorizon = {
-	id: string;
-	name: string;
-	kind: PlanningHorizonKind;
-	status: PlanningHorizonStatus;
-	startDate: string;
-	endDate: string;
-	notes: string;
-	capacityUnit: PlanningCapacityUnit;
-	createdAt: string;
-	updatedAt: string;
-};
-
 export type Goal = {
 	id: string;
 	name: string;
@@ -339,12 +298,10 @@ export type Goal = {
 	status: GoalStatus;
 	summary: string;
 	artifactPath: string;
-	horizon?: string;
 	successSignal?: string;
 	parentGoalId?: string | null;
 	projectIds?: string[];
 	taskIds?: string[];
-	planningHorizonId?: string | null;
 	targetDate?: string | null;
 	planningPriority?: number;
 	confidence?: PlanningConfidence;
@@ -400,11 +357,8 @@ export type Task = {
 	blockedReason: string;
 	dependencyTaskIds: string[];
 	parentTaskId?: string | null;
-	planningHorizonId?: string | null;
 	estimateHours?: number | null;
 	targetDate?: string | null;
-	planningOrder?: number;
-	source?: TaskPlanningSource;
 	runCount: number;
 	latestRunId: string | null;
 	artifactPath: string;
@@ -464,7 +418,6 @@ export type ControlPlaneData = {
 	roles: Role[];
 	projects: Project[];
 	goals: Goal[];
-	planningHorizons?: PlanningHorizon[];
 	workers: Worker[];
 	tasks: Task[];
 	runs: Run[];

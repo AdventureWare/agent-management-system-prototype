@@ -34,7 +34,6 @@
 			goal.name,
 			goal.summary,
 			goal.parentGoalName,
-			goal.horizon,
 			goal.successSignal,
 			goal.artifactPath,
 			...goal.linkedProjects.map((project) => project.name),
@@ -162,7 +161,6 @@
 							<th class="px-4 py-3">Lane</th>
 							<th class="px-4 py-3">Parent</th>
 							<th class="px-4 py-3">Links</th>
-							<th class="px-4 py-3">Horizon</th>
 							<th class="px-4 py-3">Workspace</th>
 							<th class="px-4 py-3">Open</th>
 						</tr>
@@ -200,9 +198,6 @@
 									{goal.linkedProjects.length} project{goal.linkedProjects.length === 1 ? '' : 's'}
 									<br />
 									{goal.relatedTaskCount} task{goal.relatedTaskCount === 1 ? '' : 's'}
-								</td>
-								<td class="px-4 py-4 text-sm text-slate-300">
-									{goal.horizon || 'Not set'}
 								</td>
 								<td class="px-4 py-4 text-sm text-slate-400">
 									<p class="ui-clamp-2 min-w-[18rem]">{goal.artifactPath || 'Not configured'}</p>

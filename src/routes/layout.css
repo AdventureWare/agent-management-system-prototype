@@ -89,6 +89,65 @@ a {
 	padding: 1.5rem;
 }
 
+:global(.ui-tabs) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+:global(.ui-tab) {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	border-radius: 9999px;
+	border: 1px solid rgb(51 65 85 / 1);
+	padding: 0.625rem 0.875rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	transition:
+		border-color 150ms ease,
+		color 150ms ease,
+		background-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+:global(.ui-tab:focus-visible) {
+	outline: none;
+	box-shadow: 0 0 0 2px rgb(56 189 248 / 0.35);
+}
+
+:global(.ui-tab-inactive) {
+	background: rgb(15 23 42 / 0.78);
+	color: rgb(203 213 225 / 1);
+}
+
+:global(.ui-tab-inactive:hover) {
+	border-color: rgb(71 85 105 / 1);
+	color: white;
+}
+
+:global(.ui-tab-active) {
+	border-color: rgb(56 189 248 / 0.4);
+	background: linear-gradient(180deg, rgb(56 189 248 / 0.9), rgb(14 165 233 / 0.86));
+	color: rgb(2 6 23 / 1);
+}
+
+:global(.ui-tab-danger.ui-tab-active) {
+	border-color: rgb(251 113 133 / 0.45);
+	background: linear-gradient(180deg, rgb(251 113 133 / 0.88), rgb(244 63 94 / 0.84));
+	color: white;
+}
+
+:global(.ui-tab-badge) {
+	border-radius: 9999px;
+	background: rgb(2 6 23 / 0.18);
+	padding: 0.125rem 0.5rem;
+	font-size: 0.6875rem;
+	letter-spacing: 0.08em;
+}
+
 :global(.ui-metric-card) {
 	border-radius: 1rem;
 	border: 1px solid rgb(30 41 59 / 0.9);
@@ -202,5 +261,4 @@ a {
 		padding-inline: 1.5rem;
 		padding-block: 2rem;
 	}
-
 }

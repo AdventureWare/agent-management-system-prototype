@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { appNavigationSections, type AppNavigationLinkId } from '$lib/app-navigation';
 	import {
 		ActivityIcon,
 		ArrowLeftRightIcon,
@@ -19,30 +20,18 @@
 
 	let { children } = $props();
 
-	const navigationSections = [
-		{
-			title: 'Operate',
-			description: 'Daily work loop',
-			links: [
-				{ label: 'Home', href: '/app/home', icon: LayoutDashboardIcon },
-				{ label: 'Tasks', href: '/app/tasks', icon: ListTodoIcon },
-				{ label: 'Runs', href: '/app/runs', icon: ActivityIcon },
-				{ label: 'Threads', href: '/app/sessions', icon: MessagesSquareIcon }
-			]
-		},
-		{
-			title: 'Model',
-			description: 'Context and routing',
-			links: [
-				{ label: 'Projects', href: '/app/projects', icon: FolderOpenIcon },
-				{ label: 'Goals', href: '/app/goals', icon: TargetIcon },
-				{ label: 'Planning', href: '/app/planning', icon: CalendarRangeIcon },
-				{ label: 'Workers', href: '/app/workers', icon: UsersIcon },
-				{ label: 'Roles', href: '/app/roles', icon: BriefcaseBusinessIcon },
-				{ label: 'Providers', href: '/app/providers', icon: CpuIcon }
-			]
-		}
-	] as const;
+	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
+		home: LayoutDashboardIcon,
+		tasks: ListTodoIcon,
+		sessions: MessagesSquareIcon,
+		runs: ActivityIcon,
+		projects: FolderOpenIcon,
+		goals: TargetIcon,
+		planning: CalendarRangeIcon,
+		workers: UsersIcon,
+		roles: BriefcaseBusinessIcon,
+		providers: CpuIcon
+	};
 
 	let layoutRail = $state(true);
 	let mobileNavOpen = $state(false);
@@ -89,8 +78,10 @@
 	>
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
 			<div class="min-w-0">
-				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">Agent Ops</p>
-				<p class="truncate text-sm text-slate-300">Tasks, runs, and threads first</p>
+				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">
+					Agent Ops
+				</p>
+				<p class="truncate text-sm text-slate-300">Overview, work, context, and capacity</p>
 			</div>
 			<button
 				class="inline-flex items-center justify-center rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-200"
@@ -122,7 +113,7 @@
 						<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">
 							Navigation
 						</p>
-						<p class="text-sm text-slate-400">Choose an operating or model surface</p>
+						<p class="text-sm text-slate-400">Choose the surface that matches your next task</p>
 					</div>
 					<button
 						class="inline-flex items-center justify-center rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-200"
@@ -135,7 +126,7 @@
 				</div>
 
 				<nav class="space-y-4">
-					{#each navigationSections as section (section.title)}
+					{#each appNavigationSections as section (section.title)}
 						<div class="space-y-2">
 							<div class="px-1">
 								<p class="text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
@@ -144,7 +135,7 @@
 								<p class="mt-1 text-xs text-slate-500">{section.description}</p>
 							</div>
 							{#each section.links as link (link.href)}
-								{@const Icon = link.icon}
+								{@const Icon = iconByLinkId[link.id]}
 								<a
 									class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 transition hover:border-slate-700 hover:text-white"
 									href={resolve(link.href)}
@@ -171,23 +162,33 @@
 		]}
 	>
 		<Navigation.Content>
-			<Navigation.Header>
+			<Navigation.Header class={layoutRail ? '' : 'space-y-4 px-4 pt-4'}>
+				{#if !layoutRail}
+					<div class="space-y-1">
+						<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">
+							Agent Ops
+						</p>
+						<p class="text-sm text-slate-300">Work-first control plane</p>
+						<p class="text-xs text-slate-500">Overview, work, context, and capacity</p>
+					</div>
+				{/if}
 				<Navigation.Trigger onclick={toggleLayout}>
 					<ArrowLeftRightIcon class={layoutRail ? 'size-5' : 'size-4'} />
 					{#if !layoutRail}<span>Resize</span>{/if}
 				</Navigation.Trigger>
 			</Navigation.Header>
-			{#each navigationSections as section (section.title)}
+			{#each appNavigationSections as section (section.title)}
 				{#if !layoutRail}
-					<div
-						class="px-4 pt-4 pb-2 text-[10px] font-semibold tracking-[0.2em] text-slate-500 uppercase"
-					>
-						{section.title}
+					<div class="space-y-1 px-4 pt-4 pb-2">
+						<p class="text-[10px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
+							{section.title}
+						</p>
+						<p class="text-xs text-slate-500">{section.description}</p>
 					</div>
 				{/if}
 				<Navigation.Menu>
 					{#each section.links as link (link.href)}
-						{@const Icon = link.icon}
+						{@const Icon = iconByLinkId[link.id]}
 						<Navigation.TriggerAnchor href={resolve(link.href)}>
 							<Icon class={layoutRail ? 'size-5' : 'size-4'} />
 							<Navigation.TriggerText>{link.label}</Navigation.TriggerText>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
@@ -259,6 +260,8 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				}
 			} as never
 		});
+
+		await page.getByRole('tab', { name: /Execution 0/i }).click();
 
 		expect(document.body.textContent).toContain('Suggested available thread');
 		expect(document.body.textContent).toContain('Assign suggested thread');

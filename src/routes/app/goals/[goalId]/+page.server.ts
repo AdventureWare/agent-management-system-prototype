@@ -38,7 +38,6 @@ function readGoalForm(form: FormData) {
 		goalId: form.get('goalId')?.toString().trim() ?? '',
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
-		horizon: form.get('horizon')?.toString().trim() ?? '',
 		successSignal: form.get('successSignal')?.toString().trim() ?? '',
 		artifactPath: normalizePathInput(form.get('artifactPath')?.toString()),
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
@@ -49,7 +48,10 @@ function readGoalForm(form: FormData) {
 	};
 }
 
-function collectDescendantGoalIds(data: Awaited<ReturnType<typeof loadControlPlane>>, goalId: string) {
+function collectDescendantGoalIds(
+	data: Awaited<ReturnType<typeof loadControlPlane>>,
+	goalId: string
+) {
 	const descendants = new Set<string>();
 	const queue = [goalId];
 
@@ -83,9 +85,7 @@ function buildGoalOptions(
 
 	return {
 		parentGoalOptions: sortGoalsByName(
-			data.goals.filter(
-				(goal) => goal.id !== currentGoalId && !descendantGoalIds.has(goal.id)
-			)
+			data.goals.filter((goal) => goal.id !== currentGoalId && !descendantGoalIds.has(goal.id))
 		).map((goal) => ({
 			id: goal.id,
 			name: goal.name,
@@ -134,7 +134,9 @@ function validateGoalSelections(
 		return 'One or more selected projects are no longer available.';
 	}
 
-	const selectedTasks = values.taskIds.map((taskId) => data.tasks.find((task) => task.id === taskId));
+	const selectedTasks = values.taskIds.map((taskId) =>
+		data.tasks.find((task) => task.id === taskId)
+	);
 
 	if (selectedTasks.some((task) => !task)) {
 		return 'One or more selected tasks are no longer available.';
@@ -240,8 +242,7 @@ export const actions: Actions = {
 
 		if (!artifactPath) {
 			return fail(400, {
-				message:
-					'Add an artifact path or link a project or parent goal with a usable workspace.',
+				message: 'Add an artifact path or link a project or parent goal with a usable workspace.',
 				values
 			});
 		}
@@ -261,7 +262,6 @@ export const actions: Actions = {
 						...goal,
 						name: values.name,
 						summary: values.summary,
-						horizon: values.horizon,
 						successSignal: values.successSignal,
 						artifactPath,
 						lane: values.lane,

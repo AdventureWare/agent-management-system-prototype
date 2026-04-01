@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlanningPageData, selectPlanningHorizon } from './planning';
+import { buildPlanningPageData } from './planning';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
 function buildFixture(): ControlPlaneData {
@@ -28,7 +28,6 @@ function buildFixture(): ControlPlaneData {
 				artifactPath: '/tmp/ams/agent_output',
 				projectIds: ['project_1'],
 				taskIds: [],
-				planningHorizonId: 'horizon_active',
 				targetDate: '2026-04-15',
 				planningPriority: 3,
 				confidence: 'medium'
@@ -42,36 +41,9 @@ function buildFixture(): ControlPlaneData {
 				artifactPath: '/tmp/ams/agent_output',
 				projectIds: ['project_1'],
 				taskIds: [],
-				planningHorizonId: null,
 				targetDate: null,
 				planningPriority: 0,
 				confidence: 'high'
-			}
-		],
-		planningHorizons: [
-			{
-				id: 'horizon_active',
-				name: 'Q2 2026',
-				kind: 'quarter',
-				status: 'active',
-				startDate: '2026-04-01',
-				endDate: '2026-06-30',
-				notes: '',
-				capacityUnit: 'hours',
-				createdAt: '2026-03-31T00:00:00.000Z',
-				updatedAt: '2026-03-31T00:00:00.000Z'
-			},
-			{
-				id: 'horizon_draft',
-				name: 'May 2026',
-				kind: 'month',
-				status: 'draft',
-				startDate: '2026-05-01',
-				endDate: '2026-05-31',
-				notes: '',
-				capacityUnit: 'hours',
-				createdAt: '2026-03-31T00:00:00.000Z',
-				updatedAt: '2026-03-31T00:00:00.000Z'
 			}
 		],
 		workers: [
@@ -133,11 +105,8 @@ function buildFixture(): ControlPlaneData {
 				blockedReason: '',
 				dependencyTaskIds: [],
 				parentTaskId: null,
-				planningHorizonId: null,
 				estimateHours: 12,
 				targetDate: '2026-04-10',
-				planningOrder: 1,
-				source: 'manual',
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/ams/agent_output',
@@ -163,11 +132,8 @@ function buildFixture(): ControlPlaneData {
 				blockedReason: '',
 				dependencyTaskIds: [],
 				parentTaskId: null,
-				planningHorizonId: 'horizon_active',
 				estimateHours: null,
 				targetDate: null,
-				planningOrder: 2,
-				source: 'manual',
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/ams/agent_output',
@@ -183,13 +149,6 @@ function buildFixture(): ControlPlaneData {
 }
 
 describe('planning helpers', () => {
-	it('prefers an explicitly selected horizon when present', () => {
-		const fixture = buildFixture();
-
-		expect(selectPlanningHorizon(fixture, 'horizon_draft')?.id).toBe('horizon_draft');
-		expect(selectPlanningHorizon(fixture)?.id).toBe('horizon_active');
-	});
-
 	it('builds planning metrics, goal summaries, and worker loads', () => {
 		const snapshot = buildPlanningPageData(buildFixture(), {
 			startDate: '2026-04-01',
@@ -197,7 +156,6 @@ describe('planning helpers', () => {
 			includeUnscheduled: true
 		});
 
-		expect(snapshot.metrics.savedWindowCount).toBe(2);
 		expect(snapshot.metrics.goalCount).toBe(1);
 		expect(snapshot.metrics.taskCount).toBe(2);
 		expect(snapshot.metrics.scheduledTaskCount).toBe(1);

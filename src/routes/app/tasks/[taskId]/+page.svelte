@@ -5,6 +5,7 @@
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import PageTabs from '$lib/components/PageTabs.svelte';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
 	import { formatSessionStateLabel } from '$lib/session-activity';
 	import {
@@ -46,6 +47,29 @@
 				return '';
 		}
 	});
+	let selectedDetailPanel = $state<'resources' | 'execution' | 'governance' | 'danger'>(
+		(() => {
+			switch (form?.successAction) {
+				case 'updateTaskThread':
+				case 'launchTaskSession':
+				case 'recoverTaskSession':
+					return 'execution';
+				case 'approveReview':
+				case 'requestChanges':
+				case 'approveApproval':
+				case 'rejectApproval':
+					return 'governance';
+				case 'attachTaskFile':
+				case 'removeTaskAttachment':
+					return 'resources';
+				default:
+					return 'resources';
+			}
+		})()
+	);
+	let governanceSignalCount = $derived(
+		(data.task.openReview ? 1 : 0) + (data.task.pendingApproval ? 1 : 0)
+	);
 
 	function threadActionLabel() {
 		if (!data.task.linkThread) {
@@ -242,11 +266,9 @@
 		<DetailFactCard
 			label="Target date"
 			value={formatDateLabel(data.task.targetDate)}
-			detail={
-				data.task.targetDate
-					? `Scheduled for ${data.task.targetDate}`
-					: 'Set a task-level target date to make queue timing visible.'
-			}
+			detail={data.task.targetDate
+				? `Scheduled for ${data.task.targetDate}`
+				: 'Set a task-level target date to make queue timing visible.'}
 			class="card border border-slate-800 bg-slate-950/70 p-4"
 			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
 			valueClass="mt-3 text-lg font-semibold text-white"
@@ -438,53 +460,6 @@
 		</section>
 	{/if}
 
-	<nav
-		class="sticky top-4 z-10 card border border-slate-800/90 bg-slate-950/85 px-5 py-4 backdrop-blur"
-	>
-		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-			<div>
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
-					Page sections
-				</p>
-				<p class="mt-1 text-sm text-slate-400">
-					Jump between configuration, resources, execution, governance, and cleanup.
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<a
-					class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-					href="#task-configuration"
-				>
-					Task configuration
-				</a>
-				<a
-					class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-					href="#resources"
-				>
-					Resources
-				</a>
-				<a
-					class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-					href="#execution"
-				>
-					Execution
-				</a>
-				<a
-					class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-					href="#governance"
-				>
-					Governance
-				</a>
-				<a
-					class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-rose-400/40 hover:text-rose-200"
-					href="#danger-zone"
-				>
-					Danger zone
-				</a>
-			</div>
-		</div>
-	</nav>
-
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
 		<form id="task-update-form" method="POST" action="?/updateTask">
 			<DetailSection
@@ -621,570 +596,646 @@
 		</form>
 
 		<div class="space-y-6">
-			<DetailSection
-				id="resources"
-				eyebrow="Resources"
-				title="Files, uploads, and task outputs"
-				description="Keep source material and generated artifacts together so the task can be reviewed from one place."
-				bodyClass="divide-y divide-slate-800/90 p-0"
-			>
-				<div class="px-6 py-6">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-						Attachments
-					</p>
-					<h3 class="mt-2 text-xl font-semibold text-white">Attached files</h3>
-					<p class="mt-2 max-w-2xl text-sm text-slate-400">
-						Upload supporting files for this task. Files are stored under the task artifact area so
-						the worker thread and human reviewer can reference the same source material.
-					</p>
+			<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div>
+						<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+							Task workspaces
+						</p>
+						<p class="mt-1 text-sm text-slate-400">
+							Switch between supporting materials, execution continuity, governance, and cleanup
+							without scanning the entire page.
+						</p>
+					</div>
+					<PageTabs
+						ariaLabel="Task detail panels"
+						bind:value={selectedDetailPanel}
+						items={[
+							{ id: 'resources', label: 'Resources', badge: data.task.attachments.length },
+							{ id: 'execution', label: 'Execution', badge: data.relatedRuns.length },
+							{ id: 'governance', label: 'Governance', badge: governanceSignalCount },
+							{ id: 'danger', label: 'Danger zone', tone: 'danger' }
+						]}
+						panelIdPrefix="task-detail"
+					/>
+				</div>
+			</section>
 
-					<form
-						class="mt-5 space-y-4"
-						method="POST"
-						action="?/attachTaskFile"
-						enctype="multipart/form-data"
+			{#if selectedDetailPanel === 'resources'}
+				<div
+					id="task-detail-panel-resources"
+					role="tabpanel"
+					aria-labelledby="task-detail-tab-resources"
+				>
+					<DetailSection
+						id="resources"
+						eyebrow="Resources"
+						title="Files, uploads, and task outputs"
+						description="Keep source material and generated artifacts together so the task can be reviewed from one place."
+						bodyClass="divide-y divide-slate-800/90 p-0"
 					>
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Choose file</span>
-							<input
-								class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
-								name="attachment"
-								type="file"
-								required
-							/>
-						</label>
-
-						<div
-							class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300"
-						>
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Storage root
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Attachments
 							</p>
-							<p class="ui-wrap-anywhere mt-2">{data.attachmentRoot || 'Not configured'}</p>
+							<h3 class="mt-2 text-xl font-semibold text-white">Attached files</h3>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								Upload supporting files for this task. Files are stored under the task artifact area
+								so the worker thread and human reviewer can reference the same source material.
+							</p>
+
+							<form
+								class="mt-5 space-y-4"
+								method="POST"
+								action="?/attachTaskFile"
+								enctype="multipart/form-data"
+							>
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">Choose file</span>
+									<input
+										class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
+										name="attachment"
+										type="file"
+										required
+									/>
+								</label>
+
+								<div
+									class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300"
+								>
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+										Storage root
+									</p>
+									<p class="ui-wrap-anywhere mt-2">{data.attachmentRoot || 'Not configured'}</p>
+								</div>
+
+								<button
+									class="btn border border-slate-700 font-semibold text-slate-100"
+									type="submit"
+								>
+									Attach file
+								</button>
+							</form>
+
+							<div class="mt-5 space-y-4">
+								{#if data.task.attachments.length === 0}
+									<p
+										class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+									>
+										No files attached to this task yet.
+									</p>
+								{:else}
+									{#each data.task.attachments as attachment (attachment.id)}
+										<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0">
+													<p class="ui-wrap-anywhere font-medium text-white">{attachment.name}</p>
+													<p class="mt-2 text-sm text-slate-300">
+														{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType ||
+															'Unknown type'}
+													</p>
+													<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+														{attachment.path}
+													</p>
+													<p class="mt-2 text-xs text-slate-500">
+														Attached {new Date(attachment.attachedAt).toLocaleString()}
+													</p>
+												</div>
+												<div class="flex flex-col gap-2 sm:items-end">
+													<a
+														class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+														href={resolve(
+															`/api/tasks/${data.task.id}/attachments/${attachment.id}`
+														)}
+													>
+														Download
+													</a>
+													<form method="POST" action="?/removeTaskAttachment">
+														<input type="hidden" name="attachmentId" value={attachment.id} />
+														<button
+															class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-rose-400/40 hover:text-rose-200"
+															type="submit"
+														>
+															Detach
+														</button>
+													</form>
+												</div>
+											</div>
+										</article>
+									{/each}
+								{/if}
+							</div>
 						</div>
 
-						<button class="btn border border-slate-700 font-semibold text-slate-100" type="submit">
-							Attach file
-						</button>
-					</form>
-
-					<div class="mt-5 space-y-4">
-						{#if data.task.attachments.length === 0}
-							<p
-								class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
-							>
-								No files attached to this task yet.
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Artifact root
 							</p>
-						{:else}
-							{#each data.task.attachments as attachment (attachment.id)}
-								<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-									<div class="flex flex-wrap items-start justify-between gap-3">
+							<h3 class="mt-2 text-xl font-semibold text-white">Browse task outputs</h3>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								Review the task artifact root directly instead of relying on the raw path alone.
+								Attached files remain linked through the existing task download route.
+							</p>
+
+							<div class="mt-5">
+								<ArtifactBrowser
+									browser={data.artifactBrowser}
+									emptyLabel="No files or folders are present under this task root yet."
+								/>
+							</div>
+						</div>
+					</DetailSection>
+				</div>
+			{:else if selectedDetailPanel === 'execution'}
+				<div
+					id="task-detail-panel-execution"
+					role="tabpanel"
+					aria-labelledby="task-detail-tab-execution"
+				>
+					<DetailSection
+						id="execution"
+						eyebrow="Execution"
+						title="Thread continuity and run history"
+						description="Manage where work continues and review how this task has executed over time."
+						tone="sky"
+						bodyClass="divide-y divide-slate-800/90 p-0"
+					>
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Thread continuity
+							</p>
+							<h3 class="mt-2 text-xl font-semibold text-white">
+								Assign this task to a work thread
+							</h3>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								A work thread is reusable context. Assign this task to an existing thread when you
+								want follow-up work to continue in the same conversation instead of creating a fresh
+								one.
+							</p>
+
+							{#if data.suggestedThread && data.suggestedThread.id !== data.task.threadSessionId}
+								<div class="mt-5 rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4">
+									<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 										<div class="min-w-0">
-											<p class="ui-wrap-anywhere font-medium text-white">{attachment.name}</p>
-											<p class="mt-2 text-sm text-slate-300">
-												{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType ||
-													'Unknown type'}
+											<p class="text-xs font-semibold tracking-[0.16em] text-emerald-300 uppercase">
+												Suggested available thread
 											</p>
-											<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
-												{attachment.path}
+											<p class="thread-name-clamp mt-2 text-sm font-medium text-white">
+												{data.suggestedThread.name}
 											</p>
-											<p class="mt-2 text-xs text-slate-500">
-												Attached {new Date(attachment.attachedAt).toLocaleString()}
+											{#if data.suggestedThread.topicLabels?.length > 0}
+												<div class="mt-3 flex flex-wrap gap-2">
+													{#each data.suggestedThread.topicLabels as topicLabel (topicLabel)}
+														<span
+															class="badge border border-emerald-900/60 bg-emerald-950/30 text-[0.65rem] tracking-[0.16em] text-emerald-100 uppercase"
+														>
+															{topicLabel}
+														</span>
+													{/each}
+												</div>
+											{/if}
+											<p class="mt-2 text-sm text-emerald-100/90">
+												{data.suggestedThread.suggestionReason}
+											</p>
+											<p class="mt-2 text-xs text-slate-400">
+												{formatSessionStateLabel(data.suggestedThread.sessionState)} · Available to resume
 											</p>
 										</div>
+
 										<div class="flex flex-col gap-2 sm:items-end">
-											<a
-												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-												href={resolve(`/api/tasks/${data.task.id}/attachments/${attachment.id}`)}
-											>
-												Download
-											</a>
-											<form method="POST" action="?/removeTaskAttachment">
-												<input type="hidden" name="attachmentId" value={attachment.id} />
+											<form method="POST" action="?/updateTaskThread">
+												<input
+													type="hidden"
+													name="threadSessionId"
+													value={data.suggestedThread.id}
+												/>
 												<button
-													class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-rose-400/40 hover:text-rose-200"
+													class="rounded-full border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-500/60 hover:text-emerald-100"
 													type="submit"
 												>
-													Detach
+													Assign suggested thread
+												</button>
+											</form>
+											<a
+												class="text-sm text-sky-300 transition hover:text-sky-200"
+												href={resolve(`/app/sessions/${data.suggestedThread.id}`)}
+											>
+												Open thread
+											</a>
+										</div>
+									</div>
+								</div>
+							{/if}
+
+							<form class="mt-5 space-y-4" method="POST" action="?/updateTaskThread">
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">Assigned thread</span>
+									<select class="select text-white" name="threadSessionId">
+										<option value="" selected={!data.task.threadSessionId}>
+											Create a new thread when this task runs
+										</option>
+										{#each data.candidateThreads as thread (thread.id)}
+											<option value={thread.id} selected={data.task.threadSessionId === thread.id}>
+												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
+												{formatSessionStateLabel(thread.sessionState)} ·
+												{thread.canResume
+													? 'ready'
+													: thread.hasActiveRun
+														? 'busy'
+														: 'blocked'}{thread.topicLabels?.length
+													? ` · ${thread.topicLabels.join(', ')}`
+													: ''}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<p class="text-sm text-slate-400">
+									Leave the task unassigned if the next run should start a new thread from scratch.
+								</p>
+
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+									<button
+										class="btn border border-slate-700 font-semibold text-slate-100"
+										type="submit"
+									>
+										Save thread assignment
+									</button>
+									{#if data.task.linkThread}
+										<a
+											class="text-sm text-sky-300 transition hover:text-sky-200"
+											href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+										>
+											{threadActionLabel()}
+										</a>
+									{/if}
+								</div>
+							</form>
+
+							{#if data.candidateThreads.length > 0}
+								<div class="mt-5 space-y-3">
+									{#each visibleCandidateThreads as thread (thread.id)}
+										<div class="relative rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+											<a
+												class="absolute top-4 right-4 text-sm text-sky-300 transition hover:text-sky-200"
+												href={resolve(`/app/sessions/${thread.id}`)}
+											>
+												Open thread
+											</a>
+											<div class="min-w-0 pr-28">
+												<div class="flex flex-wrap items-center gap-2">
+													<p class="thread-name-clamp text-sm font-medium text-white">
+														{thread.name}
+													</p>
+													{#if thread.isSuggested}
+														<span
+															class="badge border border-emerald-800/70 bg-emerald-950/40 text-[0.65rem] tracking-[0.18em] text-emerald-200 uppercase"
+														>
+															Suggested
+														</span>
+													{/if}
+												</div>
+												<p class="mt-1 text-xs text-slate-500">
+													{formatSessionStateLabel(thread.sessionState)} ·
+													{thread.canResume
+														? 'Can resume'
+														: thread.hasActiveRun
+															? 'Busy'
+															: 'Blocked'}
+												</p>
+											</div>
+											{#if thread.topicLabels?.length > 0}
+												<div class="mt-3 flex flex-wrap gap-2">
+													{#each thread.topicLabels as topicLabel (topicLabel)}
+														<span
+															class="badge border border-sky-900/50 bg-sky-950/30 text-[0.65rem] tracking-[0.16em] text-sky-200 uppercase"
+														>
+															{topicLabel}
+														</span>
+													{/each}
+												</div>
+											{/if}
+											{#if thread.previewText}
+												<p class="thread-preview-clamp mt-3 text-sm leading-6 text-slate-300">
+													{compactText(thread.previewText)}
+												</p>
+											{/if}
+											{#if thread.isSuggested && thread.suggestionReason}
+												<p class="mt-3 text-xs font-medium text-emerald-200">
+													{thread.suggestionReason}
+												</p>
+											{/if}
+											<p class="ui-wrap-anywhere mt-3 text-xs text-slate-400">
+												{thread.relatedTasks.length > 0
+													? `Related tasks: ${thread.relatedTasks.map((task) => task.title).join(', ')}`
+													: 'No tasks linked yet.'}
+											</p>
+										</div>
+									{/each}
+								</div>
+								{#if data.candidateThreads.length > 3}
+									<button
+										class="mt-4 text-sm text-sky-300 transition hover:text-sky-200"
+										type="button"
+										onclick={() => {
+											showAllCandidateThreads = !showAllCandidateThreads;
+										}}
+									>
+										{showAllCandidateThreads
+											? 'Show fewer threads'
+											: `See more threads (${data.candidateThreads.length - 3} more)`}
+									</button>
+								{/if}
+							{:else}
+								<p class="mt-5 text-sm text-slate-500">
+									No reusable threads match this project context yet.
+								</p>
+							{/if}
+						</div>
+
+						<div class="px-6 py-6">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+										Run history
+									</p>
+									<h3 class="mt-2 text-xl font-semibold text-white">Execution timeline</h3>
+								</div>
+								<a
+									class="rounded-full border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
+									href={resolve('/app/runs')}
+								>
+									Open runs
+								</a>
+							</div>
+
+							<div class="mt-5 space-y-4">
+								{#if data.relatedRuns.length === 0}
+									<p
+										class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+									>
+										No runs recorded yet.
+									</p>
+								{:else}
+									{#each data.relatedRuns as run (run.id)}
+										<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0 flex-1">
+													<div class="flex flex-wrap items-center gap-2">
+														<a
+															class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
+															href={resolve(`/app/runs/${run.id}`)}
+														>
+															{run.id}
+														</a>
+														<span
+															class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(run.status)}`}
+														>
+															{formatRunStatusLabel(run.status)}
+														</span>
+													</div>
+													<p class="ui-wrap-anywhere mt-2 text-sm text-slate-300">
+														{run.summary || 'No summary recorded.'}
+													</p>
+												</div>
+												<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
+											</div>
+
+											<div class="mt-4 grid gap-3 sm:grid-cols-3">
+												<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Worker
+													</p>
+													<p class="mt-2 text-sm text-white">{run.workerName}</p>
+												</div>
+												<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Provider
+													</p>
+													<p class="mt-2 text-sm text-white">{run.providerName}</p>
+												</div>
+												<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Session
+													</p>
+													{#if run.sessionId}
+														<a
+															class="ui-wrap-inline mt-2 text-sm text-sky-300 transition hover:text-sky-200"
+															href={resolve(`/app/sessions/${run.sessionId}`)}
+														>
+															{run.sessionId}
+														</a>
+													{:else}
+														<p class="mt-2 text-sm text-white">No thread</p>
+													{/if}
+												</div>
+											</div>
+											<div class="mt-3">
+												<a
+													class="text-xs font-medium text-sky-300 transition hover:text-sky-200"
+													href={resolve(`/app/runs/${run.id}`)}
+												>
+													Open run details
+												</a>
+											</div>
+										</article>
+									{/each}
+								{/if}
+							</div>
+						</div>
+					</DetailSection>
+				</div>
+			{:else if selectedDetailPanel === 'governance'}
+				<div
+					id="task-detail-panel-governance"
+					role="tabpanel"
+					aria-labelledby="task-detail-tab-governance"
+				>
+					<DetailSection
+						id="governance"
+						eyebrow="Governance"
+						title="Review state and execution constraints"
+						description="Track decisions that can block or redirect the task before more work is queued."
+						tone="amber"
+						bodyClass="divide-y divide-slate-800/90 p-0"
+					>
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Governance
+							</p>
+							<h3 class="mt-2 text-xl font-semibold text-white">Review and approval state</h3>
+
+							<div class="mt-5 space-y-4">
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Open review
+											</p>
+											<p class="mt-2 text-sm text-white">
+												{data.task.openReview
+													? data.task.openReview.summary || 'Waiting on reviewer decision.'
+													: 'No open review'}
+											</p>
+										</div>
+										{#if data.task.openReview}
+											<span
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${reviewStatusToneClass(data.task.openReview.status)}`}
+											>
+												{formatReviewStatusLabel(data.task.openReview.status)}
+											</span>
+										{/if}
+									</div>
+
+									{#if data.task.openReview}
+										<div class="mt-4 flex flex-col gap-3 sm:flex-row">
+											<form method="POST" action="?/approveReview">
+												<button
+													class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+													type="submit"
+												>
+													Approve review
+												</button>
+											</form>
+											<form method="POST" action="?/requestChanges">
+												<button
+													class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+													type="submit"
+												>
+													Request changes
 												</button>
 											</form>
 										</div>
-									</div>
-								</article>
-							{/each}
-						{/if}
-					</div>
-				</div>
-
-				<div class="px-6 py-6">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-						Artifact root
-					</p>
-					<h3 class="mt-2 text-xl font-semibold text-white">Browse task outputs</h3>
-					<p class="mt-2 max-w-2xl text-sm text-slate-400">
-						Review the task artifact root directly instead of relying on the raw path alone.
-						Attached files remain linked through the existing task download route.
-					</p>
-
-					<div class="mt-5">
-						<ArtifactBrowser
-							browser={data.artifactBrowser}
-							emptyLabel="No files or folders are present under this task root yet."
-						/>
-					</div>
-				</div>
-			</DetailSection>
-
-			<DetailSection
-				id="execution"
-				eyebrow="Execution"
-				title="Thread continuity and run history"
-				description="Manage where work continues and review how this task has executed over time."
-				tone="sky"
-				bodyClass="divide-y divide-slate-800/90 p-0"
-			>
-				<div class="px-6 py-6">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-						Thread continuity
-					</p>
-					<h3 class="mt-2 text-xl font-semibold text-white">Assign this task to a work thread</h3>
-					<p class="mt-2 max-w-2xl text-sm text-slate-400">
-						A work thread is reusable context. Assign this task to an existing thread when you want
-						follow-up work to continue in the same conversation instead of creating a fresh one.
-					</p>
-
-					{#if data.suggestedThread && data.suggestedThread.id !== data.task.threadSessionId}
-						<div class="mt-5 rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4">
-							<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-								<div class="min-w-0">
-									<p class="text-xs font-semibold tracking-[0.16em] text-emerald-300 uppercase">
-										Suggested available thread
-									</p>
-									<p class="thread-name-clamp mt-2 text-sm font-medium text-white">
-										{data.suggestedThread.name}
-									</p>
-									{#if data.suggestedThread.topicLabels?.length > 0}
-										<div class="mt-3 flex flex-wrap gap-2">
-											{#each data.suggestedThread.topicLabels as topicLabel (topicLabel)}
-												<span
-													class="badge border border-emerald-900/60 bg-emerald-950/30 text-[0.65rem] tracking-[0.16em] text-emerald-100 uppercase"
-												>
-													{topicLabel}
-												</span>
-											{/each}
-										</div>
 									{/if}
-									<p class="mt-2 text-sm text-emerald-100/90">
-										{data.suggestedThread.suggestionReason}
-									</p>
-									<p class="mt-2 text-xs text-slate-400">
-										{formatSessionStateLabel(data.suggestedThread.sessionState)} · Available to resume
-									</p>
 								</div>
 
-								<div class="flex flex-col gap-2 sm:items-end">
-									<form method="POST" action="?/updateTaskThread">
-										<input type="hidden" name="threadSessionId" value={data.suggestedThread.id} />
-										<button
-											class="rounded-full border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-500/60 hover:text-emerald-100"
-											type="submit"
-										>
-											Assign suggested thread
-										</button>
-									</form>
-									<a
-										class="text-sm text-sky-300 transition hover:text-sky-200"
-										href={resolve(`/app/sessions/${data.suggestedThread.id}`)}
-									>
-										Open thread
-									</a>
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Pending approval
+											</p>
+											<p class="mt-2 text-sm text-white">
+												{data.task.pendingApproval
+													? data.task.pendingApproval.summary ||
+														`Waiting on ${formatTaskApprovalModeLabel(data.task.pendingApproval.mode)} approval.`
+													: 'No pending approval'}
+											</p>
+										</div>
+										{#if data.task.pendingApproval}
+											<span
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${approvalStatusToneClass(data.task.pendingApproval.status)}`}
+											>
+												{formatTaskApprovalModeLabel(data.task.pendingApproval.mode)}
+											</span>
+										{/if}
+									</div>
+
+									{#if data.task.pendingApproval}
+										<div class="mt-4 flex flex-col gap-3 sm:flex-row">
+											<form method="POST" action="?/approveApproval">
+												<button
+													class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+													type="submit"
+												>
+													Approve gate
+												</button>
+											</form>
+											<form method="POST" action="?/rejectApproval">
+												<button
+													class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+													type="submit"
+												>
+													Reject gate
+												</button>
+											</form>
+										</div>
+									{/if}
 								</div>
 							</div>
 						</div>
-					{/if}
 
-					<form class="mt-5 space-y-4" method="POST" action="?/updateTaskThread">
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Assigned thread</span>
-							<select class="select text-white" name="threadSessionId">
-								<option value="" selected={!data.task.threadSessionId}>
-									Create a new thread when this task runs
-								</option>
-								{#each data.candidateThreads as thread (thread.id)}
-									<option value={thread.id} selected={data.task.threadSessionId === thread.id}>
-										{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
-										{formatSessionStateLabel(thread.sessionState)} ·
-										{thread.canResume ? 'ready' : thread.hasActiveRun ? 'busy' : 'blocked'}{thread
-											.topicLabels?.length
-											? ` · ${thread.topicLabels.join(', ')}`
-											: ''}
-									</option>
-								{/each}
-							</select>
-						</label>
-						<p class="text-sm text-slate-400">
-							Leave the task unassigned if the next run should start a new thread from scratch.
-						</p>
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Dependency context
+							</p>
+							<h3 class="mt-2 text-xl font-semibold text-white">
+								Dependencies and execution notes
+							</h3>
 
-						<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<div class="mt-5 space-y-4">
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+										Goal link
+									</p>
+									{#if data.task.goalId}
+										<a
+											class="mt-2 inline-flex text-sm font-medium text-sky-300 transition hover:text-sky-200"
+											href={resolve(`/app/goals/${data.task.goalId}`)}
+										>
+											{data.task.goalName || data.task.goalId}
+										</a>
+									{:else}
+										<p class="mt-2 text-sm text-white">No goal linked</p>
+									{/if}
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+										Blocked reason
+									</p>
+									<p class="mt-2 text-sm text-white">
+										{data.task.blockedReason || 'No blocker recorded'}
+									</p>
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+										Dependencies
+									</p>
+									{#if data.dependencyTasks.length === 0}
+										<p class="mt-2 text-sm text-slate-400">No dependencies recorded.</p>
+									{:else}
+										<div class="mt-3 space-y-3">
+											{#each data.dependencyTasks as dependency (dependency.id)}
+												<a
+													class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 transition hover:border-sky-400/40"
+													href={resolve(`/app/tasks/${dependency.id}`)}
+												>
+													<span class="text-sm text-white">{dependency.title}</span>
+													<span
+														class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(dependency.status)}`}
+													>
+														{formatTaskStatusLabel(dependency.status)}
+													</span>
+												</a>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							</div>
+						</div>
+					</DetailSection>
+				</div>
+			{:else}
+				<div id="task-detail-panel-danger" role="tabpanel" aria-labelledby="task-detail-tab-danger">
+					<DetailSection
+						id="danger-zone"
+						eyebrow="Danger zone"
+						title="Delete task"
+						description="This removes the task from the control plane, drops its related runs, reviews, and approvals, and detaches it from dependency lists on other tasks."
+						tone="rose"
+					>
+						<form class="mt-5" method="POST" action="?/deleteTask">
 							<button
-								class="btn border border-slate-700 font-semibold text-slate-100"
+								class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
 								type="submit"
 							>
-								Save thread assignment
+								Delete task
 							</button>
-							{#if data.task.linkThread}
-								<a
-									class="text-sm text-sky-300 transition hover:text-sky-200"
-									href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
-								>
-									{threadActionLabel()}
-								</a>
-							{/if}
-						</div>
-					</form>
-
-					{#if data.candidateThreads.length > 0}
-						<div class="mt-5 space-y-3">
-							{#each visibleCandidateThreads as thread (thread.id)}
-								<div class="relative rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-									<a
-										class="absolute top-4 right-4 text-sm text-sky-300 transition hover:text-sky-200"
-										href={resolve(`/app/sessions/${thread.id}`)}
-									>
-										Open thread
-									</a>
-									<div class="min-w-0 pr-28">
-										<div class="flex flex-wrap items-center gap-2">
-											<p class="thread-name-clamp text-sm font-medium text-white">
-												{thread.name}
-											</p>
-											{#if thread.isSuggested}
-												<span
-													class="badge border border-emerald-800/70 bg-emerald-950/40 text-[0.65rem] tracking-[0.18em] text-emerald-200 uppercase"
-												>
-													Suggested
-												</span>
-											{/if}
-										</div>
-										<p class="mt-1 text-xs text-slate-500">
-											{formatSessionStateLabel(thread.sessionState)} ·
-											{thread.canResume ? 'Can resume' : thread.hasActiveRun ? 'Busy' : 'Blocked'}
-										</p>
-									</div>
-									{#if thread.topicLabels?.length > 0}
-										<div class="mt-3 flex flex-wrap gap-2">
-											{#each thread.topicLabels as topicLabel (topicLabel)}
-												<span
-													class="badge border border-sky-900/50 bg-sky-950/30 text-[0.65rem] tracking-[0.16em] text-sky-200 uppercase"
-												>
-													{topicLabel}
-												</span>
-											{/each}
-										</div>
-									{/if}
-									{#if thread.previewText}
-										<p class="thread-preview-clamp mt-3 text-sm leading-6 text-slate-300">
-											{compactText(thread.previewText)}
-										</p>
-									{/if}
-									{#if thread.isSuggested && thread.suggestionReason}
-										<p class="mt-3 text-xs font-medium text-emerald-200">
-											{thread.suggestionReason}
-										</p>
-									{/if}
-									<p class="ui-wrap-anywhere mt-3 text-xs text-slate-400">
-										{thread.relatedTasks.length > 0
-											? `Related tasks: ${thread.relatedTasks.map((task) => task.title).join(', ')}`
-											: 'No tasks linked yet.'}
-									</p>
-								</div>
-							{/each}
-						</div>
-						{#if data.candidateThreads.length > 3}
-							<button
-								class="mt-4 text-sm text-sky-300 transition hover:text-sky-200"
-								type="button"
-								onclick={() => {
-									showAllCandidateThreads = !showAllCandidateThreads;
-								}}
-							>
-								{showAllCandidateThreads
-									? 'Show fewer threads'
-									: `See more threads (${data.candidateThreads.length - 3} more)`}
-							</button>
-						{/if}
-					{:else}
-						<p class="mt-5 text-sm text-slate-500">
-							No reusable threads match this project context yet.
-						</p>
-					{/if}
+						</form>
+					</DetailSection>
 				</div>
-
-				<div class="px-6 py-6">
-					<div class="flex items-start justify-between gap-3">
-						<div>
-							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-								Run history
-							</p>
-							<h3 class="mt-2 text-xl font-semibold text-white">Execution timeline</h3>
-						</div>
-						<a
-							class="rounded-full border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
-							href={resolve('/app/runs')}
-						>
-							Open runs
-						</a>
-					</div>
-
-					<div class="mt-5 space-y-4">
-						{#if data.relatedRuns.length === 0}
-							<p
-								class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
-							>
-								No runs recorded yet.
-							</p>
-						{:else}
-							{#each data.relatedRuns as run (run.id)}
-								<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-									<div class="flex flex-wrap items-start justify-between gap-3">
-										<div class="min-w-0 flex-1">
-											<div class="flex flex-wrap items-center gap-2">
-												<a
-													class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
-													href={resolve(`/app/runs/${run.id}`)}
-												>
-													{run.id}
-												</a>
-												<span
-													class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(run.status)}`}
-												>
-													{formatRunStatusLabel(run.status)}
-												</span>
-											</div>
-											<p class="ui-wrap-anywhere mt-2 text-sm text-slate-300">
-												{run.summary || 'No summary recorded.'}
-											</p>
-										</div>
-										<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
-									</div>
-
-									<div class="mt-4 grid gap-3 sm:grid-cols-3">
-										<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Worker</p>
-											<p class="mt-2 text-sm text-white">{run.workerName}</p>
-										</div>
-										<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Provider</p>
-											<p class="mt-2 text-sm text-white">{run.providerName}</p>
-										</div>
-										<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Session</p>
-											{#if run.sessionId}
-												<a
-													class="ui-wrap-inline mt-2 text-sm text-sky-300 transition hover:text-sky-200"
-													href={resolve(`/app/sessions/${run.sessionId}`)}
-												>
-													{run.sessionId}
-												</a>
-											{:else}
-												<p class="mt-2 text-sm text-white">No thread</p>
-											{/if}
-										</div>
-									</div>
-									<div class="mt-3">
-										<a
-											class="text-xs font-medium text-sky-300 transition hover:text-sky-200"
-											href={resolve(`/app/runs/${run.id}`)}
-										>
-											Open run details
-										</a>
-									</div>
-								</article>
-							{/each}
-						{/if}
-					</div>
-				</div>
-			</DetailSection>
-
-			<DetailSection
-				id="governance"
-				eyebrow="Governance"
-				title="Review state and execution constraints"
-				description="Track decisions that can block or redirect the task before more work is queued."
-				tone="amber"
-				bodyClass="divide-y divide-slate-800/90 p-0"
-			>
-				<div class="px-6 py-6">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Governance</p>
-					<h3 class="mt-2 text-xl font-semibold text-white">Review and approval state</h3>
-
-					<div class="mt-5 space-y-4">
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-							<div class="flex flex-wrap items-center justify-between gap-3">
-								<div>
-									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-										Open review
-									</p>
-									<p class="mt-2 text-sm text-white">
-										{data.task.openReview
-											? data.task.openReview.summary || 'Waiting on reviewer decision.'
-											: 'No open review'}
-									</p>
-								</div>
-								{#if data.task.openReview}
-									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${reviewStatusToneClass(data.task.openReview.status)}`}
-									>
-										{formatReviewStatusLabel(data.task.openReview.status)}
-									</span>
-								{/if}
-							</div>
-
-							{#if data.task.openReview}
-								<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-									<form method="POST" action="?/approveReview">
-										<button
-											class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
-											type="submit"
-										>
-											Approve review
-										</button>
-									</form>
-									<form method="POST" action="?/requestChanges">
-										<button
-											class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
-											type="submit"
-										>
-											Request changes
-										</button>
-									</form>
-								</div>
-							{/if}
-						</div>
-
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-							<div class="flex flex-wrap items-center justify-between gap-3">
-								<div>
-									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-										Pending approval
-									</p>
-									<p class="mt-2 text-sm text-white">
-										{data.task.pendingApproval
-											? data.task.pendingApproval.summary ||
-												`Waiting on ${formatTaskApprovalModeLabel(data.task.pendingApproval.mode)} approval.`
-											: 'No pending approval'}
-									</p>
-								</div>
-								{#if data.task.pendingApproval}
-									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${approvalStatusToneClass(data.task.pendingApproval.status)}`}
-									>
-										{formatTaskApprovalModeLabel(data.task.pendingApproval.mode)}
-									</span>
-								{/if}
-							</div>
-
-							{#if data.task.pendingApproval}
-								<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-									<form method="POST" action="?/approveApproval">
-										<button
-											class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
-											type="submit"
-										>
-											Approve gate
-										</button>
-									</form>
-									<form method="POST" action="?/rejectApproval">
-										<button
-											class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
-											type="submit"
-										>
-											Reject gate
-										</button>
-									</form>
-								</div>
-							{/if}
-						</div>
-					</div>
-				</div>
-
-				<div class="px-6 py-6">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-						Dependency context
-					</p>
-					<h3 class="mt-2 text-xl font-semibold text-white">Dependencies and execution notes</h3>
-
-					<div class="mt-5 space-y-4">
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Goal link
-							</p>
-							{#if data.task.goalId}
-								<a
-									class="mt-2 inline-flex text-sm font-medium text-sky-300 transition hover:text-sky-200"
-									href={resolve(`/app/goals/${data.task.goalId}`)}
-								>
-									{data.task.goalName || data.task.goalId}
-								</a>
-							{:else}
-								<p class="mt-2 text-sm text-white">No goal linked</p>
-							{/if}
-						</div>
-
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Blocked reason
-							</p>
-							<p class="mt-2 text-sm text-white">
-								{data.task.blockedReason || 'No blocker recorded'}
-							</p>
-						</div>
-
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Dependencies
-							</p>
-							{#if data.dependencyTasks.length === 0}
-								<p class="mt-2 text-sm text-slate-400">No dependencies recorded.</p>
-							{:else}
-								<div class="mt-3 space-y-3">
-									{#each data.dependencyTasks as dependency (dependency.id)}
-										<a
-											class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 transition hover:border-sky-400/40"
-											href={resolve(`/app/tasks/${dependency.id}`)}
-										>
-											<span class="text-sm text-white">{dependency.title}</span>
-											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(dependency.status)}`}
-											>
-												{formatTaskStatusLabel(dependency.status)}
-											</span>
-										</a>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-				</div>
-			</DetailSection>
-
-			<DetailSection
-				id="danger-zone"
-				eyebrow="Danger zone"
-				title="Delete task"
-				description="This removes the task from the control plane, drops its related runs, reviews, and approvals, and detaches it from dependency lists on other tasks."
-				tone="rose"
-			>
-				<form class="mt-5" method="POST" action="?/deleteTask">
-					<button
-						class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
-						type="submit"
-					>
-						Delete task
-					</button>
-				</form>
-			</DetailSection>
+			{/if}
 		</div>
 	</div>
 </AppPage>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { fetchAgentSession } from '$lib/client/agent-data';
+	import { fetchAgentThread } from '$lib/client/agent-threads';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
@@ -9,10 +9,10 @@
 		ACTIVE_REFRESH_INTERVAL_MS,
 		ACTIVITY_CLOCK_INTERVAL_MS,
 		formatActivityAge,
-		formatSessionStateLabel,
-		getSessionActivityMeta
-	} from '$lib/session-activity';
-	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
+		formatThreadStateLabel,
+		getThreadActivityMeta
+	} from '$lib/thread-activity';
+	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import {
 		approvalStatusToneClass,
 		formatApprovalStatusLabel,
@@ -21,11 +21,7 @@
 		formatTaskStatusLabel,
 		reviewStatusToneClass
 	} from '$lib/types/control-plane';
-	import type {
-		AgentRunDetail,
-		AgentRunStatus,
-		AgentSessionDetail
-	} from '$lib/types/agent-session';
+	import type { AgentRunDetail, AgentRunStatus, AgentThreadDetail } from '$lib/types/agent-session';
 	import { fade } from 'svelte/transition';
 
 	type TaskResponseAction = {
@@ -46,7 +42,7 @@
 		form = null,
 		backHref = resolve('/app/sessions')
 	} = $props<{
-		session: AgentSessionDetail;
+		session: AgentThreadDetail;
 		sandboxOptions: readonly string[];
 		taskResponseAction?: TaskResponseAction | null;
 		form?: {
@@ -59,7 +55,7 @@
 		backHref?: string;
 	}>();
 
-	let session = $state.raw<AgentSessionDetail | null>(null);
+	let session = $state.raw<AgentThreadDetail | null>(null);
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
 	let isCanceling = $state(false);
@@ -248,10 +244,10 @@
 
 	async function loadSession() {
 		if (!session) {
-			throw new Error('Session not found.');
+			throw new Error('Thread not found.');
 		}
 
-		session = await fetchAgentSession(session.id);
+		session = await fetchAgentThread(session.id);
 	}
 
 	async function refreshSession(options: { force?: boolean } = {}) {
@@ -400,7 +396,7 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function sessionStatusClass(state: AgentSessionDetail['sessionState']) {
+	function sessionStatusClass(state: AgentThreadDetail['sessionState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -433,7 +429,7 @@
 		}
 	}
 
-	function threadLabel(detail: AgentSessionDetail) {
+	function threadLabel(detail: AgentThreadDetail) {
 		if (detail.threadId) {
 			return 'Available';
 		}
@@ -441,7 +437,7 @@
 		return detail.hasActiveRun ? 'Pending' : 'Missing';
 	}
 
-	function resumeLabel(detail: AgentSessionDetail) {
+	function resumeLabel(detail: AgentThreadDetail) {
 		if (detail.hasActiveRun) {
 			return 'Busy';
 		}
@@ -457,15 +453,15 @@
 		return run.mode === 'message' ? 'Follow-up' : 'Start';
 	}
 
-	function describeSessionState(detail: AgentSessionDetail): SessionStateDescriptor {
+	function describeSessionState(detail: AgentThreadDetail): SessionStateDescriptor {
 		return {
-			label: formatSessionStateLabel(detail.sessionState),
+			label: formatThreadStateLabel(detail.sessionState),
 			detail: detail.sessionSummary,
 			className: sessionStatusClass(detail.sessionState)
 		};
 	}
 
-	function replyStateLabel(detail: AgentSessionDetail) {
+	function replyStateLabel(detail: AgentThreadDetail) {
 		if (detail.latestRun?.lastMessage) {
 			return 'Captured';
 		}
@@ -485,7 +481,7 @@
 		return 'None';
 	}
 
-	function replyStateDetail(detail: AgentSessionDetail) {
+	function replyStateDetail(detail: AgentThreadDetail) {
 		if (detail.latestRun?.lastMessage) {
 			return 'A saved reply is available in the selected run.';
 		}
@@ -534,12 +530,12 @@
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
 
-	function executionMeta(detail: AgentSessionDetail) {
-		return getSessionActivityMeta(detail, now);
+	function executionMeta(detail: AgentThreadDetail) {
+		return getThreadActivityMeta(detail, now);
 	}
 </script>
 
-{#snippet sessionStatus(detail: AgentSessionDetail)}
+{#snippet sessionStatus(detail: AgentThreadDetail)}
 	<div class="space-y-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 			<div>
@@ -569,7 +565,7 @@
 				{/each}
 			</div>
 		{/if}
-		<SessionActivityIndicator session={detail} {now} />
+		<ThreadActivityIndicator thread={detail} {now} />
 		<p class="text-xs text-slate-500">
 			A work thread keeps one Codex conversation and all of its runs together. Each run in the
 			history below is one start or follow-up execution inside this thread.
@@ -682,7 +678,7 @@
 							<span
 								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.sessionState)}`}
 							>
-								{formatSessionStateLabel(session!.sessionState)}
+								{formatThreadStateLabel(session!.sessionState)}
 							</span>
 							<span
 								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session!.latestRunStatus)}`}

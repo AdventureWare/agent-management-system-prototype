@@ -57,18 +57,15 @@ function buildFixture(): {
 					status: 'running',
 					summary: 'Make planning less noisy',
 					artifactPath: '/repo',
-					horizon: '',
 					successSignal: 'Planning is usable',
 					parentGoalId: null,
 					projectIds: ['project_ams'],
 					taskIds: [],
-					planningHorizonId: null,
 					targetDate: '2026-04-15',
 					planningPriority: 5,
 					confidence: 'medium'
 				}
 			],
-			planningHorizons: [],
 			workers: [
 				{
 					id: 'worker_local',
@@ -109,11 +106,8 @@ function buildFixture(): {
 					blockedReason: '',
 					dependencyTaskIds: [],
 					parentTaskId: null,
-					planningHorizonId: null,
 					estimateHours: 6,
 					targetDate: '2026-04-10',
-					planningOrder: 1,
-					source: 'manual',
 					runCount: 1,
 					latestRunId: 'run_1',
 					artifactPath: '/repo/agent_output',

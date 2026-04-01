@@ -118,3 +118,11 @@ export type AgentSessionDetail = AgentSession & {
 	latestRun: AgentRunDetail | null;
 	runs: AgentRunDetail[];
 };
+
+export type AgentThreadState = AgentSessionState;
+export type AgentThreadOrigin = AgentSessionOrigin;
+export type AgentThread = AgentSession;
+export type AgentThreadTaskLink = AgentSessionTaskLink;
+export type AgentThreadAttachment = AgentSessionAttachment;
+export type AgentThreadDetail = AgentSessionDetail;
+export type AgentThreadsDb = AgentSessionsDb;

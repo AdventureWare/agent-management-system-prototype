@@ -43,8 +43,7 @@ const CODEX_STATE_DB_FILE = resolve(CODEX_HOME, 'state_5.sqlite');
 const STALE_RUN_GRACE_MS = 5 * 60 * 1000;
 const STARTUP_AUTH_FAILURE_GRACE_MS = 30 * 1000;
 const STARTUP_STDIN_STALL_GRACE_MS = 60 * 1000;
-const AUTH_REFRESH_FAILURE_MARKER =
-	'Auth(TokenRefreshFailed("Failed to parse server response"))';
+const AUTH_REFRESH_FAILURE_MARKER = 'Auth(TokenRefreshFailed("Failed to parse server response"))';
 const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
 
 function defaultDb(): AgentSessionsDb {
@@ -969,7 +968,7 @@ function hasStructuredCodexOutput(run: Pick<AgentRunDetail, 'logTail'>) {
 function hasThreadStarted(run: Pick<AgentRunDetail, 'logTail' | 'state'>) {
 	return Boolean(
 		run.state?.codexThreadId ||
-			run.logTail.some((line) => Boolean(extractThreadIdFromOutputLine(line.trim())))
+		run.logTail.some((line) => Boolean(extractThreadIdFromOutputLine(line.trim())))
 	);
 }
 
@@ -982,7 +981,10 @@ function hasStartupStdinWait(run: Pick<AgentRunDetail, 'logTail'>) {
 }
 
 function isStartupAuthFailure(
-	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage' | 'mode'>,
+	run: Pick<
+		AgentRunDetail,
+		'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage' | 'mode'
+	>,
 	now = Date.now()
 ) {
 	if (run.mode !== 'start' || !hasAuthRefreshStartupFailure(run)) {
@@ -1009,7 +1011,10 @@ function isStartupAuthFailure(
 }
 
 function isStartupStdinStall(
-	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage'>,
+	run: Pick<
+		AgentRunDetail,
+		'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage'
+	>,
 	now = Date.now()
 ) {
 	if (!hasStartupStdinWait(run)) {
@@ -1485,16 +1490,13 @@ type SessionActiveUpdate = {
 };
 
 function deriveRunFailureDetail(
-	run: Pick<
-		AgentRunDetail,
-		| 'activityAt'
-		| 'createdAt'
-		| 'updatedAt'
-		| 'state'
-		| 'logTail'
-		| 'lastMessage'
-		| 'mode'
-	> | null | undefined
+	run:
+		| Pick<
+				AgentRunDetail,
+				'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage' | 'mode'
+		  >
+		| null
+		| undefined
 ) {
 	if (!run) {
 		return '';
@@ -2334,3 +2336,12 @@ export async function cancelAgentSession(sessionId: string) {
 		return false;
 	}
 }
+
+export const loadAgentThreadsDb = loadAgentSessionsDb;
+export const listAgentThreads = listAgentSessions;
+export const getAgentThread = getAgentSession;
+export const startAgentThread = startAgentSession;
+export const updateAgentThreadSandbox = updateAgentSessionSandbox;
+export const setAgentThreadsArchived = setAgentSessionsArchived;
+export const recoverAgentThread = recoverAgentSession;
+export const cancelAgentThread = cancelAgentSession;

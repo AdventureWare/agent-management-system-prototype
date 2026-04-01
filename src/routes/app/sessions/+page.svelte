@@ -1,32 +1,32 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { fetchAgentSessions, updateAgentSessionArchiveState } from '$lib/client/agent-data';
+	import { fetchAgentThreads, updateAgentThreadArchiveState } from '$lib/client/agent-threads';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import DataTableSection from '$lib/components/DataTableSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
-	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
+	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import {
 		ACTIVE_REFRESH_INTERVAL_MS,
 		ACTIVITY_CLOCK_INTERVAL_MS,
 		formatActivityAge,
-		formatSessionStateLabel
-	} from '$lib/session-activity';
-	import type { AgentSessionDetail } from '$lib/types/agent-session';
+		formatThreadStateLabel
+	} from '$lib/thread-activity';
+	import type { AgentThreadDetail } from '$lib/types/agent-session';
 	import { fade } from 'svelte/transition';
 
 	type ArchiveAction = 'archive' | 'unarchive';
 
-	let { data } = $props<{ data: { sessions: AgentSessionDetail[] } }>();
+	let { data } = $props<{ data: { sessions: AgentThreadDetail[] } }>();
 	let query = $state('');
 	let autoRefresh = $state(true);
 	let showArchived = $state(false);
 	let isRefreshing = $state(false);
 	let isUpdatingArchive = $state(false);
 	let now = $state(Date.now());
-	let sessions = $state.raw<AgentSessionDetail[]>([]);
+	let sessions = $state.raw<AgentThreadDetail[]>([]);
 	let selectedSessionIds = $state.raw<string[]>([]);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 
@@ -47,7 +47,7 @@
 				session.name,
 				session.cwd,
 				session.sessionState,
-				formatSessionStateLabel(session.sessionState),
+				formatThreadStateLabel(session.sessionState),
 				session.latestRunStatus,
 				(session.topicLabels ?? []).join(' '),
 				session.threadId ?? '',
@@ -150,7 +150,7 @@
 		};
 	});
 
-	function isActiveSessionState(state: AgentSessionDetail['sessionState']) {
+	function isActiveSessionState(state: AgentThreadDetail['sessionState']) {
 		return state === 'starting' || state === 'waiting' || state === 'working';
 	}
 
@@ -169,7 +169,7 @@
 	}
 
 	async function loadSessions() {
-		sessions = await fetchAgentSessions({ includeArchived: true });
+		sessions = await fetchAgentThreads({ includeArchived: true });
 	}
 
 	async function refreshSessions(options: { force?: boolean } = {}) {
@@ -189,7 +189,7 @@
 		} catch (err) {
 			pageNotice = {
 				tone: 'error',
-				message: err instanceof Error ? err.message : 'Could not refresh sessions.'
+				message: err instanceof Error ? err.message : 'Could not refresh threads.'
 			};
 		} finally {
 			isRefreshing = false;
@@ -205,7 +205,7 @@
 		isUpdatingArchive = true;
 
 		try {
-			const updatedSessionIds = await updateAgentSessionArchiveState(sessionIds, archived);
+			const updatedSessionIds = await updateAgentThreadArchiveState(sessionIds, archived);
 			await loadSessions();
 			selectedSessionIds = [];
 			pageNotice = {
@@ -257,7 +257,7 @@
 		selectedSessionIds = selectedSessionIds.filter((candidate) => candidate !== sessionId);
 	}
 
-	function setSelectionForRows(rows: AgentSessionDetail[], checked: boolean) {
+	function setSelectionForRows(rows: AgentThreadDetail[], checked: boolean) {
 		const rowIds = rows.map((session) => session.id);
 		const rowIdSet = new Set(rowIds);
 
@@ -269,11 +269,11 @@
 		selectedSessionIds = selectedSessionIds.filter((sessionId) => !rowIdSet.has(sessionId));
 	}
 
-	function areAllRowsSelected(rows: AgentSessionDetail[]) {
+	function areAllRowsSelected(rows: AgentThreadDetail[]) {
 		return rows.length > 0 && rows.every((session) => isSessionSelected(session.id));
 	}
 
-	function selectedRowCount(rows: AgentSessionDetail[]) {
+	function selectedRowCount(rows: AgentThreadDetail[]) {
 		return rows.filter((session) => isSessionSelected(session.id)).length;
 	}
 
@@ -285,7 +285,7 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function sessionStatusClass(state: AgentSessionDetail['sessionState']) {
+	function sessionStatusClass(state: AgentThreadDetail['sessionState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -302,7 +302,7 @@
 		}
 	}
 
-	function threadLabel(session: AgentSessionDetail) {
+	function threadLabel(session: AgentThreadDetail) {
 		if (session.threadId) {
 			return 'Available';
 		}
@@ -310,7 +310,7 @@
 		return session.hasActiveRun ? 'Pending' : 'Missing';
 	}
 
-	function resumeLabel(session: AgentSessionDetail) {
+	function resumeLabel(session: AgentThreadDetail) {
 		if (session.hasActiveRun) {
 			return 'Busy';
 		}
@@ -332,7 +332,7 @@
 {#snippet sessionTable(
 	title: string,
 	description: string,
-	rows: AgentSessionDetail[],
+	rows: AgentThreadDetail[],
 	emptyMessage: string,
 	compactThreadColumn = false
 )}
@@ -458,9 +458,9 @@
 								<span
 									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
 								>
-									{formatSessionStateLabel(session.sessionState)}
+									{formatThreadStateLabel(session.sessionState)}
 								</span>
-								<SessionActivityIndicator {now} {session} compact />
+								<ThreadActivityIndicator {now} thread={session} compact />
 								<p class="text-xs text-slate-500">Latest run {session.latestRunStatus}</p>
 							</div>
 						</td>
@@ -563,7 +563,7 @@
 
 	<div class="space-y-6">
 		<CollectionToolbar
-			title="Thread index"
+			title="Thread registry"
 			description="Search by thread name, topic label, related task, path, thread state, thread id, or recent prompt text."
 		>
 			{#snippet controls()}

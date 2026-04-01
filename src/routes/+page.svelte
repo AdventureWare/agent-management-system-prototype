@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { appNavigationSections } from '$lib/app-navigation';
 	import { formatTaskStatusLabel, taskStatusToneClass } from '$lib/types/control-plane';
 
 	let { data } = $props();
@@ -56,6 +57,37 @@
 			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.runCount}</p>
 		</div>
 	</div>
+
+	<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+		<div class="flex flex-col gap-2">
+			<h2 class="text-xl font-semibold text-white">Browse the control plane</h2>
+			<p class="max-w-3xl text-sm text-slate-400">
+				The app is organized around overview, daily work, supporting context, and execution
+				capacity. Start in the section that matches the question you need answered.
+			</p>
+		</div>
+
+		<div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			{#each appNavigationSections as section (section.id)}
+				<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+					<p class="text-xs font-semibold tracking-[0.2em] text-sky-300 uppercase">
+						{section.title}
+					</p>
+					<p class="mt-3 text-sm text-slate-300">{section.description}</p>
+					<div class="mt-4 flex flex-wrap gap-2">
+						{#each section.links as link (link.href)}
+							<a
+								class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
+								href={resolve(link.href)}
+							>
+								{link.label}
+							</a>
+						{/each}
+					</div>
+				</article>
+			{/each}
+		</div>
+	</section>
 
 	<div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
 		<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">

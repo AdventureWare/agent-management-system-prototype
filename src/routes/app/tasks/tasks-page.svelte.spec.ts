@@ -355,4 +355,33 @@ describe('/app/tasks/+page.svelte', () => {
 			.element(page.getByRole('heading', { name: 'Ideation assistant and saved reviews' }))
 			.toBeVisible();
 	});
+
+	it('switches between active and completed task views with local tabs', async () => {
+		renderPage([
+			createTask({
+				id: 'task_active',
+				title: 'Active queue item',
+				status: 'ready'
+			}),
+			createTask({
+				id: 'task_done',
+				title: 'Completed queue item',
+				status: 'done'
+			})
+		]);
+
+		await expect.element(page.getByText('Active queue item', { exact: true })).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Completed queue item', { exact: true }))
+			.not.toBeInTheDocument();
+
+		await page.getByRole('tab', { name: /Completed work 1/i }).click();
+
+		await expect
+			.element(page.getByText('Completed queue item', { exact: true }))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Active queue item', { exact: true }))
+			.not.toBeInTheDocument();
+	});
 });

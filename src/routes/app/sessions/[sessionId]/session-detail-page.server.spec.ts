@@ -6,47 +6,69 @@ const controlPlaneState = vi.hoisted(() => ({
 	saved: null as ControlPlaneData | null
 }));
 
-const getAgentSession = vi.hoisted(() => vi.fn());
-const updateAgentSessionSandbox = vi.hoisted(() => vi.fn());
+const getAgentThread = vi.hoisted(() => vi.fn());
+const updateAgentThreadSandbox = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/agent-sessions', () => ({
-	getAgentSession,
-	parseAgentSandbox: vi.fn((value: string | null | undefined, fallback: string) => value ?? fallback),
-	updateAgentSessionSandbox
+vi.mock('$lib/server/agent-threads', () => ({
+	getAgentThread,
+	parseAgentSandbox: vi.fn(
+		(value: string | null | undefined, fallback: string) => value ?? fallback
+	),
+	updateAgentThreadSandbox
 }));
 
 vi.mock('$lib/server/control-plane', () => ({
-	createApproval: vi.fn((input: { taskId: string; runId?: string | null; mode: string; status?: string; resolvedAt?: string | null; summary?: string }) => ({
-		id: 'approval_created',
-		taskId: input.taskId,
-		runId: input.runId ?? null,
-		mode: input.mode,
-		status: input.status ?? 'pending',
-		createdAt: '2026-03-31T12:00:00.000Z',
-		updatedAt: '2026-03-31T12:00:00.000Z',
-		resolvedAt: input.resolvedAt ?? null,
-		requestedByWorkerId: null,
-		approverWorkerId: null,
-		summary: input.summary ?? ''
-	})),
-	createReview: vi.fn((input: { taskId: string; runId?: string | null; status?: string; resolvedAt?: string | null; summary?: string }) => ({
-		id: 'review_created',
-		taskId: input.taskId,
-		runId: input.runId ?? null,
-		status: input.status ?? 'open',
-		createdAt: '2026-03-31T12:00:00.000Z',
-		updatedAt: '2026-03-31T12:00:00.000Z',
-		resolvedAt: input.resolvedAt ?? null,
-		requestedByWorkerId: null,
-		reviewerWorkerId: null,
-		summary: input.summary ?? ''
-	})),
-	getOpenReviewForTask: vi.fn((data: ControlPlaneData, taskId: string) =>
-		data.reviews.find((review) => review.taskId === taskId && review.status === 'open') ?? null
+	createApproval: vi.fn(
+		(input: {
+			taskId: string;
+			runId?: string | null;
+			mode: string;
+			status?: string;
+			resolvedAt?: string | null;
+			summary?: string;
+		}) => ({
+			id: 'approval_created',
+			taskId: input.taskId,
+			runId: input.runId ?? null,
+			mode: input.mode,
+			status: input.status ?? 'pending',
+			createdAt: '2026-03-31T12:00:00.000Z',
+			updatedAt: '2026-03-31T12:00:00.000Z',
+			resolvedAt: input.resolvedAt ?? null,
+			requestedByWorkerId: null,
+			approverWorkerId: null,
+			summary: input.summary ?? ''
+		})
 	),
-	getPendingApprovalForTask: vi.fn((data: ControlPlaneData, taskId: string) =>
-		data.approvals.find((approval) => approval.taskId === taskId && approval.status === 'pending') ??
-		null
+	createReview: vi.fn(
+		(input: {
+			taskId: string;
+			runId?: string | null;
+			status?: string;
+			resolvedAt?: string | null;
+			summary?: string;
+		}) => ({
+			id: 'review_created',
+			taskId: input.taskId,
+			runId: input.runId ?? null,
+			status: input.status ?? 'open',
+			createdAt: '2026-03-31T12:00:00.000Z',
+			updatedAt: '2026-03-31T12:00:00.000Z',
+			resolvedAt: input.resolvedAt ?? null,
+			requestedByWorkerId: null,
+			reviewerWorkerId: null,
+			summary: input.summary ?? ''
+		})
+	),
+	getOpenReviewForTask: vi.fn(
+		(data: ControlPlaneData, taskId: string) =>
+			data.reviews.find((review) => review.taskId === taskId && review.status === 'open') ?? null
+	),
+	getPendingApprovalForTask: vi.fn(
+		(data: ControlPlaneData, taskId: string) =>
+			data.approvals.find(
+				(approval) => approval.taskId === taskId && approval.status === 'pending'
+			) ?? null
 	),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
@@ -143,9 +165,9 @@ describe('session detail page server actions', () => {
 			]
 		};
 		controlPlaneState.saved = null;
-		getAgentSession.mockReset();
-		updateAgentSessionSandbox.mockReset();
-		getAgentSession.mockResolvedValue({
+		getAgentThread.mockReset();
+		updateAgentThreadSandbox.mockReset();
+		getAgentThread.mockResolvedValue({
 			id: 'session_1',
 			name: 'Task thread',
 			cwd: '/tmp/project',
@@ -257,7 +279,7 @@ describe('session detail page server actions', () => {
 			})
 		} as never);
 
-		expect(updateAgentSessionSandbox).toHaveBeenCalledWith('session_1', 'danger-full-access');
+		expect(updateAgentThreadSandbox).toHaveBeenCalledWith('session_1', 'danger-full-access');
 		expect(result).toEqual(
 			expect.objectContaining({
 				ok: true,
@@ -268,7 +290,7 @@ describe('session detail page server actions', () => {
 	});
 
 	it('rejects approval while the thread still has active work', async () => {
-		getAgentSession.mockResolvedValue({
+		getAgentThread.mockResolvedValue({
 			id: 'session_1',
 			name: 'Task thread',
 			cwd: '/tmp/project',

@@ -1,10 +1,4 @@
-import type {
-	ControlPlaneData,
-	Goal,
-	PlanningHorizon,
-	Task,
-	Worker
-} from '$lib/types/control-plane';
+import type { ControlPlaneData, Goal, Task, Worker } from '$lib/types/control-plane';
 
 const FALLBACK_CAPACITY_HOURS_PER_SLOT = 20;
 
@@ -57,38 +51,11 @@ type PlanningWorkerLoad = {
 	overAllocated: boolean;
 };
 
-function sortHorizons(horizons: PlanningHorizon[]) {
-	return [...horizons].sort((left, right) => {
-		const statusWeight = (value: PlanningHorizon['status']) => {
-			switch (value) {
-				case 'active':
-					return 0;
-				case 'draft':
-					return 1;
-				case 'closed':
-				default:
-					return 2;
-			}
-		};
-
-		const statusDelta = statusWeight(left.status) - statusWeight(right.status);
-
-		if (statusDelta !== 0) {
-			return statusDelta;
-		}
-
-		return right.startDate.localeCompare(left.startDate);
-	});
-}
-
-function getTaskPlanningHorizonId(task: Task, goalMap: Map<string, Goal>) {
-	return task.planningHorizonId ?? goalMap.get(task.goalId)?.planningHorizonId ?? null;
-}
-
 function getWorkerCapacityHours(worker: Worker) {
 	return (
-		worker.weeklyCapacityHours ?? worker.capacity * FALLBACK_CAPACITY_HOURS_PER_SLOT
-	) * (worker.focusFactor ?? 1);
+		(worker.weeklyCapacityHours ?? worker.capacity * FALLBACK_CAPACITY_HOURS_PER_SLOT) *
+		(worker.focusFactor ?? 1)
+	);
 }
 
 function isDateInWindow(date: string | null | undefined, startDate: string, endDate: string) {
@@ -106,10 +73,6 @@ function sortTasks(tasks: Task[]) {
 
 		if (leftDate !== rightDate) {
 			return leftDate.localeCompare(rightDate);
-		}
-
-		if ((left.planningOrder ?? 0) !== (right.planningOrder ?? 0)) {
-			return (left.planningOrder ?? 0) - (right.planningOrder ?? 0);
 		}
 
 		return left.title.localeCompare(right.title);
@@ -171,20 +134,6 @@ function uniqueTasks(tasks: Task[]) {
 	});
 }
 
-export function selectPlanningHorizon(data: ControlPlaneData, requestedHorizonId?: string | null) {
-	const horizons = sortHorizons(data.planningHorizons ?? []);
-
-	if (requestedHorizonId) {
-		const requested = horizons.find((horizon) => horizon.id === requestedHorizonId);
-
-		if (requested) {
-			return requested;
-		}
-	}
-
-	return horizons[0] ?? null;
-}
-
 export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningPageFilters) {
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
@@ -216,7 +165,11 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 							return true;
 						}
 
-						return isDateInWindow(goalMap.get(task.goalId)?.targetDate, filters.startDate, filters.endDate);
+						return isDateInWindow(
+							goalMap.get(task.goalId)?.targetDate,
+							filters.startDate,
+							filters.endDate
+						);
 					})
 				)
 			)
@@ -249,10 +202,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 			return left.name.localeCompare(right.name);
 		});
 	const goalTaskMap = new Map(
-		goalsInScope.map((goal) => [
-			goal.id,
-			inScopeTasks.filter((task) => task.goalId === goal.id)
-		])
+		goalsInScope.map((goal) => [goal.id, inScopeTasks.filter((task) => task.goalId === goal.id)])
 	);
 	const workerLoads = data.workers
 		.map((worker) => {
@@ -277,7 +227,10 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 		})
 		.sort((left, right) => left.name.localeCompare(right.name));
 	const totalCapacityHours = workerLoads.reduce((total, worker) => total + worker.capacityHours, 0);
-	const plannedHours = scheduledOpenTasks.reduce((total, task) => total + (task.estimateHours ?? 0), 0);
+	const plannedHours = scheduledOpenTasks.reduce(
+		(total, task) => total + (task.estimateHours ?? 0),
+		0
+	);
 
 	return {
 		filters: {
@@ -288,25 +241,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 			workerId: filters.workerId ?? '',
 			includeUnscheduled
 		},
-		savedWindows: sortHorizons(data.planningHorizons ?? []).map((horizon) => {
-			const goals = data.goals.filter((goal) => goal.planningHorizonId === horizon.id);
-			const tasks = data.tasks.filter(
-				(task) => getTaskPlanningHorizonId(task, goalMap) === horizon.id
-			);
-
-			return {
-				id: horizon.id,
-				name: horizon.name,
-				kind: horizon.kind,
-				status: horizon.status,
-				startDate: horizon.startDate,
-				endDate: horizon.endDate,
-				goalCount: goals.length,
-				taskCount: tasks.length
-			};
-		}),
 		metrics: {
-			savedWindowCount: (data.planningHorizons ?? []).length,
 			goalCount: goalsInScope.length,
 			taskCount: inScopeTasks.length,
 			scheduledTaskCount: scheduledTasks.length,

@@ -5,11 +5,8 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
 		formatGoalStatusLabel,
-		formatPlanningHorizonKindLabel,
-		formatPlanningHorizonStatusLabel,
 		formatTaskStatusLabel,
 		goalStatusToneClass,
-		planningHorizonStatusToneClass,
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
 
@@ -85,11 +82,6 @@
 
 	<div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
 		<MetricCard
-			label="Saved windows"
-			value={data.metrics.savedWindowCount}
-			detail="Legacy saved windows can still act as planning presets."
-		/>
-		<MetricCard
 			label="Goals in scope"
 			value={data.metrics.goalCount}
 			detail="Goals due in this window or supported by work under review."
@@ -122,9 +114,8 @@
 				<div>
 					<h2 class="text-xl font-semibold text-white">Planning window</h2>
 					<p class="mt-1 text-sm text-slate-400">
-						Planning here works over the current plan. Choose the date range and scope you want
-						to inspect, then review what is scheduled, what remains undated, and what needs to
-						change.
+						Planning here works over the current plan. Choose the date range and scope you want to
+						inspect, then review what is scheduled, what remains undated, and what needs to change.
 					</p>
 				</div>
 
@@ -187,7 +178,9 @@
 						</select>
 					</label>
 
-					<label class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 lg:col-span-2">
+					<label
+						class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 lg:col-span-2"
+					>
 						<input name="includeUnscheduled" type="hidden" value="false" />
 						<input
 							checked={data.filters.includeUnscheduled}
@@ -217,50 +210,6 @@
 						</a>
 					</div>
 				</form>
-
-				{#if data.savedWindows.length > 0}
-					<div class="space-y-3 border-t border-slate-800 pt-4">
-						<div>
-							<h3 class="text-sm font-semibold tracking-[0.18em] text-slate-400 uppercase">
-								Saved windows
-							</h3>
-							<p class="mt-1 text-sm text-slate-500">
-								These are transitional presets from the older horizon model. They now act as quick
-								ways to load a date window rather than as the core planning object.
-							</p>
-						</div>
-
-						<div class="flex flex-wrap gap-3">
-							{#each data.savedWindows as windowPreset (windowPreset.id)}
-								<a
-									class={[
-										'rounded-2xl border px-4 py-3 transition',
-										data.selectedPresetId === windowPreset.id
-											? 'border-sky-500/60 bg-sky-950/30'
-											: 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
-									]}
-									href={`/app/planning?preset=${windowPreset.id}`}
-								>
-									<div class="flex flex-wrap items-center gap-2">
-										<p class="font-medium text-white">{windowPreset.name}</p>
-										<span
-											class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${planningHorizonStatusToneClass(windowPreset.status)}`}
-										>
-											{formatPlanningHorizonStatusLabel(windowPreset.status)}
-										</span>
-									</div>
-									<p class="mt-2 text-xs text-slate-400">
-										{formatPlanningHorizonKindLabel(windowPreset.kind)} ·
-										{' '}{formatDate(windowPreset.startDate)} to {formatDate(windowPreset.endDate)}
-									</p>
-									<p class="mt-2 text-xs text-slate-500">
-										{windowPreset.goalCount} goal(s) · {windowPreset.taskCount} task(s)
-									</p>
-								</a>
-							{/each}
-						</div>
-					</div>
-				{/if}
 			</section>
 
 			<section class="ui-panel space-y-4">
@@ -274,8 +223,8 @@
 
 				{#if data.goalsInScope.length === 0}
 					<p class="ui-empty-state">
-						No goals are currently in scope for this window. Try widening the date range or adjusting
-						the filters.
+						No goals are currently in scope for this window. Try widening the date range or
+						adjusting the filters.
 					</p>
 				{:else}
 					<div class="space-y-4">
@@ -328,7 +277,11 @@
 									</div>
 								</div>
 
-								<form class="mt-5 grid gap-4 md:grid-cols-4" method="POST" action="?/updateGoalPlan">
+								<form
+									class="mt-5 grid gap-4 md:grid-cols-4"
+									method="POST"
+									action="?/updateGoalPlan"
+								>
 									<input type="hidden" name="goalId" value={goal.id} />
 
 									<label class="block">
@@ -365,7 +318,7 @@
 
 									<div class="flex items-end">
 										<button
-											class="btn preset-filled-primary-500 w-full font-semibold"
+											class="btn w-full preset-filled-primary-500 font-semibold"
 											type="submit"
 										>
 											Save
@@ -435,8 +388,8 @@
 
 				{#if data.unscheduledTasks.length === 0}
 					<p class="ui-empty-state">
-						No undated tasks were pulled into this session. Either the current scope is already dated
-						or the filter excludes undated work.
+						No undated tasks were pulled into this session. Either the current scope is already
+						dated or the filter excludes undated work.
 					</p>
 				{:else}
 					<div class="space-y-3">
@@ -454,7 +407,9 @@
 											>
 												{formatTaskStatusLabel(task.status)}
 											</span>
-											<span class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] text-amber-200">
+											<span
+												class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] text-amber-200"
+											>
 												Undated
 											</span>
 										</div>

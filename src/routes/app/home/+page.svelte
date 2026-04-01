@@ -5,8 +5,8 @@
 		fetchHomeDashboard,
 		updateSelfImprovementOpportunityStatus
 	} from '$lib/client/agent-data';
-	import { formatSessionStateLabel } from '$lib/session-activity';
-	import type { AgentSessionDetail } from '$lib/types/agent-session';
+	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import type { AgentThreadDetail } from '$lib/types/agent-session';
 	import {
 		formatTaskApprovalModeLabel,
 		formatTaskStatusLabel,
@@ -31,17 +31,17 @@
 
 	let activeSessions = $derived(
 		dashboard.sessions.filter(
-			(session: AgentSessionDetail) =>
+			(session: AgentThreadDetail) =>
 				session.sessionState === 'starting' ||
 				session.sessionState === 'waiting' ||
 				session.sessionState === 'working'
 		)
 	);
 	let attentionSessions = $derived(
-		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'attention')
+		dashboard.sessions.filter((session: AgentThreadDetail) => session.sessionState === 'attention')
 	);
 	let availableSessions = $derived(
-		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'ready')
+		dashboard.sessions.filter((session: AgentThreadDetail) => session.sessionState === 'ready')
 	);
 	let latestSessions = $derived(dashboard.sessions.slice(0, 5));
 	let blockedTasks = $derived(
@@ -131,7 +131,7 @@
 		});
 	}
 
-	function sessionStateClass(state: AgentSessionDetail['sessionState']) {
+	function sessionStateClass(state: AgentThreadDetail['sessionState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -189,7 +189,7 @@
 	});
 </script>
 
-{#snippet sessionCard(session: AgentSessionDetail)}
+{#snippet sessionCard(session: AgentThreadDetail)}
 	<article class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
 		<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
 			<div class="min-w-0 space-y-2">
@@ -206,7 +206,7 @@
 							sessionStateClass(session.sessionState)
 						]}
 					>
-						{formatSessionStateLabel(session.sessionState)}
+						{formatThreadStateLabel(session.sessionState)}
 					</span>
 					<span
 						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
@@ -814,7 +814,7 @@
 
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div>
-					<h2 class="text-xl font-semibold text-white">Recent sessions</h2>
+					<h2 class="text-xl font-semibold text-white">Recent threads</h2>
 					<p class="text-sm text-slate-400">Newest threads across all states.</p>
 				</div>
 
@@ -828,7 +828,7 @@
 										<span
 											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
-											{formatSessionStateLabel(session.sessionState)}
+											{formatThreadStateLabel(session.sessionState)}
 										</span>
 									</div>
 									<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>
@@ -844,7 +844,7 @@
 				<div>
 					<h2 class="text-xl font-semibold text-white">Operator notes</h2>
 					<p class="text-sm text-slate-400">
-						Use the dashboard for scan speed and the sessions page for control.
+						Use the dashboard for scan speed and the threads page for control.
 					</p>
 				</div>
 				<ul class="space-y-3 text-sm text-slate-300">
@@ -852,11 +852,11 @@
 						Check this page first when you are away from the laptop and want a fast status read.
 					</li>
 					<li>
-						Open the detailed sessions page when you need to start a task, cancel a run, or send the
+						Open the detailed threads page when you need to start a task, cancel a run, or send the
 						next prompt.
 					</li>
 					<li>
-						If a run fails without a thread id, treat it as a dead end and start a new session
+						If a run fails without a thread id, treat it as a dead end and start a new thread
 						instead of trying to resume it.
 					</li>
 				</ul>

@@ -37,7 +37,6 @@ function readGoalForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
-		horizon: form.get('horizon')?.toString().trim() ?? '',
 		successSignal: form.get('successSignal')?.toString().trim() ?? '',
 		artifactPath: normalizePathInput(form.get('artifactPath')?.toString()),
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
@@ -96,7 +95,9 @@ function validateGoalSelections(
 		return 'One or more selected projects are no longer available.';
 	}
 
-	const selectedTasks = values.taskIds.map((taskId) => data.tasks.find((task) => task.id === taskId));
+	const selectedTasks = values.taskIds.map((taskId) =>
+		data.tasks.find((task) => task.id === taskId)
+	);
 
 	if (selectedTasks.some((task) => !task)) {
 		return 'One or more selected tasks are no longer available.';
@@ -191,8 +192,7 @@ export const actions: Actions = {
 
 		if (!artifactPath) {
 			return fail(400, {
-				message:
-					'Add an artifact path or link a project or parent goal with a usable workspace.',
+				message: 'Add an artifact path or link a project or parent goal with a usable workspace.',
 				values
 			});
 		}
@@ -201,7 +201,6 @@ export const actions: Actions = {
 			const goal = createGoal({
 				name: values.name,
 				summary: values.summary,
-				horizon: values.horizon,
 				successSignal: values.successSignal,
 				artifactPath,
 				parentGoalId,

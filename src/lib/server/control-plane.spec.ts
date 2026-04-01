@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createApproval,
-	createPlanningHorizon,
 	createProvider,
 	createProject,
 	createReview,
@@ -175,26 +174,9 @@ describe('control-plane helpers', () => {
 		expect(task.latestRunId).toBeNull();
 		expect(task.threadSessionId).toBeNull();
 		expect(task.parentTaskId).toBeNull();
-		expect(task.planningHorizonId).toBeNull();
 		expect(task.estimateHours).toBeNull();
 		expect(task.targetDate).toBeNull();
-		expect(task.planningOrder).toBe(0);
-		expect(task.source).toBe('manual');
 		expect(task.attachments).toEqual([]);
-	});
-
-	it('creates planning horizons with scheduling defaults', () => {
-		const horizon = createPlanningHorizon({
-			name: 'Q2 2026',
-			kind: 'quarter',
-			startDate: '2026-04-01',
-			endDate: '2026-06-30'
-		});
-
-		expect(horizon.id).toMatch(/^planning_horizon_/);
-		expect(horizon.status).toBe('draft');
-		expect(horizon.capacityUnit).toBe('hours');
-		expect(horizon.notes).toBe('');
 	});
 
 	it('creates runs as first-class execution records', () => {

@@ -10,10 +10,7 @@ import {
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
 	PROVIDER_SETUP_STATUS_OPTIONS,
-	PLANNING_CAPACITY_UNIT_OPTIONS,
 	PLANNING_CONFIDENCE_OPTIONS,
-	PLANNING_HORIZON_KIND_OPTIONS,
-	PLANNING_HORIZON_STATUS_OPTIONS,
 	PRIORITY_OPTIONS,
 	REVIEW_STATUS_OPTIONS,
 	RUN_STATUS_OPTIONS,
@@ -28,11 +25,7 @@ import {
 	type Goal,
 	type GoalStatus,
 	type Lane,
-	type PlanningCapacityUnit,
 	type PlanningConfidence,
-	type PlanningHorizon,
-	type PlanningHorizonKind,
-	type PlanningHorizonStatus,
 	type Provider,
 	type ProviderAuthMode,
 	type ProviderKind,
@@ -47,7 +40,6 @@ import {
 	type TaskRiskLevel,
 	type Task,
 	type TaskAttachment,
-	type TaskPlanningSource,
 	type TaskStatus,
 	type Worker,
 	type WorkerLocation,
@@ -108,24 +100,8 @@ function isProviderAuthMode(value: string): value is ProviderAuthMode {
 	return PROVIDER_AUTH_MODE_OPTIONS.includes(value as ProviderAuthMode);
 }
 
-function isPlanningHorizonKind(value: string): value is PlanningHorizonKind {
-	return PLANNING_HORIZON_KIND_OPTIONS.includes(value as PlanningHorizonKind);
-}
-
-function isPlanningHorizonStatus(value: string): value is PlanningHorizonStatus {
-	return PLANNING_HORIZON_STATUS_OPTIONS.includes(value as PlanningHorizonStatus);
-}
-
-function isPlanningCapacityUnit(value: string): value is PlanningCapacityUnit {
-	return PLANNING_CAPACITY_UNIT_OPTIONS.includes(value as PlanningCapacityUnit);
-}
-
 function isPlanningConfidence(value: string): value is PlanningConfidence {
 	return PLANNING_CONFIDENCE_OPTIONS.includes(value as PlanningConfidence);
-}
-
-function isTaskPlanningSource(value: string): value is TaskPlanningSource {
-	return value === 'manual' || value === 'ai_proposed' || value === 'ai_accepted';
 }
 
 function isAgentSandbox(value: string): value is AgentSandbox {
@@ -138,7 +114,6 @@ function defaultData(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
-		planningHorizons: [],
 		workers: [],
 		tasks: [],
 		runs: [],
@@ -186,12 +161,10 @@ type LegacyWorker = Partial<Worker> & {
 };
 
 type LegacyGoal = Partial<Goal> & {
-	horizon?: unknown;
 	successSignal?: unknown;
 	parentGoalId?: unknown;
 	projectIds?: unknown;
 	taskIds?: unknown;
-	planningHorizonId?: unknown;
 	targetDate?: unknown;
 	planningPriority?: unknown;
 	confidence?: unknown;
@@ -201,11 +174,8 @@ type LegacyTask = Partial<Task> & {
 	projectId?: unknown;
 	attachments?: unknown;
 	parentTaskId?: unknown;
-	planningHorizonId?: unknown;
 	estimateHours?: unknown;
 	targetDate?: unknown;
-	planningOrder?: unknown;
-	source?: unknown;
 };
 
 type LegacyRun = Partial<Run> & {
@@ -215,15 +185,6 @@ type LegacyRun = Partial<Run> & {
 type LegacyReview = Partial<Review>;
 
 type LegacyApproval = Partial<Approval>;
-type LegacyPlanningHorizon = Partial<PlanningHorizon> & {
-	kind?: unknown;
-	status?: unknown;
-	startDate?: unknown;
-	endDate?: unknown;
-	notes?: unknown;
-	capacityUnit?: unknown;
-};
-
 type LegacyTaskAttachment = Partial<TaskAttachment>;
 
 function inferProviderService(provider: LegacyProvider) {
@@ -438,7 +399,6 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 		artifactPath: normalizePathInput(
 			typeof goal.artifactPath === 'string' ? goal.artifactPath : ''
 		),
-		horizon: typeof goal.horizon === 'string' ? goal.horizon : '',
 		successSignal: typeof goal.successSignal === 'string' ? goal.successSignal : '',
 		parentGoalId:
 			typeof goal.parentGoalId === 'string' && goal.parentGoalId.trim()
@@ -446,10 +406,6 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 				: null,
 		projectIds: normalizeIdList(goal.projectIds),
 		taskIds: normalizeIdList(goal.taskIds),
-		planningHorizonId:
-			typeof goal.planningHorizonId === 'string' && goal.planningHorizonId.trim()
-				? goal.planningHorizonId.trim()
-				: null,
 		targetDate: normalizeOptionalDate(goal.targetDate),
 		planningPriority:
 			typeof goal.planningPriority === 'number' &&
@@ -461,26 +417,6 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 			typeof goal.confidence === 'string' && isPlanningConfidence(goal.confidence)
 				? goal.confidence
 				: 'medium'
-	};
-}
-
-function normalizePlanningHorizon(horizon: LegacyPlanningHorizon): PlanningHorizon {
-	const now = new Date().toISOString();
-	const kindValue = typeof horizon.kind === 'string' ? horizon.kind : '';
-	const statusValue = typeof horizon.status === 'string' ? horizon.status : '';
-	const capacityUnitValue = typeof horizon.capacityUnit === 'string' ? horizon.capacityUnit : '';
-
-	return {
-		id: typeof horizon.id === 'string' ? horizon.id : createPlanningHorizonId(),
-		name: typeof horizon.name === 'string' ? horizon.name : '',
-		kind: isPlanningHorizonKind(kindValue) ? kindValue : 'custom',
-		status: isPlanningHorizonStatus(statusValue) ? statusValue : 'draft',
-		startDate: typeof horizon.startDate === 'string' ? horizon.startDate : '',
-		endDate: typeof horizon.endDate === 'string' ? horizon.endDate : '',
-		notes: typeof horizon.notes === 'string' ? horizon.notes : '',
-		capacityUnit: isPlanningCapacityUnit(capacityUnitValue) ? capacityUnitValue : 'hours',
-		createdAt: typeof horizon.createdAt === 'string' ? horizon.createdAt : now,
-		updatedAt: typeof horizon.updatedAt === 'string' ? horizon.updatedAt : now
 	};
 }
 
@@ -707,15 +643,8 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 			: [],
 		parentTaskId:
 			typeof task.parentTaskId === 'string' && task.parentTaskId.trim() ? task.parentTaskId : null,
-		planningHorizonId:
-			typeof task.planningHorizonId === 'string' && task.planningHorizonId.trim()
-				? task.planningHorizonId
-				: null,
 		estimateHours: normalizePositiveNumber(task.estimateHours),
 		targetDate: normalizeOptionalDate(task.targetDate),
-		planningOrder: normalizeNonNegativeInteger(task.planningOrder, 0),
-		source:
-			typeof task.source === 'string' && isTaskPlanningSource(task.source) ? task.source : 'manual',
 		runCount:
 			typeof task.runCount === 'number' && Number.isFinite(task.runCount) && task.runCount >= 0
 				? task.runCount
@@ -868,11 +797,6 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 		const approvals = Array.isArray(parsed.approvals)
 			? parsed.approvals.map((approval) => normalizeApproval(approval as LegacyApproval))
 			: [];
-		const planningHorizons = Array.isArray(parsed.planningHorizons)
-			? parsed.planningHorizons.map((horizon) =>
-					normalizePlanningHorizon(horizon as LegacyPlanningHorizon)
-				)
-			: [];
 
 		return syncGovernanceQueues({
 			providers,
@@ -881,7 +805,6 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 			goals: Array.isArray(parsed.goals)
 				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
 				: [],
-			planningHorizons,
 			workers: Array.isArray(parsed.workers)
 				? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
 				: [],
@@ -968,10 +891,6 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 
 export function createGoalId() {
 	return `goal_${randomUUID()}`;
-}
-
-export function createPlanningHorizonId() {
-	return `planning_horizon_${randomUUID()}`;
 }
 
 export function createProviderId() {
@@ -1106,12 +1025,10 @@ export function createGoal(input: {
 	lane: Lane;
 	status: GoalStatus;
 	artifactPath: string;
-	horizon?: string;
 	successSignal?: string;
 	parentGoalId?: string | null;
 	projectIds?: string[];
 	taskIds?: string[];
-	planningHorizonId?: string | null;
 	targetDate?: string | null;
 	planningPriority?: number;
 	confidence?: PlanningConfidence;
@@ -1123,40 +1040,13 @@ export function createGoal(input: {
 		lane: input.lane,
 		status: input.status,
 		artifactPath: normalizePathInput(input.artifactPath),
-		horizon: input.horizon ?? '',
 		successSignal: input.successSignal ?? '',
 		parentGoalId: input.parentGoalId ?? null,
 		projectIds: input.projectIds ?? [],
 		taskIds: input.taskIds ?? [],
-		planningHorizonId: input.planningHorizonId ?? null,
 		targetDate: input.targetDate ?? null,
 		planningPriority: input.planningPriority ?? 0,
 		confidence: input.confidence ?? 'medium'
-	};
-}
-
-export function createPlanningHorizon(input: {
-	name: string;
-	kind: PlanningHorizonKind;
-	status?: PlanningHorizonStatus;
-	startDate: string;
-	endDate: string;
-	notes?: string;
-	capacityUnit?: PlanningCapacityUnit;
-}): PlanningHorizon {
-	const now = new Date().toISOString();
-
-	return {
-		id: createPlanningHorizonId(),
-		name: input.name,
-		kind: input.kind,
-		status: input.status ?? 'draft',
-		startDate: input.startDate,
-		endDate: input.endDate,
-		notes: input.notes ?? '',
-		capacityUnit: input.capacityUnit ?? 'hours',
-		createdAt: now,
-		updatedAt: now
 	};
 }
 
@@ -1225,11 +1115,8 @@ export function createTask(input: {
 	blockedReason?: string;
 	dependencyTaskIds?: string[];
 	parentTaskId?: string | null;
-	planningHorizonId?: string | null;
 	estimateHours?: number | null;
 	targetDate?: string | null;
-	planningOrder?: number;
-	source?: TaskPlanningSource;
 	assigneeWorkerId?: string | null;
 	threadSessionId?: string | null;
 	status?: TaskStatus;
@@ -1255,11 +1142,8 @@ export function createTask(input: {
 		blockedReason: input.blockedReason ?? '',
 		dependencyTaskIds: input.dependencyTaskIds ?? [],
 		parentTaskId: input.parentTaskId ?? null,
-		planningHorizonId: input.planningHorizonId ?? null,
 		estimateHours: input.estimateHours ?? null,
 		targetDate: input.targetDate ?? null,
-		planningOrder: input.planningOrder ?? 0,
-		source: input.source ?? 'manual',
 		runCount: 0,
 		latestRunId: null,
 		artifactPath: input.artifactPath,

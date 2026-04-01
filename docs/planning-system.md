@@ -1,506 +1,84 @@
-# Planning System Spec
+# Planning Surface Notes
 
-Date: 2026-03-31
+Date: 2026-04-01
 Project: Agent Management System Prototype
-Scope: planning page, planning data model, capacity-aware sequencing, and future AI-assisted planning
+Status: Updated after horizon-model cleanup
 
-## Why this needs its own surface
+## Why this doc changed
 
-The repo already has durable primitives for:
+An earlier version of this file proposed `PlanningHorizon` as a first-class entity and treated planning as operating inside explicit horizons.
 
-- goals with hierarchy and linked projects/tasks
-- tasks with dependencies, approvals, and runs
-- workers with capacity and role/provider routing
+That no longer matches the prototype.
 
-What it does not yet have is a planning layer that answers:
+The live product direction is:
 
-- what horizon are we planning for right now
-- which goals fit inside that horizon
-- what sequence of subgoals and tasks gets those goals done
-- whether available worker capacity can actually absorb that plan
-- what the AI should be allowed to propose versus execute
+- planning is a process or session
+- the plan is the current body of goals, tasks, timing, assignments, and related context
+- the planning surface works over a chosen date window and scope, not over a separate horizon object
 
-The planning page should fill that gap. It should sit above `/app/goals`, `/app/projects`, and `/app/tasks`, not replace them.
+## Current planning model
 
-## Current repo findings
+Planning in this prototype is now centered on:
 
-Relevant starting points already exist in the codebase:
+- `Goal`: desired outcome or future state
+- `Task`: action intended to advance a goal
+- `Run`: AI-mediated work attempt against a task
+- `Thread`: reusable AI context, not the plan itself
+- `Project`: workspace and default context
+- `Worker`: available execution surface or operator
 
-- `Goal.horizon` exists today, but is a freeform string rather than a structured planning window.
-- Goal hierarchy already exists through `parentGoalId`.
-- Goal-to-project and goal-to-task relationships already exist and are surfaced in the goal routes.
-- Tasks already support `dependencyTaskIds`, `riskLevel`, `approvalMode`, `requiresReview`, and run linkage.
-- Workers already expose `capacity`, but only as a coarse execution slot count rather than planning capacity over time.
+The planning page is a review and revision surface over that existing model.
 
-This means the first planning slice should extend the current control-plane model, not create a separate planner database.
+## What the current planning page does
 
-## Research inputs
+`/app/planning` currently lets the operator:
 
-The product direction below is informed by the current repo and a small set of official references:
+- choose a start and end date
+- filter by project, goal, and worker
+- include or exclude undated work
+- review goals currently in scope
+- review scheduled and unscheduled tasks
+- inspect capacity rollups by worker
+- update goal planning fields such as target date, planning priority, and confidence
 
-- Atlassian Goals and program modeling: goals are outcome-oriented, can have sub-goals, and link projects and delivery work.
-- Linear Initiatives, timelines, milestones, and dependencies: keep portfolio planning distinct from granular issue execution while preserving rollups and sequencing.
-- Asana capacity planning: long-range staffing and task assignment are related but not identical views.
-- Notion subtasks and dependencies: decomposition and blockage need to be first-class planning tools.
-- Linear AI agents and Notion AI project planning: AI is most useful when it proposes, decomposes, summarizes, and delegates within a governed work model.
+This means the planning surface is already useful without requiring a parallel planning entity.
 
-Sources:
+## Model constraints
 
-- https://support.atlassian.com/platform-experiences/docs/what-is-a-goal/
-- https://support.atlassian.com/platform-experiences/docs/modeling-large-programs-of-work-with-goals-and-projects/
-- https://linear.app/docs/initiatives
-- https://linear.app/docs/sub-initiatives
-- https://linear.app/docs/timeline
-- https://linear.app/docs/project-milestones
-- https://linear.app/docs/project-dependencies
-- https://help.asana.com/s/article/capacity-planning
-- https://www.notion.com/help/guides/tasks-manageable-steps-sub-tasks-dependencies
-- https://linear.app/docs/agents-in-linear
-- https://www.notion.com/help/notion-academy/lesson/plan-projects-with-ai
+To keep the prototype coherent, avoid reintroducing these concepts unless a real workflow requires them:
 
-## Product principles
+- freeform goal `horizon`
+- structured `PlanningHorizon`
+- goal or task `planningHorizonId`
+- preset-based planning windows as a primary planning object
 
-### 1. Horizons should be explicit
+Those concepts added noise and competed with the simpler model of "review the current plan inside a selected window."
 
-Freeform goal horizon text is useful as narrative, but planning requires a real object with dates, scope, and status.
+## Preferred direction
 
-### 2. Planning stays outcome-first
+If planning needs more persistence later, the next model should probably be:
 
-Goals and subgoals define intended outcomes. Projects provide context and workspace defaults. Tasks remain execution units. The planning page should connect these layers, not blur them.
+- `PlanningSession`: a review event or saved working session
+- `Decision`: prioritization, reassignment, rescheduling, acceptance, or deferral
+- `Constraint`: dependencies, deadlines, approvals, or resource limits
 
-### 3. Capacity is a planning input, not a vanity metric
+That fits the ontology work better than bringing back horizon objects.
 
-The system should show whether a horizon is underloaded, balanced, or overloaded by role and by worker before work is launched.
+## Near-term additions that still make sense
 
-### 4. Back-planning should produce editable structure
+The planning surface can still get stronger by adding:
 
-The system should help derive milestones, subgoals, and tasks backward from a target date, but humans must be able to adjust sequence, estimates, and dependencies directly.
+- explicit decisions for reschedule, reprioritize, assign, and defer
+- capability or tool requirements on tasks
+- better artifact and context linkage for planning inputs and outputs
+- improved AI assistance for decomposition, risk finding, and plan suggestions
 
-### 5. AI should suggest before it commits
+## Repo truth
 
-For planning, silent autonomous writes are the wrong default. The assistant should generate options, rationale, and diffs that a human accepts.
+As of this update:
 
-## Recommended information architecture
+- the planning UI no longer uses saved horizon presets
+- goal management no longer exposes freeform horizon text
+- the control-plane schema no longer models planning horizons as first-class entities
 
-Add a new top-level route:
-
-- `/app/planning`
-
-Purpose:
-
-- plan a time-bounded horizon
-- slot goals into that horizon
-- decompose goals into subgoals, milestones, and tasks
-- check feasibility against available capacity
-- hand accepted plan elements into the existing goals/tasks/runs system
-
-The page should have five zones.
-
-### 1. Horizon bar
-
-Shows:
-
-- current horizon selector
-- date range
-- draft or active state
-- total capacity
-- planned load
-- overload or slack signal
-
-Actions:
-
-- create horizon
-- duplicate prior horizon
-- close horizon
-- open AI planning assistant
-
-### 2. Goal slate
-
-A ranked list of goals committed to the selected horizon.
-
-Each goal card should show:
-
-- goal name and status
-- parent goal if present
-- linked projects
-- success signal
-- target date
-- confidence
-- effort estimate
-- current rollup progress
-
-Primary interactions:
-
-- add existing goal to horizon
-- create a new goal directly in the horizon
-- reorder by importance
-- expand into plan breakdown
-
-### 3. Breakdown workspace
-
-The main interactive area for turning a goal into a plan.
-
-Default view:
-
-- phases or milestones from left to right
-- subgoals under the goal
-- tasks under milestones or subgoals
-- dependency lines
-
-Alternative views:
-
-- outline view for fast editing
-- timeline view for dates and overlap
-
-### 4. Capacity sidebar
-
-Shows planned load for the selected horizon by:
-
-- role
-- worker
-- project
-- risk band
-
-It should also call out:
-
-- overloaded workers
-- goals with no feasible owner
-- dependencies that push work past the horizon end
-- work with no estimate
-
-### 5. AI planning drawer
-
-The assistant should work inside the current horizon and selected goal context.
-
-Supported actions later:
-
-- propose goal decomposition
-- propose milestones
-- create draft tasks
-- suggest estimates and dependencies
-- rebalance overloaded work
-- summarize plan risks and missing information
-
-## Recommended data model changes
-
-The first implementation should extend the control-plane schema with one new entity and a focused set of fields.
-
-### New entity: `PlanningHorizon`
-
-Recommended shape:
-
-- `id`
-- `name`
-- `kind`: `week | month | quarter | custom`
-- `status`: `draft | active | closed`
-- `startDate`
-- `endDate`
-- `notes`
-- `capacityUnit`: `hours | points | slots`
-- `createdAt`
-- `updatedAt`
-
-Why:
-
-- it gives the planning page a real home
-- it replaces the current freeform-only horizon concept with something schedulable
-- it supports historical comparisons across horizons
-
-### Extend `Goal`
-
-Add:
-
-- `planningHorizonId: string | null`
-- `targetStartDate: string | null`
-- `targetDate: string | null`
-- `planningPriority: number`
-- `confidence: 'low' | 'medium' | 'high'`
-- `health: 'on_track' | 'at_risk' | 'off_track'`
-- `ownerWorkerId: string | null`
-- `metricDefinition: string`
-
-Keep:
-
-- `horizon` as narrative copy for now during migration
-
-### Extend `Task`
-
-Add:
-
-- `parentTaskId: string | null`
-- `planningHorizonId: string | null`
-- `milestone: string`
-- `estimateHours: number | null`
-- `remainingHours: number | null`
-- `earliestStartDate: string | null`
-- `targetDate: string | null`
-- `scheduledStartDate: string | null`
-- `scheduledEndDate: string | null`
-- `planningOrder: number`
-- `source: 'manual' | 'ai_proposed' | 'ai_accepted'`
-
-Why:
-
-- back-planning needs subtasks
-- capacity planning needs effort estimates and dates
-- AI planning needs provenance
-
-### Extend `Worker`
-
-Add:
-
-- `weeklyCapacityHours: number | null`
-- `focusFactor: number`
-- `skills: string[]`
-- `costClass: 'low' | 'medium' | 'high'`
-- `maxConcurrentRuns: number | null`
-
-Interpretation:
-
-- existing `capacity` remains useful for live dispatch
-- `weeklyCapacityHours` becomes the planning input
-
-### Derived, not stored initially
-
-Compute these in server helpers before deciding to persist them:
-
-- horizon utilization percent
-- worker slack or overload
-- goal effort rollups
-- dependency critical path length
-- spillover past horizon end
-
-## Planning behaviors
-
-### Horizon setup
-
-The operator should be able to create:
-
-- a weekly execution horizon
-- a monthly coordination horizon
-- a quarterly strategic horizon
-- a custom date range
-
-Recommended default:
-
-- quarter for goals
-- month for milestone review
-- week for executable task planning
-
-### Goal slotting
-
-When a goal is added to a horizon, the page should require or strongly suggest:
-
-- linked project context
-- target date
-- success signal
-- effort estimate or confidence placeholder
-- owner
-
-If the goal is too large for the selected horizon, the UI should push the user toward:
-
-- splitting it into subgoals
-- deferring lower-priority work
-- creating explicit spillover into a later horizon
-
-### Back-planning flow
-
-For each goal:
-
-1. Start from the target date.
-2. Add milestone checkpoints or subgoals.
-3. Break each checkpoint into tasks and subtasks.
-4. Add dependencies.
-5. Estimate effort.
-6. Assign owner role or worker.
-7. Check feasibility against capacity.
-
-The main interaction should allow both:
-
-- manual editing
-- AI-generated first draft
-
-### Capacity calculation
-
-For the first useful implementation, use:
-
-- `worker weeklyCapacityHours * focusFactor`
-- minus estimated hours from tasks scheduled inside the horizon
-
-Roll up by:
-
-- worker
-- desired role
-- project
-
-Do not block saving a plan when estimates are incomplete. Instead:
-
-- mark missing estimates clearly
-- show reduced-confidence utilization math
-
-### Readiness and execution handoff
-
-The planning page should not automatically launch work by default.
-
-Instead it should move accepted plan items into existing execution surfaces:
-
-- goals remain visible in `/app/goals`
-- tasks become visible in `/app/tasks`
-- worker assignment and dispatch stay compatible with current worker APIs
-
-Later, a horizon can expose:
-
-- `Promote ready tasks`
-- `Auto-queue low-risk planned tasks`
-
-## AI assistance design
-
-AI planning should arrive after the manual planning loop works.
-
-### Good AI jobs
-
-- turn a goal brief into candidate milestones, subgoals, and tasks
-- infer likely dependencies
-- draft estimates with explicit confidence
-- spot missing project links, owners, or success criteria
-- propose a rebalance when capacity is overloaded
-- summarize tradeoffs between multiple planning options
-- update plans when dependencies slip or goals change
-
-### Bad AI defaults
-
-- silently rewriting goals or tasks
-- assigning dates without capacity context
-- auto-closing planning gaps by inventing facts
-- launching execution immediately after plan generation
-
-### Required governance
-
-Every AI planning action should return:
-
-- proposed changes
-- rationale
-- confidence
-- affected entities
-- a human approval affordance
-
-Accepted changes should stamp provenance into stored fields such as `source` and future activity logs.
-
-## Suggested phased implementation
-
-### Phase 1: Manual planning foundation
-
-Outcome:
-
-- a useful planning page exists even with no AI
-
-Deliver:
-
-- add `PlanningHorizon` model
-- add structured goal and task scheduling fields
-- add `/app/planning`
-- allow horizon creation and goal slotting
-- support manual breakdown into milestones, subgoals, tasks, and subtasks
-- show dependency-aware outline view
-
-Recommended repo impact:
-
-- `src/lib/types/control-plane.ts`
-- `src/lib/server/control-plane.ts`
-- `src/lib/server/planning.ts` (new)
-- `src/routes/app/planning/+page.server.ts` (new)
-- `src/routes/app/planning/+page.svelte` (new)
-- `src/lib/components/Sidebar.svelte`
-- `data/control-plane.json`
-
-### Phase 2: Capacity-aware planning
-
-Outcome:
-
-- the page can tell whether a plan fits the available team
-
-Deliver:
-
-- add worker planning-capacity fields
-- add task estimates and scheduled dates
-- compute utilization and overload warnings
-- add capacity panel and summary badges
-- show spillover beyond the horizon end
-
-Recommended repo impact:
-
-- `src/lib/server/planning.ts`
-- `src/routes/app/planning/+page.server.ts`
-- new planning UI components for utilization and warnings
-- worker forms and worker detail routes
-
-### Phase 3: AI-assisted plan drafting
-
-Outcome:
-
-- the system can draft and revise plans, but only through explicit review
-
-Deliver:
-
-- prompt builders for goal decomposition and horizon planning
-- AI draft generation into temporary proposal objects
-- accept or reject flow for proposed tasks and edits
-- provenance tracking on accepted entities
-
-Recommended repo impact:
-
-- `src/lib/server/planning-ai.ts` (new)
-- planning actions on `/app/planning`
-- optional session reuse for planning threads
-
-### Phase 4: Adaptive planning and auto-execution
-
-Outcome:
-
-- accepted plans can adapt when work slips, completes early, or capacity changes
-
-Deliver:
-
-- replan suggestions on missed dependencies or overload
-- auto-promotion of safe planned tasks into ready execution
-- policy controls for which work AI may queue automatically
-
-This phase should only come after planning quality is trustworthy.
-
-## Recommended first build
-
-If only one slice gets built now, build this:
-
-1. Add `PlanningHorizon`.
-2. Add `Task.parentTaskId` and `Task.estimateHours`.
-3. Add `/app/planning` with:
-   - horizon selector
-   - goal slate
-   - outline-based decomposition editor
-   - dependency editor
-   - simple capacity summary by worker role
-4. Keep AI out of the critical path.
-
-That is the smallest slice that turns planning from a note-taking exercise into an operational control surface.
-
-## Open questions
-
-- Should planning be primarily quarter-oriented, month-oriented, or week-oriented for this product's first user?
-- Should subgoals remain only at the goal layer, or should the product also support milestone entities explicitly?
-- Is worker capacity best measured in hours, points, or concurrent slots for this operator's workflow?
-- Should AI proposals persist as draft records in the control plane, or remain ephemeral until accepted?
-- Does the operator want one shared horizon across all lanes, or separate planning horizons by lane or project?
-
-## Bottom line
-
-The right implementation is not "add a smarter goals page."
-
-The right implementation is:
-
-- a dedicated planning route
-- a structured planning horizon
-- editable decomposition from goal to subgoal to task to subtask
-- dependency and capacity awareness
-- AI assistance that proposes and adapts plans under human control
-
-That fits the repo's current architecture and creates a credible path from strategic intent to executable work.
+This document should be read as the current planning stance for the prototype, not as a historical proposal for a different architecture.

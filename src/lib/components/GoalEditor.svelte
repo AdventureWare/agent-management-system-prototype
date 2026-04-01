@@ -17,7 +17,6 @@
 		goalId?: string;
 		name?: string;
 		summary?: string;
-		horizon?: string;
 		successSignal?: string;
 		artifactPath?: string;
 		parentGoalId?: string;
@@ -94,7 +93,6 @@
 	let summary = $state('');
 	let lane = $state('product');
 	let status = $state('ready');
-	let horizon = $state('');
 	let successSignal = $state('');
 	let projectQuery = $state('');
 	let taskQuery = $state('');
@@ -118,7 +116,6 @@
 			summary: values.summary ?? '',
 			lane: values.lane ?? 'product',
 			status: values.status ?? 'ready',
-			horizon: values.horizon ?? '',
 			successSignal: values.successSignal ?? '',
 			projectIds: values.projectIds ?? [],
 			taskIds: values.taskIds ?? [],
@@ -135,7 +132,6 @@
 		summary = values.summary ?? '';
 		lane = values.lane ?? 'product';
 		status = values.status ?? 'ready';
-		horizon = values.horizon ?? '';
 		successSignal = values.successSignal ?? '';
 		selectedProjectIds = [...(values.projectIds ?? [])];
 		selectedTaskIds = [...(values.taskIds ?? [])];
@@ -160,7 +156,6 @@
 		const hasIncomingValues = !isFormDraftEmpty({
 			name: values.name ?? '',
 			summary: values.summary ?? '',
-			horizon: values.horizon ?? '',
 			successSignal: values.successSignal ?? '',
 			artifactPath: values.artifactPath ?? '',
 			parentGoalId: values.parentGoalId ?? '',
@@ -182,7 +177,6 @@
 			summary = savedDraft.summary ?? '';
 			lane = savedDraft.lane ?? 'product';
 			status = savedDraft.status ?? 'ready';
-			horizon = savedDraft.horizon ?? '';
 			successSignal = savedDraft.successSignal ?? '';
 			artifactPath = savedDraft.artifactPath ?? '';
 			selectedParentGoalId = savedDraft.parentGoalId ?? '';
@@ -203,7 +197,6 @@
 			summary,
 			lane: lane === 'product' ? '' : lane,
 			status: status === 'ready' ? '' : status,
-			horizon,
 			successSignal,
 			artifactPath,
 			parentGoalId: selectedParentGoalId,
@@ -385,16 +378,6 @@
 						<option value={status}>{formatGoalStatusLabel(status)}</option>
 					{/each}
 				</select>
-			</label>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Horizon</span>
-				<input
-					bind:value={horizon}
-					class="input text-white placeholder:text-slate-500"
-					name="horizon"
-					placeholder="Now, next quarter, later this year…"
-				/>
 			</label>
 
 			<label class="block">
