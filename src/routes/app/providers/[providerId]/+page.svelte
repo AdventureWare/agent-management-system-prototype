@@ -1,20 +1,17 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import {
+		formatRunStatusLabel,
+		formatProviderSetupStatusLabel,
+		formatWorkerStatusLabel,
+		providerSetupStatusToneClass,
+		runStatusToneClass,
+		workerStatusToneClass
+	} from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProvider');
-
-	function statusClass(status: string) {
-		switch (status) {
-			case 'connected':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
-			case 'needs_setup':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
 
 	function enabledClass(enabled: boolean) {
 		return enabled
@@ -25,7 +22,7 @@
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="space-y-3">
+		<div class="min-w-0 space-y-3">
 			<a
 				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
 				href={resolve('/app/providers')}
@@ -42,9 +39,9 @@
 					{data.provider.enabled ? 'enabled' : 'disabled'}
 				</span>
 				<span
-					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(data.provider.setupStatus)}`}
+					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${providerSetupStatusToneClass(data.provider.setupStatus)}`}
 				>
-					{data.provider.setupStatus.replace('_', ' ')}
+					{formatProviderSetupStatusLabel(data.provider.setupStatus)}
 				</span>
 			</div>
 			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
@@ -68,11 +65,16 @@
 				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
 					Launcher: {data.provider.launcher || 'Not set'}
 				</p>
+				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+					Thread sandbox: {data.provider.defaultThreadSandbox}
+				</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Workers</p>
 				<p class="mt-3 text-3xl font-semibold text-white">{data.attachedWorkers.length}</p>
-				<p class="mt-2 text-sm text-slate-400">Workers currently configured against this provider.</p>
+				<p class="mt-2 text-sm text-slate-400">
+					Workers currently configured against this provider.
+				</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
@@ -103,7 +105,9 @@
 			action="?/updateProvider"
 		>
 			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider details</p>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+					Provider details
+				</p>
 				<h2 class="text-xl font-semibold text-white">Edit provider readiness and defaults</h2>
 			</div>
 
@@ -152,7 +156,7 @@
 					<select class="select text-white" name="setupStatus">
 						{#each data.setupStatusOptions as setupStatus (setupStatus)}
 							<option value={setupStatus} selected={data.provider.setupStatus === setupStatus}>
-								{setupStatus}
+								{formatProviderSetupStatusLabel(setupStatus)}
 							</option>
 						{/each}
 					</select>
@@ -170,6 +174,17 @@
 					<input class="input text-white" name="launcher" value={data.provider.launcher} />
 				</label>
 			</div>
+
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Default thread sandbox</span>
+				<select class="select text-white" name="defaultThreadSandbox">
+					{#each data.sandboxOptions as sandbox (sandbox)}
+						<option value={sandbox} selected={data.provider.defaultThreadSandbox === sandbox}>
+							{sandbox}
+						</option>
+					{/each}
+				</select>
+			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Base URL</span>
@@ -242,6 +257,15 @@
 					</div>
 
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Default thread sandbox
+						</p>
+						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
+							{data.provider.defaultThreadSandbox}
+						</p>
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Notes</p>
 						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
 							{data.provider.notes || 'No notes saved.'}
@@ -285,9 +309,9 @@
 										<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">{worker.roleName}</p>
 									</div>
 									<span
-										class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
 									>
-										{worker.status}
+										{formatWorkerStatusLabel(worker.status)}
 									</span>
 								</div>
 								<p class="ui-clamp-3 mt-3 text-sm text-slate-300">
@@ -323,7 +347,11 @@
 									<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
 								</div>
 								<div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
-									<span class="ui-wrap-anywhere">{run.status}</span>
+									<span
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(run.status)}`}
+									>
+										{formatRunStatusLabel(run.status)}
+									</span>
 									<span class="ui-wrap-anywhere">{run.sessionId || 'No thread'}</span>
 									<a
 										class="text-sky-300 transition hover:text-sky-200"

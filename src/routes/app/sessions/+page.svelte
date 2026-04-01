@@ -1,11 +1,18 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentSessions, updateAgentSessionArchiveState } from '$lib/client/agent-data';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import DataTableSection from '$lib/components/DataTableSection.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
 	import {
 		ACTIVE_REFRESH_INTERVAL_MS,
 		ACTIVITY_CLOCK_INTERVAL_MS,
-		formatActivityAge
+		formatActivityAge,
+		formatSessionStateLabel
 	} from '$lib/session-activity';
 	import type { AgentSessionDetail } from '$lib/types/agent-session';
 	import { fade } from 'svelte/transition';
@@ -40,7 +47,9 @@
 				session.name,
 				session.cwd,
 				session.sessionState,
+				formatSessionStateLabel(session.sessionState),
 				session.latestRunStatus,
+				(session.topicLabels ?? []).join(' '),
 				session.threadId ?? '',
 				session.relatedTasks.map((task) => task.title).join(' '),
 				session.latestRun?.prompt ?? '',
@@ -65,7 +74,7 @@
 		sessions.filter((session) => !session.archivedAt && isActiveSessionState(session.sessionState))
 			.length
 	);
-	let readyCount = $derived(
+	let availableCount = $derived(
 		sessions.filter((session) => !session.archivedAt && session.sessionState === 'ready').length
 	);
 	let inactiveCount = $derived(
@@ -276,31 +285,12 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function sessionStateLabel(state: AgentSessionDetail['sessionState']) {
-		switch (state) {
-			case 'starting':
-				return 'Starting';
-			case 'waiting':
-				return 'Waiting';
-			case 'working':
-				return 'Working';
-			case 'ready':
-				return 'Ready';
-			case 'attention':
-				return 'Attention';
-			case 'unavailable':
-				return 'Not resumable';
-			default:
-				return 'Idle';
-		}
-	}
-
 	function sessionStatusClass(state: AgentSessionDetail['sessionState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
 			case 'starting':
-				return 'border border-amber-800/70 bg-amber-950/50 text-amber-300';
+				return 'border border-violet-800/70 bg-violet-950/50 text-violet-300';
 			case 'waiting':
 			case 'ready':
 				return 'border border-sky-800/70 bg-sky-950/50 text-sky-300';
@@ -314,7 +304,7 @@
 
 	function threadLabel(session: AgentSessionDetail) {
 		if (session.threadId) {
-			return 'Ready';
+			return 'Available';
 		}
 
 		return session.hasActiveRun ? 'Pending' : 'Missing';
@@ -343,212 +333,210 @@
 	title: string,
 	description: string,
 	rows: AgentSessionDetail[],
-	emptyMessage: string
+	emptyMessage: string,
+	compactThreadColumn = false
 )}
-	<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h2 class="text-lg font-semibold text-white">{title}</h2>
-				<p class="mt-1 text-sm text-slate-400">{description}</p>
-				<p class="mt-2 text-xs text-slate-500">Open any thread on its own detail page.</p>
-			</div>
-			<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
-				{rows.length} shown · {selectedRowCount(rows)} selected
-			</p>
-		</div>
-
-		{#if rows.length === 0}
-			<p
-				class="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
-			>
-				{emptyMessage}
-			</p>
-		{:else}
-			<div class="mt-4 overflow-x-auto">
-				<table class="min-w-[1100px] divide-y divide-slate-800 text-left">
-					<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-						<tr>
-							<th class="w-16 px-3 py-3 font-medium">
-								<label class="inline-flex items-center gap-2">
-									<input
-										aria-label={`Select all rows in ${title}`}
-										type="checkbox"
-										checked={areAllRowsSelected(rows)}
-										onchange={(event) => {
-											if (event.currentTarget instanceof HTMLInputElement) {
-												setSelectionForRows(rows, event.currentTarget.checked);
-											}
-										}}
-									/>
-									<span class="sr-only">Select all</span>
-								</label>
-							</th>
-							<th class="px-3 py-3 font-medium">Thread</th>
-							<th class="px-3 py-3 font-medium">Status</th>
-							<th class="px-3 py-3 font-medium">Last activity</th>
-							<th class="px-3 py-3 font-medium">Started</th>
-							<th class="px-3 py-3 font-medium">Runs</th>
-							<th class="px-3 py-3 font-medium">Thread</th>
-							<th class="px-3 py-3 font-medium">Resume</th>
-							<th class="px-3 py-3 font-medium">Working dir</th>
-							<th class="px-3 py-3 font-medium">Open</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-900/80">
-						{#each rows as session (session.id)}
-							<tr
-								class={[
-									'bg-slate-950/30 transition hover:bg-slate-900/60',
-									isSessionSelected(session.id) ? 'bg-slate-900/80' : ''
-								]}
+	<DataTableSection
+		{title}
+		description={`${description} Open any thread on its own detail page.`}
+		summary={`${rows.length} shown · ${selectedRowCount(rows)} selected`}
+		empty={rows.length === 0}
+		{emptyMessage}
+	>
+		<table class="min-w-[1100px] divide-y divide-slate-800 text-left">
+			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+				<tr>
+					<th class="w-16 px-3 py-3 font-medium">
+						<label class="inline-flex items-center gap-2">
+							<input
+								aria-label={`Select all rows in ${title}`}
+								type="checkbox"
+								checked={areAllRowsSelected(rows)}
+								onchange={(event) => {
+									if (event.currentTarget instanceof HTMLInputElement) {
+										setSelectionForRows(rows, event.currentTarget.checked);
+									}
+								}}
+							/>
+							<span class="sr-only">Select all</span>
+						</label>
+					</th>
+					<th
+						class={`px-3 py-3 font-medium ${compactThreadColumn ? 'w-[18rem] max-w-[18rem] min-w-[18rem]' : 'min-w-[22rem]'}`}
+					>
+						Thread
+					</th>
+					<th class="px-3 py-3 font-medium">Status</th>
+					<th class="px-3 py-3 font-medium">Last activity</th>
+					<th class="px-3 py-3 font-medium">Started</th>
+					<th class="px-3 py-3 font-medium">Runs</th>
+					<th class="px-3 py-3 font-medium">Thread</th>
+					<th class="px-3 py-3 font-medium">Resume</th>
+					<th class="px-3 py-3 font-medium">Working dir</th>
+					<th class="px-3 py-3 font-medium">Open</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-900/80">
+				{#each rows as session (session.id)}
+					<tr
+						class={[
+							'bg-slate-950/30 transition hover:bg-slate-900/60',
+							isSessionSelected(session.id) ? 'bg-slate-900/80' : ''
+						]}
+					>
+						<td class="px-3 py-3 align-top">
+							<label class="inline-flex items-center gap-2">
+								<input
+									aria-label={`Select thread ${session.name}`}
+									type="checkbox"
+									checked={isSessionSelected(session.id)}
+									onchange={(event) => {
+										if (event.currentTarget instanceof HTMLInputElement) {
+											toggleSessionSelection(session.id, event.currentTarget.checked);
+										}
+									}}
+								/>
+								<span class="sr-only">Select thread {session.name}</span>
+							</label>
+						</td>
+						<td
+							class={`px-3 py-3 align-top ${compactThreadColumn ? 'w-[18rem] max-w-[18rem] min-w-[18rem]' : 'min-w-[22rem]'}`}
+						>
+							<a
+								class="block rounded-lg text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
+								href={resolve(`/app/sessions/${session.id}`)}
+								aria-label={`View thread details for ${session.name}`}
 							>
-								<td class="px-3 py-3 align-top">
-									<label class="inline-flex items-center gap-2">
-										<input
-											aria-label={`Select thread ${session.name}`}
-											type="checkbox"
-											checked={isSessionSelected(session.id)}
-											onchange={(event) => {
-												if (event.currentTarget instanceof HTMLInputElement) {
-													toggleSessionSelection(session.id, event.currentTarget.checked);
-												}
-											}}
-										/>
-										<span class="sr-only">Select thread {session.name}</span>
-									</label>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<a
-										class="block rounded-lg text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
-										href={resolve(`/app/sessions/${session.id}`)}
-										aria-label={`View thread details for ${session.name}`}
-									>
-										<span class="ui-wrap-anywhere block font-medium text-white">{session.name}</span>
-										<span class="ui-wrap-anywhere mt-1 block text-xs text-slate-400">
-											{session.model ?? 'default model'} · {session.sandbox}
-										</span>
-										<div class="mt-2 flex flex-wrap gap-2">
-											{#if session.archivedAt}
-												<span
-													class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
-												>
-													Archived
-												</span>
-											{/if}
-											{#if session.origin === 'external'}
-												<span
-													class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
-												>
-													Imported from Codex
-												</span>
-											{/if}
-										</div>
-										{#if session.relatedTasks.length > 0}
-											<span class="ui-clamp-3 mt-2 block text-xs text-slate-500">
-												Tasks: {session.relatedTasks.map((task) => task.title).join(', ')}
-											</span>
-										{/if}
-										{#if session.archivedAt}
-											<span class="mt-2 block text-xs text-slate-500">
-												Archived {formatTimestamp(session.archivedAt)}
-											</span>
-										{/if}
-										{#if session.latestRun?.lastMessage}
-											<span class="ui-clamp-3 mt-2 block max-w-72 text-xs text-slate-500">
-												Last reply: {compactText(session.latestRun.lastMessage, 120)}
-											</span>
-										{/if}
-									</a>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<div class="space-y-2">
+								<div class="ui-clamp-5 font-medium text-white">
+									{session.name}
+								</div>
+								<span class="ui-clamp-5 mt-1 block text-xs text-slate-400">
+									{session.model ?? 'default model'} · {session.sandbox}
+								</span>
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#if session.archivedAt}
 										<span
-											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
-											{sessionStateLabel(session.sessionState)}
+											Archived
 										</span>
-										<SessionActivityIndicator {now} {session} compact />
-										<p class="text-xs text-slate-500">Latest run {session.latestRunStatus}</p>
-									</div>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{formatActivityAge(session.lastActivityAt, now)}</p>
-									<p class="mt-1 text-xs text-slate-500">
-										{formatTimestamp(session.lastActivityAt)}
-									</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{formatTimestamp(session.createdAt)}</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{session.runCount}</p>
-									<p class="mt-1 text-xs text-slate-500">
-										latest {session.latestRun?.mode === 'message' ? 'follow-up' : 'start'}
-									</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{threadLabel(session)}</p>
-									{#if session.threadId}
-										<p class="ui-wrap-anywhere mt-1 max-w-44 text-xs text-slate-500">
-											{session.threadId}
-										</p>
 									{/if}
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{resumeLabel(session)}</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="ui-wrap-anywhere max-w-80 text-sm text-slate-300">{session.cwd}</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<a
-										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs font-medium leading-none tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-										href={resolve(`/app/sessions/${session.id}`)}
-									>
-										View thread
-									</a>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
+									{#if session.origin === 'external'}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
+										>
+											Imported from Codex
+										</span>
+									{/if}
+									{#each session.topicLabels ?? [] as topicLabel (topicLabel)}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+										>
+											{topicLabel}
+										</span>
+									{/each}
+								</div>
+								{#if session.relatedTasks.length > 0}
+									<span class="ui-clamp-5 mt-2 block text-xs text-slate-500">
+										Tasks: {session.relatedTasks.map((task) => task.title).join(', ')}
+									</span>
+								{/if}
+								{#if session.archivedAt}
+									<span class="mt-2 block text-xs text-slate-500">
+										Archived {formatTimestamp(session.archivedAt)}
+									</span>
+								{/if}
+								{#if session.latestRun?.lastMessage}
+									<span class="ui-clamp-5 mt-2 block max-w-full text-xs text-slate-500">
+										Last reply: {compactText(session.latestRun.lastMessage, 120)}
+									</span>
+								{/if}
+							</a>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<div class="space-y-2">
+								<span
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+								>
+									{formatSessionStateLabel(session.sessionState)}
+								</span>
+								<SessionActivityIndicator {now} {session} compact />
+								<p class="text-xs text-slate-500">Latest run {session.latestRunStatus}</p>
+							</div>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{formatActivityAge(session.lastActivityAt, now)}</p>
+							<p class="mt-1 text-xs text-slate-500">
+								{formatTimestamp(session.lastActivityAt)}
+							</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{formatTimestamp(session.createdAt)}</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{session.runCount}</p>
+							<p class="mt-1 text-xs text-slate-500">
+								latest {session.latestRun?.mode === 'message' ? 'follow-up' : 'start'}
+							</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{threadLabel(session)}</p>
+							{#if session.threadId}
+								<p class="ui-clamp-5 mt-1 max-w-44 text-xs text-slate-500">
+									{session.threadId}
+								</p>
+							{/if}
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{resumeLabel(session)}</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="ui-clamp-5 max-w-80 text-sm text-slate-300">{session.cwd}</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<a
+								class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+								href={resolve(`/app/sessions/${session.id}`)}
+							>
+								View thread
+							</a>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</DataTableSection>
 {/snippet}
-
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
-	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Threads</p>
-		<h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-			Browse active and historical background threads
-		</h1>
-		<p class="max-w-3xl text-sm text-slate-300">
-			Use this page as the remote-work registry. The tables separate active runs from history, and
-			each thread opens on its own detail page for logs, conversation turns, and follow-up work.
-		</p>
-		<div
-			class="flex flex-col gap-3 text-sm text-slate-400 sm:flex-row sm:flex-wrap sm:items-center"
-		>
-			<label
-				class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+<AppPage class="gap-6 px-4 py-5 sm:px-6 sm:py-8">
+	<PageHeader
+		eyebrow="Threads"
+		title="Browse active and historical background threads"
+		description="Use this page as the remote-work registry. The tables separate active runs from history, and each thread opens on its own detail page for logs, conversation turns, and follow-up work."
+	>
+		{#snippet meta()}
+			<div
+				class="flex flex-col gap-3 text-sm text-slate-400 sm:flex-row sm:flex-wrap sm:items-center"
 			>
-				<input bind:checked={autoRefresh} type="checkbox" />
-				<span>Auto-refresh active runs every 4s</span>
-			</label>
-			<span>Refresh pauses while you are typing or when this tab is in the background.</span>
-			<button
-				class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
-				type="button"
-				onclick={() => {
-					void refreshSessions({ force: true });
-				}}
-				disabled={isRefreshing}
-			>
-				{isRefreshing ? 'Refreshing...' : 'Refresh all'}
-			</button>
-		</div>
-	</div>
+				<label
+					class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+				>
+					<input bind:checked={autoRefresh} type="checkbox" />
+					<span>Auto-refresh active runs every 4s</span>
+				</label>
+				<span>Refresh pauses while you are typing or when this tab is in the background.</span>
+				<button
+					class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
+					type="button"
+					onclick={() => {
+						void refreshSessions({ force: true });
+					}}
+					disabled={isRefreshing}
+				>
+					{isRefreshing ? 'Refreshing...' : 'Refresh all'}
+				</button>
+			</div>
+		{/snippet}
+	</PageHeader>
 
 	{#if pageNotice}
 		<p
@@ -566,38 +554,19 @@
 	{/if}
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Active</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{activeCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Ready</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{readyCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Closed / idle</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{inactiveCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Needs attention</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{attentionCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Archived</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{archivedCount}</p>
-		</div>
+		<MetricCard label="Active" value={activeCount} />
+		<MetricCard label="Available" value={availableCount} />
+		<MetricCard label="Closed / idle" value={inactiveCount} />
+		<MetricCard label="Needs attention" value={attentionCount} />
+		<MetricCard label="Archived" value={archivedCount} />
 	</div>
 
 	<div class="space-y-6">
-		<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
-			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<h2 class="text-xl font-semibold text-white">Thread index</h2>
-					<p class="mt-1 text-sm text-slate-400">
-						Search by thread name, related task, path, thread state, thread id, or recent prompt
-						text.
-					</p>
-				</div>
+		<CollectionToolbar
+			title="Thread index"
+			description="Search by thread name, topic label, related task, path, thread state, thread id, or recent prompt text."
+		>
+			{#snippet controls()}
 				<div class="w-full sm:max-w-sm">
 					<label class="sr-only" for="session-search">Search threads</label>
 					<input
@@ -607,8 +576,9 @@
 						placeholder="Search threads"
 					/>
 				</div>
-			</div>
-			<div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+			{/snippet}
+
+			<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 				<label
 					class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300"
 				>
@@ -630,57 +600,48 @@
 					</p>
 				{/if}
 			</div>
-		</section>
+		</CollectionToolbar>
 
 		{#if selectedSessionIds.length > 0}
-			<section class="rounded-2xl border border-slate-700 bg-slate-900/80 p-4 sm:p-5">
-				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<h2 class="text-sm font-semibold tracking-[0.16em] text-white uppercase">
-							{selectedSessionIds.length}
-							{selectedSessionIds.length === 1 ? 'thread' : 'threads'} selected
-						</h2>
-						<p class="mt-1 text-sm text-slate-400">
-							{#if selectedAction === 'archive'}
-								Archive the selected threads to hide them from the default registry view.
-							{:else if selectedAction === 'unarchive'}
-								Restore the selected threads to the default registry view.
-							{:else}
-								Choose only archived threads or only unarchived threads for one bulk action.
-							{/if}
-						</p>
-					</div>
-					<div class="flex flex-col gap-2 sm:flex-row">
-						<button
-							class="inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-2 text-center text-sm font-medium leading-none text-slate-200 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-							type="button"
-							onclick={() => {
-								if (selectedAction === 'archive') {
-									void updateArchiveState(true);
-								} else if (selectedAction === 'unarchive') {
-									void updateArchiveState(false);
-								}
-							}}
-							disabled={!selectedAction || isUpdatingArchive}
-						>
-							{#if isUpdatingArchive}
-								Updating...
-							{:else if selectedAction === 'unarchive'}
-								Unarchive selected
-							{:else}
-								Archive selected
-							{/if}
-						</button>
-						<button
-							class="inline-flex items-center justify-center rounded-full border border-slate-800 px-4 py-2 text-center text-sm leading-none text-slate-400 transition hover:border-slate-700 hover:text-white"
-							type="button"
-							onclick={clearSelection}
-						>
-							Clear selection
-						</button>
-					</div>
-				</div>
-			</section>
+			<SelectionActionBar
+				title={`${selectedSessionIds.length} ${selectedSessionIds.length === 1 ? 'thread' : 'threads'} selected`}
+				description={selectedAction === 'archive'
+					? 'Archive the selected threads to hide them from the default registry view.'
+					: selectedAction === 'unarchive'
+						? 'Restore the selected threads to the default registry view.'
+						: 'Choose only archived threads or only unarchived threads for one bulk action.'}
+				tone="muted"
+			>
+				{#snippet actions()}
+					<button
+						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-2 text-center text-sm leading-none font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+						type="button"
+						onclick={() => {
+							if (selectedAction === 'archive') {
+								void updateArchiveState(true);
+							} else if (selectedAction === 'unarchive') {
+								void updateArchiveState(false);
+							}
+						}}
+						disabled={!selectedAction || isUpdatingArchive}
+					>
+						{#if isUpdatingArchive}
+							Updating...
+						{:else if selectedAction === 'unarchive'}
+							Unarchive selected
+						{:else}
+							Archive selected
+						{/if}
+					</button>
+					<button
+						class="inline-flex items-center justify-center rounded-full border border-slate-800 px-4 py-2 text-center text-sm leading-none text-slate-400 transition hover:border-slate-700 hover:text-white"
+						type="button"
+						onclick={clearSelection}
+					>
+						Clear selection
+					</button>
+				{/snippet}
+			</SelectionActionBar>
 		{/if}
 
 		{@render sessionTable(
@@ -692,9 +653,10 @@
 
 		{@render sessionTable(
 			'Other threads',
-			'Ready, not-resumable, idle, and attention-needed threads kept for reference and follow-up.',
+			'Available, not-resumable, idle, and attention-needed threads kept for reference and follow-up.',
 			historicalSessions,
-			'No other threads match the current search.'
+			'No other threads match the current search.',
+			true
 		)}
 
 		{#if showArchived}
@@ -706,4 +668,4 @@
 			)}
 		{/if}
 	</div>
-</section>
+</AppPage>

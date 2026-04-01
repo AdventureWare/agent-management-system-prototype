@@ -3,12 +3,16 @@
 	import {
 		ActivityIcon,
 		ArrowLeftRightIcon,
+		BriefcaseBusinessIcon,
+		CalendarRangeIcon,
 		CpuIcon,
 		FolderOpenIcon,
 		LayoutDashboardIcon,
 		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
+		TargetIcon,
+		UsersIcon,
 		XIcon
 	} from '@lucide/svelte';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
@@ -17,9 +21,13 @@
 
 	const links = [
 		{ label: 'Dashboard', href: '/app/home', icon: LayoutDashboardIcon },
+		{ label: 'Planning', href: '/app/planning', icon: CalendarRangeIcon },
 		{ label: 'Projects', href: '/app/projects', icon: FolderOpenIcon },
+		{ label: 'Goals', href: '/app/goals', icon: TargetIcon },
 		{ label: 'Tasks', href: '/app/tasks', icon: ListTodoIcon },
 		{ label: 'Runs', href: '/app/runs', icon: ActivityIcon },
+		{ label: 'Workers', href: '/app/workers', icon: UsersIcon },
+		{ label: 'Roles', href: '/app/roles', icon: BriefcaseBusinessIcon },
 		{ label: 'Providers', href: '/app/providers', icon: CpuIcon },
 		{ label: 'Sessions', href: '/app/sessions', icon: MessagesSquareIcon }
 	] as const;
@@ -160,7 +168,7 @@
 	</Navigation>
 
 	<div
-		class="min-w-0 min-h-[calc(100vh-65px)] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))] md:h-screen md:min-h-screen"
+		class="min-h-[calc(100vh-65px)] min-w-0 overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))] md:h-screen md:min-h-screen"
 	>
 		{@render children()}
 	</div>

@@ -47,7 +47,7 @@ Good thread-level states:
 - `Starting`
 - `Waiting for response`
 - `Working`
-- `Ready`
+- `Available`
 - `Needs attention`
 - `Idle`
 - Optional: `Not resumable`

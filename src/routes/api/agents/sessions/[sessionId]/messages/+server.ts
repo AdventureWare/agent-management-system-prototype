@@ -2,18 +2,30 @@ import { json } from '@sveltejs/kit';
 import { sendAgentSessionMessage } from '$lib/server/agent-sessions';
 
 export const POST = async ({ params, request }) => {
-	const body = (await request.json()) as {
-		prompt?: string;
-	};
+	const contentType = request.headers.get('content-type') ?? '';
+	let prompt = '';
+	let attachments: File[] = [];
 
-	const prompt = body.prompt?.trim() ?? '';
+	if (contentType.includes('application/json')) {
+		const body = (await request.json()) as {
+			prompt?: string;
+		};
 
-	if (!prompt) {
-		return json({ error: 'prompt is required.' }, { status: 400 });
+		prompt = body.prompt?.trim() ?? '';
+	} else {
+		const form = await request.formData();
+		prompt = form.get('prompt')?.toString().trim() ?? '';
+		attachments = form
+			.getAll('attachments')
+			.filter((value): value is File => value instanceof File && value.size > 0);
+	}
+
+	if (!prompt && attachments.length === 0) {
+		return json({ error: 'prompt or attachment is required.' }, { status: 400 });
 	}
 
 	try {
-		const result = await sendAgentSessionMessage(params.sessionId, prompt);
+		const result = await sendAgentSessionMessage(params.sessionId, { prompt, attachments });
 		return json(result, { status: 201 });
 	} catch (err) {
 		return json(

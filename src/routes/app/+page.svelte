@@ -1,1 +1,1 @@
-<h1>test</h1>
+<p class="sr-only">Redirecting to the dashboard.</p>

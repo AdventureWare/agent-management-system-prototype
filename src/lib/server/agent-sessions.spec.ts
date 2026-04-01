@@ -5,8 +5,10 @@ import {
 	extractThreadIdFromOutputLine,
 	isAbandonedSessionDetail,
 	parseAgentSandbox,
+	reconcileControlPlaneSessionMessage,
 	reconcileControlPlaneSessionState
 } from './agent-sessions';
+import { buildSessionAttachmentPrompt } from './agent-session-attachments';
 import { buildCodexArgs } from '../../../scripts/agent-session-runner-args.mjs';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
@@ -166,6 +168,108 @@ describe('agent session helpers', () => {
 		vi.useRealTimers();
 	});
 
+	it('downgrades stale follow-up runs even after a thread id was discovered', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-03-30T21:10:00.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_stale_followup',
+			sessionId: 'session_stale',
+			mode: 'message',
+			prompt: 'follow up',
+			requestedThreadId: 'thread_123',
+			createdAt: '2026-03-30T21:00:00.000Z',
+			updatedAt: '2026-03-30T21:00:00.000Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'queued',
+				pid: null,
+				startedAt: '2026-03-30T21:00:00.000Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: 'thread_123'
+			},
+			lastMessage: null,
+			logTail: [],
+			activityAt: '2026-03-30T21:00:00.000Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'failed',
+			pid: null,
+			startedAt: '2026-03-30T21:00:00.000Z',
+			finishedAt: '2026-03-30T21:00:00.000Z',
+			exitCode: -1,
+			signal: null,
+			codexThreadId: 'thread_123'
+		});
+
+		vi.useRealTimers();
+	});
+
+	it('builds follow-up prompts that include attached thread files as immediate context', () => {
+		expect(
+			buildSessionAttachmentPrompt({
+				prompt: 'Use the brief and continue.',
+				attachments: [
+					{
+						id: 'attachment_1',
+						name: 'brief.md',
+						path: '/tmp/session/attachments/brief.md',
+						contentType: 'text/markdown',
+						sizeBytes: 128,
+						attachedAt: '2026-03-31T10:00:00.000Z'
+					}
+				],
+				inlineAttachmentContents: [
+					{
+						attachment: {
+							id: 'attachment_1',
+							name: 'brief.md',
+							path: '/tmp/session/attachments/brief.md',
+							contentType: 'text/markdown',
+							sizeBytes: 128,
+							attachedAt: '2026-03-31T10:00:00.000Z'
+						},
+						content: '# Brief\nImportant context.'
+					}
+				]
+			})
+		).toContain('Treat them as immediate context for this run.');
+		expect(
+			buildSessionAttachmentPrompt({
+				prompt: 'Use the brief and continue.',
+				attachments: [
+					{
+						id: 'attachment_1',
+						name: 'brief.md',
+						path: '/tmp/session/attachments/brief.md',
+						contentType: 'text/markdown',
+						sizeBytes: 128,
+						attachedAt: '2026-03-31T10:00:00.000Z'
+					}
+				],
+				inlineAttachmentContents: [
+					{
+						attachment: {
+							id: 'attachment_1',
+							name: 'brief.md',
+							path: '/tmp/session/attachments/brief.md',
+							contentType: 'text/markdown',
+							sizeBytes: 128,
+							attachedAt: '2026-03-31T10:00:00.000Z'
+						},
+						content: '# Brief\nImportant context.'
+					}
+				]
+			})
+		).toContain('Path: /tmp/session/attachments/brief.md');
+	});
+
 	it('hides abandoned managed sessions that never produced a real thread', () => {
 		const session: AgentSessionDetail = {
 			id: 'session_stale',
@@ -174,6 +278,7 @@ describe('agent session helpers', () => {
 			sandbox: 'workspace-write',
 			model: null,
 			threadId: null,
+			attachments: [],
 			archivedAt: null,
 			createdAt: '2026-03-27T23:47:36.683Z',
 			updatedAt: '2026-03-27T23:47:36.683Z',
@@ -302,5 +407,128 @@ describe('agent session helpers', () => {
 		expect(next.runs[0]?.status).toBe('completed');
 		expect(next.runs[0]?.endedAt).toBe('2026-03-30T20:15:00.000Z');
 		expect(next.runs[0]?.summary).toBe('Task run finished and is ready for review.');
+	});
+
+	it('moves linked review tasks back to in progress when a follow-up message is queued', () => {
+		const data: ControlPlaneData = {
+			providers: [],
+			roles: [],
+			projects: [],
+			goals: [],
+			workers: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Address review feedback',
+					summary: 'Resume the linked task thread after review comments.',
+					projectId: 'project_1',
+					lane: 'product',
+					goalId: 'goal_1',
+					priority: 'high',
+					status: 'review',
+					riskLevel: 'medium',
+					approvalMode: 'before_complete',
+					requiresReview: true,
+					desiredRoleId: 'role_app_worker',
+					assigneeWorkerId: null,
+					threadSessionId: 'session_1',
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_1',
+					artifactPath: '/tmp/artifacts',
+					attachments: [],
+					createdAt: '2026-03-30T20:00:00.000Z',
+					updatedAt: '2026-03-30T20:15:00.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_1',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'completed',
+					createdAt: '2026-03-30T20:00:00.000Z',
+					updatedAt: '2026-03-30T20:15:00.000Z',
+					startedAt: '2026-03-30T20:00:00.000Z',
+					endedAt: '2026-03-30T20:15:00.000Z',
+					threadId: 'thread_1',
+					sessionId: 'session_1',
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Task run finished and is ready for review.',
+					lastHeartbeatAt: '2026-03-30T20:15:00.000Z',
+					errorSummary: ''
+				}
+			],
+			reviews: [
+				{
+					id: 'review_1',
+					taskId: 'task_1',
+					runId: 'run_1',
+					status: 'open',
+					createdAt: '2026-03-30T20:15:00.000Z',
+					updatedAt: '2026-03-30T20:15:00.000Z',
+					resolvedAt: null,
+					requestedByWorkerId: null,
+					reviewerWorkerId: null,
+					summary: 'Waiting on review.'
+				}
+			],
+			approvals: [
+				{
+					id: 'approval_1',
+					taskId: 'task_1',
+					runId: 'run_1',
+					mode: 'before_complete',
+					status: 'pending',
+					createdAt: '2026-03-30T20:15:00.000Z',
+					updatedAt: '2026-03-30T20:15:00.000Z',
+					resolvedAt: null,
+					requestedByWorkerId: null,
+					approverWorkerId: null,
+					summary: 'Task requires approval before it can be closed out.'
+				}
+			]
+		};
+
+		const next = reconcileControlPlaneSessionMessage(
+			data,
+			'session_1',
+			'2026-03-30T20:20:00.000Z'
+		);
+
+		expect(next.tasks[0]).toEqual(
+			expect.objectContaining({
+				id: 'task_1',
+				status: 'in_progress',
+				blockedReason: '',
+				updatedAt: '2026-03-30T20:20:00.000Z'
+			})
+		);
+		expect(next.runs[0]).toEqual(
+			expect.objectContaining({
+				id: 'run_1',
+				status: 'running',
+				summary: 'Queued follow-up work in the linked thread.',
+				endedAt: null,
+				lastHeartbeatAt: '2026-03-30T20:20:00.000Z'
+			})
+		);
+		expect(next.reviews[0]).toEqual(
+			expect.objectContaining({
+				id: 'review_1',
+				status: 'dismissed',
+				resolvedAt: '2026-03-30T20:20:00.000Z'
+			})
+		);
+		expect(next.approvals[0]).toEqual(
+			expect.objectContaining({
+				id: 'approval_1',
+				status: 'canceled',
+				resolvedAt: '2026-03-30T20:20:00.000Z'
+			})
+		);
 	});
 });

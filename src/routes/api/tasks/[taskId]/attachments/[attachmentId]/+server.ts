@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import { error } from '@sveltejs/kit';
+import { createArtifactDownloadResponse } from '$lib/server/artifact-browser';
 import { loadControlPlane } from '$lib/server/control-plane';
 
 export const GET = async ({ params }) => {
@@ -17,15 +17,10 @@ export const GET = async ({ params }) => {
 	}
 
 	try {
-		const payload = await readFile(attachment.path);
-		const encodedName = encodeURIComponent(attachment.name);
-
-		return new Response(payload, {
-			headers: {
-				'content-type': attachment.contentType || 'application/octet-stream',
-				'content-length': String(payload.byteLength),
-				'content-disposition': `attachment; filename*=UTF-8''${encodedName}`
-			}
+		return await createArtifactDownloadResponse({
+			path: attachment.path,
+			name: attachment.name,
+			contentType: attachment.contentType
 		});
 	} catch {
 		throw error(404, 'Attached file is missing from disk.');

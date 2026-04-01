@@ -16,6 +16,25 @@ export type SessionActivityMeta = {
 	animate: boolean;
 };
 
+export function formatSessionStateLabel(state: AgentSessionDetail['sessionState']) {
+	switch (state) {
+		case 'starting':
+			return 'Starting';
+		case 'waiting':
+		case 'working':
+			return 'Working';
+		case 'ready':
+			return 'Available';
+		case 'attention':
+			return 'Needs attention';
+		case 'unavailable':
+			return 'History only';
+		case 'idle':
+		default:
+			return 'Idle';
+	}
+}
+
 function getActivityAgeMs(iso: string | null, now = Date.now()) {
 	if (!iso) {
 		return null;
@@ -82,15 +101,15 @@ export function getSessionActivityMeta(
 			};
 		case 'waiting':
 			return {
-				label: isLive ? 'Live activity' : 'Awaiting reply',
-				detail: 'The agent is running, but the first saved reply has not landed yet.',
+				label: isLive ? 'Live activity' : formatSessionStateLabel(session.sessionState),
+				detail: 'The agent is still working, but no saved reply has landed yet.',
 				ageLabel,
 				tone: 'live',
 				animate: true
 			};
 		case 'working':
 			return {
-				label: isLive ? 'Live activity' : isRecent ? 'Active now' : 'Checking for output',
+				label: isLive ? 'Live activity' : formatSessionStateLabel(session.sessionState),
 				detail: 'The latest run is still in progress and has already emitted thread output.',
 				ageLabel,
 				tone: 'live',
@@ -98,15 +117,15 @@ export function getSessionActivityMeta(
 			};
 		case 'ready':
 			return {
-				label: isRecent ? 'Ready just now' : 'Ready for follow-up',
-				detail: 'The thread is idle and can take the next instruction.',
+				label: isRecent ? 'Available now' : formatSessionStateLabel(session.sessionState),
+				detail: 'The thread is idle and available for the next instruction.',
 				ageLabel,
 				tone: 'ready',
 				animate: false
 			};
 		case 'attention':
 			return {
-				label: 'Needs attention',
+				label: formatSessionStateLabel(session.sessionState),
 				detail:
 					session.latestRunStatus === 'canceled'
 						? 'The latest run was canceled before completion.'
@@ -117,7 +136,7 @@ export function getSessionActivityMeta(
 			};
 		case 'unavailable':
 			return {
-				label: 'History only',
+				label: formatSessionStateLabel(session.sessionState),
 				detail: 'This thread finished, but it is not resumable from the manager right now.',
 				ageLabel,
 				tone: 'idle',
@@ -126,7 +145,7 @@ export function getSessionActivityMeta(
 		case 'idle':
 		default:
 			return {
-				label: isRecent ? 'Recently active' : 'Idle',
+				label: isRecent ? 'Recently active' : formatSessionStateLabel(session.sessionState),
 				detail: 'No run is currently active in this thread.',
 				ageLabel,
 				tone: 'idle',

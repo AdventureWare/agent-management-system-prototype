@@ -1,10 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { TASK_STATUS_OPTIONS, type Project, type Run, type Task } from '$lib/types/control-plane';
 import {
-	createTaskAttachmentId,
 	createRun,
 	deleteTask as removeTaskFromControlPlane,
 	formatRelativeTime,
@@ -12,7 +9,8 @@ import {
 	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
-	projectMatchesPath,
+	resolveThreadSandbox,
+	selectExecutionProvider,
 	updateControlPlane
 } from '$lib/server/control-plane';
 import {
@@ -27,7 +25,15 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
-import { selectTaskThreadContext } from '$lib/task-thread-context';
+import { buildTaskThreadSuggestions } from '$lib/server/task-thread-suggestions';
+import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
+import { buildArtifactBrowser } from '$lib/server/artifact-browser';
+import {
+	isTaskThreadCompatibleWithProject,
+	selectProjectTaskThreadContext
+} from '$lib/server/task-thread-compatibility';
+
+const ACTIVE_TASK_RUN_STATUSES = new Set<Run['status']>(['queued', 'starting', 'running']);
 
 function readTaskForm(form: FormData) {
 	return {
@@ -59,25 +65,6 @@ function updateLatestRunForTask(
 			: run;
 }
 
-function getTaskAttachmentRoot(task: Task, project: Project | null) {
-	return task.artifactPath || project?.defaultArtifactRoot || project?.projectRootFolder || '';
-}
-
-function sanitizeAttachmentName(name: string) {
-	const basename =
-		name
-			.split(/[/\\]+/)
-			.at(-1)
-			?.trim() ?? '';
-	const normalized = basename
-		.replace(/[^A-Za-z0-9._-]+/g, '-')
-		.replace(/^\.+/, '')
-		.replace(/-+/g, '-')
-		.replace(/^[-_.]+|[-_.]+$/g, '');
-
-	return normalized || 'attachment';
-}
-
 export const load: PageServerLoad = async ({ params }) => {
 	const sessions = await listAgentSessions({ includeArchived: true });
 	const data = await loadControlPlane();
@@ -90,6 +77,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
+	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const dependencyTaskIds = new Set(task.dependencyTaskIds);
 	const relatedRuns = data.runs
 		.filter((run) => run.taskId === task.id)
@@ -115,6 +103,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const openReview = getOpenReviewForTask(data, task.id);
 	const pendingApproval = getPendingApprovalForTask(data, task.id);
 	const project = projectMap.get(task.projectId) ?? null;
+	const artifactRoot = getTaskAttachmentRoot(task, project);
 	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
 	const assignedThread = task.threadSessionId
 		? (sessions.find((session) => session.id === task.threadSessionId) ?? null)
@@ -122,47 +111,36 @@ export const load: PageServerLoad = async ({ params }) => {
 	const latestRun = task.latestRunId
 		? (relatedRuns.find((run) => run.id === task.latestRunId) ?? null)
 		: null;
+	const activeRun =
+		relatedRuns.find((run) => ACTIVE_TASK_RUN_STATUSES.has(run.status)) ?? null;
 	const latestRunThread = latestRun?.sessionId
 		? (sessionMap.get(latestRun.sessionId) ?? null)
 		: null;
-	const candidateThreads = sessions
-		.filter((session) => {
-			if (assignedThread?.id === session.id) {
-				return true;
-			}
+	const threadScopedSessions = sessions.filter((session) => {
+		if (!project) {
+			return false;
+		}
 
-			return project ? projectMatchesPath(project, session.cwd) : false;
-		})
-		.map((session) => ({
-			id: session.id,
-			name: session.name,
-			sessionState: session.sessionState,
-			canResume: session.canResume,
-			hasActiveRun: session.hasActiveRun,
-			relatedTasks: session.relatedTasks,
-			previewText: session.latestRun?.lastMessage ?? session.sessionSummary
-		}))
-		.sort((left, right) => {
-			if (left.id === assignedThread?.id) {
-				return -1;
-			}
-
-			if (right.id === assignedThread?.id) {
-				return 1;
-			}
-
-			return left.name.localeCompare(right.name);
-		});
+		return isTaskThreadCompatibleWithProject(project, session);
+	});
+	const { candidateThreads, suggestedThread } = buildTaskThreadSuggestions({
+		task,
+		assignedThreadId: assignedThread?.id ?? null,
+		sessions: threadScopedSessions
+	});
 
 	return {
 		task: {
 			...task,
 			projectName: projectMap.get(task.projectId)?.name ?? 'No project',
+			goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : '',
 			assigneeName: task.assigneeWorkerId
 				? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
 				: 'Unassigned',
 			latestRun,
-			...selectTaskThreadContext({
+			activeRun,
+			hasActiveRun: Boolean(activeRun),
+			...selectProjectTaskThreadContext(project, {
 				assignedThread,
 				latestRunThread
 			}),
@@ -170,14 +148,24 @@ export const load: PageServerLoad = async ({ params }) => {
 			openReview,
 			pendingApproval
 		},
-		attachmentRoot: getTaskAttachmentRoot(task, project),
+		attachmentRoot: artifactRoot,
+		artifactBrowser: await buildArtifactBrowser({
+			rootPath: artifactRoot,
+			knownOutputs: task.attachments.map((attachment) => ({
+				label: attachment.name,
+				path: attachment.path,
+				href: `/api/tasks/${task.id}/attachments/${attachment.id}`,
+				description: `Attached task file${attachment.contentType ? ` · ${attachment.contentType}` : ''}`
+			}))
+		}),
 		project,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		statusOptions: TASK_STATUS_OPTIONS,
 		relatedRuns,
 		dependencyTasks,
-		candidateThreads
+		candidateThreads,
+		suggestedThread
 	};
 };
 
@@ -267,23 +255,12 @@ export const actions: Actions = {
 			});
 		}
 
-		const attachmentId = createTaskAttachmentId();
-		const safeName = sanitizeAttachmentName(upload.name);
-		const attachmentFolder = join(attachmentRoot, 'task-attachments', task.id);
-		const attachmentPath = join(attachmentFolder, `${attachmentId}-${safeName}`);
-
-		await mkdir(attachmentFolder, { recursive: true });
-		await writeFile(attachmentPath, Buffer.from(await upload.arrayBuffer()));
-
+		const [nextAttachment] = await persistTaskAttachments({
+			taskId: task.id,
+			attachmentRoot,
+			uploads: [upload]
+		});
 		const now = new Date().toISOString();
-		const nextAttachment = {
-			id: attachmentId,
-			name: upload.name.trim() || safeName,
-			path: attachmentPath,
-			contentType: upload.type || 'application/octet-stream',
-			sizeBytes: upload.size,
-			attachedAt: now
-		};
 
 		await updateControlPlane((data) => ({
 			...data,
@@ -302,7 +279,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'attachTaskFile',
 			taskId: params.taskId,
-			attachmentId
+			attachmentId: nextAttachment.id
 		};
 	},
 
@@ -397,12 +374,35 @@ export const actions: Actions = {
 			return fail(404, { message: 'Task not found.' });
 		}
 
+		if (task.status !== 'ready') {
+			return fail(409, {
+				message: 'Only tasks in the Ready state can be run. Set the task status to Ready first.'
+			});
+		}
+
+		const activeTaskRun =
+			current.runs.find(
+				(run) => run.taskId === task.id && ACTIVE_TASK_RUN_STATUSES.has(run.status)
+			) ?? null;
+
+		if (activeTaskRun) {
+			return fail(409, {
+				message:
+					'This task already has an active run. Open the current work thread or wait for it to finish before starting another run.'
+			});
+		}
+
 		const effectiveName = name || task.title;
 		const effectiveInstructions = instructions || task.summary;
 		const effectiveProjectId = projectId || task.projectId;
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
+		const effectiveWorker =
+			assigneeWorker ??
+			(task.assigneeWorkerId
+				? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+				: null);
 		const project = current.projects.find((candidate) => candidate.id === effectiveProjectId);
 
 		if (!project) {
@@ -432,44 +432,52 @@ export const actions: Actions = {
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot
 		});
+		const provider = selectExecutionProvider(current, effectiveWorker);
+		const sandbox = resolveThreadSandbox({
+			worker: effectiveWorker,
+			provider
+		});
 		const assignedThread = task.threadSessionId
 			? await getAgentSession(task.threadSessionId)
 			: null;
+		const compatibleAssignedThread = isTaskThreadCompatibleWithProject(project, assignedThread)
+			? assignedThread
+			: null;
 		let sessionId = task.threadSessionId;
-		let threadId = assignedThread?.threadId ?? null;
+		let threadId = compatibleAssignedThread?.threadId ?? null;
 		let reusedAssignedThread = false;
 
-		if (assignedThread?.hasActiveRun) {
+		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
 				message:
 					'This task is assigned to a busy work thread. Wait for that run to finish or change the thread assignment first.'
 			});
 		}
 
-		if (assignedThread?.canResume) {
-			await sendAgentSessionMessage(assignedThread.id, prompt);
-			sessionId = assignedThread.id;
-			threadId = assignedThread.threadId;
+		if (compatibleAssignedThread?.canResume) {
+			await sendAgentSessionMessage(compatibleAssignedThread.id, prompt);
+			sessionId = compatibleAssignedThread.id;
+			threadId = compatibleAssignedThread.threadId;
 			reusedAssignedThread = true;
 		} else {
 			const session = await startAgentSession({
-				name: buildTaskThreadName(project.name),
+				name: buildTaskThreadName({
+					projectName: project.name,
+					taskName: effectiveName,
+					taskId: task.id
+				}),
 				cwd: project.projectRootFolder,
 				prompt,
-				sandbox: 'workspace-write',
+				sandbox,
 				model: null
 			});
 			sessionId = session.sessionId;
 			threadId = null;
 		}
-		const providerId =
-			assigneeWorker?.providerId ??
-			current.providers.find((provider) => provider.kind === 'local' && provider.enabled)?.id ??
-			current.providers[0]?.id ??
-			null;
+		const providerId = provider?.id ?? null;
 		const run = createRun({
 			taskId: params.taskId,
-			workerId: assigneeWorker?.id ?? task.assigneeWorkerId ?? null,
+			workerId: effectiveWorker?.id ?? null,
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),

@@ -6,6 +6,37 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 	it('shows prompt, thread, error, and artifact inspection details', async () => {
 		render(Page, {
 			data: {
+				artifactBrowsers: [
+					{
+						rootPath: '/tmp/project/agent_output/run_1/log.txt',
+						rootKind: 'file',
+						browsePath: '/tmp/project/agent_output/run_1',
+						inspectingParentDirectory: true,
+						directoryEntries: [
+							{
+								name: 'log.txt',
+								path: '/tmp/project/agent_output/run_1/log.txt',
+								kind: 'file',
+								extension: 'txt',
+								sizeBytes: 1280
+							}
+						],
+						directoryEntriesTruncated: false,
+						knownOutputs: [
+							{
+								label: 'Recorded output',
+								path: '/tmp/project/agent_output/run_1/log.txt',
+								kind: 'file',
+								extension: 'txt',
+								sizeBytes: 1280,
+								exists: true,
+								href: null,
+								description: 'Recorded file.'
+							}
+						],
+						errorMessage: ''
+					}
+				],
 				run: {
 					id: 'run_1',
 					taskId: 'task_1',
@@ -64,5 +95,6 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('thread_1');
 		expect(document.body.textContent).toContain('Route load failed on missing worker filter.');
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1/log.txt');
+		expect(document.body.textContent).toContain('Recorded output');
 	});
 });

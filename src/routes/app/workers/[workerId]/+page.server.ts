@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
 import { WORKER_LOCATION_OPTIONS, WORKER_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	formatRelativeTime,
@@ -8,6 +9,12 @@ import {
 	parseWorkerStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { parseAgentSandbox } from '$lib/server/agent-sessions';
+
+function readThreadSandboxOverride(value: FormDataEntryValue | null) {
+	const raw = value?.toString().trim() ?? '';
+	return raw ? parseAgentSandbox(raw, 'workspace-write') : null;
+}
 
 function readWorkerForm(form: FormData) {
 	return {
@@ -24,7 +31,8 @@ function readWorkerForm(form: FormData) {
 				.filter(Boolean) ?? [],
 		capacity: Number.parseInt(form.get('capacity')?.toString() ?? '1', 10),
 		location: parseWorkerLocation(form.get('location')?.toString() ?? '', 'cloud'),
-		status: parseWorkerStatus(form.get('status')?.toString() ?? '', 'idle')
+		status: parseWorkerStatus(form.get('status')?.toString() ?? '', 'idle'),
+		threadSandboxOverride: readThreadSandboxOverride(form.get('threadSandboxOverride'))
 	};
 }
 
@@ -37,6 +45,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
+	const provider = providerMap.get(worker.providerId) ?? null;
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const recentRuns = data.runs
 		.filter((run) => run.workerId === worker.id)
@@ -60,13 +69,15 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		worker: {
 			...worker,
-			providerName: providerMap.get(worker.providerId)?.name ?? 'Unknown provider',
+			providerName: provider?.name ?? 'Unknown provider',
+			providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
 			roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role'
 		},
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		statusOptions: WORKER_STATUS_OPTIONS,
 		locationOptions: WORKER_LOCATION_OPTIONS,
+		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		recentRuns,
 		assignedTasks
 	};

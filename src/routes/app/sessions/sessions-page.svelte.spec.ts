@@ -98,6 +98,8 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'external',
 			threadId: 'thread-1',
+			attachments: [],
+			topicLabels: ['Documentation', 'Integrations'],
 			archivedAt: null,
 			createdAt: '2026-03-27T12:00:00.000Z',
 			updatedAt: '2026-03-27T13:03:00.000Z',
@@ -108,7 +110,7 @@ describe('/app/sessions/+page.svelte', () => {
 			runCount: 2,
 			lastActivityAt: '2026-03-27T13:03:00.000Z',
 			lastActivityLabel: 'moments ago',
-			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and available for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
 			relatedTasks: [
@@ -133,8 +135,12 @@ describe('/app/sessions/+page.svelte', () => {
 			.element(page.getByText('Last reply: Follow-up response from the agent.'))
 			.toBeVisible();
 		await expect.element(page.getByText('Imported from Codex')).toBeVisible();
+		await expect.element(page.getByText('Documentation')).toBeVisible();
 		await expect.element(page.getByText('Tasks: Polish follow-up flow')).toBeVisible();
-		await expect.element(page.getByText('Ready for follow-up')).toBeVisible();
+		await expect
+			.element(page.getByText('The thread is idle and available for the next instruction.'))
+			.toBeVisible();
+		await expect.element(page.getByText('Available')).toBeVisible();
 		await expect.element(page.getByText('Latest run completed')).toBeVisible();
 		await expect
 			.element(
@@ -169,6 +175,7 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'managed',
 			threadId: 'thread-active',
+			attachments: [],
 			archivedAt: null,
 			createdAt: '2026-03-27T14:00:00.000Z',
 			updatedAt: '2026-03-27T14:01:00.000Z',
@@ -200,6 +207,7 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'managed',
 			threadId: 'thread-past',
+			attachments: [],
 			archivedAt: null,
 			createdAt: '2026-03-27T13:00:00.000Z',
 			updatedAt: '2026-03-27T13:10:00.000Z',
@@ -210,7 +218,7 @@ describe('/app/sessions/+page.svelte', () => {
 			runCount: 1,
 			lastActivityAt: '2026-03-27T13:10:00.000Z',
 			lastActivityLabel: '50m ago',
-			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and available for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
 			relatedTasks: [],
@@ -256,6 +264,7 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'managed',
 			threadId: 'thread-active',
+			attachments: [],
 			archivedAt: null,
 			createdAt: '2026-03-27T14:00:00.000Z',
 			updatedAt: '2026-03-27T14:01:00.000Z',
@@ -286,6 +295,7 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'managed',
 			threadId: 'thread-past',
+			attachments: [],
 			archivedAt: null,
 			createdAt: '2026-03-27T13:00:00.000Z',
 			updatedAt: '2026-03-27T13:10:00.000Z',
@@ -296,7 +306,7 @@ describe('/app/sessions/+page.svelte', () => {
 			runCount: 1,
 			lastActivityAt: '2026-03-27T13:10:00.000Z',
 			lastActivityLabel: '50m ago',
-			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and available for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
 			relatedTasks: [],
@@ -316,6 +326,7 @@ describe('/app/sessions/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'managed',
 			threadId: 'thread-archived',
+			attachments: [],
 			archivedAt: '2026-03-27T15:00:00.000Z',
 			createdAt: '2026-03-27T12:30:00.000Z',
 			updatedAt: '2026-03-27T12:45:00.000Z',
@@ -326,7 +337,7 @@ describe('/app/sessions/+page.svelte', () => {
 			runCount: 1,
 			lastActivityAt: '2026-03-27T12:45:00.000Z',
 			lastActivityLabel: '1h ago',
-			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and available for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
 			relatedTasks: [],

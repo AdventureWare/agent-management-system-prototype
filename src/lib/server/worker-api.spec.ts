@@ -24,6 +24,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 		lastSeenAt: '2026-03-26T00:00:00.000Z',
 		note: 'fixture worker',
 		tags: ['research'],
+		threadSandboxOverride: null,
 		authTokenHash: workerTokenHash
 	};
 

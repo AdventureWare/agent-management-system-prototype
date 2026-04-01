@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import type { AgentSandbox } from '$lib/types/agent-session';
 import {
 	createWorker,
 	loadControlPlane,
@@ -12,6 +13,7 @@ import {
 	hashWorkerToken,
 	toPublicWorker
 } from '$lib/server/worker-api';
+import { parseAgentSandbox } from '$lib/server/agent-sessions';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
@@ -24,6 +26,7 @@ export const POST = async ({ request }) => {
 		capacity?: number;
 		note?: string;
 		tags?: string[];
+		threadSandboxOverride?: string | null;
 	};
 
 	assertBootstrapToken(body.bootstrapToken);
@@ -63,7 +66,11 @@ export const POST = async ({ request }) => {
 					? body.capacity
 					: 1,
 			note: body.note?.trim() ?? '',
-			tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.trim()).filter(Boolean) : []
+			tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.trim()).filter(Boolean) : [],
+			threadSandboxOverride:
+				typeof body.threadSandboxOverride === 'string' && body.threadSandboxOverride.trim().length > 0
+					? parseAgentSandbox(body.threadSandboxOverride, 'workspace-write')
+					: (null as AgentSandbox | null)
 		});
 
 		worker.authTokenHash = hashWorkerToken(workerToken);

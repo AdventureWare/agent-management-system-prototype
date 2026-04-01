@@ -1,0 +1,437 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - button [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+    - generic [ref=e11]:
+      - link "Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: ../../app/home
+        - img [ref=e13]
+        - generic [ref=e18]: Dashboard
+      - link "Projects" [ref=e19] [cursor=pointer]:
+        - /url: ../../app/projects
+        - img [ref=e20]
+        - generic [ref=e22]: Projects
+      - link "Goals" [ref=e23] [cursor=pointer]:
+        - /url: ../../app/goals
+        - img [ref=e24]
+        - generic [ref=e28]: Goals
+      - link "Tasks" [ref=e29] [cursor=pointer]:
+        - /url: ../../app/tasks
+        - img [ref=e30]
+        - generic [ref=e33]: Tasks
+      - link "Runs" [ref=e34] [cursor=pointer]:
+        - /url: ../../app/runs
+        - img [ref=e35]
+        - generic [ref=e37]: Runs
+      - link "Workers" [ref=e38] [cursor=pointer]:
+        - /url: ../../app/workers
+        - img [ref=e39]
+        - generic [ref=e44]: Workers
+      - link "Roles" [ref=e45] [cursor=pointer]:
+        - /url: ../../app/roles
+        - img [ref=e46]
+        - generic [ref=e50]: Roles
+      - link "Providers" [ref=e51] [cursor=pointer]:
+        - /url: ../../app/providers
+        - img [ref=e52]
+        - generic [ref=e55]: Providers
+      - link "Sessions" [ref=e56] [cursor=pointer]:
+        - /url: ../../app/sessions
+        - img [ref=e57]
+        - generic [ref=e60]: Sessions
+  - generic [ref=e62]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - link "Goals" [ref=e65] [cursor=pointer]:
+          - /url: ../../app/goals
+        - generic [ref=e66]:
+          - heading "Agent Management System prototype milestone" [level=1] [ref=e67]
+          - generic [ref=e68]: Ready
+        - paragraph [ref=e69]: Build the Agent Management System to the point of a useful prototype and 10x my productivity.
+      - generic [ref=e70]:
+        - article [ref=e71]:
+          - paragraph [ref=e72]: Linked tasks
+          - paragraph [ref=e73]: "0"
+          - paragraph [ref=e74]: Tasks assigned to this goal.
+        - article [ref=e75]:
+          - paragraph [ref=e76]: Active tasks
+          - paragraph [ref=e77]: "0"
+          - paragraph [ref=e78]: Open or in-flight work under this goal.
+        - article [ref=e79]:
+          - paragraph [ref=e80]: Linked projects
+          - paragraph [ref=e81]: "1"
+          - paragraph [ref=e82]: Projects providing context or workspace roots.
+        - article [ref=e83]:
+          - paragraph [ref=e84]: Subgoals
+          - paragraph [ref=e85]: "0"
+          - paragraph [ref=e86]: Nested outcomes rolling up into this goal.
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - heading "Edit goal" [level=2] [ref=e92]
+            - paragraph [ref=e93]: This is the canonical goal management surface. Update the goal details, parent/subgoal structure, project context, and task links here.
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - heading "Outcome" [level=3] [ref=e96]
+              - paragraph [ref=e97]: State the outcome first. Structure and execution links come after.
+            - generic [ref=e98]:
+              - generic [ref=e99]: Name
+              - textbox "Name" [ref=e100]:
+                - /placeholder: Improve goal planning & linking UX…
+                - text: Agent Management System prototype milestone
+            - generic [ref=e101]:
+              - generic [ref=e102]: Summary
+              - textbox "Summary" [ref=e103]:
+                - /placeholder: Describe the desired outcome and why it matters…
+                - text: Build the Agent Management System to the point of a useful prototype and 10x my productivity.
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - generic [ref=e106]: Lane
+                - combobox "Lane" [ref=e107]:
+                  - option "product" [selected]
+                  - option "growth"
+                  - option "ops"
+              - generic [ref=e108]:
+                - generic [ref=e109]: Status
+                - combobox "Status" [ref=e110]:
+                  - option "Ready" [selected]
+                  - option "Running"
+                  - option "Review"
+                  - option "Blocked"
+                  - option "Done"
+              - generic [ref=e111]:
+                - generic [ref=e112]: Horizon
+                - textbox "Horizon" [ref=e113]:
+                  - /placeholder: Now, next quarter, later this year…
+                  - text: Within the next 2 weeks
+              - generic [ref=e114]:
+                - generic [ref=e115]: Parent goal
+                - combobox "Parent goal" [ref=e116]:
+                  - option "No parent goal" [selected]
+                  - option "Kwipoo app + website release sync"
+                  - option "Kwipoo B2C market research"
+            - generic [ref=e117]:
+              - generic [ref=e118]: Success signal
+              - textbox "Success signal" [ref=e119]:
+                - /placeholder: What evidence will show this goal is actually working…
+                - text: I am using the Agent Management System consistently and receiving noticeable benefit from it
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - heading "Relationships" [level=3] [ref=e122]
+              - paragraph [ref=e123]: "Use the same pattern for every relationship: pick the parent, link projects, and assign the tasks that should roll up into this goal."
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - generic [ref=e126]:
+                  - generic [ref=e127]:
+                    - paragraph [ref=e128]: Projects
+                    - paragraph [ref=e129]: Linked projects help scope the goal and recommend a workspace.
+                  - generic [ref=e130]:
+                    - generic [ref=e131]: 1 selected
+                    - button "Browse 4 projects" [ref=e132] [cursor=pointer]
+                - button "Agent Management System Prototype ×" [ref=e134] [cursor=pointer]
+              - generic [ref=e135]:
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - paragraph [ref=e138]: Tasks
+                    - paragraph [ref=e139]: Saving will assign selected tasks to this goal.
+                  - generic [ref=e140]:
+                    - generic [ref=e141]: 0 selected
+                    - button "Browse 52 tasks" [ref=e142] [cursor=pointer]
+                - paragraph [ref=e143]: No tasks assigned yet. Add tasks only when the goal already has execution work under it.
+          - generic [ref=e144]:
+            - generic [ref=e145]:
+              - heading "Workspace" [level=3] [ref=e146]
+              - paragraph [ref=e147]: Leave the path blank to keep the form light. If the linked context has a good workspace, use the recommendation below or let the server infer it.
+            - generic [ref=e148]:
+              - paragraph [ref=e149]: "Recommended workspace: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+              - button "Use recommended workspace" [ref=e150] [cursor=pointer]
+            - generic [ref=e151]:
+              - generic [ref=e152]: Artifact path
+              - combobox "Artifact path /Users/colinfreed/Projects/Experiments/agent-management-system-prototype" [ref=e153]:
+                - option "Choose a known path" [selected]
+                - option "Products · ."
+                - option "Products · Kwipoo"
+                - option "Products · Kwipoo/agent_output"
+                - option "Products · Kwipoo/android"
+                - option "Products · Kwipoo/android/source"
+                - option "Products · Kwipoo/app"
+                - option "Products · Kwipoo/app/config"
+                - option "Products · Kwipoo/app/docs"
+                - option "Products · Kwipoo/app/node_modules"
+                - option "Products · Kwipoo/app/output"
+                - option "Products · Kwipoo/app/playwright"
+                - option "Products · Kwipoo/app/releases"
+                - option "Products · Kwipoo/app/scripts"
+                - option "Products · Kwipoo/app/src"
+                - option "Products · Kwipoo/app/static"
+                - option "Products · Kwipoo/app/supabase"
+                - option "Products · Kwipoo/app/test-results"
+                - option "Products · Kwipoo/app/tests"
+                - option "Products · Kwipoo/cleanup-inbox"
+                - option "Products · Kwipoo/cleanup-inbox/downloaded-project-files"
+                - option "Products · Kwipoo/coordination"
+                - option "Products · Kwipoo/coordination/active"
+                - option "Products · Kwipoo/coordination/completed"
+                - option "Products · Kwipoo/coordination/contracts"
+                - option "Products · Kwipoo/coordination/decisions"
+                - option "Products · Kwipoo/infra"
+                - option "Products · Kwipoo/infra/supabase-local"
+                - option "Products · Kwipoo/ios-wrapper"
+                - option "Products · Kwipoo/ios-wrapper/src"
+                - option "Products · Kwipoo/website"
+                - option "Products · Kwipoo/website/build"
+                - option "Products · Kwipoo/website/docs"
+                - option "Products · Kwipoo/website/node_modules"
+                - option "Products · Kwipoo/website/output"
+                - option "Products · Kwipoo/website/scripts"
+                - option "Products · Kwipoo/website/src"
+                - option "Products · Kwipoo/website/static"
+                - option "Products · Kwipoo/website/test-results"
+                - option "Products · Kwipoo/website/tests"
+                - option "Experiments · ."
+                - option "Experiments · agent-management-system-prototype"
+                - option "Experiments · agent-management-system-prototype/agent_output"
+                - option "Experiments · agent-management-system-prototype/data"
+                - option "Experiments · agent-management-system-prototype/docs"
+                - option "Experiments · agent-management-system-prototype/e2e"
+                - option "Experiments · agent-management-system-prototype/node_modules"
+                - option "Experiments · agent-management-system-prototype/output"
+                - option "Experiments · agent-management-system-prototype/screenshots"
+                - option "Experiments · agent-management-system-prototype/scripts"
+                - option "Experiments · agent-management-system-prototype/src"
+                - option "Experiments · agent-management-system-prototype/static"
+                - option "Experiments · agent-management-system-prototype/test-results"
+                - option "Experiments · animal-welfare-monitoring-system"
+                - option "Experiments · animal-welfare-monitoring-system/Advanced_and_Predictive_Monitoring_of_Animal_Welfare_in_a_Dairy_Cattle_Production_Unit"
+                - option "Experiments · animal-welfare-monitoring-system/agent_output"
+                - option "Experiments · animal-welfare-monitoring-system/animal-welfare-monitoring-system-prototype"
+                - option "Experiments · practice-app"
+                - option "Experiments · practice-app/e2e"
+                - option "Experiments · practice-app/node_modules"
+                - option "Experiments · practice-app/src"
+                - option "Experiments · practice-app/static"
+                - option "Shared · ."
+                - option "Shared · agent-ops"
+                - option "Shared · agent-ops/templates"
+                - option "Shared · growth-ops"
+                - option "Shared · growth-ops/templates"
+                - option "Shared · home-organizer"
+              - combobox "/absolute/path/to/goal/workspace" [ref=e154]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+            - generic [ref=e155]:
+              - button "Create folder if missing" [ref=e156] [cursor=pointer]
+              - paragraph [ref=e157]: If left blank, a linked project or parent goal can provide the default workspace.
+          - generic [ref=e158]:
+            - paragraph [ref=e159]: This goal will be created as a top-level outcome.
+            - button "Save goal" [ref=e160] [cursor=pointer]
+        - article [ref=e161]:
+          - paragraph [ref=e162]: Workspace
+          - heading "Goal artifact browser" [level=2] [ref=e163]
+          - paragraph [ref=e164]: Use one durable workspace for planning notes, related briefs, and downstream outputs.
+          - generic [ref=e166]:
+            - generic [ref=e167]:
+              - generic [ref=e168]:
+                - generic [ref=e169]:
+                  - paragraph [ref=e170]: Recorded path
+                  - paragraph [ref=e171]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+                - generic [ref=e172]: Folder
+              - generic [ref=e173]:
+                - paragraph [ref=e174]: Directory listing
+                - paragraph [ref=e175]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+            - generic [ref=e176]:
+              - paragraph [ref=e177]: Directory contents
+              - generic [ref=e180]:
+                - generic [ref=e181]:
+                  - paragraph [ref=e182]: .agents
+                  - generic [ref=e183]: Folder
+                - paragraph [ref=e184]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.agents
+                - paragraph [ref=e185]: Subfolder
+              - generic [ref=e188]:
+                - generic [ref=e189]:
+                  - paragraph [ref=e190]: .git
+                  - generic [ref=e191]: Folder
+                - paragraph [ref=e192]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.git
+                - paragraph [ref=e193]: Subfolder
+              - generic [ref=e196]:
+                - generic [ref=e197]:
+                  - paragraph [ref=e198]: .playwright-cli
+                  - generic [ref=e199]: Folder
+                - paragraph [ref=e200]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.playwright-cli
+                - paragraph [ref=e201]: Subfolder
+              - generic [ref=e204]:
+                - generic [ref=e205]:
+                  - paragraph [ref=e206]: .svelte-kit
+                  - generic [ref=e207]: Folder
+                - paragraph [ref=e208]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.svelte-kit
+                - paragraph [ref=e209]: Subfolder
+              - generic [ref=e212]:
+                - generic [ref=e213]:
+                  - paragraph [ref=e214]: .vscode
+                  - generic [ref=e215]: Folder
+                - paragraph [ref=e216]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.vscode
+                - paragraph [ref=e217]: Subfolder
+              - generic [ref=e220]:
+                - generic [ref=e221]:
+                  - paragraph [ref=e222]: agent_output
+                  - generic [ref=e223]: Folder
+                - paragraph [ref=e224]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output
+                - paragraph [ref=e225]: Subfolder
+              - generic [ref=e228]:
+                - generic [ref=e229]:
+                  - paragraph [ref=e230]: data
+                  - generic [ref=e231]: Folder
+                - paragraph [ref=e232]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data
+                - paragraph [ref=e233]: Subfolder
+              - generic [ref=e236]:
+                - generic [ref=e237]:
+                  - paragraph [ref=e238]: docs
+                  - generic [ref=e239]: Folder
+                - paragraph [ref=e240]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs
+                - paragraph [ref=e241]: Subfolder
+              - generic [ref=e244]:
+                - generic [ref=e245]:
+                  - paragraph [ref=e246]: e2e
+                  - generic [ref=e247]: Folder
+                - paragraph [ref=e248]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/e2e
+                - paragraph [ref=e249]: Subfolder
+              - generic [ref=e252]:
+                - generic [ref=e253]:
+                  - paragraph [ref=e254]: node_modules
+                  - generic [ref=e255]: Folder
+                - paragraph [ref=e256]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/node_modules
+                - paragraph [ref=e257]: Subfolder
+              - generic [ref=e260]:
+                - generic [ref=e261]:
+                  - paragraph [ref=e262]: output
+                  - generic [ref=e263]: Folder
+                - paragraph [ref=e264]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/output
+                - paragraph [ref=e265]: Subfolder
+              - generic [ref=e268]:
+                - generic [ref=e269]:
+                  - paragraph [ref=e270]: screenshots
+                  - generic [ref=e271]: Folder
+                - paragraph [ref=e272]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/screenshots
+                - paragraph [ref=e273]: Subfolder
+              - generic [ref=e276]:
+                - generic [ref=e277]:
+                  - paragraph [ref=e278]: scripts
+                  - generic [ref=e279]: Folder
+                - paragraph [ref=e280]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/scripts
+                - paragraph [ref=e281]: Subfolder
+              - generic [ref=e284]:
+                - generic [ref=e285]:
+                  - paragraph [ref=e286]: src
+                  - generic [ref=e287]: Folder
+                - paragraph [ref=e288]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src
+                - paragraph [ref=e289]: Subfolder
+              - generic [ref=e292]:
+                - generic [ref=e293]:
+                  - paragraph [ref=e294]: static
+                  - generic [ref=e295]: Folder
+                - paragraph [ref=e296]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/static
+                - paragraph [ref=e297]: Subfolder
+              - generic [ref=e300]:
+                - generic [ref=e301]:
+                  - paragraph [ref=e302]: test-results
+                  - generic [ref=e303]: Folder
+                - paragraph [ref=e304]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/test-results
+                - paragraph [ref=e305]: Subfolder
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]:
+                    - paragraph [ref=e310]: .gitignore
+                    - generic [ref=e311]: File
+                  - paragraph [ref=e312]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.gitignore
+                  - paragraph [ref=e313]: File · 304 B
+                - link "Download" [ref=e314] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.gitignore
+              - generic [ref=e316]:
+                - generic [ref=e317]:
+                  - generic [ref=e318]:
+                    - paragraph [ref=e319]: .npmrc
+                    - generic [ref=e320]: File
+                  - paragraph [ref=e321]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.npmrc
+                  - paragraph [ref=e322]: File · 19 B
+                - link "Download" [ref=e323] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.npmrc
+              - generic [ref=e325]:
+                - generic [ref=e326]:
+                  - generic [ref=e327]:
+                    - paragraph [ref=e328]: .prettierignore
+                    - generic [ref=e329]: File
+                  - paragraph [ref=e330]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.prettierignore
+                  - paragraph [ref=e331]: File · 107 B
+                - link "Download" [ref=e332] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.prettierignore
+              - generic [ref=e334]:
+                - generic [ref=e335]:
+                  - generic [ref=e336]:
+                    - paragraph [ref=e337]: .prettierrc
+                    - generic [ref=e338]: File
+                  - paragraph [ref=e339]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.prettierrc
+                  - paragraph [ref=e340]: File · 306 B
+                - link "Download" [ref=e341] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.prettierrc
+              - generic [ref=e343]:
+                - generic [ref=e344]:
+                  - generic [ref=e345]:
+                    - paragraph [ref=e346]: eslint.config.js
+                    - generic [ref=e347]: JS
+                  - paragraph [ref=e348]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/eslint.config.js
+                  - paragraph [ref=e349]: File · 1.2 KB
+                - link "Download" [ref=e350] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Feslint.config.js
+              - generic [ref=e352]:
+                - generic [ref=e353]:
+                  - generic [ref=e354]:
+                    - paragraph [ref=e355]: package-lock.json
+                    - generic [ref=e356]: JSON
+                  - paragraph [ref=e357]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/package-lock.json
+                  - paragraph [ref=e358]: File · 165.7 KB
+                - link "Download" [ref=e359] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fpackage-lock.json
+              - generic [ref=e361]:
+                - generic [ref=e362]:
+                  - generic [ref=e363]:
+                    - paragraph [ref=e364]: package.json
+                    - generic [ref=e365]: JSON
+                  - paragraph [ref=e366]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/package.json
+                  - paragraph [ref=e367]: File · 1.6 KB
+                - link "Download" [ref=e368] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fpackage.json
+              - generic [ref=e370]:
+                - generic [ref=e371]:
+                  - generic [ref=e372]:
+                    - paragraph [ref=e373]: playwright.config.ts
+                    - generic [ref=e374]: TS
+                  - paragraph [ref=e375]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/playwright.config.ts
+                  - paragraph [ref=e376]: File · 173 B
+                - link "Download" [ref=e377] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fplaywright.config.ts
+              - paragraph [ref=e378]: Showing the first 24 entries from this folder.
+      - generic [ref=e379]:
+        - article [ref=e380]:
+          - paragraph [ref=e381]: Structure
+          - heading "Parent and subgoal context" [level=2] [ref=e382]
+          - generic [ref=e383]:
+            - generic [ref=e384]:
+              - paragraph [ref=e385]: Parent goal
+              - paragraph [ref=e386]: Top-level goal.
+            - generic [ref=e387]:
+              - paragraph [ref=e388]: Subgoals
+              - paragraph [ref=e389]: No subgoals linked yet.
+        - article [ref=e390]:
+          - paragraph [ref=e391]: Linked projects
+          - heading "Project context" [level=2] [ref=e392]
+          - link "Agent Management System Prototype Literally this app I'm using /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output Open" [ref=e394] [cursor=pointer]:
+            - /url: ../../app/projects/project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1
+            - generic [ref=e395]:
+              - paragraph [ref=e396]: Agent Management System Prototype
+              - paragraph [ref=e397]: Literally this app I'm using
+              - paragraph [ref=e398]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output
+            - generic [ref=e399]: Open
+        - article [ref=e400]:
+          - paragraph [ref=e401]: Linked tasks
+          - heading "Execution under this goal" [level=2] [ref=e402]
+          - paragraph [ref=e404]: No tasks are assigned to this goal yet.

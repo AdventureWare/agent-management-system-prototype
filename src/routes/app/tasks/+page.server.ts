@@ -5,12 +5,11 @@ import {
 	createRun,
 	createTask,
 	deleteTask as removeTaskFromControlPlane,
-	formatRelativeTime,
-	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
-	taskHasUnmetDependencies,
+	resolveThreadSandbox,
+	selectExecutionProvider,
 	updateControlPlane
 } from '$lib/server/control-plane';
 import {
@@ -20,12 +19,13 @@ import {
 	sendAgentSessionMessage,
 	startAgentSession
 } from '$lib/server/agent-sessions';
-import { selectTaskThreadContext } from '$lib/task-thread-context';
 import {
 	buildPromptDigest,
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
+import { isTaskThreadCompatibleWithProject } from '$lib/server/task-thread-compatibility';
+import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import {
 	buildProjectTaskIdeationPrompt,
 	buildProjectTaskIdeationThreadName,
@@ -34,6 +34,7 @@ import {
 	getProjectTaskIdeationWorkspace,
 	parseIdeationTaskSuggestions
 } from '$lib/server/task-ideation';
+import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import type { ControlPlaneData, Project, Role } from '$lib/types/control-plane';
 
 function readTaskForm(form: FormData) {
@@ -43,6 +44,16 @@ function readTaskForm(form: FormData) {
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? ''
 	};
+}
+
+function readCreateTaskSubmitMode(form: FormData) {
+	return form.get('submitMode')?.toString() === 'createAndRun' ? 'createAndRun' : 'create';
+}
+
+function readTaskAttachments(form: FormData) {
+	return form
+		.getAll('attachments')
+		.filter((value): value is File => value instanceof File && value.size > 0);
 }
 
 function getDefaultDraftRole(data: ControlPlaneData): Role | null {
@@ -67,11 +78,8 @@ function parseSuggestionIndexes(form: FormData) {
 export const load: PageServerLoad = async ({ url }) => {
 	const sessions = await listAgentSessions({ includeArchived: true });
 	const data = await loadControlPlane();
-	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
-	const runMap = new Map(data.runs.map((run) => [run.id, run]));
-	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
 	const defaultDraftRole = getDefaultDraftRole(data);
+	const taskWorkItems = buildTaskWorkItems(data, sessions);
 	const ideationReviews = [...data.projects]
 		.map((project) => {
 			const ideationSession = findProjectTaskIdeationThread(project, sessions);
@@ -112,34 +120,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
 		ideationReviews,
-		tasks: [...data.tasks]
-			.map((task) => {
-				const latestRun = task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null;
-				const assignedThread = task.threadSessionId
-					? (sessionMap.get(task.threadSessionId) ?? null)
-					: null;
-				const latestRunThread = latestRun?.sessionId
-					? (sessionMap.get(latestRun.sessionId) ?? null)
-					: null;
-
-				return {
-					...task,
-					projectName: projectMap.get(task.projectId)?.name ?? 'No project',
-					assigneeName: task.assigneeWorkerId
-						? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
-						: 'Unassigned',
-					latestRun,
-					...selectTaskThreadContext({
-						assignedThread,
-						latestRunThread
-					}),
-					updatedAtLabel: formatRelativeTime(task.updatedAt),
-					hasUnmetDependencies: taskHasUnmetDependencies(data, task),
-					openReview: getOpenReviewForTask(data, task.id),
-					pendingApproval: getPendingApprovalForTask(data, task.id)
-				};
-			})
-			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+		tasks: taskWorkItems
 	};
 };
 
@@ -183,6 +164,8 @@ export const actions: Actions = {
 
 		let sessionId = ideationThread?.id ?? null;
 		let reusedThread = false;
+		const ideationProvider = selectExecutionProvider(current);
+		const ideationSandbox = resolveThreadSandbox({ provider: ideationProvider });
 
 		if (ideationThread?.canResume) {
 			await sendAgentSessionMessage(ideationThread.id, prompt);
@@ -192,7 +175,7 @@ export const actions: Actions = {
 				name: buildProjectTaskIdeationThreadName(project.name),
 				cwd: workspace,
 				prompt,
-				sandbox: 'workspace-write',
+				sandbox: ideationSandbox,
 				model: null
 			});
 			sessionId = session.sessionId;
@@ -211,6 +194,8 @@ export const actions: Actions = {
 	createTask: async ({ request }) => {
 		const form = await request.formData();
 		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
+		const submitMode = readCreateTaskSubmitMode(form);
+		const uploads = readTaskAttachments(form);
 
 		if (!name || !instructions || !projectId) {
 			return fail(400, {
@@ -232,35 +217,132 @@ export const actions: Actions = {
 			return fail(400, { message: 'Worker not found.' });
 		}
 
+		if (submitMode === 'createAndRun' && !project.projectRootFolder) {
+			return fail(400, {
+				message: 'This task cannot launch a work thread until its project has a root folder.'
+			});
+		}
+
+		const attachmentRoot = getTaskAttachmentRoot(
+			{
+				artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
+			},
+			project
+		);
+
+		if (uploads.length > 0 && !attachmentRoot) {
+			return fail(400, {
+				message: 'This project needs an artifact root before files can be attached during creation.'
+			});
+		}
+
 		const coordinatorRoleId =
 			current.roles.find((role) => role.id === 'role_coordinator')?.id ??
 			current.roles[0]?.id ??
 			'';
+		const baseTask = createTask({
+			title: name,
+			summary: instructions,
+			projectId: project.id,
+			lane: 'product',
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
+			assigneeWorkerId: assigneeWorker?.id ?? null,
+			artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
+		});
+		const attachments =
+			uploads.length > 0
+				? await persistTaskAttachments({
+						taskId: baseTask.id,
+						attachmentRoot,
+						uploads
+					})
+				: [];
+		const createdTask = attachments.length > 0 ? { ...baseTask, attachments } : baseTask;
+
+		if (submitMode !== 'createAndRun') {
+			await updateControlPlane((data) => {
+				return {
+					...data,
+					tasks: [createdTask, ...data.tasks]
+				};
+			});
+
+			return {
+				ok: true,
+				successAction: 'createTask',
+				attachmentCount: attachments.length
+			};
+		}
+
+		const prompt = buildTaskThreadPrompt({
+			taskName: name,
+			taskInstructions: instructions,
+			projectName: project.name,
+			projectRootFolder: project.projectRootFolder ?? '',
+			defaultArtifactRoot: project.defaultArtifactRoot
+		});
+		const provider = selectExecutionProvider(current, assigneeWorker);
+		const sandbox = resolveThreadSandbox({ worker: assigneeWorker, provider });
+		const session = await startAgentSession({
+			name: buildTaskThreadName({
+				projectName: project.name,
+				taskName: createdTask.title,
+				taskId: createdTask.id
+			}),
+			cwd: project.projectRootFolder ?? '',
+			prompt,
+			sandbox,
+			model: null
+		});
+		const providerId = provider?.id ?? null;
+		const now = new Date().toISOString();
+		const run = createRun({
+			taskId: createdTask.id,
+			workerId: assigneeWorker?.id ?? null,
+			providerId,
+			status: 'running',
+			startedAt: now,
+			threadId: null,
+			sessionId: session.sessionId,
+			promptDigest: buildPromptDigest(prompt),
+			artifactPaths:
+				project.defaultArtifactRoot || project.projectRootFolder
+					? [project.defaultArtifactRoot || project.projectRootFolder]
+					: [],
+			summary: 'Started a new work thread during task creation.',
+			lastHeartbeatAt: now
+		});
 
 		await updateControlPlane((data) => {
 			return {
 				...data,
+				runs: [run, ...data.runs],
 				tasks: [
-					createTask({
-						title: name,
-						summary: instructions,
-						projectId: project.id,
-						lane: 'product',
-						goalId: '',
-						priority: 'medium',
-						riskLevel: 'medium',
-						approvalMode: 'none',
-						requiresReview: true,
-						desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
-						assigneeWorkerId: assigneeWorker?.id ?? null,
-						artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
-					}),
+					{
+						...createdTask,
+						threadSessionId: session.sessionId,
+						runCount: 1,
+						latestRunId: run.id,
+						status: 'in_progress',
+						updatedAt: now
+					},
 					...data.tasks
 				]
 			};
 		});
 
-		return { ok: true, successAction: 'createTask' };
+		return {
+			ok: true,
+			successAction: 'createTaskAndRun',
+			taskId: createdTask.id,
+			sessionId: session.sessionId,
+			attachmentCount: attachments.length
+		};
 	},
 
 	createDraftTasksFromIdeation: async ({ request }) => {
@@ -444,6 +526,11 @@ export const actions: Actions = {
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
+		const effectiveWorker =
+			assigneeWorker ??
+			(task.assigneeWorkerId
+				? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+				: null);
 		const project = current.projects.find((candidate) => candidate.id === effectiveProjectId);
 
 		if (!project) {
@@ -473,45 +560,53 @@ export const actions: Actions = {
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot
 		});
+		const provider = selectExecutionProvider(current, effectiveWorker);
+		const sandbox = resolveThreadSandbox({
+			worker: effectiveWorker,
+			provider
+		});
 		const assignedThread = task.threadSessionId
 			? await getAgentSession(task.threadSessionId)
 			: null;
+		const compatibleAssignedThread = isTaskThreadCompatibleWithProject(project, assignedThread)
+			? assignedThread
+			: null;
 		let sessionId = task.threadSessionId;
-		let threadId = assignedThread?.threadId ?? null;
+		let threadId = compatibleAssignedThread?.threadId ?? null;
 		let reusedAssignedThread = false;
 
-		if (assignedThread?.hasActiveRun) {
+		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
 				message:
 					'This task is assigned to a busy work thread. Wait for that run to finish or change the thread assignment first.'
 			});
 		}
 
-		if (assignedThread?.canResume) {
-			await sendAgentSessionMessage(assignedThread.id, prompt);
-			sessionId = assignedThread.id;
-			threadId = assignedThread.threadId;
+		if (compatibleAssignedThread?.canResume) {
+			await sendAgentSessionMessage(compatibleAssignedThread.id, prompt);
+			sessionId = compatibleAssignedThread.id;
+			threadId = compatibleAssignedThread.threadId;
 			reusedAssignedThread = true;
 		} else {
 			const session = await startAgentSession({
-				name: buildTaskThreadName(project.name),
+				name: buildTaskThreadName({
+					projectName: project.name,
+					taskName: effectiveName,
+					taskId: task.id
+				}),
 				cwd: project.projectRootFolder,
 				prompt,
-				sandbox: 'workspace-write',
+				sandbox,
 				model: null
 			});
 			sessionId = session.sessionId;
 			threadId = null;
 		}
 
-		const providerId =
-			assigneeWorker?.providerId ??
-			current.providers.find((provider) => provider.kind === 'local' && provider.enabled)?.id ??
-			current.providers[0]?.id ??
-			null;
+		const providerId = provider?.id ?? null;
 		const run = createRun({
 			taskId,
-			workerId: assigneeWorker?.id ?? task.assigneeWorkerId ?? null,
+			workerId: effectiveWorker?.id ?? null,
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),

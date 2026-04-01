@@ -1,16 +1,44 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import DataTableSection from '$lib/components/DataTableSection.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import { formatSessionStateLabel } from '$lib/session-activity';
+	import {
+		formatTaskApprovalModeLabel,
+		formatTaskStatusLabel,
+		taskStatusToneClass
+	} from '$lib/types/control-plane';
+	import type { TaskStaleSignalKey } from '$lib/types/task-work-item';
 
 	let { data, form } = $props();
 
 	let query = $state('');
 	let selectedStatus = $state('all');
 	let selectedTaskIds = $state.raw<string[]>([]);
+	let selectedStaleFilters = $state.raw<TaskStaleSignalKey[]>([]);
+	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
+	let pendingCreateAttachments = $state.raw<
+		{ id: string; name: string; sizeBytes: number; contentType: string }[]
+	>([]);
+
+	const STALE_FILTERS = [
+		{ key: 'staleInProgress', label: 'Stale in-progress' },
+		{ key: 'noRecentRunActivity', label: 'No recent run activity' },
+		{ key: 'activeThreadNoRecentOutput', label: 'Active thread, no recent output' }
+	] as const;
 
 	let ideationSuccess = $derived(form?.ok && form?.successAction === 'runTaskIdeationAssistant');
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createTask');
+	let createAndRunSuccess = $derived(form?.ok && form?.successAction === 'createTaskAndRun');
+	let createdAttachmentCount = $derived(
+		form?.ok && (form?.successAction === 'createTask' || form?.successAction === 'createTaskAndRun')
+			? Number(form.attachmentCount ?? 0)
+			: 0
+	);
 	let ideationDraftCreateCount = $derived(
 		form?.ok && form?.successAction === 'createDraftTasksFromIdeation'
 			? Number(form.createdCount ?? 0)
@@ -26,21 +54,6 @@
 	});
 	let deleteSuccess = $derived(deleteCount > 0);
 
-	function statusClass(status: string) {
-		switch (status) {
-			case 'done':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-300';
-			case 'blocked':
-				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
-			case 'review':
-				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
-			case 'in_progress':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
-
 	function compactText(value: string, maxLength = 120) {
 		const normalized = value.replace(/\s+/g, ' ').trim();
 
@@ -49,6 +62,86 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function formatAttachmentSize(sizeBytes: number) {
+		if (sizeBytes < 1024) {
+			return `${sizeBytes} B`;
+		}
+
+		if (sizeBytes < 1024 * 1024) {
+			return `${(sizeBytes / 1024).toFixed(1)} KB`;
+		}
+
+		return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function createAttachmentKey(file: File) {
+		return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+	}
+
+	function syncPendingCreateAttachments() {
+		pendingCreateAttachments = Array.from(createTaskAttachmentInput?.files ?? []).map((file) => ({
+			id: createAttachmentKey(file),
+			name: file.name || 'Attachment',
+			sizeBytes: file.size,
+			contentType: file.type || 'Unknown type'
+		}));
+	}
+
+	function replaceCreateAttachmentFiles(files: File[]) {
+		if (!createTaskAttachmentInput || typeof DataTransfer === 'undefined') {
+			return;
+		}
+
+		const transfer = new DataTransfer();
+
+		for (const file of files) {
+			transfer.items.add(file);
+		}
+
+		createTaskAttachmentInput.files = transfer.files;
+		syncPendingCreateAttachments();
+	}
+
+	function mergeCreateAttachmentFiles(files: Iterable<File>) {
+		const nextFiles = new Map(
+			Array.from(createTaskAttachmentInput?.files ?? []).map((file) => [
+				createAttachmentKey(file),
+				file
+			])
+		);
+
+		for (const file of files) {
+			if (file.size === 0) {
+				continue;
+			}
+
+			nextFiles.set(createAttachmentKey(file), file);
+		}
+
+		replaceCreateAttachmentFiles([...nextFiles.values()]);
+	}
+
+	function clearPendingCreateAttachments() {
+		if (createTaskAttachmentInput) {
+			createTaskAttachmentInput.value = '';
+		}
+
+		pendingCreateAttachments = [];
+	}
+
+	function handleCreateTaskAttachmentPaste(event: ClipboardEvent) {
+		const pastedFiles = Array.from(event.clipboardData?.items ?? [])
+			.filter((item) => item.kind === 'file')
+			.map((item) => item.getAsFile())
+			.filter((file): file is File => file !== null);
+
+		if (pastedFiles.length === 0) {
+			return;
+		}
+
+		mergeCreateAttachmentFiles(pastedFiles);
 	}
 
 	function confidenceClass(confidence: 'high' | 'medium' | 'low') {
@@ -78,11 +171,53 @@
 			task.artifactPath,
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
 			task.statusThread?.name ?? '',
-			task.statusThread?.sessionState ?? ''
+			task.statusThread?.sessionState ?? '',
+			task.statusThread ? formatSessionStateLabel(task.statusThread.sessionState) : '',
+			...task.freshness.staleSignals
 		]
 			.join(' ')
 			.toLowerCase()
 			.includes(normalizedTerm);
+	}
+
+	function staleBadgeClass(signal: TaskStaleSignalKey) {
+		switch (signal) {
+			case 'staleInProgress':
+				return 'border-violet-900/70 bg-violet-950/40 text-violet-200';
+			case 'noRecentRunActivity':
+				return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+			case 'activeThreadNoRecentOutput':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			default:
+				return 'border-slate-700 bg-slate-950/70 text-slate-300';
+		}
+	}
+
+	function staleBadgeLabel(task: (typeof data.tasks)[number], signal: TaskStaleSignalKey) {
+		switch (signal) {
+			case 'staleInProgress':
+				return `Stale WIP ${task.freshness.taskAgeLabel}`;
+			case 'noRecentRunActivity':
+				return `Run quiet ${task.freshness.runActivityAgeLabel}`;
+			case 'activeThreadNoRecentOutput':
+				return `Thread quiet ${task.freshness.threadActivityAgeLabel}`;
+			default:
+				return '';
+		}
+	}
+
+	function toggleStaleFilter(filterKey: TaskStaleSignalKey) {
+		selectedStaleFilters = selectedStaleFilters.includes(filterKey)
+			? selectedStaleFilters.filter((candidate) => candidate !== filterKey)
+			: [...selectedStaleFilters, filterKey];
+	}
+
+	function matchesStaleFilters(task: (typeof data.tasks)[number]) {
+		if (selectedStaleFilters.length === 0) {
+			return true;
+		}
+
+		return selectedStaleFilters.some((filterKey) => task.freshness[filterKey]);
 	}
 
 	function threadActionLabel(task: (typeof data.tasks)[number]) {
@@ -156,11 +291,22 @@
 				return false;
 			}
 
+			if (!matchesStaleFilters(task)) {
+				return false;
+			}
+
 			return matchesTask(task, query);
 		})
 	);
 	let activeTasks = $derived(filteredTasks.filter((task) => task.status !== 'done'));
 	let completedTasks = $derived(filteredTasks.filter((task) => task.status === 'done'));
+	let staleFilterCounts = $derived.by(() => ({
+		staleInProgress: data.tasks.filter((task) => task.freshness.staleInProgress).length,
+		noRecentRunActivity: data.tasks.filter((task) => task.freshness.noRecentRunActivity).length,
+		activeThreadNoRecentOutput: data.tasks.filter(
+			(task) => task.freshness.activeThreadNoRecentOutput
+		).length
+	}));
 </script>
 
 {#snippet taskTable(
@@ -169,165 +315,153 @@
 	rows: (typeof data.tasks)[number][],
 	emptyMessage: string
 )}
-	<section class="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h2 class="text-lg font-semibold text-white">{title}</h2>
-				<p class="mt-1 text-sm text-slate-400">{description}</p>
-			</div>
-			<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
-				{rows.length} shown
-			</p>
-		</div>
-
-		{#if rows.length === 0}
-			<p
-				class="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
-			>
-				{emptyMessage}
-			</p>
-		{:else}
-			<div class="mt-4 overflow-x-auto">
-				<table class="min-w-[980px] divide-y divide-slate-800 text-left">
-					<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-						<tr>
-							<th class="px-3 py-3 font-medium">
-								<label class="flex items-center justify-center">
-									<span class="sr-only">Select all shown tasks</span>
-									<input
-										checked={areAllRowsSelected(rows)}
-										class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-										type="checkbox"
-										onchange={(event) => {
-											setSelectionForRows(rows, event.currentTarget.checked);
-										}}
-									/>
-								</label>
-							</th>
-							<th class="px-3 py-3 font-medium">Task</th>
-							<th class="px-3 py-3 font-medium">Project</th>
-							<th class="px-3 py-3 font-medium">Status</th>
-							<th class="px-3 py-3 font-medium">Assignee</th>
-							<th class="px-3 py-3 font-medium">Runs</th>
-							<th class="px-3 py-3 font-medium">Updated</th>
-							<th class="px-3 py-3 font-medium">Actions</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-900/80">
-						{#each rows as task (task.id)}
-							<tr class="bg-slate-950/30 transition hover:bg-slate-900/60">
-								<td class="px-3 py-3 align-top">
-									<label class="flex items-center justify-center">
-										<span class="sr-only">Select {task.title}</span>
-										<input
-											checked={isTaskSelected(task.id)}
-											class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-											type="checkbox"
-											onchange={(event) => {
-												toggleTaskSelection(task.id, event.currentTarget.checked);
-											}}
-										/>
-									</label>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<div class="max-w-sm min-w-0">
-										<p class="ui-clamp-2 font-medium text-white">{task.title}</p>
-										<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
-											{compactText(task.summary)}
-										</p>
-										<div class="mt-2 flex flex-wrap gap-2">
-											{#if task.openReview}
-												<span
-													class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
-												>
-													Review open
-												</span>
-											{/if}
-											{#if task.pendingApproval}
-												<span
-													class="inline-flex items-center justify-center rounded-full border border-amber-800/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
-												>
-													Approval {task.pendingApproval.mode}
-												</span>
-											{/if}
-										</div>
-										{#if task.hasUnmetDependencies}
-											<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
-										{/if}
-									</div>
-								</td>
-								<td class="px-3 py-3 align-top text-sm text-slate-300">
-									<p class="ui-wrap-anywhere max-w-40">{task.projectName}</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<div class="min-w-52 space-y-3">
+	<DataTableSection
+		{title}
+		{description}
+		summary={`${rows.length} shown`}
+		empty={rows.length === 0}
+		{emptyMessage}
+	>
+		<table class="min-w-[980px] divide-y divide-slate-800 text-left">
+			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+				<tr>
+					<th class="px-3 py-3 font-medium">
+						<label class="flex items-center justify-center">
+							<span class="sr-only">Select all shown tasks</span>
+							<input
+								checked={areAllRowsSelected(rows)}
+								class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+								type="checkbox"
+								onchange={(event) => {
+									setSelectionForRows(rows, event.currentTarget.checked);
+								}}
+							/>
+						</label>
+					</th>
+					<th class="px-3 py-3 font-medium">Task</th>
+					<th class="px-3 py-3 font-medium">Project</th>
+					<th class="px-3 py-3 font-medium">Status</th>
+					<th class="px-3 py-3 font-medium">Assignee</th>
+					<th class="px-3 py-3 font-medium">Runs</th>
+					<th class="px-3 py-3 font-medium">Updated</th>
+					<th class="px-3 py-3 font-medium">Actions</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-900/80">
+				{#each rows as task (task.id)}
+					<tr class="bg-slate-950/30 transition hover:bg-slate-900/60">
+						<td class="px-3 py-3 align-top">
+							<label class="flex items-center justify-center">
+								<span class="sr-only">Select {task.title}</span>
+								<input
+									checked={isTaskSelected(task.id)}
+									class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+									type="checkbox"
+									onchange={(event) => {
+										toggleTaskSelection(task.id, event.currentTarget.checked);
+									}}
+								/>
+							</label>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<div class="max-w-sm min-w-0">
+								<p class="ui-clamp-2 font-medium text-white">{task.title}</p>
+								<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
+									{compactText(task.summary)}
+								</p>
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#if task.openReview}
 										<span
-											class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${statusClass(task.status)}`}
+											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 										>
-											{formatTaskStatusLabel(task.status)}
+											Review open
 										</span>
-										{#if task.statusThread}
-											<div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
-												<SessionActivityIndicator compact session={task.statusThread} />
-											</div>
-										{/if}
-									</div>
-								</td>
-								<td class="px-3 py-3 align-top text-sm text-slate-300">
-									<p class="ui-wrap-anywhere max-w-40">{task.assigneeName}</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{task.runCount}</p>
-									{#if task.statusThread}
-										<p class="ui-wrap-anywhere mt-1 max-w-40 text-xs text-slate-500">
-											{task.statusThread.name}
-										</p>
 									{/if}
-								</td>
-								<td class="px-3 py-3 align-top">
-									<p class="text-sm text-white">{task.updatedAtLabel}</p>
-									<p class="mt-1 text-xs text-slate-500">
-										{new Date(task.updatedAt).toLocaleString()}
-									</p>
-								</td>
-								<td class="px-3 py-3 align-top">
-									<div class="flex min-w-40 flex-col items-start gap-2">
-										<a
-											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-											href={resolve(`/app/tasks/${task.id}`)}
+									{#if task.pendingApproval}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 										>
-											Open task
-										</a>
-										{#if task.linkThread}
-											<a
-												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-												href={resolve(`/app/sessions/${task.linkThread.id}`)}
-											>
-												{threadActionLabel(task)}
-											</a>
-										{/if}
+											Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
+										</span>
+									{/if}
+									{#each task.freshness.staleSignals as signal (signal)}
+										<span
+											class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
+										>
+											{staleBadgeLabel(task, signal)}
+										</span>
+									{/each}
+								</div>
+								{#if task.hasUnmetDependencies}
+									<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
+								{/if}
+							</div>
+						</td>
+						<td class="px-3 py-3 align-top text-sm text-slate-300">
+							<p class="ui-clamp-3 max-w-40">{task.projectName}</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<div class="min-w-52 space-y-3">
+								<span
+									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
+								>
+									{formatTaskStatusLabel(task.status)}
+								</span>
+								{#if task.statusThread}
+									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+										<SessionActivityIndicator compact session={task.statusThread} />
 									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
+								{/if}
+							</div>
+						</td>
+						<td class="px-3 py-3 align-top text-sm text-slate-300">
+							<p class="ui-clamp-3 max-w-40">{task.assigneeName}</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{task.runCount}</p>
+							{#if task.statusThread}
+								<p class="ui-clamp-3 mt-1 max-w-40 text-xs text-slate-500">
+									{task.statusThread.name}
+								</p>
+							{/if}
+						</td>
+						<td class="px-3 py-3 align-top">
+							<p class="text-sm text-white">{task.updatedAtLabel}</p>
+							<p class="mt-1 text-xs text-slate-500">
+								{new Date(task.updatedAt).toLocaleString()}
+							</p>
+						</td>
+						<td class="px-3 py-3 align-top">
+							<div class="flex min-w-40 flex-col items-start gap-2">
+								<a
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+									href={resolve(`/app/tasks/${task.id}`)}
+								>
+									Open task
+								</a>
+								{#if task.linkThread}
+									<a
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+										href={resolve(`/app/sessions/${task.linkThread.id}`)}
+									>
+										{threadActionLabel(task)}
+									</a>
+								{/if}
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</DataTableSection>
 {/snippet}
 
-<section class="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Tasks</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">
-			Browse the queue, then open one task
-		</h1>
-		<p class="max-w-3xl text-sm text-slate-300">
-			Tasks should read like an operating queue. Scan by status, search for a specific brief, and
-			use the detail page for editing, launching threads, and deeper execution context.
-		</p>
-	</div>
+<AppPage class="min-w-0">
+	<PageHeader
+		eyebrow="Tasks"
+		title="Browse the queue, then open one task"
+		description="Tasks should read like an operating queue. Scan by status, search for a specific brief, and use the detail page for editing, launching threads, and deeper execution context."
+	/>
 
 	{#if form?.message}
 		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
@@ -335,11 +469,33 @@
 		</p>
 	{/if}
 
-	{#if createSuccess}
+	{#if createAndRunSuccess}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Task created and launched in a work thread.
+			{#if createdAttachmentCount > 0}
+				{createdAttachmentCount === 1
+					? ' 1 attachment saved with it.'
+					: ` ${createdAttachmentCount} attachments saved with it.`}
+			{/if}
+			{#if form?.sessionId}
+				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+					Open thread details
+				</a>
+				to follow the run.
+			{/if}
+		</p>
+	{:else if createSuccess}
 		<p
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Task created and linked to its project.
+			{#if createdAttachmentCount > 0}
+				{createdAttachmentCount === 1
+					? ' 1 attachment saved with it.'
+					: ` ${createdAttachmentCount} attachments saved with it.`}
+			{/if}
 		</p>
 	{:else if ideationSuccess}
 		<p
@@ -385,350 +541,61 @@
 			</a>
 		</section>
 	{:else}
-		<div class="grid gap-6 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
-			<div class="min-w-0 space-y-6">
-				<section class="card border border-slate-800 bg-slate-950/70 p-6">
-					<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-						<div>
-							<h2 class="text-xl font-semibold text-white">Task index</h2>
-							<p class="mt-1 text-sm text-slate-400">
-								Search by task title, summary, project, assignee, or artifact path.
-							</p>
-						</div>
-
-						<div class="flex w-full flex-col gap-3 xl:w-auto xl:items-end">
-							<div class="w-full xl:w-80">
-								<label class="sr-only" for="task-search">Search tasks</label>
-								<input
-									id="task-search"
-									bind:value={query}
-									class="input text-white placeholder:text-slate-500"
-									placeholder="Search tasks"
-								/>
-							</div>
-
-							<div class="flex flex-wrap gap-2">
-								<button
-									class={[
-										'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
-										selectedStatus === 'all'
-											? 'border-sky-400/40 bg-sky-400 text-slate-950'
-											: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
-									]}
-									type="button"
-									onclick={() => {
-										selectedStatus = 'all';
-									}}
-								>
-									All
-								</button>
-
-								{#each data.statusOptions as status (status)}
-									<button
-										class={[
-											'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
-											selectedStatus === status
-												? 'border-sky-400/40 bg-sky-400 text-slate-950'
-												: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
-										]}
-										type="button"
-										onclick={() => {
-											selectedStatus = status;
-										}}
-									>
-										{formatTaskStatusLabel(status)}
-									</button>
-								{/each}
-							</div>
-						</div>
-					</div>
-				</section>
-
-				<section class="card border border-slate-800 bg-slate-950/70 p-6">
-					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-						<div>
-							<h2 class="text-xl font-semibold text-white">Bulk actions</h2>
-							<p class="mt-1 text-sm text-slate-400">
-								Select tasks from the queue to remove them in one pass.
-							</p>
-						</div>
-
-						<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-							<p class="text-sm text-slate-300">
-								{selectedTaskIds.length === 0
-									? 'No tasks selected'
-									: `${selectedTaskIds.length} task${selectedTaskIds.length === 1 ? '' : 's'} selected`}
-							</p>
-							{#if selectedTaskIds.length > 0}
-								<button
-									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
-									type="button"
-									onclick={clearSelection}
-								>
-									Clear selection
-								</button>
-								<form method="POST" action="?/deleteTasks">
-									{#each selectedTaskIds as taskId (taskId)}
-										<input name="taskId" type="hidden" value={taskId} />
-									{/each}
-									<button
-										class="inline-flex items-center justify-center rounded-full border border-rose-800/70 bg-rose-950/40 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-rose-200 uppercase transition hover:border-rose-700 hover:text-white"
-										type="submit"
-									>
-										Delete selected
-									</button>
-								</form>
-							{/if}
-						</div>
-					</div>
-				</section>
-
-				{@render taskTable(
-					'Active queue',
-					'Draft, ready, in-progress, review, and blocked work that still needs attention.',
-					activeTasks,
-					'No active tasks match the current filters.'
-				)}
-
-				{@render taskTable(
-					'Completed work',
-					'Finished tasks kept here for reference and session follow-up.',
-					completedTasks,
-					'No completed tasks match the current filters.'
-				)}
-			</div>
-
-			<div class="min-w-0 space-y-6">
+		<section
+			class="card border border-sky-900/60 bg-slate-950/80 p-6 shadow-[0_0_0_1px_rgba(14,165,233,0.08)]"
+		>
+			<div
+				class="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start"
+			>
 				<form
-					class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
-					method="POST"
-					action="?/runTaskIdeationAssistant"
-				>
-					<div class="space-y-2">
-						<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-							Task ideation
-						</p>
-						<h2 class="text-xl font-semibold text-white">Need more tasks to queue?</h2>
-						<p class="text-sm text-slate-400">
-							Run a reusable assistant thread that inspects a project, reviews its task history, and
-							proposes additional task ideas before you create them manually.
-						</p>
-					</div>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
-						<select class="select text-white" name="projectId" required>
-							<option value="" disabled selected>Select a project</option>
-							{#each data.projects as project (project.id)}
-								<option value={project.id}>{project.name}</option>
-							{/each}
-						</select>
-					</label>
-
-					<p
-						class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300"
-					>
-						The assistant uses the selected project’s configured workspace plus its existing tasks,
-						runs, goals, and related project context. If a resumable ideation thread already exists,
-						this reuses it instead of starting from scratch.
-					</p>
-
-					<button
-						class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
-						type="submit"
-					>
-						Run task ideation assistant
-					</button>
-				</form>
-
-				<section class="card border border-slate-800 bg-slate-950/70 p-6">
-					<div class="space-y-2">
-						<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-							Ideation review
-						</p>
-						<h2 class="text-xl font-semibold text-white">Create drafts from ideation output</h2>
-						<p class="text-sm text-slate-400">
-							Review each project’s latest ideation reply here, then create only the suggestions you
-							want as draft tasks.
-						</p>
-					</div>
-
-					{#if data.ideationReviews.length === 0}
-						<p
-							class="mt-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-5 text-sm text-slate-400"
-						>
-							Run the ideation assistant first. Its latest saved reply will appear here for review.
-						</p>
-					{:else}
-						<div class="mt-4 space-y-4">
-							{#each data.ideationReviews as review (review.sessionId)}
-								<form
-									class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
-									method="POST"
-									action="?/createDraftTasksFromIdeation"
-								>
-									<input name="sessionId" type="hidden" value={review.sessionId} />
-
-									<div class="flex flex-col gap-3">
-										<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-											<div>
-												<h3 class="text-base font-semibold text-white">{review.projectName}</h3>
-												<p class="mt-1 text-sm text-slate-400">{review.sessionSummary}</p>
-											</div>
-											<a
-												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-												href={resolve(`/app/sessions/${review.sessionId}`)}
-											>
-												Open thread
-											</a>
-										</div>
-
-										<div class="flex flex-wrap gap-2 text-xs text-slate-300">
-											<span class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
-												{review.suggestionCount} suggestion{review.suggestionCount === 1 ? '' : 's'}
-											</span>
-											<span class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
-												Last activity {review.lastActivityLabel}
-											</span>
-											<span class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
-												Default role {review.defaultDraftRoleName}
-											</span>
-										</div>
-
-										<p
-											class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-300"
-										>
-											Selected suggestions become <span class="font-medium text-white"
-												>In Draft</span
-											>{' '}
-											tasks in <span class="font-medium text-white">{review.projectName}</span> with
-											default routing to
-											<span class="font-medium text-white"> {review.defaultDraftRoleName}</span>
-											{#if review.defaultArtifactPath}
-												and artifact path
-												<span class="ui-wrap-anywhere font-medium text-white">
-													{review.defaultArtifactPath}
-												</span>.
-											{:else}
-												.
-											{/if}
-										</p>
-									</div>
-
-									{#if review.suggestionCount === 0}
-										<p
-											class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-4 text-sm text-slate-400"
-										>
-											{review.hasActiveRun
-												? 'The ideation run is still active. Wait for a saved assistant reply, then refresh or reopen this page.'
-												: 'The latest saved reply did not match the expected suggestion format. Open the thread to review the raw output.'}
-										</p>
-									{:else}
-										<div class="space-y-3">
-											{#each review.suggestions as suggestion (suggestion.index)}
-												<label
-													class="block rounded-2xl border border-slate-800 bg-slate-950/40 p-4 transition hover:border-slate-700"
-												>
-													<div class="flex items-start gap-3">
-														<input
-															class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-															name="suggestionIndex"
-															type="checkbox"
-															value={suggestion.index}
-														/>
-														<div class="min-w-0 flex-1">
-															<div class="flex flex-wrap items-center gap-2">
-																<h4 class="font-medium text-white">{suggestion.title}</h4>
-																<span
-																	class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${confidenceClass(suggestion.confidence)}`}
-																>
-																	{suggestion.confidence} confidence
-																</span>
-															</div>
-															<p class="mt-2 text-sm text-slate-300">
-																{suggestion.whyItMatters}
-															</p>
-															<div class="mt-3 space-y-2 text-sm">
-																<div>
-																	<p
-																		class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
-																	>
-																		Draft summary
-																	</p>
-																	<p class="mt-1 whitespace-pre-wrap text-slate-300">
-																		{suggestion.suggestedInstructions}
-																	</p>
-																</div>
-																<div>
-																	<p
-																		class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
-																	>
-																		Signals
-																	</p>
-																	<p class="mt-1 whitespace-pre-wrap text-slate-400">
-																		{suggestion.signals}
-																	</p>
-																</div>
-															</div>
-														</div>
-													</div>
-												</label>
-											{/each}
-										</div>
-
-										<button
-											class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
-											type="submit"
-										>
-											Create selected draft tasks
-										</button>
-									{/if}
-								</form>
-							{/each}
-						</div>
-					{/if}
-				</section>
-
-				<form
-					class="min-w-0 space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
+					class="min-w-0 space-y-4"
 					method="POST"
 					action="?/createTask"
+					enctype="multipart/form-data"
+					onpaste={handleCreateTaskAttachmentPaste}
 				>
-					<h2 class="text-xl font-semibold text-white">Create task</h2>
-					<p class="text-sm text-slate-400">
-						Add the brief here. Editing, launch controls, and run history live on the task detail
-						page.
-					</p>
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
+							Quick create
+						</p>
+						<h2 class="text-xl font-semibold text-white">Create task</h2>
+						<p class="max-w-2xl text-sm text-slate-300">
+							Add a new work item directly from the top of the queue. Editing, launch controls, and
+							run history stay on the task detail page after creation.
+						</p>
+					</div>
 
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
-						<select class="select text-white" name="projectId" required>
-							<option value="" disabled selected>Select a project</option>
-							{#each data.projects as project (project.id)}
-								<option value={project.id}>{project.name}</option>
-							{/each}
-						</select>
-					</label>
+					<div class="grid gap-4 md:grid-cols-2">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
+							<select class="select text-white" name="projectId" required>
+								<option value="" disabled selected>Select a project</option>
+								{#each data.projects as project (project.id)}
+									<option value={project.id}>{project.name}</option>
+								{/each}
+							</select>
+						</label>
 
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-						<input
-							class="input text-white placeholder:text-slate-500"
-							name="name"
-							placeholder="Build the first task creation flow"
-							required
-						/>
-					</label>
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+							<input
+								class="input text-white placeholder:text-slate-500"
+								name="name"
+								placeholder="Build the first task creation flow"
+								required
+							/>
+						</label>
 
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Assign to worker</span>
-						<select class="select text-white" name="assigneeWorkerId">
-							<option value="">Leave unassigned</option>
-							{#each data.workers as worker (worker.id)}
-								<option value={worker.id}>{worker.name}</option>
-							{/each}
-						</select>
-					</label>
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Assign to worker</span>
+							<select class="select text-white" name="assigneeWorkerId">
+								<option value="">Leave unassigned</option>
+								{#each data.workers as worker (worker.id)}
+									<option value={worker.id}>{worker.name}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
 
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Instructions</span>
@@ -740,11 +607,475 @@
 						></textarea>
 					</label>
 
-					<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-						Create task
-					</button>
+					<div class="space-y-3">
+						<div>
+							<p class="text-sm font-medium text-slate-200">Attachments</p>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								Attach source files during intake. You can choose multiple files or paste files
+								anywhere in this form.
+							</p>
+						</div>
+
+						<label class="block">
+							<span class="sr-only">Attach files</span>
+							<input
+								bind:this={createTaskAttachmentInput}
+								class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
+								name="attachments"
+								type="file"
+								multiple
+								onchange={syncPendingCreateAttachments}
+							/>
+						</label>
+
+						<div
+							class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-4 text-sm text-slate-300"
+						>
+							<p class="font-medium text-white">Paste files into the form to attach them</p>
+							<p class="mt-2 text-slate-400">
+								Copied screenshots, images, and files are added to the same upload list as the file
+								picker.
+							</p>
+						</div>
+
+						{#if pendingCreateAttachments.length > 0}
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<div class="flex flex-wrap items-center justify-between gap-3">
+									<p class="text-sm font-medium text-white">
+										{pendingCreateAttachments.length === 1
+											? '1 attachment selected'
+											: `${pendingCreateAttachments.length} attachments selected`}
+									</p>
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+										type="button"
+										onclick={clearPendingCreateAttachments}
+									>
+										Clear
+									</button>
+								</div>
+								<div class="mt-4 space-y-3">
+									{#each pendingCreateAttachments as attachment (attachment.id)}
+										<div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+											<p class="ui-wrap-anywhere font-medium text-white">{attachment.name}</p>
+											<p class="mt-2 text-sm text-slate-300">
+												{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+											</p>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<div class="flex flex-wrap items-center gap-3">
+						<button
+							class="btn preset-filled-primary-500 font-semibold"
+							name="submitMode"
+							type="submit"
+							value="create"
+						>
+							Create task
+						</button>
+						<button
+							class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
+							name="submitMode"
+							type="submit"
+							value="createAndRun"
+						>
+							Create and run
+						</button>
+						<p class="text-sm text-slate-400">
+							Choose a project, name the work clearly, then create a queued task or launch it
+							immediately.
+						</p>
+					</div>
 				</form>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+						Queue snapshot
+					</p>
+					<h3 class="mt-2 text-lg font-semibold text-white">Create before you triage</h3>
+					<p class="mt-2 text-sm text-slate-300">
+						Keep quick intake at the top, then use filters and detail views below to manage the
+						queue.
+					</p>
+					<div class="mt-4 grid gap-3 sm:grid-cols-2">
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Active</p>
+							<p class="mt-2 text-2xl font-semibold text-white">{activeTasks.length}</p>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Completed</p>
+							<p class="mt-2 text-2xl font-semibold text-white">{completedTasks.length}</p>
+						</div>
+					</div>
+				</div>
 			</div>
+		</section>
+
+		<div class="space-y-6">
+			<CollectionToolbar
+				title="Task index"
+				description="Search by task title, summary, project, assignee, or artifact path."
+			>
+				{#snippet controls()}
+					<div class="w-full xl:w-80">
+						<label class="sr-only" for="task-search">Search tasks</label>
+						<input
+							id="task-search"
+							bind:value={query}
+							class="input text-white placeholder:text-slate-500"
+							placeholder="Search tasks"
+						/>
+					</div>
+
+					<div class="flex flex-wrap gap-2">
+						<button
+							class={[
+								'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+								selectedStatus === 'all'
+									? 'border-sky-400/40 bg-sky-400 text-slate-950'
+									: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
+							]}
+							type="button"
+							onclick={() => {
+								selectedStatus = 'all';
+							}}
+						>
+							All
+						</button>
+
+						{#each data.statusOptions as status (status)}
+							<button
+								class={[
+									'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+									selectedStatus === status
+										? 'border-sky-400/40 bg-sky-400 text-slate-950'
+										: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
+								]}
+								type="button"
+								onclick={() => {
+									selectedStatus = status;
+								}}
+							>
+								{formatTaskStatusLabel(status)}
+							</button>
+						{/each}
+					</div>
+
+					<div class="flex flex-col gap-2 xl:items-end">
+						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Stale work filters</p>
+						<div class="flex flex-wrap gap-2">
+							{#each STALE_FILTERS as filter (filter.key)}
+								<button
+									aria-pressed={selectedStaleFilters.includes(filter.key)}
+									class={[
+										'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+										selectedStaleFilters.includes(filter.key)
+											? 'border-sky-400/40 bg-sky-400 text-slate-950'
+											: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
+									]}
+									type="button"
+									onclick={() => {
+										toggleStaleFilter(filter.key);
+									}}
+								>
+									{filter.label} ({staleFilterCounts[filter.key]})
+								</button>
+							{/each}
+							{#if selectedStaleFilters.length > 0}
+								<button
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+									type="button"
+									onclick={() => {
+										selectedStaleFilters = [];
+									}}
+								>
+									Clear stale filters
+								</button>
+							{/if}
+						</div>
+					</div>
+				{/snippet}
+			</CollectionToolbar>
+
+			<SelectionActionBar
+				title="Bulk actions"
+				description={selectedTaskIds.length === 0
+					? 'Select tasks from the queue to remove them in one pass.'
+					: `${selectedTaskIds.length} task${selectedTaskIds.length === 1 ? '' : 's'} selected.`}
+			>
+				{#snippet actions()}
+					{#if selectedTaskIds.length > 0}
+						<button
+							class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
+							type="button"
+							onclick={clearSelection}
+						>
+							Clear selection
+						</button>
+						<form method="POST" action="?/deleteTasks">
+							{#each selectedTaskIds as taskId (taskId)}
+								<input name="taskId" type="hidden" value={taskId} />
+							{/each}
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-rose-800/70 bg-rose-950/40 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-rose-200 uppercase transition hover:border-rose-700 hover:text-white"
+								type="submit"
+							>
+								Delete selected
+							</button>
+						</form>
+					{/if}
+				{/snippet}
+			</SelectionActionBar>
+
+			{@render taskTable(
+				'Active queue',
+				'Draft, ready, in-progress, review, and blocked work that still needs attention.',
+				activeTasks,
+				'No active tasks match the current filters.'
+			)}
+
+			{@render taskTable(
+				'Completed work',
+				'Finished tasks kept here for reference and session follow-up.',
+				completedTasks,
+				'No completed tasks match the current filters.'
+			)}
+
+			<details class="group card border border-slate-800 bg-slate-950/60 p-6">
+				<summary
+					class="flex cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+				>
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+							Task ideation
+						</p>
+						<h2 class="text-xl font-semibold text-white">Ideation assistant and saved reviews</h2>
+						<p class="max-w-3xl text-sm text-slate-400">
+							Keep this collapsed until you need more draft work. Run the assistant or review saved
+							suggestions without taking space away from the queue.
+						</p>
+					</div>
+					<div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+						<span class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1">
+							{data.ideationReviews.length} saved review{data.ideationReviews.length === 1
+								? ''
+								: 's'}
+						</span>
+						<span
+							class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 font-medium tracking-[0.14em] uppercase transition group-open:border-sky-400/40 group-open:text-sky-200"
+						>
+							Expand
+						</span>
+					</div>
+				</summary>
+
+				<div class="mt-6 space-y-6 border-t border-slate-800 pt-6">
+					<form
+						class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-6"
+						method="POST"
+						action="?/runTaskIdeationAssistant"
+					>
+						<div class="space-y-2">
+							<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
+								Run assistant
+							</p>
+							<h3 class="text-lg font-semibold text-white">Need more tasks to queue?</h3>
+							<p class="text-sm text-slate-400">
+								Run a reusable assistant thread that inspects a project, reviews its task history,
+								and proposes additional task ideas before you create them manually.
+							</p>
+						</div>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
+							<select class="select text-white" name="projectId" required>
+								<option value="" disabled selected>Select a project</option>
+								{#each data.projects as project (project.id)}
+									<option value={project.id}>{project.name}</option>
+								{/each}
+							</select>
+						</label>
+
+						<p
+							class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300"
+						>
+							The assistant uses the selected project’s configured workspace plus its existing
+							tasks, runs, goals, and related project context. If a resumable ideation thread
+							already exists, this reuses it instead of starting from scratch.
+						</p>
+
+						<button
+							class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
+							type="submit"
+						>
+							Run task ideation assistant
+						</button>
+					</form>
+
+					<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+						<div class="space-y-2">
+							<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
+								Saved reviews
+							</p>
+							<h3 class="text-lg font-semibold text-white">Create drafts from ideation output</h3>
+							<p class="text-sm text-slate-400">
+								Review each project’s latest ideation reply here, then create only the suggestions
+								you want as draft tasks.
+							</p>
+						</div>
+
+						{#if data.ideationReviews.length === 0}
+							<p
+								class="mt-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-5 text-sm text-slate-400"
+							>
+								Run the ideation assistant first. Its latest saved reply will appear here for
+								review.
+							</p>
+						{:else}
+							<div class="mt-4 space-y-4">
+								{#each data.ideationReviews as review (review.sessionId)}
+									<form
+										class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
+										method="POST"
+										action="?/createDraftTasksFromIdeation"
+									>
+										<input name="sessionId" type="hidden" value={review.sessionId} />
+
+										<div class="flex flex-col gap-3">
+											<div
+												class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+											>
+												<div>
+													<h4 class="text-base font-semibold text-white">{review.projectName}</h4>
+													<p class="mt-1 text-sm text-slate-400">{review.sessionSummary}</p>
+												</div>
+												<a
+													class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+													href={resolve(`/app/sessions/${review.sessionId}`)}
+												>
+													Open thread
+												</a>
+											</div>
+
+											<div class="flex flex-wrap gap-2 text-xs text-slate-300">
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
+												>
+													{review.suggestionCount} suggestion{review.suggestionCount === 1
+														? ''
+														: 's'}
+												</span>
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
+												>
+													Last activity {review.lastActivityLabel}
+												</span>
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
+												>
+													Default role {review.defaultDraftRoleName}
+												</span>
+											</div>
+
+											<p
+												class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-300"
+											>
+												Selected suggestions become <span class="font-medium text-white"
+													>In Draft</span
+												>
+												tasks in <span class="font-medium text-white">{review.projectName}</span>
+												with default routing to
+												<span class="font-medium text-white"> {review.defaultDraftRoleName}</span>
+												{#if review.defaultArtifactPath}
+													and artifact path
+													<span class="ui-wrap-anywhere font-medium text-white">
+														{review.defaultArtifactPath}
+													</span>.
+												{:else}
+													.
+												{/if}
+											</p>
+										</div>
+
+										{#if review.suggestionCount === 0}
+											<p
+												class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-4 text-sm text-slate-400"
+											>
+												{review.hasActiveRun
+													? 'The ideation run is still active. Wait for a saved assistant reply, then refresh or reopen this page.'
+													: 'The latest saved reply did not match the expected suggestion format. Open the thread to review the raw output.'}
+											</p>
+										{:else}
+											<div class="space-y-3">
+												{#each review.suggestions as suggestion (suggestion.index)}
+													<label
+														class="block rounded-2xl border border-slate-800 bg-slate-950/40 p-4 transition hover:border-slate-700"
+													>
+														<div class="flex items-start gap-3">
+															<input
+																class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+																name="suggestionIndex"
+																type="checkbox"
+																value={suggestion.index}
+															/>
+															<div class="min-w-0 flex-1">
+																<div class="flex flex-wrap items-center gap-2">
+																	<p class="font-medium text-white">{suggestion.title}</p>
+																	<span
+																		class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${confidenceClass(suggestion.confidence)}`}
+																	>
+																		{suggestion.confidence} confidence
+																	</span>
+																</div>
+																<p class="mt-2 text-sm text-slate-300">
+																	{suggestion.whyItMatters}
+																</p>
+																<div class="mt-3 space-y-2 text-sm">
+																	<div>
+																		<p
+																			class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
+																		>
+																			Draft summary
+																		</p>
+																		<p class="mt-1 whitespace-pre-wrap text-slate-300">
+																			{suggestion.suggestedInstructions}
+																		</p>
+																	</div>
+																	<div>
+																		<p
+																			class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
+																		>
+																			Signals
+																		</p>
+																		<p class="mt-1 whitespace-pre-wrap text-slate-400">
+																			{suggestion.signals}
+																		</p>
+																	</div>
+																</div>
+															</div>
+														</div>
+													</label>
+												{/each}
+											</div>
+
+											<button
+												class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
+												type="submit"
+											>
+												Create selected draft tasks
+											</button>
+										{/if}
+									</form>
+								{/each}
+							</div>
+						{/if}
+					</section>
+				</div>
+			</details>
 		</div>
 	{/if}
-</section>
+</AppPage>

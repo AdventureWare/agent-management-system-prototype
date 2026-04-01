@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import { formatTaskStatusLabel, taskStatusToneClass } from '$lib/types/control-plane';
 
 	let { data } = $props();
 </script>
@@ -107,7 +107,7 @@
 						<div class="flex items-center justify-between gap-3">
 							<h3 class="font-medium text-white">{task.title}</h3>
 							<span
-								class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300 uppercase"
+								class={`rounded-full border px-2 py-1 text-xs uppercase ${taskStatusToneClass(task.status)}`}
 							>
 								{formatTaskStatusLabel(task.status)}
 							</span>

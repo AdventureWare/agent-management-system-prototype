@@ -4,10 +4,10 @@ import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput } from '$lib/server/path-tools';
 import {
 	formatRelativeTime,
+	goalLinksProject,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
-	projectMatchesPath,
 	taskHasUnmetDependencies,
 	updateControlPlane
 } from '$lib/server/control-plane';
@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		relatedTasks.map((task) => task.goalId).filter((goalId) => goalId.length > 0)
 	);
 	const relatedGoals = data.goals
-		.filter((goal) => relatedGoalIds.has(goal.id) || projectMatchesPath(project, goal.artifactPath))
+		.filter((goal) => relatedGoalIds.has(goal.id) || goalLinksProject(goal, project))
 		.map((goal) => ({
 			...goal,
 			taskCount: relatedTasks.filter((task) => task.goalId === goal.id).length

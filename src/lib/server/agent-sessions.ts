@@ -6,11 +6,18 @@ import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { normalizePathInput } from '$lib/server/path-tools';
+import { resolveTaskThreadName } from '$lib/server/task-threads';
+import { deriveThreadTopicLabels } from '$lib/server/task-thread-topics';
+import {
+	buildSessionAttachmentPrompt,
+	persistSessionAttachments
+} from '$lib/server/agent-session-attachments';
 import {
 	AGENT_SANDBOX_OPTIONS,
 	type AgentRun,
 	type AgentRunDetail,
 	type AgentRunStatus,
+	type AgentSessionAttachment,
 	type AgentSessionTaskLink,
 	type AgentSessionState,
 	type AgentRunState,
@@ -22,7 +29,7 @@ import {
 	type AgentSessionsDb
 } from '$lib/types/agent-session';
 import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
-import type { ControlPlaneData, RunStatus, TaskStatus } from '$lib/types/control-plane';
+import type { ControlPlaneData, Lane, RunStatus, TaskStatus } from '$lib/types/control-plane';
 
 const AGENT_SESSIONS_DB_FILE = resolve(process.cwd(), 'data', 'agent-sessions.json');
 const AGENT_SESSIONS_ROOT = resolve(process.cwd(), 'data', 'agent-sessions');
@@ -79,6 +86,43 @@ export async function loadAgentSessionsDb(): Promise<AgentSessionsDb> {
 									typeof candidate.threadId === 'string' && candidate.threadId.trim()
 										? candidate.threadId
 										: null,
+								attachments: Array.isArray(candidate.attachments)
+									? candidate.attachments
+											.filter((attachment) => Boolean(attachment) && typeof attachment === 'object')
+											.map((attachment) => {
+												const item = attachment as Partial<AgentSessionAttachment>;
+
+												return {
+													id:
+														typeof item.id === 'string' && item.id.trim()
+															? item.id
+															: `session_attachment_${randomUUID()}`,
+													name:
+														typeof item.name === 'string' && item.name.trim()
+															? item.name
+															: 'Attachment',
+													path:
+														typeof item.path === 'string'
+															? normalizePathInput(item.path)
+															: '',
+													contentType:
+														typeof item.contentType === 'string' && item.contentType.trim()
+															? item.contentType
+															: 'application/octet-stream',
+													sizeBytes:
+														typeof item.sizeBytes === 'number' &&
+														Number.isFinite(item.sizeBytes) &&
+														item.sizeBytes >= 0
+															? item.sizeBytes
+															: 0,
+													attachedAt:
+														typeof item.attachedAt === 'string' && item.attachedAt.trim()
+															? item.attachedAt
+															: new Date().toISOString()
+												};
+											})
+											.filter((attachment) => attachment.path.length > 0)
+									: [],
 								archivedAt:
 									typeof candidate.archivedAt === 'string' && candidate.archivedAt.trim()
 										? candidate.archivedAt
@@ -144,7 +188,15 @@ export function parseAgentSandbox(value: string | null | undefined, fallback: Ag
 }
 
 type TaskContext = {
-	tasks: Array<{ id: string; title: string; status: string; threadSessionId: string | null }>;
+	tasks: Array<{
+		id: string;
+		title: string;
+		summary: string;
+		lane: Lane;
+		status: string;
+		projectName: string | null;
+		threadSessionId: string | null;
+	}>;
 	runs: Array<{ taskId: string; sessionId: string | null }>;
 };
 
@@ -538,6 +590,7 @@ function materializeNativeSession(thread: NativeCodexThread): AgentSession {
 		sandbox: thread.sandbox,
 		model: thread.model,
 		threadId: thread.id,
+		attachments: [],
 		archivedAt: null,
 		createdAt: thread.createdAt,
 		updatedAt: thread.updatedAt
@@ -677,11 +730,11 @@ function getSessionSummary(detail: {
 		case 'starting':
 			return 'The latest run is queued locally and has not started yet.';
 		case 'waiting':
-			return 'Codex is running, but no saved reply has been captured yet.';
+			return 'Codex is still working, but no saved reply has been captured yet.';
 		case 'working':
-			return 'Codex is still running. A reply has already been captured for the latest run.';
+			return 'Codex is still working and has already produced thread output.';
 		case 'ready':
-			return 'The thread is idle and ready for a follow-up instruction.';
+			return 'The thread is idle and available for the next instruction.';
 		case 'attention':
 			return detail.latestRunStatus === 'canceled'
 				? 'The latest run was canceled before it finished.'
@@ -691,7 +744,7 @@ function getSessionSummary(detail: {
 		case 'idle':
 		default:
 			if (detail.threadId) {
-				return 'The thread has a discovered context and is waiting for follow-up work.';
+				return 'The thread has reusable context and is currently idle.';
 			}
 
 			if (detail.lastMessage) {
@@ -744,7 +797,7 @@ function buildRunTimeline(detail: { run: AgentRunDetail | null; threadId: string
 		},
 		{
 			key: 'thread',
-			label: 'Thread ready',
+			label: 'Thread available',
 			state: hasThread
 				? 'complete'
 				: status === 'running'
@@ -862,13 +915,7 @@ function isStaleActiveRun(run: AgentRunDetail, now = Date.now()) {
 		return false;
 	}
 
-	if (
-		state.finishedAt ||
-		state.pid ||
-		state.codexThreadId ||
-		run.lastMessage ||
-		run.logTail.length > 0
-	) {
+	if (state.finishedAt || state.pid || run.lastMessage || run.logTail.length > 0) {
 		return false;
 	}
 
@@ -982,6 +1029,25 @@ function buildRelatedTaskLinks(
 	return links;
 }
 
+function buildStandardizedManagedSessionName(
+	session: AgentSession,
+	taskContext: TaskContext,
+	relatedTasks: AgentSessionTaskLink[]
+) {
+	const primaryTask =
+		taskContext.tasks.find((task) => task.threadSessionId === session.id) ??
+		(relatedTasks[0]
+			? (taskContext.tasks.find((task) => task.id === relatedTasks[0]?.id) ?? null)
+			: null);
+
+	return resolveTaskThreadName({
+		currentName: session.name,
+		projectName: primaryTask?.projectName ?? null,
+		taskName: primaryTask?.title ?? null,
+		taskId: primaryTask?.id ?? null
+	});
+}
+
 function finalizeSessionDetail(input: {
 	session: AgentSession;
 	runDetails: AgentRunDetail[];
@@ -996,6 +1062,19 @@ function finalizeSessionDetail(input: {
 	const lastExitCode = latestRun?.state?.exitCode ?? null;
 	const hasActive = hasActiveRun(input.runDetails);
 	const canResume = Boolean(threadId) && !hasActive;
+	const relatedTasks = buildRelatedTaskLinks(input.session.id, input.taskContext);
+	const name =
+		input.origin === 'managed'
+			? buildStandardizedManagedSessionName(input.session, input.taskContext, relatedTasks)
+			: input.session.name;
+	const relatedTaskDetails = input.taskContext.tasks
+		.filter((task) => relatedTasks.some((relatedTask) => relatedTask.id === task.id))
+		.map((task) => ({
+			title: task.title,
+			summary: task.summary,
+			lane: task.lane,
+			isPrimary: task.threadSessionId === input.session.id
+		}));
 	const sessionState = getSessionState({
 		latestRunStatus,
 		canResume,
@@ -1003,11 +1082,33 @@ function finalizeSessionDetail(input: {
 		lastMessage: latestRun?.lastMessage ?? null,
 		threadId
 	});
+	const sessionSummary =
+		input.sessionSummaryOverride ??
+		getSessionSummary({
+			sessionState,
+			latestRunStatus,
+			hasActiveRun: hasActive,
+			canResume,
+			lastMessage: latestRun?.lastMessage ?? null,
+			threadId
+		});
+	const topicLabels = deriveThreadTopicLabels({
+		sessionName: name,
+		sessionSummary,
+		runDetails: input.runDetails.map((run) => ({
+			prompt: run.prompt,
+			lastMessage: run.lastMessage
+		})),
+		relatedTasks: relatedTaskDetails
+	});
 
 	return {
 		...input.session,
+		name,
+		attachments: input.session.attachments ?? [],
 		origin: input.origin,
 		threadId,
+		topicLabels,
 		sessionState,
 		latestRunStatus,
 		hasActiveRun: hasActive,
@@ -1015,22 +1116,13 @@ function finalizeSessionDetail(input: {
 		runCount: input.runDetails.length,
 		lastActivityAt,
 		lastActivityLabel: formatRelativeTime(lastActivityAt),
-		sessionSummary:
-			input.sessionSummaryOverride ??
-			getSessionSummary({
-				sessionState,
-				latestRunStatus,
-				hasActiveRun: hasActive,
-				canResume,
-				lastMessage: latestRun?.lastMessage ?? null,
-				threadId
-			}),
+		sessionSummary,
 		lastExitCode,
 		runTimeline: buildRunTimeline({
 			run: latestRun,
 			threadId
 		}),
-		relatedTasks: buildRelatedTaskLinks(input.session.id, input.taskContext),
+		relatedTasks,
 		latestRun,
 		runs: input.runDetails
 	} satisfies AgentSessionDetail;
@@ -1137,11 +1229,16 @@ async function buildExternalSessionDetail(
 }
 
 function buildTaskContextFromControlPlane(controlPlane: ControlPlaneData): TaskContext {
+	const projectNames = new Map(controlPlane.projects.map((project) => [project.id, project.name]));
+
 	return {
 		tasks: controlPlane.tasks.map((task) => ({
 			id: task.id,
 			title: task.title,
+			summary: task.summary,
+			lane: task.lane,
 			status: task.status,
+			projectName: projectNames.get(task.projectId) ?? null,
 			threadSessionId: task.threadSessionId
 		})),
 		runs: controlPlane.runs.map((run) => ({
@@ -1159,8 +1256,20 @@ type SessionLifecycleUpdate = {
 	finishedAt: string;
 };
 
+type SessionMessageQueueUpdate = {
+	taskStatus: TaskStatus;
+	runStatus: RunStatus;
+	runSummary: string;
+	reviewSummary: string;
+	approvalSummary: string;
+	queuedAt: string;
+};
+
 function deriveLifecycleUpdateFromSessionDetail(
-	detail: Pick<AgentSessionDetail, 'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'>
+	detail: Pick<
+		AgentSessionDetail,
+		'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'
+	>
 ): SessionLifecycleUpdate | null {
 	if (detail.hasActiveRun) {
 		return null;
@@ -1202,9 +1311,23 @@ function deriveLifecycleUpdateFromSessionDetail(
 	}
 }
 
+function createSessionMessageQueueUpdate(queuedAt: string): SessionMessageQueueUpdate {
+	return {
+		taskStatus: 'in_progress',
+		runStatus: 'running',
+		runSummary: 'Queued follow-up work in the linked thread.',
+		reviewSummary: 'Dismissed after follow-up work was queued in the linked thread.',
+		approvalSummary: 'Canceled after follow-up work was queued in the linked thread.',
+		queuedAt
+	};
+}
+
 export function reconcileControlPlaneSessionState(
 	data: ControlPlaneData,
-	detail: Pick<AgentSessionDetail, 'id' | 'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'>
+	detail: Pick<
+		AgentSessionDetail,
+		'id' | 'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'
+	>
 ) {
 	const lifecycleUpdate = deriveLifecycleUpdateFromSessionDetail(detail);
 
@@ -1263,6 +1386,94 @@ export function reconcileControlPlaneSessionState(
 							lifecycleUpdate.runStatus === 'completed' ? '' : lifecycleUpdate.blockedReason
 					}
 				: run
+		)
+	};
+}
+
+export function reconcileControlPlaneSessionMessage(
+	data: ControlPlaneData,
+	sessionId: string,
+	queuedAt = new Date().toISOString()
+) {
+	const queueUpdate = createSessionMessageQueueUpdate(queuedAt);
+	const runIdsToUpdate = new Set<string>();
+	const taskIdsToReopen = new Set<string>();
+	let changed = false;
+
+	const tasks = data.tasks.map((task) => {
+		if (task.status !== 'review') {
+			return task;
+		}
+
+		const latestRun = task.latestRunId
+			? (data.runs.find((candidate) => candidate.id === task.latestRunId) ?? null)
+			: null;
+		const isLinkedToSession =
+			latestRun?.sessionId === sessionId || (!latestRun && task.threadSessionId === sessionId);
+
+		if (!isLinkedToSession) {
+			return task;
+		}
+
+		changed = true;
+		taskIdsToReopen.add(task.id);
+
+		if (task.latestRunId) {
+			runIdsToUpdate.add(task.latestRunId);
+		}
+
+		return {
+			...task,
+			status: queueUpdate.taskStatus,
+			blockedReason: '',
+			updatedAt: queueUpdate.queuedAt
+		};
+	});
+
+	if (!changed) {
+		return data;
+	}
+
+	return {
+		...data,
+		tasks,
+		runs: data.runs.map((run) =>
+			runIdsToUpdate.has(run.id)
+				? {
+						...run,
+						status: queueUpdate.runStatus,
+						summary: queueUpdate.runSummary,
+						updatedAt: queueUpdate.queuedAt,
+						startedAt: run.startedAt ?? queueUpdate.queuedAt,
+						endedAt: null,
+						lastHeartbeatAt: queueUpdate.queuedAt,
+						errorSummary: ''
+					}
+				: run
+		),
+		reviews: data.reviews.map((review) =>
+			taskIdsToReopen.has(review.taskId) && review.status === 'open'
+				? {
+						...review,
+						status: 'dismissed' as const,
+						updatedAt: queueUpdate.queuedAt,
+						resolvedAt: queueUpdate.queuedAt,
+						summary: queueUpdate.reviewSummary
+					}
+				: review
+		),
+		approvals: data.approvals.map((approval) =>
+			taskIdsToReopen.has(approval.taskId) &&
+			approval.mode === 'before_complete' &&
+			approval.status === 'pending'
+				? {
+						...approval,
+						status: 'canceled' as const,
+						updatedAt: queueUpdate.queuedAt,
+						resolvedAt: queueUpdate.queuedAt,
+						summary: queueUpdate.approvalSummary
+					}
+				: approval
 		)
 	};
 }
@@ -1498,6 +1709,7 @@ export async function startAgentSession(input: {
 		sandbox: input.sandbox,
 		model: input.model,
 		threadId: null,
+		attachments: [],
 		archivedAt: null,
 		createdAt: now,
 		updatedAt: now
@@ -1530,9 +1742,60 @@ export async function startAgentSession(input: {
 	};
 }
 
-export async function sendAgentSessionMessage(sessionId: string, prompt: string) {
+export async function updateAgentSessionSandbox(sessionId: string, sandbox: AgentSandbox) {
+	const [db, nativeThread] = await Promise.all([
+		loadAgentSessionsDb(),
+		getNativeCodexThread(sessionId)
+	]);
+	const existingSession = db.sessions.find((candidate) => candidate.id === sessionId) ?? null;
+
+	if (!existingSession && !nativeThread) {
+		throw new Error('Session not found.');
+	}
+
+	const now = new Date().toISOString();
+	const baseSession = existingSession ?? materializeNativeSession(nativeThread as NativeCodexThread);
+	const updatedSession: AgentSession = {
+		...baseSession,
+		sandbox,
+		updatedAt: now
+	};
+
+	await updateAgentSessionsDb((current) => {
+		const existingIndex = current.sessions.findIndex((candidate) => candidate.id === sessionId);
+
+		if (existingIndex >= 0) {
+			return {
+				sessions: current.sessions.map((candidate) =>
+					candidate.id === sessionId ? updatedSession : candidate
+				),
+				runs: current.runs
+			};
+		}
+
+		return {
+			sessions: [updatedSession, ...current.sessions],
+			runs: current.runs
+		};
+	});
+
+	return updatedSession;
+}
+
+export async function sendAgentSessionMessage(
+	sessionId: string,
+	input:
+		| string
+		| {
+				prompt: string;
+				attachments?: File[];
+		  }
+) {
 	const db = await loadAgentSessionsDb();
 	let session = db.sessions.find((candidate) => candidate.id === sessionId) ?? null;
+	const prompt = typeof input === 'string' ? input : input.prompt;
+	const uploads =
+		typeof input === 'string' ? [] : (input.attachments ?? []).filter((file) => file.size > 0);
 
 	if (!session) {
 		const nativeThread = await getNativeCodexThread(sessionId);
@@ -1569,6 +1832,22 @@ export async function sendAgentSessionMessage(sessionId: string, prompt: string)
 		throw new Error('Session does not have a discovered Codex thread id yet.');
 	}
 
+	const nextSessionAttachments =
+		session.attachments?.filter((attachment) => attachment.path.trim().length > 0) ?? [];
+	const persistedAttachments =
+		uploads.length > 0
+			? await persistSessionAttachments({
+					rootPath: AGENT_SESSIONS_ROOT,
+					sessionId,
+					uploads
+				})
+			: { attachments: [], inlineAttachmentContents: [] };
+	const nextPrompt = buildSessionAttachmentPrompt({
+		prompt,
+		attachments: persistedAttachments.attachments,
+		inlineAttachmentContents: persistedAttachments.inlineAttachmentContents
+	});
+
 	const runId = createRunId();
 	const now = new Date().toISOString();
 	const paths = getRunPaths(sessionId, runId);
@@ -1576,7 +1855,7 @@ export async function sendAgentSessionMessage(sessionId: string, prompt: string)
 		id: runId,
 		sessionId,
 		mode: 'message',
-		prompt,
+		prompt: nextPrompt,
 		requestedThreadId: detail.threadId,
 		createdAt: now,
 		updatedAt: now,
@@ -1589,6 +1868,7 @@ export async function sendAgentSessionMessage(sessionId: string, prompt: string)
 	const nextSession: AgentSession = {
 		...session,
 		threadId: detail.threadId,
+		attachments: [...persistedAttachments.attachments, ...nextSessionAttachments],
 		updatedAt: now
 	};
 
@@ -1599,6 +1879,12 @@ export async function sendAgentSessionMessage(sessionId: string, prompt: string)
 		),
 		runs: [run, ...current.runs]
 	}));
+	const controlPlane = await loadControlPlane();
+	const reconciledControlPlane = reconcileControlPlaneSessionMessage(controlPlane, sessionId, now);
+
+	if (reconciledControlPlane !== controlPlane) {
+		await updateControlPlane(() => reconciledControlPlane);
+	}
 	launchRunner(run.configPath);
 
 	return {

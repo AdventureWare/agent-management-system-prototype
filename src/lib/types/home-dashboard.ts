@@ -1,5 +1,9 @@
 import type { AgentSessionDetail } from '$lib/types/agent-session';
-import type { Approval, Review, Task } from '$lib/types/control-plane';
+import type {
+	SelfImprovementSnapshotSummary,
+	TrackedSelfImprovementOpportunity
+} from '$lib/types/self-improvement';
+import type { TaskFreshnessSummary, TaskWorkItem } from '$lib/types/task-work-item';
 
 export type AgentSessionSummary = {
 	totalCount: number;
@@ -30,13 +34,8 @@ export type ControlSummary = {
 	busyWorkerCount: number;
 };
 
-export type DashboardTaskAttentionItem = Task & {
+export type DashboardTaskAttentionItem = TaskWorkItem & {
 	goalName: string;
-	projectName: string;
-	assigneeName: string;
-	openReview: Review | null;
-	pendingApproval: Approval | null;
-	hasUnmetDependencies: boolean;
 	dependencyTaskNames: string[];
 };
 
@@ -45,4 +44,8 @@ export type HomeDashboardData = {
 	sessionSummary: AgentSessionSummary;
 	controlSummary: ControlSummary;
 	taskAttention: DashboardTaskAttentionItem[];
+	staleTaskSummary: TaskFreshnessSummary;
+	staleTasks: DashboardTaskAttentionItem[];
+	improvementSummary: SelfImprovementSnapshotSummary;
+	improvementOpportunities: TrackedSelfImprovementOpportunity[];
 };

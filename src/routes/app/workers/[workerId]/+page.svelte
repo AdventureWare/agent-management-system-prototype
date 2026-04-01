@@ -1,26 +1,22 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import {
+		formatRunStatusLabel,
+		formatTaskStatusLabel,
+		formatWorkerStatusLabel,
+		runStatusToneClass,
+		taskStatusToneClass,
+		workerStatusToneClass
+	} from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateWorker');
-
-	function statusClass(status: string) {
-		switch (status) {
-			case 'busy':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
-			case 'offline':
-				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
-			default:
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
-		}
-	}
 </script>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="space-y-3">
+		<div class="min-w-0 space-y-3">
 			<a
 				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
 				href={resolve('/app/workers')}
@@ -32,9 +28,9 @@
 					{data.worker.name}
 				</h1>
 				<span
-					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(data.worker.status)}`}
+					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.worker.status)}`}
 				>
-					{data.worker.status}
+					{formatWorkerStatusLabel(data.worker.status)}
 				</span>
 			</div>
 			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
@@ -50,6 +46,9 @@
 				</p>
 				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
 					{data.worker.location} execution surface
+				</p>
+				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+					Provider default sandbox: {data.worker.providerDefaultThreadSandbox}
 				</p>
 			</article>
 			<article class="card border border-slate-800 bg-slate-950/70 p-4">
@@ -144,7 +143,9 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 					<select class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
-							<option value={status} selected={data.worker.status === status}>{status}</option>
+							<option value={status} selected={data.worker.status === status}>
+								{formatWorkerStatusLabel(status)}
+							</option>
 						{/each}
 					</select>
 				</label>
@@ -160,6 +161,24 @@
 					/>
 				</label>
 			</div>
+
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Thread sandbox override</span>
+				<select class="select text-white" name="threadSandboxOverride">
+					<option value="" selected={data.worker.threadSandboxOverride === null}>
+						Use provider default ({data.worker.providerDefaultThreadSandbox})
+					</option>
+					{#each data.sandboxOptions as sandbox (sandbox)}
+						<option value={sandbox} selected={data.worker.threadSandboxOverride === sandbox}>
+							{sandbox}
+						</option>
+					{/each}
+				</select>
+				<p class="mt-2 text-xs text-slate-500">
+					Applies when this worker starts a new managed thread. Existing threads keep their own
+					saved sandbox until you change them directly.
+				</p>
+			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Note</span>
@@ -223,7 +242,7 @@
 										<p class="mt-1 text-sm text-slate-400">Updated {task.updatedAtLabel}</p>
 									</div>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${statusClass(task.status === 'done' ? 'idle' : task.status === 'blocked' ? 'offline' : task.status === 'in_progress' ? 'busy' : 'idle')}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
 									>
 										{formatTaskStatusLabel(task.status)}
 									</span>
@@ -258,7 +277,11 @@
 									<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
 								</div>
 								<div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
-									<span>{run.status}</span>
+									<span
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(run.status)}`}
+									>
+										{formatRunStatusLabel(run.status)}
+									</span>
 									<a
 										class="text-sky-300 transition hover:text-sky-200"
 										href={resolve(`/app/runs/${run.id}`)}

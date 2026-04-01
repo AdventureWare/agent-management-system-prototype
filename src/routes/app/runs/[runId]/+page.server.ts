@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listAgentSessions } from '$lib/server/agent-sessions';
+import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 
@@ -16,8 +17,18 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	return {
 		run,
+		artifactBrowsers: await Promise.all(
+			run.artifactPaths.map((path) =>
+				buildArtifactBrowser({
+					rootPath: path,
+					rootFileLabel: 'Recorded output'
+				})
+			)
+		),
 		task: data.tasks.find((task) => task.id === run.taskId) ?? null,
-		worker: run.workerId ? (data.workers.find((worker) => worker.id === run.workerId) ?? null) : null,
+		worker: run.workerId
+			? (data.workers.find((worker) => worker.id === run.workerId) ?? null)
+			: null,
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,

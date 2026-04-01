@@ -23,9 +23,9 @@
 				};
 			case 'progress':
 				return {
-					label: 'text-amber-200',
-					bar: 'bg-amber-300',
-					chip: 'border-amber-800/70 bg-amber-950/40 text-amber-200'
+					label: 'text-violet-200',
+					bar: 'bg-violet-300',
+					chip: 'border-violet-800/70 bg-violet-950/40 text-violet-200'
 				};
 			case 'ready':
 				return {

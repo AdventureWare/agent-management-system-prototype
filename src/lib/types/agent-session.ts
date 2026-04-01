@@ -34,6 +34,7 @@ export type AgentSession = {
 	sandbox: AgentSandbox;
 	model: string | null;
 	threadId: string | null;
+	attachments?: AgentSessionAttachment[];
 	archivedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
@@ -44,6 +45,15 @@ export type AgentSessionTaskLink = {
 	title: string;
 	status: string;
 	isPrimary: boolean;
+};
+
+export type AgentSessionAttachment = {
+	id: string;
+	name: string;
+	path: string;
+	contentType: string;
+	sizeBytes: number;
+	attachedAt: string;
 };
 
 export type AgentRun = {
@@ -93,6 +103,7 @@ export type AgentTimelineStep = {
 export type AgentSessionDetail = AgentSession & {
 	origin: AgentSessionOrigin;
 	threadId: string | null;
+	topicLabels?: string[];
 	sessionState: AgentSessionState;
 	latestRunStatus: AgentRunStatus | 'idle';
 	hasActiveRun: boolean;

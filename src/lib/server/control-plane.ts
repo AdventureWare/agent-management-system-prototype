@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { normalizePathInput } from '$lib/server/path-tools';
+import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-session';
 import {
 	APPROVAL_STATUS_OPTIONS,
 	GOAL_STATUS_OPTIONS,
@@ -9,6 +10,10 @@ import {
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
 	PROVIDER_SETUP_STATUS_OPTIONS,
+	PLANNING_CAPACITY_UNIT_OPTIONS,
+	PLANNING_CONFIDENCE_OPTIONS,
+	PLANNING_HORIZON_KIND_OPTIONS,
+	PLANNING_HORIZON_STATUS_OPTIONS,
 	PRIORITY_OPTIONS,
 	REVIEW_STATUS_OPTIONS,
 	RUN_STATUS_OPTIONS,
@@ -23,6 +28,11 @@ import {
 	type Goal,
 	type GoalStatus,
 	type Lane,
+	type PlanningCapacityUnit,
+	type PlanningConfidence,
+	type PlanningHorizon,
+	type PlanningHorizonKind,
+	type PlanningHorizonStatus,
 	type Provider,
 	type ProviderAuthMode,
 	type ProviderKind,
@@ -37,6 +47,7 @@ import {
 	type TaskRiskLevel,
 	type Task,
 	type TaskAttachment,
+	type TaskPlanningSource,
 	type TaskStatus,
 	type Worker,
 	type WorkerLocation,
@@ -97,12 +108,37 @@ function isProviderAuthMode(value: string): value is ProviderAuthMode {
 	return PROVIDER_AUTH_MODE_OPTIONS.includes(value as ProviderAuthMode);
 }
 
+function isPlanningHorizonKind(value: string): value is PlanningHorizonKind {
+	return PLANNING_HORIZON_KIND_OPTIONS.includes(value as PlanningHorizonKind);
+}
+
+function isPlanningHorizonStatus(value: string): value is PlanningHorizonStatus {
+	return PLANNING_HORIZON_STATUS_OPTIONS.includes(value as PlanningHorizonStatus);
+}
+
+function isPlanningCapacityUnit(value: string): value is PlanningCapacityUnit {
+	return PLANNING_CAPACITY_UNIT_OPTIONS.includes(value as PlanningCapacityUnit);
+}
+
+function isPlanningConfidence(value: string): value is PlanningConfidence {
+	return PLANNING_CONFIDENCE_OPTIONS.includes(value as PlanningConfidence);
+}
+
+function isTaskPlanningSource(value: string): value is TaskPlanningSource {
+	return value === 'manual' || value === 'ai_proposed' || value === 'ai_accepted';
+}
+
+function isAgentSandbox(value: string): value is AgentSandbox {
+	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
+}
+
 function defaultData(): ControlPlaneData {
 	return {
 		providers: [],
 		roles: [],
 		projects: [],
 		goals: [],
+		planningHorizons: [],
 		workers: [],
 		tasks: [],
 		runs: [],
@@ -129,12 +165,47 @@ type LegacyProvider = Partial<Provider> & {
 	launcher?: unknown;
 	envVars?: unknown;
 	capabilities?: unknown;
+	defaultThreadSandbox?: unknown;
 	notes?: unknown;
+};
+
+type LegacyWorker = Partial<Worker> & {
+	providerId?: unknown;
+	roleId?: unknown;
+	location?: unknown;
+	status?: unknown;
+	capacity?: unknown;
+	note?: unknown;
+	tags?: unknown;
+	skills?: unknown;
+	weeklyCapacityHours?: unknown;
+	focusFactor?: unknown;
+	maxConcurrentRuns?: unknown;
+	threadSandboxOverride?: unknown;
+	authTokenHash?: unknown;
+};
+
+type LegacyGoal = Partial<Goal> & {
+	horizon?: unknown;
+	successSignal?: unknown;
+	parentGoalId?: unknown;
+	projectIds?: unknown;
+	taskIds?: unknown;
+	planningHorizonId?: unknown;
+	targetDate?: unknown;
+	planningPriority?: unknown;
+	confidence?: unknown;
 };
 
 type LegacyTask = Partial<Task> & {
 	projectId?: unknown;
 	attachments?: unknown;
+	parentTaskId?: unknown;
+	planningHorizonId?: unknown;
+	estimateHours?: unknown;
+	targetDate?: unknown;
+	planningOrder?: unknown;
+	source?: unknown;
 };
 
 type LegacyRun = Partial<Run> & {
@@ -144,6 +215,14 @@ type LegacyRun = Partial<Run> & {
 type LegacyReview = Partial<Review>;
 
 type LegacyApproval = Partial<Approval>;
+type LegacyPlanningHorizon = Partial<PlanningHorizon> & {
+	kind?: unknown;
+	status?: unknown;
+	startDate?: unknown;
+	endDate?: unknown;
+	notes?: unknown;
+	capacityUnit?: unknown;
+};
 
 type LegacyTaskAttachment = Partial<TaskAttachment>;
 
@@ -198,6 +277,68 @@ function normalizeProviderList(value: unknown) {
 		.map((candidate) => candidate.trim());
 }
 
+function normalizeOptionalAgentSandbox(value: unknown): AgentSandbox | null {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const normalized = value.trim();
+	return isAgentSandbox(normalized) ? normalized : null;
+}
+
+function normalizeAgentSandbox(value: unknown, fallback: AgentSandbox): AgentSandbox {
+	return normalizeOptionalAgentSandbox(value) ?? fallback;
+}
+
+function normalizeIdList(value: unknown) {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return [
+		...new Set(
+			value
+				.filter(
+					(candidate): candidate is string =>
+						typeof candidate === 'string' && candidate.trim().length > 0
+				)
+				.map((candidate) => candidate.trim())
+		)
+	];
+}
+
+function normalizeStringList(value: unknown) {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.filter((candidate): candidate is string => typeof candidate === 'string')
+		.map((candidate) => candidate.trim())
+		.filter(Boolean);
+}
+
+function normalizeOptionalDate(value: unknown) {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const normalized = value.trim();
+	return normalized ? normalized : null;
+}
+
+function normalizePositiveNumber(value: unknown) {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback = 0) {
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+		return fallback;
+	}
+
+	return Math.round(value);
+}
+
 function normalizeProvider(provider: LegacyProvider): Provider {
 	const providerKindValue = typeof provider.kind === 'string' ? provider.kind : '';
 	const kind: ProviderKind = isProviderKind(providerKindValue) ? providerKindValue : 'cloud';
@@ -235,7 +376,115 @@ function normalizeProvider(provider: LegacyProvider): Provider {
 					: '',
 		envVars: normalizeProviderList(provider.envVars),
 		capabilities: normalizeProviderList(provider.capabilities),
+		defaultThreadSandbox: normalizeAgentSandbox(
+			provider.defaultThreadSandbox,
+			'workspace-write'
+		),
 		notes: typeof provider.notes === 'string' ? provider.notes : ''
+	};
+}
+
+function normalizeWorker(worker: LegacyWorker): Worker {
+	const locationValue = typeof worker.location === 'string' ? worker.location : '';
+	const statusValue = typeof worker.status === 'string' ? worker.status : '';
+	const tags = Array.isArray(worker.tags)
+		? worker.tags
+				.filter((tag): tag is string => typeof tag === 'string')
+				.map((tag) => tag.trim())
+				.filter(Boolean)
+		: [];
+	const skills = normalizeStringList(worker.skills);
+	const focusFactor =
+		typeof worker.focusFactor === 'number' &&
+		Number.isFinite(worker.focusFactor) &&
+		worker.focusFactor > 0 &&
+		worker.focusFactor <= 1
+			? worker.focusFactor
+			: 1;
+
+	return {
+		id: typeof worker.id === 'string' ? worker.id : createWorkerId(),
+		name: typeof worker.name === 'string' ? worker.name : '',
+		providerId: typeof worker.providerId === 'string' ? worker.providerId : '',
+		roleId: typeof worker.roleId === 'string' ? worker.roleId : '',
+		location: isWorkerLocation(locationValue) ? locationValue : 'cloud',
+		status: isWorkerStatus(statusValue) ? statusValue : 'idle',
+		capacity:
+			typeof worker.capacity === 'number' && Number.isFinite(worker.capacity) && worker.capacity > 0
+				? worker.capacity
+				: 1,
+		registeredAt:
+			typeof worker.registeredAt === 'string' ? worker.registeredAt : new Date().toISOString(),
+		lastSeenAt:
+			typeof worker.lastSeenAt === 'string' ? worker.lastSeenAt : new Date().toISOString(),
+		note: typeof worker.note === 'string' ? worker.note : '',
+		tags,
+		skills,
+		weeklyCapacityHours: normalizePositiveNumber(worker.weeklyCapacityHours),
+		focusFactor,
+		maxConcurrentRuns: normalizePositiveNumber(worker.maxConcurrentRuns),
+		threadSandboxOverride: normalizeOptionalAgentSandbox(worker.threadSandboxOverride),
+		authTokenHash: typeof worker.authTokenHash === 'string' ? worker.authTokenHash : ''
+	};
+}
+
+function normalizeGoal(goal: LegacyGoal): Goal {
+	const laneValue = typeof goal.lane === 'string' ? goal.lane : '';
+	const statusValue = typeof goal.status === 'string' ? goal.status : '';
+
+	return {
+		id: typeof goal.id === 'string' ? goal.id : createGoalId(),
+		name: typeof goal.name === 'string' ? goal.name : '',
+		summary: typeof goal.summary === 'string' ? goal.summary : '',
+		lane: isLane(laneValue) ? laneValue : 'product',
+		status: isGoalStatus(statusValue) ? statusValue : 'ready',
+		artifactPath: normalizePathInput(
+			typeof goal.artifactPath === 'string' ? goal.artifactPath : ''
+		),
+		horizon: typeof goal.horizon === 'string' ? goal.horizon : '',
+		successSignal: typeof goal.successSignal === 'string' ? goal.successSignal : '',
+		parentGoalId:
+			typeof goal.parentGoalId === 'string' && goal.parentGoalId.trim()
+				? goal.parentGoalId.trim()
+				: null,
+		projectIds: normalizeIdList(goal.projectIds),
+		taskIds: normalizeIdList(goal.taskIds),
+		planningHorizonId:
+			typeof goal.planningHorizonId === 'string' && goal.planningHorizonId.trim()
+				? goal.planningHorizonId.trim()
+				: null,
+		targetDate: normalizeOptionalDate(goal.targetDate),
+		planningPriority:
+			typeof goal.planningPriority === 'number' &&
+			Number.isFinite(goal.planningPriority) &&
+			goal.planningPriority >= 0
+				? Math.round(goal.planningPriority)
+				: 0,
+		confidence:
+			typeof goal.confidence === 'string' && isPlanningConfidence(goal.confidence)
+				? goal.confidence
+				: 'medium'
+	};
+}
+
+function normalizePlanningHorizon(horizon: LegacyPlanningHorizon): PlanningHorizon {
+	const now = new Date().toISOString();
+	const kindValue = typeof horizon.kind === 'string' ? horizon.kind : '';
+	const statusValue = typeof horizon.status === 'string' ? horizon.status : '';
+	const capacityUnitValue =
+		typeof horizon.capacityUnit === 'string' ? horizon.capacityUnit : '';
+
+	return {
+		id: typeof horizon.id === 'string' ? horizon.id : createPlanningHorizonId(),
+		name: typeof horizon.name === 'string' ? horizon.name : '',
+		kind: isPlanningHorizonKind(kindValue) ? kindValue : 'custom',
+		status: isPlanningHorizonStatus(statusValue) ? statusValue : 'draft',
+		startDate: typeof horizon.startDate === 'string' ? horizon.startDate : '',
+		endDate: typeof horizon.endDate === 'string' ? horizon.endDate : '',
+		notes: typeof horizon.notes === 'string' ? horizon.notes : '',
+		capacityUnit: isPlanningCapacityUnit(capacityUnitValue) ? capacityUnitValue : 'hours',
+		createdAt: typeof horizon.createdAt === 'string' ? horizon.createdAt : now,
+		updatedAt: typeof horizon.updatedAt === 'string' ? horizon.updatedAt : now
 	};
 }
 
@@ -459,6 +708,21 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 					(candidate) => typeof candidate === 'string' && candidate.trim()
 				)
 			: [],
+		parentTaskId:
+			typeof task.parentTaskId === 'string' && task.parentTaskId.trim()
+				? task.parentTaskId
+				: null,
+		planningHorizonId:
+			typeof task.planningHorizonId === 'string' && task.planningHorizonId.trim()
+				? task.planningHorizonId
+				: null,
+		estimateHours: normalizePositiveNumber(task.estimateHours),
+		targetDate: normalizeOptionalDate(task.targetDate),
+		planningOrder: normalizeNonNegativeInteger(task.planningOrder, 0),
+		source:
+			typeof task.source === 'string' && isTaskPlanningSource(task.source)
+				? task.source
+				: 'manual',
 		runCount:
 			typeof task.runCount === 'number' && Number.isFinite(task.runCount) && task.runCount >= 0
 				? task.runCount
@@ -611,13 +875,23 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 		const approvals = Array.isArray(parsed.approvals)
 			? parsed.approvals.map((approval) => normalizeApproval(approval as LegacyApproval))
 			: [];
+		const planningHorizons = Array.isArray(parsed.planningHorizons)
+			? parsed.planningHorizons.map((horizon) =>
+					normalizePlanningHorizon(horizon as LegacyPlanningHorizon)
+				)
+			: [];
 
 		return syncGovernanceQueues({
 			providers,
 			roles: Array.isArray(parsed.roles) ? parsed.roles : [],
 			projects,
-			goals: Array.isArray(parsed.goals) ? parsed.goals : [],
-			workers: Array.isArray(parsed.workers) ? parsed.workers : [],
+			goals: Array.isArray(parsed.goals)
+				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+				: [],
+			planningHorizons,
+			workers: Array.isArray(parsed.workers)
+				? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
+				: [],
 			tasks: Array.isArray(parsed.tasks)
 				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
 				: [],
@@ -701,6 +975,10 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 
 export function createGoalId() {
 	return `goal_${randomUUID()}`;
+}
+
+export function createPlanningHorizonId() {
+	return `planning_horizon_${randomUUID()}`;
 }
 
 export function createProviderId() {
@@ -807,6 +1085,7 @@ export function createProvider(input: {
 	launcher?: string;
 	envVars?: string[];
 	capabilities?: string[];
+	defaultThreadSandbox?: AgentSandbox;
 	notes?: string;
 }): Provider {
 	return {
@@ -823,6 +1102,7 @@ export function createProvider(input: {
 		launcher: input.launcher ?? '',
 		envVars: input.envVars ?? [],
 		capabilities: input.capabilities ?? [],
+		defaultThreadSandbox: input.defaultThreadSandbox ?? 'workspace-write',
 		notes: input.notes ?? ''
 	};
 }
@@ -833,6 +1113,15 @@ export function createGoal(input: {
 	lane: Lane;
 	status: GoalStatus;
 	artifactPath: string;
+	horizon?: string;
+	successSignal?: string;
+	parentGoalId?: string | null;
+	projectIds?: string[];
+	taskIds?: string[];
+	planningHorizonId?: string | null;
+	targetDate?: string | null;
+	planningPriority?: number;
+	confidence?: PlanningConfidence;
 }): Goal {
 	return {
 		id: createGoalId(),
@@ -840,7 +1129,41 @@ export function createGoal(input: {
 		summary: input.summary,
 		lane: input.lane,
 		status: input.status,
-		artifactPath: input.artifactPath
+		artifactPath: normalizePathInput(input.artifactPath),
+		horizon: input.horizon ?? '',
+		successSignal: input.successSignal ?? '',
+		parentGoalId: input.parentGoalId ?? null,
+		projectIds: input.projectIds ?? [],
+		taskIds: input.taskIds ?? [],
+		planningHorizonId: input.planningHorizonId ?? null,
+		targetDate: input.targetDate ?? null,
+		planningPriority: input.planningPriority ?? 0,
+		confidence: input.confidence ?? 'medium'
+	};
+}
+
+export function createPlanningHorizon(input: {
+	name: string;
+	kind: PlanningHorizonKind;
+	status?: PlanningHorizonStatus;
+	startDate: string;
+	endDate: string;
+	notes?: string;
+	capacityUnit?: PlanningCapacityUnit;
+}): PlanningHorizon {
+	const now = new Date().toISOString();
+
+	return {
+		id: createPlanningHorizonId(),
+		name: input.name,
+		kind: input.kind,
+		status: input.status ?? 'draft',
+		startDate: input.startDate,
+		endDate: input.endDate,
+		notes: input.notes ?? '',
+		capacityUnit: input.capacityUnit ?? 'hours',
+		createdAt: now,
+		updatedAt: now
 	};
 }
 
@@ -886,6 +1209,12 @@ export function projectMatchesPath(project: Project, path: string) {
 	});
 }
 
+export function goalLinksProject(goal: Goal, project: Project) {
+	return (
+		(goal.projectIds ?? []).includes(project.id) || projectMatchesPath(project, goal.artifactPath)
+	);
+}
+
 export function createTask(input: {
 	title: string;
 	summary: string;
@@ -900,6 +1229,12 @@ export function createTask(input: {
 	artifactPath: string;
 	blockedReason?: string;
 	dependencyTaskIds?: string[];
+	parentTaskId?: string | null;
+	planningHorizonId?: string | null;
+	estimateHours?: number | null;
+	targetDate?: string | null;
+	planningOrder?: number;
+	source?: TaskPlanningSource;
 	assigneeWorkerId?: string | null;
 	threadSessionId?: string | null;
 	status?: TaskStatus;
@@ -924,6 +1259,12 @@ export function createTask(input: {
 		threadSessionId: input.threadSessionId ?? null,
 		blockedReason: input.blockedReason ?? '',
 		dependencyTaskIds: input.dependencyTaskIds ?? [],
+		parentTaskId: input.parentTaskId ?? null,
+		planningHorizonId: input.planningHorizonId ?? null,
+		estimateHours: input.estimateHours ?? null,
+		targetDate: input.targetDate ?? null,
+		planningOrder: input.planningOrder ?? 0,
+		source: input.source ?? 'manual',
 		runCount: 0,
 		latestRunId: null,
 		artifactPath: input.artifactPath,
@@ -1075,6 +1416,11 @@ export function createWorker(input: {
 	capacity: number;
 	note: string;
 	tags: string[];
+	skills?: string[];
+	weeklyCapacityHours?: number | null;
+	focusFactor?: number;
+	maxConcurrentRuns?: number | null;
+	threadSandboxOverride?: AgentSandbox | null;
 }): Worker {
 	return {
 		id: createWorkerId(),
@@ -1088,6 +1434,38 @@ export function createWorker(input: {
 		lastSeenAt: new Date().toISOString(),
 		note: input.note,
 		tags: input.tags,
+		skills: input.skills ?? [],
+		weeklyCapacityHours: input.weeklyCapacityHours ?? null,
+		focusFactor: input.focusFactor ?? 1,
+		maxConcurrentRuns: input.maxConcurrentRuns ?? null,
+		threadSandboxOverride: input.threadSandboxOverride ?? null,
 		authTokenHash: ''
 	};
+}
+
+export function resolveThreadSandbox(input: {
+	worker?: Pick<Worker, 'threadSandboxOverride'> | null;
+	provider?: Pick<Provider, 'defaultThreadSandbox'> | null;
+	fallback?: AgentSandbox;
+}) {
+	return (
+		input.worker?.threadSandboxOverride ??
+		input.provider?.defaultThreadSandbox ??
+		input.fallback ??
+		'workspace-write'
+	);
+}
+
+export function selectExecutionProvider(
+	data: Pick<ControlPlaneData, 'providers'>,
+	worker?: Pick<Worker, 'providerId'> | null
+) {
+	return (
+		(worker?.providerId
+			? data.providers.find((provider) => provider.id === worker.providerId)
+			: null) ??
+		data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
+		data.providers[0] ??
+		null
+	);
 }

@@ -72,7 +72,8 @@ describe('control-plane project migration', () => {
 				authMode: 'local_cli',
 				setupStatus: 'connected',
 				enabled: true,
-				launcher: 'codex'
+				launcher: 'codex',
+				defaultThreadSandbox: 'workspace-write'
 			})
 		]);
 	});

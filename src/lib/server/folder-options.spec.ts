@@ -37,11 +37,11 @@ describe('folder picker options', () => {
 	it('builds labeled folder options from the known roots and skips hidden entries', async () => {
 		readdir.mockImplementation(async (path: string) => {
 			switch (path) {
-				case '/Users/colinfreed/Projects/Products':
+				case '/Users/colinfreed/Projects/AdventureWare/Products':
 					return [directory('Kwipoo'), directory('.git'), file('README.md')];
-				case '/Users/colinfreed/Projects/Products/Kwipoo':
+				case '/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo':
 					return [directory('app')];
-				case '/Users/colinfreed/Projects/Products/Kwipoo/app':
+				case '/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/app':
 					return [];
 				case '/Users/colinfreed/Projects/Experiments':
 					return [directory('agent-management-system-prototype')];
@@ -55,9 +55,15 @@ describe('folder picker options', () => {
 		const options = await loadFolderPickerOptions();
 
 		expect(options).toEqual([
-			{ path: '/Users/colinfreed/Projects/Products', label: 'Products · .' },
-			{ path: '/Users/colinfreed/Projects/Products/Kwipoo', label: 'Products · Kwipoo' },
-			{ path: '/Users/colinfreed/Projects/Products/Kwipoo/app', label: 'Products · Kwipoo/app' },
+			{ path: '/Users/colinfreed/Projects/AdventureWare/Products', label: 'Products · .' },
+			{
+				path: '/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo',
+				label: 'Products · Kwipoo'
+			},
+			{
+				path: '/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/app',
+				label: 'Products · Kwipoo/app'
+			},
 			{ path: '/Users/colinfreed/Projects/Experiments', label: 'Experiments · .' },
 			{
 				path: '/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',

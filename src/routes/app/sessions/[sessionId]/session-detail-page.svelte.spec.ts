@@ -101,6 +101,16 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			model: 'gpt-5.4',
 			origin: 'external',
 			threadId: 'thread-1',
+			attachments: [
+				{
+					id: 'attachment-1',
+					name: 'brief.md',
+					path: '/tmp/session-1/attachments/brief.md',
+					contentType: 'text/markdown',
+					sizeBytes: 128,
+					attachedAt: '2026-03-27T12:59:00.000Z'
+				}
+			],
 			archivedAt: null,
 			createdAt: '2026-03-27T12:00:00.000Z',
 			updatedAt: '2026-03-27T13:03:00.000Z',
@@ -111,7 +121,7 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			runCount: 2,
 			lastActivityAt: '2026-03-27T13:03:00.000Z',
 			lastActivityLabel: 'moments ago',
-			sessionSummary: 'The thread is idle and ready for a follow-up instruction.',
+			sessionSummary: 'The thread is idle and available for a follow-up instruction.',
 			lastExitCode: 0,
 			runTimeline: timeline,
 			relatedTasks: [
@@ -127,8 +137,28 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		};
 
 		render(Page, {
+			form: null as never,
 			data: {
-				session
+				session,
+				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				taskResponseAction: {
+					taskId: 'task-1',
+					taskTitle: 'Session detail inspector task',
+					taskStatus: 'review',
+					openReview: {
+						status: 'open',
+						summary: 'Review the latest thread output.'
+					},
+					pendingApproval: {
+						mode: 'before_complete',
+						status: 'pending',
+						summary: 'Sign-off required before closing.'
+					},
+					canApproveAndComplete: true,
+					helperText:
+						'Approving here will close the open review, approve the pending gate, and mark the task complete.',
+					disabledReason: ''
+				}
 			} as never
 		});
 
@@ -136,8 +166,10 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			.element(page.getByRole('heading', { name: 'Session detail inspector' }))
 			.toBeVisible();
 		await expect.element(page.getByText('Thread status')).toBeVisible();
-		await expect.element(page.getByRole('heading', { name: 'Ready' })).toBeVisible();
-		await expect.element(page.getByText('Ready for follow-up')).toBeVisible();
+		await expect.element(page.getByRole('heading', { name: 'Available' })).toBeVisible();
+		await expect
+			.element(page.getByText('The thread is idle and available for the next instruction.'))
+			.toBeVisible();
 		await expect.element(page.getByText('Imported from Codex')).toBeVisible();
 		await expect.element(page.getByText('latest run completed')).toBeVisible();
 		await expect
@@ -161,6 +193,14 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			.toBeVisible();
 		await expect
 			.element(page.getByRole('button', { name: 'Send follow-up instruction' }))
+			.toBeEnabled();
+		await expect.element(page.getByRole('heading', { name: 'Thread attachments' })).toBeVisible();
+		await expect.element(page.getByText('brief.md')).toBeVisible();
+		await expect
+			.element(page.getByRole('heading', { name: 'Approve task response' }))
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('button', { name: 'Approve response and complete task' }))
 			.toBeEnabled();
 
 		await page.getByRole('button', { name: /Turn 1/i }).click();

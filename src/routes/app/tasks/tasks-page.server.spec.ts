@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSessionDetail } from '$lib/types/agent-session';
 import type { ControlPlaneData, Project } from '$lib/types/control-plane';
 
+const { mkdir, writeFile } = vi.hoisted(() => ({
+	mkdir: vi.fn(),
+	writeFile: vi.fn()
+}));
+
 const controlPlaneState = vi.hoisted(() => ({
 	current: null as ControlPlaneData | null,
 	saved: null as ControlPlaneData | null
@@ -10,6 +15,27 @@ const controlPlaneState = vi.hoisted(() => ({
 const agentSessionState = vi.hoisted(() => ({
 	session: null as AgentSessionDetail | null
 }));
+
+const createRunMock = vi.hoisted(() =>
+	vi.fn((input: { taskId: string; sessionId?: string | null; status?: string }) => ({
+		id: `run_${input.taskId}`,
+		taskId: input.taskId,
+		workerId: null,
+		providerId: null,
+		status: input.status ?? 'queued',
+		createdAt: '2026-03-31T10:00:00.000Z',
+		updatedAt: '2026-03-31T10:00:00.000Z',
+		startedAt: '2026-03-31T10:00:00.000Z',
+		endedAt: null,
+		threadId: null,
+		sessionId: input.sessionId ?? null,
+		promptDigest: 'digest_create_and_run',
+		artifactPaths: ['/tmp/project/agent_output'],
+		summary: 'Started a new work thread during task creation.',
+		lastHeartbeatAt: '2026-03-31T10:00:00.000Z',
+		errorSummary: ''
+	}))
+);
 
 const createTaskMock = vi.hoisted(() =>
 	vi.fn(
@@ -47,6 +73,22 @@ const createTaskMock = vi.hoisted(() =>
 	)
 );
 
+const startAgentSessionMock = vi.hoisted(() =>
+	vi.fn(async () => ({
+		sessionId: 'session_created',
+		runId: 'runner_created'
+	}))
+);
+
+const buildPromptDigestMock = vi.hoisted(() => vi.fn(() => 'digest_create_and_run'));
+const buildTaskThreadNameMock = vi.hoisted(() =>
+	vi.fn(
+		(input: { projectName: string; taskName: string; taskId: string }) =>
+			`Task thread · ${input.taskName} · ${input.projectName} · ${input.taskId}`
+	)
+);
+const buildTaskThreadPromptMock = vi.hoisted(() => vi.fn(() => 'task prompt'));
+
 const parseIdeationTaskSuggestionsMock = vi.hoisted(() =>
 	vi.fn(() => [
 		{
@@ -69,7 +111,8 @@ const parseIdeationTaskSuggestionsMock = vi.hoisted(() =>
 );
 
 vi.mock('$lib/server/control-plane', () => ({
-	createRun: vi.fn(),
+	createTaskAttachmentId: vi.fn(() => 'attachment_created'),
+	createRun: createRunMock,
 	createTask: createTaskMock,
 	deleteTask: vi.fn(),
 	formatRelativeTime: vi.fn(() => 'just now'),
@@ -77,6 +120,19 @@ vi.mock('$lib/server/control-plane', () => ({
 	getPendingApprovalForTask: vi.fn(() => null),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseTaskStatus: vi.fn((_value: string, fallback: string) => fallback),
+	resolveThreadSandbox: vi.fn(
+		(input: { worker?: { threadSandboxOverride: string | null } | null; provider?: { defaultThreadSandbox: string } | null }) =>
+			input.worker?.threadSandboxOverride ?? input.provider?.defaultThreadSandbox ?? 'workspace-write'
+	),
+	selectExecutionProvider: vi.fn(
+		(data: ControlPlaneData, worker?: { providerId: string } | null) =>
+			(worker?.providerId
+				? data.providers.find((provider) => provider.id === worker.providerId)
+				: null) ??
+			data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
+			data.providers[0] ??
+			null
+	),
 	taskHasUnmetDependencies: vi.fn(() => false),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
@@ -85,12 +141,17 @@ vi.mock('$lib/server/control-plane', () => ({
 	})
 }));
 
+vi.mock('node:fs/promises', () => ({
+	mkdir,
+	writeFile
+}));
+
 vi.mock('$lib/server/agent-sessions', () => ({
 	cancelAgentSession: vi.fn(),
 	getAgentSession: vi.fn(async () => agentSessionState.session),
 	listAgentSessions: vi.fn(async () => []),
 	sendAgentSessionMessage: vi.fn(),
-	startAgentSession: vi.fn()
+	startAgentSession: startAgentSessionMock
 }));
 
 vi.mock('$lib/task-thread-context', () => ({
@@ -102,9 +163,9 @@ vi.mock('$lib/task-thread-context', () => ({
 }));
 
 vi.mock('$lib/server/task-threads', () => ({
-	buildPromptDigest: vi.fn(),
-	buildTaskThreadName: vi.fn(),
-	buildTaskThreadPrompt: vi.fn()
+	buildPromptDigest: buildPromptDigestMock,
+	buildTaskThreadName: buildTaskThreadNameMock,
+	buildTaskThreadPrompt: buildTaskThreadPromptMock
 }));
 
 vi.mock('$lib/server/task-ideation', () => ({
@@ -124,10 +185,35 @@ import { actions } from './+page.server';
 
 describe('tasks page server actions', () => {
 	beforeEach(() => {
+		mkdir.mockReset();
+		writeFile.mockReset();
+		buildPromptDigestMock.mockClear();
+		buildTaskThreadNameMock.mockClear();
+		buildTaskThreadPromptMock.mockClear();
+		createRunMock.mockClear();
 		createTaskMock.mockClear();
 		parseIdeationTaskSuggestionsMock.mockClear();
+		startAgentSessionMock.mockClear();
 		controlPlaneState.current = {
-			providers: [],
+			providers: [
+				{
+					id: 'provider_local',
+					name: 'Local Codex',
+					service: 'codex',
+					kind: 'local',
+					description: 'Local provider',
+					enabled: true,
+					setupStatus: 'connected',
+					authMode: 'local_cli',
+					defaultModel: 'gpt-5',
+					baseUrl: '',
+					launcher: 'codex',
+					envVars: [],
+					capabilities: [],
+					defaultThreadSandbox: 'workspace-write',
+					notes: ''
+				}
+			],
 			roles: [
 				{
 					id: 'role_coordinator',
@@ -245,6 +331,184 @@ describe('tasks page server actions', () => {
 				title: 'Create draft tasks directly from ideation output',
 				status: 'in_draft',
 				projectId: 'project_ams'
+			})
+		);
+	});
+
+	it('creates a queued task without launching a work thread by default', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Add create and run button');
+		form.set('instructions', 'Add a second action in the create task form.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(startAgentSessionMock).not.toHaveBeenCalled();
+		expect(createRunMock).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Add create and run button',
+				status: 'ready',
+				threadSessionId: null,
+				runCount: 0
+			})
+		);
+	});
+
+	it('attaches uploaded files while creating a queued task', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Create task with source files');
+		form.set('instructions', 'Save the uploaded brief files during creation.');
+		form.append('attachments', new File(['brief'], 'brief.md', { type: 'text/markdown' }));
+		form.append('attachments', new File(['diagram'], 'diagram.png', { type: 'image/png' }));
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask',
+				attachmentCount: 2
+			})
+		);
+		expect(mkdir).toHaveBeenCalledWith(
+			'/tmp/project/agent_output/task-attachments/task_create_task_with_source_files',
+			{ recursive: true }
+		);
+		expect(writeFile).toHaveBeenCalledTimes(2);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Create task with source files',
+				attachments: [
+					expect.objectContaining({
+						id: 'attachment_created',
+						name: 'brief.md',
+						path:
+							'/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-brief.md',
+						contentType: 'text/markdown',
+						sizeBytes: 5
+					}),
+					expect.objectContaining({
+						id: 'attachment_created',
+						name: 'diagram.png',
+						path:
+							'/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-diagram.png',
+						contentType: 'image/png',
+						sizeBytes: 7
+					})
+				]
+			})
+		);
+	});
+
+	it('creates and launches a task when the create-and-run submit mode is used', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Create and run from the task form');
+		form.set('instructions', 'Create the task and immediately start its work thread.');
+		form.set('submitMode', 'createAndRun');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTaskAndRun',
+				taskId: 'task_create_and_run_from_the_task_form',
+				sessionId: 'session_created'
+			})
+		);
+		expect(buildTaskThreadPromptMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				taskName: 'Create and run from the task form',
+				taskInstructions: 'Create the task and immediately start its work thread.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		);
+		expect(startAgentSessionMock).toHaveBeenCalledWith({
+			name:
+				'Task thread · Create and run from the task form · Agent Management System Prototype · task_create_and_run_from_the_task_form',
+			cwd: '/tmp/project',
+			prompt: 'task prompt',
+			sandbox: 'workspace-write',
+			model: null
+		});
+		expect(buildTaskThreadNameMock).toHaveBeenCalledWith({
+			projectName: 'Agent Management System Prototype',
+			taskName: 'Create and run from the task form',
+			taskId: 'task_create_and_run_from_the_task_form'
+		});
+		expect(createRunMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				taskId: 'task_create_and_run_from_the_task_form',
+				providerId: 'provider_local',
+				status: 'running',
+				sessionId: 'session_created',
+				promptDigest: 'digest_create_and_run',
+				artifactPaths: ['/tmp/project/agent_output']
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Create and run from the task form',
+				status: 'in_progress',
+				threadSessionId: 'session_created',
+				runCount: 1,
+				latestRunId: 'run_task_create_and_run_from_the_task_form'
+			})
+		);
+		expect(controlPlaneState.saved?.runs[0]).toEqual(
+			expect.objectContaining({
+				id: 'run_task_create_and_run_from_the_task_form',
+				taskId: 'task_create_and_run_from_the_task_form',
+				sessionId: 'session_created'
+			})
+		);
+	});
+
+	it('uses the provider thread sandbox default when launching from create-and-run', async () => {
+		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox = 'read-only';
+
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Launch with provider sandbox');
+		form.set('instructions', 'Use the provider default thread sandbox.');
+		form.set('submitMode', 'createAndRun');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(startAgentSessionMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sandbox: 'read-only'
 			})
 		);
 	});

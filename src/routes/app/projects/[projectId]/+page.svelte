@@ -1,46 +1,22 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import PathField from '$lib/components/PathField.svelte';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import {
+		formatGoalStatusLabel,
+		formatTaskApprovalModeLabel,
+		formatTaskStatusLabel,
+		goalStatusToneClass,
+		taskStatusToneClass
+	} from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProject');
-
-	function taskStatusClass(status: string) {
-		switch (status) {
-			case 'done':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-300';
-			case 'blocked':
-				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
-			case 'review':
-				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
-			case 'in_progress':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
-
-	function goalStatusClass(status: string) {
-		switch (status) {
-			case 'done':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-300';
-			case 'blocked':
-				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
-			case 'running':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
-			case 'review':
-				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
 </script>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="space-y-3">
+		<div class="min-w-0 space-y-3">
 			<a
 				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
 				href={resolve('/app/projects')}
@@ -303,7 +279,7 @@
 										<div class="flex flex-wrap items-center gap-2">
 											<h3 class="ui-wrap-anywhere font-medium text-white">{task.title}</h3>
 											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusClass(task.status)}`}
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
 											>
 												{formatTaskStatusLabel(task.status)}
 											</span>
@@ -316,16 +292,16 @@
 											{/if}
 											{#if task.openReview}
 												<span
-													class="badge border border-sky-800/70 bg-sky-950/40 text-[0.7rem] tracking-[0.2em] text-sky-200 uppercase"
+													class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-200 uppercase"
 												>
 													Review open
 												</span>
 											{/if}
 											{#if task.pendingApproval}
 												<span
-													class="badge border border-amber-800/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-200 uppercase"
+													class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-200 uppercase"
 												>
-													Approval {task.pendingApproval.mode}
+													Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
 												</span>
 											{/if}
 										</div>
@@ -380,15 +356,18 @@
 						</p>
 					{:else}
 						{#each data.relatedGoals as goal (goal.id)}
-							<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-400/40"
+								href={resolve(`/app/goals/${goal.id}`)}
+							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
 											<h3 class="ui-wrap-anywhere font-medium text-white">{goal.name}</h3>
 											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusClass(goal.status)}`}
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
 											>
-												{goal.status}
+												{formatGoalStatusLabel(goal.status)}
 											</span>
 										</div>
 										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{goal.summary}</p>
@@ -396,7 +375,7 @@
 									<p class="text-xs text-slate-500">{goal.taskCount} linked task(s)</p>
 								</div>
 								<p class="ui-wrap-anywhere mt-3 text-xs text-slate-500">{goal.artifactPath}</p>
-							</article>
+							</a>
 						{/each}
 					{/if}
 				</div>

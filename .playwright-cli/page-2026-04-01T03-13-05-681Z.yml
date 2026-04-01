@@ -1,0 +1,714 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - button [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+    - generic [ref=e11]:
+      - link "Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: ../../app/home
+        - img [ref=e13]
+        - generic [ref=e18]: Dashboard
+      - link "Projects" [ref=e19] [cursor=pointer]:
+        - /url: ../../app/projects
+        - img [ref=e20]
+        - generic [ref=e22]: Projects
+      - link "Goals" [ref=e23] [cursor=pointer]:
+        - /url: ../../app/goals
+        - img [ref=e24]
+        - generic [ref=e28]: Goals
+      - link "Tasks" [ref=e29] [cursor=pointer]:
+        - /url: ../../app/tasks
+        - img [ref=e30]
+        - generic [ref=e33]: Tasks
+      - link "Runs" [ref=e34] [cursor=pointer]:
+        - /url: ../../app/runs
+        - img [ref=e35]
+        - generic [ref=e37]: Runs
+      - link "Workers" [ref=e38] [cursor=pointer]:
+        - /url: ../../app/workers
+        - img [ref=e39]
+        - generic [ref=e44]: Workers
+      - link "Roles" [ref=e45] [cursor=pointer]:
+        - /url: ../../app/roles
+        - img [ref=e46]
+        - generic [ref=e50]: Roles
+      - link "Providers" [ref=e51] [cursor=pointer]:
+        - /url: ../../app/providers
+        - img [ref=e52]
+        - generic [ref=e55]: Providers
+      - link "Sessions" [ref=e56] [cursor=pointer]:
+        - /url: ../../app/sessions
+        - img [ref=e57]
+        - generic [ref=e60]: Sessions
+  - generic [ref=e62]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - link "Goals" [ref=e65] [cursor=pointer]:
+          - /url: ../../app/goals
+        - generic [ref=e66]:
+          - heading "Agent Management System prototype milestone" [level=1] [ref=e67]
+          - generic [ref=e68]: Ready
+        - paragraph [ref=e69]: Build the Agent Management System to the point of a useful prototype and 10x my productivity.
+      - generic [ref=e70]:
+        - article [ref=e71]:
+          - paragraph [ref=e72]: Linked tasks
+          - paragraph [ref=e73]: "0"
+          - paragraph [ref=e74]: Tasks assigned to this goal.
+        - article [ref=e75]:
+          - paragraph [ref=e76]: Active tasks
+          - paragraph [ref=e77]: "0"
+          - paragraph [ref=e78]: Open or in-flight work under this goal.
+        - article [ref=e79]:
+          - paragraph [ref=e80]: Linked projects
+          - paragraph [ref=e81]: "1"
+          - paragraph [ref=e82]: Projects providing context or workspace roots.
+        - article [ref=e83]:
+          - paragraph [ref=e84]: Subgoals
+          - paragraph [ref=e85]: "0"
+          - paragraph [ref=e86]: Nested outcomes rolling up into this goal.
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - heading "Edit goal" [level=2] [ref=e92]
+            - paragraph [ref=e93]: This is the canonical goal management surface. Update the goal details, parent/subgoal structure, project context, and task links here.
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - heading "Outcome" [level=3] [ref=e96]
+              - paragraph [ref=e97]: State the outcome first. Structure and execution links come after.
+            - generic [ref=e98]:
+              - generic [ref=e99]: Name
+              - textbox "Name" [ref=e100]:
+                - /placeholder: Improve goal planning & linking UX…
+                - text: Agent Management System prototype milestone
+            - generic [ref=e101]:
+              - generic [ref=e102]: Summary
+              - textbox "Summary" [ref=e103]:
+                - /placeholder: Describe the desired outcome and why it matters…
+                - text: Build the Agent Management System to the point of a useful prototype and 10x my productivity.
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - generic [ref=e106]: Lane
+                - combobox "Lane" [ref=e107]:
+                  - option "product" [selected]
+                  - option "growth"
+                  - option "ops"
+              - generic [ref=e108]:
+                - generic [ref=e109]: Status
+                - combobox "Status" [ref=e110]:
+                  - option "Ready" [selected]
+                  - option "Running"
+                  - option "Review"
+                  - option "Blocked"
+                  - option "Done"
+              - generic [ref=e111]:
+                - generic [ref=e112]: Horizon
+                - textbox "Horizon" [ref=e113]:
+                  - /placeholder: Now, next quarter, later this year…
+                  - text: Within the next 2 weeks
+              - generic [ref=e114]:
+                - generic [ref=e115]: Parent goal
+                - combobox "Parent goal" [ref=e116]:
+                  - option "No parent goal" [selected]
+                  - option "Kwipoo app + website release sync"
+                  - option "Kwipoo B2C market research"
+            - generic [ref=e117]:
+              - generic [ref=e118]: Success signal
+              - textbox "Success signal" [ref=e119]:
+                - /placeholder: What evidence will show this goal is actually working…
+                - text: I am using the Agent Management System consistently and receiving noticeable benefit from it
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - heading "Relationships" [level=3] [ref=e122]
+              - paragraph [ref=e123]: "Use the same pattern for every relationship: pick the parent, link projects, and assign the tasks that should roll up into this goal."
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - generic [ref=e126]:
+                  - generic [ref=e127]:
+                    - paragraph [ref=e128]: Projects
+                    - paragraph [ref=e129]: Linked projects help scope the goal and recommend a workspace.
+                  - generic [ref=e130]: 0 selected
+                - generic [ref=e131]:
+                  - generic [ref=e132]: Search linked projects
+                  - textbox "Search linked projects" [ref=e133]:
+                    - /placeholder: Search projects…
+                - generic [ref=e134]:
+                  - generic [ref=e135]:
+                    - checkbox "Agent Management System Prototype Literally this app I'm using" [ref=e136] [cursor=pointer]
+                    - generic [ref=e137]:
+                      - generic [ref=e138]: Agent Management System Prototype
+                      - generic [ref=e139]: Literally this app I'm using
+                  - generic [ref=e140]:
+                    - checkbox "Animal Welfare Monitoring System Animal Welfare Monitoring System" [ref=e141] [cursor=pointer]
+                    - generic [ref=e142]:
+                      - generic [ref=e143]: Animal Welfare Monitoring System
+                      - generic [ref=e144]: Animal Welfare Monitoring System
+                  - generic [ref=e145]:
+                    - checkbox "Kwipoo The Kwipoo App" [ref=e146] [cursor=pointer]
+                    - generic [ref=e147]:
+                      - generic [ref=e148]: Kwipoo
+                      - generic [ref=e149]: The Kwipoo App
+                  - generic [ref=e150]:
+                    - checkbox "Personal Knowledge Increasing my own knowledge" [ref=e151] [cursor=pointer]
+                    - generic [ref=e152]:
+                      - generic [ref=e153]: Personal Knowledge
+                      - generic [ref=e154]: Increasing my own knowledge
+              - generic [ref=e155]:
+                - generic [ref=e156]:
+                  - generic [ref=e157]:
+                    - paragraph [ref=e158]: Tasks
+                    - paragraph [ref=e159]: Saving will assign selected tasks to this goal.
+                  - generic [ref=e160]: 0 selected
+                - generic [ref=e161]:
+                  - generic [ref=e162]: Search linked tasks
+                  - textbox "Search linked tasks" [ref=e163]:
+                    - /placeholder: Search tasks…
+                - generic [ref=e164]:
+                  - generic [ref=e165]:
+                    - checkbox "Ability to archive threads Agent Management System Prototype • Done" [ref=e166] [cursor=pointer]
+                    - generic [ref=e167]:
+                      - generic [ref=e168]: Ability to archive threads
+                      - generic [ref=e169]: Agent Management System Prototype • Done
+                  - generic [ref=e170]:
+                    - checkbox "Accurately reflect task status Agent Management System Prototype • Done" [ref=e171] [cursor=pointer]
+                    - generic [ref=e172]:
+                      - generic [ref=e173]: Accurately reflect task status
+                      - generic [ref=e174]: Agent Management System Prototype • Done
+                  - generic [ref=e175]:
+                    - checkbox "Add artifact browsing instead of only raw path display Agent Management System Prototype • Done" [ref=e176] [cursor=pointer]
+                    - generic [ref=e177]:
+                      - generic [ref=e178]: Add artifact browsing instead of only raw path display
+                      - generic [ref=e179]: Agent Management System Prototype • Done
+                  - generic [ref=e180]:
+                    - checkbox "add attachments to task from create task form. also, be able to paste in files/attachments into the form as well Agent Management System Prototype • Done" [ref=e181] [cursor=pointer]
+                    - generic [ref=e182]:
+                      - generic [ref=e183]: add attachments to task from create task form. also, be able to paste in files/attachments into the form as well
+                      - generic [ref=e184]: Agent Management System Prototype • Done
+                  - generic [ref=e185]:
+                    - checkbox "Add goal-linking workflow for project tasks Agent Management System Prototype • Ready" [ref=e186] [cursor=pointer]
+                    - generic [ref=e187]:
+                      - generic [ref=e188]: Add goal-linking workflow for project tasks
+                      - generic [ref=e189]: Agent Management System Prototype • Ready
+                  - generic [ref=e190]:
+                    - checkbox "Add project setup health checks and missing-context warnings Agent Management System Prototype • Ready" [ref=e191] [cursor=pointer]
+                    - generic [ref=e192]:
+                      - generic [ref=e193]: Add project setup health checks and missing-context warnings
+                      - generic [ref=e194]: Agent Management System Prototype • Ready
+                  - generic [ref=e195]:
+                    - checkbox "Approve task response/mark task as completed Agent Management System Prototype • Done" [ref=e196] [cursor=pointer]
+                    - generic [ref=e197]:
+                      - generic [ref=e198]: Approve task response/mark task as completed
+                      - generic [ref=e199]: Agent Management System Prototype • Done
+                  - generic [ref=e200]:
+                    - checkbox "Assign to relevant available thread Agent Management System Prototype • Done" [ref=e201] [cursor=pointer]
+                    - generic [ref=e202]:
+                      - generic [ref=e203]: Assign to relevant available thread
+                      - generic [ref=e204]: Agent Management System Prototype • Done
+                  - generic [ref=e205]:
+                    - checkbox "Categorize work threads Agent Management System Prototype • Done" [ref=e206] [cursor=pointer]
+                    - generic [ref=e207]:
+                      - generic [ref=e208]: Categorize work threads
+                      - generic [ref=e209]: Agent Management System Prototype • Done
+                  - generic [ref=e210]:
+                    - checkbox "Change Running status to In Progress (Tasks) Agent Management System Prototype • Done" [ref=e211] [cursor=pointer]
+                    - generic [ref=e212]:
+                      - generic [ref=e213]: Change Running status to In Progress (Tasks)
+                      - generic [ref=e214]: Agent Management System Prototype • Done
+                  - generic [ref=e215]:
+                    - checkbox "Create and run Agent Management System Prototype • Done" [ref=e216] [cursor=pointer]
+                    - generic [ref=e217]:
+                      - generic [ref=e218]: Create and run
+                      - generic [ref=e219]: Agent Management System Prototype • Done
+                  - generic [ref=e220]:
+                    - checkbox "Create draft tasks directly from ideation thread output Agent Management System Prototype • Awaiting Review" [ref=e221] [cursor=pointer]
+                    - generic [ref=e222]:
+                      - generic [ref=e223]: Create draft tasks directly from ideation thread output
+                      - generic [ref=e224]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e225]:
+                    - checkbox "Demo profiles Kwipoo • Awaiting Review" [ref=e226] [cursor=pointer]
+                    - generic [ref=e227]:
+                      - generic [ref=e228]: Demo profiles
+                      - generic [ref=e229]: Kwipoo • Awaiting Review
+                  - generic [ref=e230]:
+                    - checkbox "Disable \"Run Task\" if running Agent Management System Prototype • Done" [ref=e231] [cursor=pointer]
+                    - generic [ref=e232]:
+                      - generic [ref=e233]: Disable "Run Task" if running
+                      - generic [ref=e234]: Agent Management System Prototype • Done
+                  - generic [ref=e235]:
+                    - checkbox "Do a UI pass to address containers that have text which if the text is long Agent Management System Prototype • Awaiting Review" [ref=e236] [cursor=pointer]
+                    - generic [ref=e237]:
+                      - generic [ref=e238]: Do a UI pass to address containers that have text which if the text is long
+                      - generic [ref=e239]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e240]:
+                    - checkbox "Documentation process improvement Kwipoo • Awaiting Review" [ref=e241] [cursor=pointer]
+                    - generic [ref=e242]:
+                      - generic [ref=e243]: Documentation process improvement
+                      - generic [ref=e244]: Kwipoo • Awaiting Review
+                  - generic [ref=e245]:
+                    - checkbox "Enhance agent/thread capabilities Agent Management System Prototype • Awaiting Review" [ref=e246] [cursor=pointer]
+                    - generic [ref=e247]:
+                      - generic [ref=e248]: Enhance agent/thread capabilities
+                      - generic [ref=e249]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e250]:
+                    - checkbox "Expose full task routing and governance fields in create/edit flows Agent Management System Prototype • Ready" [ref=e251] [cursor=pointer]
+                    - generic [ref=e252]:
+                      - generic [ref=e253]: Expose full task routing and governance fields in create/edit flows
+                      - generic [ref=e254]: Agent Management System Prototype • Ready
+                  - generic [ref=e255]:
+                    - checkbox "File attachment for tasks Agent Management System Prototype • Done" [ref=e256] [cursor=pointer]
+                    - generic [ref=e257]:
+                      - generic [ref=e258]: File attachment for tasks
+                      - generic [ref=e259]: Agent Management System Prototype • Done
+                  - generic [ref=e260]:
+                    - checkbox "Fix Demo profiles task stuck on misaligned directory Agent Management System Prototype • Done" [ref=e261] [cursor=pointer]
+                    - generic [ref=e262]:
+                      - generic [ref=e263]: Fix Demo profiles task stuck on misaligned directory
+                      - generic [ref=e264]: Agent Management System Prototype • Done
+                  - generic [ref=e265]:
+                    - checkbox "Fix destructive reload Agent Management System Prototype • Done" [ref=e266] [cursor=pointer]
+                    - generic [ref=e267]:
+                      - generic [ref=e268]: Fix destructive reload
+                      - generic [ref=e269]: Agent Management System Prototype • Done
+                  - generic [ref=e270]:
+                    - checkbox "Fix overflowing text Agent Management System Prototype • Awaiting Review" [ref=e271] [cursor=pointer]
+                    - generic [ref=e272]:
+                      - generic [ref=e273]: Fix overflowing text
+                      - generic [ref=e274]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e275]:
+                    - checkbox "Fix Price/cost input field Kwipoo • Awaiting Review" [ref=e276] [cursor=pointer]
+                    - generic [ref=e277]:
+                      - generic [ref=e278]: Fix Price/cost input field
+                      - generic [ref=e279]: Kwipoo • Awaiting Review
+                  - generic [ref=e280]:
+                    - checkbox "Fix UI of Thread name in other thread table Agent Management System Prototype • Done" [ref=e281] [cursor=pointer]
+                    - generic [ref=e282]:
+                      - generic [ref=e283]: Fix UI of Thread name in other thread table
+                      - generic [ref=e284]: Agent Management System Prototype • Done
+                  - generic [ref=e285]:
+                    - checkbox "Goal page and access Agent Management System Prototype • Awaiting Review" [ref=e286] [cursor=pointer]
+                    - generic [ref=e287]:
+                      - generic [ref=e288]: Goal page and access
+                      - generic [ref=e289]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e290]:
+                    - checkbox "Improve responsiveness Agent Management System Prototype • Done" [ref=e291] [cursor=pointer]
+                    - generic [ref=e292]:
+                      - generic [ref=e293]: Improve responsiveness
+                      - generic [ref=e294]: Agent Management System Prototype • Done
+                  - generic [ref=e295]:
+                    - checkbox "Improve sectioning of Task Detail pa Agent Management System Prototype • Done" [ref=e296] [cursor=pointer]
+                    - generic [ref=e297]:
+                      - generic [ref=e298]: Improve sectioning of Task Detail pa
+                      - generic [ref=e299]: Agent Management System Prototype • Done
+                  - generic [ref=e300]:
+                    - checkbox "Improve thread status clarity Agent Management System Prototype • Done" [ref=e301] [cursor=pointer]
+                    - generic [ref=e302]:
+                      - generic [ref=e303]: Improve thread status clarity
+                      - generic [ref=e304]: Agent Management System Prototype • Done
+                  - generic [ref=e305]:
+                    - checkbox "Improve UX of creating and managing goals Agent Management System Prototype • In Progress" [ref=e306] [cursor=pointer]
+                    - generic [ref=e307]:
+                      - generic [ref=e308]: Improve UX of creating and managing goals
+                      - generic [ref=e309]: Agent Management System Prototype • In Progress
+                  - generic [ref=e310]:
+                    - checkbox "Make an assistant that you can run to have it come up with additional useful tasks to create based on the context of your projects and the history of tasks Agent Management System Prototype • Done" [ref=e311] [cursor=pointer]
+                    - generic [ref=e312]:
+                      - generic [ref=e313]: Make an assistant that you can run to have it come up with additional useful tasks to create based on the context of your projects and the history of tasks
+                      - generic [ref=e314]: Agent Management System Prototype • Done
+                  - generic [ref=e315]:
+                    - checkbox "Make run and save task buttons more noticeable Agent Management System Prototype • Done" [ref=e316] [cursor=pointer]
+                    - generic [ref=e317]:
+                      - generic [ref=e318]: Make run and save task buttons more noticeable
+                      - generic [ref=e319]: Agent Management System Prototype • Done
+                  - generic [ref=e320]:
+                    - checkbox "Make runs a first-class surface Agent Management System Prototype • Done" [ref=e321] [cursor=pointer]
+                    - generic [ref=e322]:
+                      - generic [ref=e323]: Make runs a first-class surface
+                      - generic [ref=e324]: Agent Management System Prototype • Done
+                  - generic [ref=e325]:
+                    - checkbox "More accurate status indicator on tasks Agent Management System Prototype • Done" [ref=e326] [cursor=pointer]
+                    - generic [ref=e327]:
+                      - generic [ref=e328]: More accurate status indicator on tasks
+                      - generic [ref=e329]: Agent Management System Prototype • Done
+                  - generic [ref=e330]:
+                    - checkbox "Move adding provider form to button (similar to add project on project page). Agent Management System Prototype • Done" [ref=e331] [cursor=pointer]
+                    - generic [ref=e332]:
+                      - generic [ref=e333]: Move adding provider form to button (similar to add project on project page).
+                      - generic [ref=e334]: Agent Management System Prototype • Done
+                  - generic [ref=e335]:
+                    - checkbox "Move create task towards top of Tasks page Agent Management System Prototype • Done" [ref=e336] [cursor=pointer]
+                    - generic [ref=e337]:
+                      - generic [ref=e338]: Move create task towards top of Tasks page
+                      - generic [ref=e339]: Agent Management System Prototype • Done
+                  - generic [ref=e340]:
+                    - checkbox "Move project field to top of create task form Agent Management System Prototype • Done" [ref=e341] [cursor=pointer]
+                    - generic [ref=e342]:
+                      - generic [ref=e343]: Move project field to top of create task form
+                      - generic [ref=e344]: Agent Management System Prototype • Done
+                  - generic [ref=e345]:
+                    - checkbox "move Task Ideation pane Agent Management System Prototype • Done" [ref=e346] [cursor=pointer]
+                    - generic [ref=e347]:
+                      - generic [ref=e348]: move Task Ideation pane
+                      - generic [ref=e349]: Agent Management System Prototype • Done
+                  - generic [ref=e350]:
+                    - checkbox "Plan a UI improvement sweep Agent Management System Prototype • In Progress" [ref=e351] [cursor=pointer]
+                    - generic [ref=e352]:
+                      - generic [ref=e353]: Plan a UI improvement sweep
+                      - generic [ref=e354]: Agent Management System Prototype • In Progress
+                  - generic [ref=e355]:
+                    - checkbox "Plan for data export Kwipoo • Awaiting Review" [ref=e356] [cursor=pointer]
+                    - generic [ref=e357]:
+                      - generic [ref=e358]: Plan for data export
+                      - generic [ref=e359]: Kwipoo • Awaiting Review
+                  - generic [ref=e360]:
+                    - checkbox "Planning page and functionality Agent Management System Prototype • In Progress" [ref=e361] [cursor=pointer]
+                    - generic [ref=e362]:
+                      - generic [ref=e363]: Planning page and functionality
+                      - generic [ref=e364]: Agent Management System Prototype • In Progress
+                  - generic [ref=e365]:
+                    - checkbox "Planning work and chunking Personal Knowledge • Blocked" [ref=e366] [cursor=pointer]
+                    - generic [ref=e367]:
+                      - generic [ref=e368]: Planning work and chunking
+                      - generic [ref=e369]: Personal Knowledge • Blocked
+                  - generic [ref=e370]:
+                    - checkbox "Ready for approval state Agent Management System Prototype • Done" [ref=e371] [cursor=pointer]
+                    - generic [ref=e372]:
+                      - generic [ref=e373]: Ready for approval state
+                      - generic [ref=e374]: Agent Management System Prototype • Done
+                  - generic [ref=e375]:
+                    - checkbox "Reconcile task status automatically from thread/run outcomes Agent Management System Prototype • Ready" [ref=e376] [cursor=pointer]
+                    - generic [ref=e377]:
+                      - generic [ref=e378]: Reconcile task status automatically from thread/run outcomes
+                      - generic [ref=e379]: Agent Management System Prototype • Ready
+                  - generic [ref=e380]:
+                    - checkbox "Reduce size of Thread Continuity in Task detail Agent Management System Prototype • Done" [ref=e381] [cursor=pointer]
+                    - generic [ref=e382]:
+                      - generic [ref=e383]: Reduce size of Thread Continuity in Task detail
+                      - generic [ref=e384]: Agent Management System Prototype • Done
+                  - generic [ref=e385]:
+                    - checkbox "Refine first Kwipoo ICP Unknown project • Ready Currently linked to Kwipoo B2C market research" [ref=e386] [cursor=pointer]
+                    - generic [ref=e387]:
+                      - generic [ref=e388]: Refine first Kwipoo ICP
+                      - generic [ref=e389]: Unknown project • Ready
+                      - generic [ref=e390]: Currently linked to Kwipoo B2C market research
+                  - generic [ref=e391]:
+                    - checkbox "Remove info panels/cards from Providers page Agent Management System Prototype • Done" [ref=e392] [cursor=pointer]
+                    - generic [ref=e393]:
+                      - generic [ref=e394]: Remove info panels/cards from Providers page
+                      - generic [ref=e395]: Agent Management System Prototype • Done
+                  - generic [ref=e396]:
+                    - checkbox "Self-improving system Agent Management System Prototype • Awaiting Review" [ref=e397] [cursor=pointer]
+                    - generic [ref=e398]:
+                      - generic [ref=e399]: Self-improving system
+                      - generic [ref=e400]: Agent Management System Prototype • Awaiting Review
+                  - generic [ref=e401]:
+                    - checkbox "status and color standardization Agent Management System Prototype • Done" [ref=e402] [cursor=pointer]
+                    - generic [ref=e403]:
+                      - generic [ref=e404]: status and color standardization
+                      - generic [ref=e405]: Agent Management System Prototype • Done
+                  - generic [ref=e406]:
+                    - checkbox "Surface stale WIP and aging work on home/tasks pages Agent Management System Prototype • Done" [ref=e407] [cursor=pointer]
+                    - generic [ref=e408]:
+                      - generic [ref=e409]: Surface stale WIP and aging work on home/tasks pages
+                      - generic [ref=e410]: Agent Management System Prototype • Done
+                  - generic [ref=e411]:
+                    - checkbox "Thread naming standardization Agent Management System Prototype • Done" [ref=e412] [cursor=pointer]
+                    - generic [ref=e413]:
+                      - generic [ref=e414]: Thread naming standardization
+                      - generic [ref=e415]: Agent Management System Prototype • Done
+                  - generic [ref=e416]:
+                    - checkbox "Thread status change Agent Management System Prototype • Done" [ref=e417] [cursor=pointer]
+                    - generic [ref=e418]:
+                      - generic [ref=e419]: Thread status change
+                      - generic [ref=e420]: Agent Management System Prototype • Done
+          - generic [ref=e421]:
+            - generic [ref=e422]:
+              - heading "Workspace" [level=3] [ref=e423]
+              - paragraph [ref=e424]: Leave the path blank to keep the form light. If the linked context has a good workspace, use the recommendation below or let the server infer it.
+            - generic [ref=e425]:
+              - generic [ref=e426]: Artifact path
+              - combobox "Artifact path" [ref=e427]:
+                - option "Choose a known path" [selected]
+                - option "Products · ."
+                - option "Products · Kwipoo"
+                - option "Products · Kwipoo/agent_output"
+                - option "Products · Kwipoo/android"
+                - option "Products · Kwipoo/android/source"
+                - option "Products · Kwipoo/app"
+                - option "Products · Kwipoo/app/config"
+                - option "Products · Kwipoo/app/docs"
+                - option "Products · Kwipoo/app/node_modules"
+                - option "Products · Kwipoo/app/output"
+                - option "Products · Kwipoo/app/playwright"
+                - option "Products · Kwipoo/app/releases"
+                - option "Products · Kwipoo/app/scripts"
+                - option "Products · Kwipoo/app/src"
+                - option "Products · Kwipoo/app/static"
+                - option "Products · Kwipoo/app/supabase"
+                - option "Products · Kwipoo/app/test-results"
+                - option "Products · Kwipoo/app/tests"
+                - option "Products · Kwipoo/cleanup-inbox"
+                - option "Products · Kwipoo/cleanup-inbox/downloaded-project-files"
+                - option "Products · Kwipoo/coordination"
+                - option "Products · Kwipoo/coordination/active"
+                - option "Products · Kwipoo/coordination/completed"
+                - option "Products · Kwipoo/coordination/contracts"
+                - option "Products · Kwipoo/coordination/decisions"
+                - option "Products · Kwipoo/infra"
+                - option "Products · Kwipoo/infra/supabase-local"
+                - option "Products · Kwipoo/ios-wrapper"
+                - option "Products · Kwipoo/ios-wrapper/src"
+                - option "Products · Kwipoo/website"
+                - option "Products · Kwipoo/website/build"
+                - option "Products · Kwipoo/website/docs"
+                - option "Products · Kwipoo/website/node_modules"
+                - option "Products · Kwipoo/website/output"
+                - option "Products · Kwipoo/website/scripts"
+                - option "Products · Kwipoo/website/src"
+                - option "Products · Kwipoo/website/static"
+                - option "Products · Kwipoo/website/test-results"
+                - option "Products · Kwipoo/website/tests"
+                - option "Experiments · ."
+                - option "Experiments · agent-management-system-prototype"
+                - option "Experiments · agent-management-system-prototype/agent_output"
+                - option "Experiments · agent-management-system-prototype/data"
+                - option "Experiments · agent-management-system-prototype/docs"
+                - option "Experiments · agent-management-system-prototype/e2e"
+                - option "Experiments · agent-management-system-prototype/node_modules"
+                - option "Experiments · agent-management-system-prototype/output"
+                - option "Experiments · agent-management-system-prototype/screenshots"
+                - option "Experiments · agent-management-system-prototype/scripts"
+                - option "Experiments · agent-management-system-prototype/src"
+                - option "Experiments · agent-management-system-prototype/static"
+                - option "Experiments · agent-management-system-prototype/test-results"
+                - option "Experiments · animal-welfare-monitoring-system"
+                - option "Experiments · animal-welfare-monitoring-system/Advanced_and_Predictive_Monitoring_of_Animal_Welfare_in_a_Dairy_Cattle_Production_Unit"
+                - option "Experiments · animal-welfare-monitoring-system/agent_output"
+                - option "Experiments · animal-welfare-monitoring-system/animal-welfare-monitoring-system-prototype"
+                - option "Experiments · practice-app"
+                - option "Experiments · practice-app/e2e"
+                - option "Experiments · practice-app/node_modules"
+                - option "Experiments · practice-app/src"
+                - option "Experiments · practice-app/static"
+                - option "Shared · ."
+                - option "Shared · agent-ops"
+                - option "Shared · agent-ops/templates"
+                - option "Shared · growth-ops"
+                - option "Shared · growth-ops/templates"
+                - option "Shared · home-organizer"
+              - combobox "/absolute/path/to/goal/workspace" [ref=e428]
+            - generic [ref=e429]:
+              - button "Create folder if missing" [ref=e430] [cursor=pointer]
+              - paragraph [ref=e431]: If left blank, a linked project or parent goal can provide the default workspace.
+          - generic [ref=e432]:
+            - paragraph [ref=e433]: This goal will be created as a top-level outcome.
+            - button "Save goal" [ref=e434] [cursor=pointer]
+        - article [ref=e435]:
+          - paragraph [ref=e436]: Workspace
+          - heading "Goal artifact browser" [level=2] [ref=e437]
+          - paragraph [ref=e438]: Use one durable workspace for planning notes, related briefs, and downstream outputs.
+          - generic [ref=e440]:
+            - generic [ref=e441]:
+              - generic [ref=e442]:
+                - generic [ref=e443]:
+                  - paragraph [ref=e444]: Recorded path
+                  - paragraph [ref=e445]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+                - generic [ref=e446]: Folder
+              - generic [ref=e447]:
+                - paragraph [ref=e448]: Directory listing
+                - paragraph [ref=e449]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+            - generic [ref=e450]:
+              - paragraph [ref=e451]: Directory contents
+              - generic [ref=e454]:
+                - generic [ref=e455]:
+                  - paragraph [ref=e456]: .agents
+                  - generic [ref=e457]: Folder
+                - paragraph [ref=e458]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.agents
+                - paragraph [ref=e459]: Subfolder
+              - generic [ref=e462]:
+                - generic [ref=e463]:
+                  - paragraph [ref=e464]: .git
+                  - generic [ref=e465]: Folder
+                - paragraph [ref=e466]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.git
+                - paragraph [ref=e467]: Subfolder
+              - generic [ref=e470]:
+                - generic [ref=e471]:
+                  - paragraph [ref=e472]: .playwright-cli
+                  - generic [ref=e473]: Folder
+                - paragraph [ref=e474]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.playwright-cli
+                - paragraph [ref=e475]: Subfolder
+              - generic [ref=e478]:
+                - generic [ref=e479]:
+                  - paragraph [ref=e480]: .svelte-kit
+                  - generic [ref=e481]: Folder
+                - paragraph [ref=e482]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.svelte-kit
+                - paragraph [ref=e483]: Subfolder
+              - generic [ref=e486]:
+                - generic [ref=e487]:
+                  - paragraph [ref=e488]: .vscode
+                  - generic [ref=e489]: Folder
+                - paragraph [ref=e490]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.vscode
+                - paragraph [ref=e491]: Subfolder
+              - generic [ref=e494]:
+                - generic [ref=e495]:
+                  - paragraph [ref=e496]: agent_output
+                  - generic [ref=e497]: Folder
+                - paragraph [ref=e498]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output
+                - paragraph [ref=e499]: Subfolder
+              - generic [ref=e502]:
+                - generic [ref=e503]:
+                  - paragraph [ref=e504]: data
+                  - generic [ref=e505]: Folder
+                - paragraph [ref=e506]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/data
+                - paragraph [ref=e507]: Subfolder
+              - generic [ref=e510]:
+                - generic [ref=e511]:
+                  - paragraph [ref=e512]: docs
+                  - generic [ref=e513]: Folder
+                - paragraph [ref=e514]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs
+                - paragraph [ref=e515]: Subfolder
+              - generic [ref=e518]:
+                - generic [ref=e519]:
+                  - paragraph [ref=e520]: e2e
+                  - generic [ref=e521]: Folder
+                - paragraph [ref=e522]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/e2e
+                - paragraph [ref=e523]: Subfolder
+              - generic [ref=e526]:
+                - generic [ref=e527]:
+                  - paragraph [ref=e528]: node_modules
+                  - generic [ref=e529]: Folder
+                - paragraph [ref=e530]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/node_modules
+                - paragraph [ref=e531]: Subfolder
+              - generic [ref=e534]:
+                - generic [ref=e535]:
+                  - paragraph [ref=e536]: output
+                  - generic [ref=e537]: Folder
+                - paragraph [ref=e538]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/output
+                - paragraph [ref=e539]: Subfolder
+              - generic [ref=e542]:
+                - generic [ref=e543]:
+                  - paragraph [ref=e544]: screenshots
+                  - generic [ref=e545]: Folder
+                - paragraph [ref=e546]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/screenshots
+                - paragraph [ref=e547]: Subfolder
+              - generic [ref=e550]:
+                - generic [ref=e551]:
+                  - paragraph [ref=e552]: scripts
+                  - generic [ref=e553]: Folder
+                - paragraph [ref=e554]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/scripts
+                - paragraph [ref=e555]: Subfolder
+              - generic [ref=e558]:
+                - generic [ref=e559]:
+                  - paragraph [ref=e560]: src
+                  - generic [ref=e561]: Folder
+                - paragraph [ref=e562]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/src
+                - paragraph [ref=e563]: Subfolder
+              - generic [ref=e566]:
+                - generic [ref=e567]:
+                  - paragraph [ref=e568]: static
+                  - generic [ref=e569]: Folder
+                - paragraph [ref=e570]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/static
+                - paragraph [ref=e571]: Subfolder
+              - generic [ref=e574]:
+                - generic [ref=e575]:
+                  - paragraph [ref=e576]: test-results
+                  - generic [ref=e577]: Folder
+                - paragraph [ref=e578]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/test-results
+                - paragraph [ref=e579]: Subfolder
+              - generic [ref=e581]:
+                - generic [ref=e582]:
+                  - generic [ref=e583]:
+                    - paragraph [ref=e584]: .gitignore
+                    - generic [ref=e585]: File
+                  - paragraph [ref=e586]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.gitignore
+                  - paragraph [ref=e587]: File · 304 B
+                - link "Download" [ref=e588] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.gitignore
+              - generic [ref=e590]:
+                - generic [ref=e591]:
+                  - generic [ref=e592]:
+                    - paragraph [ref=e593]: .npmrc
+                    - generic [ref=e594]: File
+                  - paragraph [ref=e595]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.npmrc
+                  - paragraph [ref=e596]: File · 19 B
+                - link "Download" [ref=e597] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.npmrc
+              - generic [ref=e599]:
+                - generic [ref=e600]:
+                  - generic [ref=e601]:
+                    - paragraph [ref=e602]: .prettierignore
+                    - generic [ref=e603]: File
+                  - paragraph [ref=e604]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.prettierignore
+                  - paragraph [ref=e605]: File · 107 B
+                - link "Download" [ref=e606] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.prettierignore
+              - generic [ref=e608]:
+                - generic [ref=e609]:
+                  - generic [ref=e610]:
+                    - paragraph [ref=e611]: .prettierrc
+                    - generic [ref=e612]: File
+                  - paragraph [ref=e613]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/.prettierrc
+                  - paragraph [ref=e614]: File · 306 B
+                - link "Download" [ref=e615] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2F.prettierrc
+              - generic [ref=e617]:
+                - generic [ref=e618]:
+                  - generic [ref=e619]:
+                    - paragraph [ref=e620]: eslint.config.js
+                    - generic [ref=e621]: JS
+                  - paragraph [ref=e622]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/eslint.config.js
+                  - paragraph [ref=e623]: File · 1.2 KB
+                - link "Download" [ref=e624] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Feslint.config.js
+              - generic [ref=e626]:
+                - generic [ref=e627]:
+                  - generic [ref=e628]:
+                    - paragraph [ref=e629]: package-lock.json
+                    - generic [ref=e630]: JSON
+                  - paragraph [ref=e631]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/package-lock.json
+                  - paragraph [ref=e632]: File · 165.7 KB
+                - link "Download" [ref=e633] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fpackage-lock.json
+              - generic [ref=e635]:
+                - generic [ref=e636]:
+                  - generic [ref=e637]:
+                    - paragraph [ref=e638]: package.json
+                    - generic [ref=e639]: JSON
+                  - paragraph [ref=e640]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/package.json
+                  - paragraph [ref=e641]: File · 1.6 KB
+                - link "Download" [ref=e642] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fpackage.json
+              - generic [ref=e644]:
+                - generic [ref=e645]:
+                  - generic [ref=e646]:
+                    - paragraph [ref=e647]: playwright.config.ts
+                    - generic [ref=e648]: TS
+                  - paragraph [ref=e649]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/playwright.config.ts
+                  - paragraph [ref=e650]: File · 173 B
+                - link "Download" [ref=e651] [cursor=pointer]:
+                  - /url: ../../api/artifacts/file?path=%2FUsers%2Fcolinfreed%2FProjects%2FExperiments%2Fagent-management-system-prototype%2Fplaywright.config.ts
+              - paragraph [ref=e652]: Showing the first 24 entries from this folder.
+      - generic [ref=e653]:
+        - article [ref=e654]:
+          - paragraph [ref=e655]: Structure
+          - heading "Parent and subgoal context" [level=2] [ref=e656]
+          - generic [ref=e657]:
+            - generic [ref=e658]:
+              - paragraph [ref=e659]: Parent goal
+              - paragraph [ref=e660]: Top-level goal.
+            - generic [ref=e661]:
+              - paragraph [ref=e662]: Subgoals
+              - paragraph [ref=e663]: No subgoals linked yet.
+        - article [ref=e664]:
+          - paragraph [ref=e665]: Linked projects
+          - heading "Project context" [level=2] [ref=e666]
+          - link "Agent Management System Prototype Literally this app I'm using /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output Open" [ref=e668] [cursor=pointer]:
+            - /url: ../../app/projects/project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1
+            - generic [ref=e669]:
+              - paragraph [ref=e670]: Agent Management System Prototype
+              - paragraph [ref=e671]: Literally this app I'm using
+              - paragraph [ref=e672]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output
+            - generic [ref=e673]: Open
+        - article [ref=e674]:
+          - paragraph [ref=e675]: Linked tasks
+          - heading "Execution under this goal" [level=2] [ref=e676]
+          - paragraph [ref=e678]: No tasks are assigned to this goal yet.

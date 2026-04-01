@@ -8,7 +8,7 @@ export type FolderOption = {
 
 const HOME_DIR = '/Users/colinfreed';
 const FOLDER_PICKER_ROOTS = [
-	{ path: resolve(HOME_DIR, 'Projects', 'Products'), depth: 3, labelPrefix: 'Products' },
+	{ path: resolve(HOME_DIR, 'Projects', 'AdventureWare', 'Products'), depth: 3, labelPrefix: 'Products' },
 	{ path: resolve(HOME_DIR, 'Projects', 'Experiments'), depth: 2, labelPrefix: 'Experiments' },
 	{ path: resolve(HOME_DIR, 'Projects', 'Shared'), depth: 2, labelPrefix: 'Shared' }
 ];

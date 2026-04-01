@@ -8,6 +8,7 @@ Current scope:
 - one main UI at `/app/sessions`
 - background Codex session launching and follow-up prompts
 - logs, state files, and last-message capture per run
+- self-improvement opportunity analysis from tasks, runs, reviews, and thread state
 - session APIs under `/api/agents/sessions/*`
 
 ## Why this slice exists
@@ -58,6 +59,7 @@ API:
 - `GET /api/agents/sessions/:sessionId`
 - `POST /api/agents/sessions/:sessionId/messages`
 - `POST /api/agents/sessions/:sessionId/cancel`
+- `GET /api/improvement/opportunities`
 
 Environment:
 

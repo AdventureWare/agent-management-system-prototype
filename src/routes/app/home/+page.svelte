@@ -1,9 +1,26 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { fetchHomeDashboard } from '$lib/client/agent-data';
+	import {
+		createTaskFromSelfImprovementOpportunity,
+		fetchHomeDashboard,
+		updateSelfImprovementOpportunityStatus
+	} from '$lib/client/agent-data';
+	import { formatSessionStateLabel } from '$lib/session-activity';
 	import type { AgentSessionDetail } from '$lib/types/agent-session';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import {
+		formatTaskApprovalModeLabel,
+		formatTaskStatusLabel,
+		taskStatusToneClass
+	} from '$lib/types/control-plane';
+	import {
+		formatSelfImprovementCategoryLabel,
+		formatSelfImprovementStatusLabel,
+		selfImprovementSeverityToneClass,
+		selfImprovementStatusToneClass
+	} from '$lib/types/self-improvement';
+	import type { SelfImprovementStatus } from '$lib/types/self-improvement';
 	import type { DashboardTaskAttentionItem, HomeDashboardData } from '$lib/types/home-dashboard';
+	import type { TaskStaleSignalKey } from '$lib/types/task-work-item';
 
 	let { data } = $props<{ data: HomeDashboardData }>();
 	let autoRefresh = $state(true);
@@ -23,7 +40,7 @@
 	let attentionSessions = $derived(
 		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'attention')
 	);
-	let followUpSessions = $derived(
+	let availableSessions = $derived(
 		dashboard.sessions.filter((session: AgentSessionDetail) => session.sessionState === 'ready')
 	);
 	let latestSessions = $derived(dashboard.sessions.slice(0, 5));
@@ -39,6 +56,10 @@
 	let dependencyTasks = $derived(
 		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.hasUnmetDependencies)
 	);
+	let staleTasks = $derived(dashboard.staleTasks);
+	let improvementOpportunities = $derived(dashboard.improvementOpportunities);
+	let opportunityActionIds = $state.raw<string[]>([]);
+	let opportunityActionError = $state<string | null>(null);
 
 	function userIsEditingFormControl() {
 		const activeElement = document.activeElement;
@@ -75,23 +96,39 @@
 		}
 	}
 
-	function sessionStateLabel(state: AgentSessionDetail['sessionState']) {
-		switch (state) {
-			case 'starting':
-				return 'Starting';
-			case 'waiting':
-				return 'Waiting';
-			case 'working':
-				return 'Working';
-			case 'ready':
-				return 'Ready';
-			case 'attention':
-				return 'Attention';
-			case 'unavailable':
-				return 'Not resumable';
-			default:
-				return 'Idle';
+	function opportunityActionIsPending(opportunityId: string) {
+		return opportunityActionIds.includes(opportunityId);
+	}
+
+	async function runOpportunityAction(opportunityId: string, action: () => Promise<void>) {
+		if (opportunityActionIsPending(opportunityId)) {
+			return;
 		}
+
+		opportunityActionIds = [...opportunityActionIds, opportunityId];
+		opportunityActionError = null;
+
+		try {
+			await action();
+			await refreshDashboard({ force: true });
+		} catch (err) {
+			opportunityActionError =
+				err instanceof Error ? err.message : 'Could not update the self-improvement opportunity.';
+		} finally {
+			opportunityActionIds = opportunityActionIds.filter((id) => id !== opportunityId);
+		}
+	}
+
+	async function updateOpportunityStatus(opportunityId: string, status: SelfImprovementStatus) {
+		await runOpportunityAction(opportunityId, async () => {
+			await updateSelfImprovementOpportunityStatus(opportunityId, status);
+		});
+	}
+
+	async function createOpportunityTask(opportunityId: string) {
+		await runOpportunityAction(opportunityId, async () => {
+			await createTaskFromSelfImprovementOpportunity(opportunityId);
+		});
 	}
 
 	function sessionStateClass(state: AgentSessionDetail['sessionState']) {
@@ -99,7 +136,7 @@
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
 			case 'starting':
-				return 'border border-amber-800/70 bg-amber-950/50 text-amber-300';
+				return 'border border-violet-800/70 bg-violet-950/50 text-violet-300';
 			case 'waiting':
 			case 'ready':
 				return 'border border-sky-800/70 bg-sky-950/50 text-sky-300';
@@ -108,6 +145,32 @@
 			case 'unavailable':
 			default:
 				return 'border border-slate-700 bg-slate-900 text-slate-300';
+		}
+	}
+
+	function staleBadgeClass(signal: TaskStaleSignalKey) {
+		switch (signal) {
+			case 'staleInProgress':
+				return 'border border-violet-800/70 bg-violet-950/40 text-violet-200';
+			case 'noRecentRunActivity':
+				return 'border border-rose-800/70 bg-rose-950/40 text-rose-200';
+			case 'activeThreadNoRecentOutput':
+				return 'border border-amber-800/70 bg-amber-950/40 text-amber-200';
+			default:
+				return 'border border-slate-700 bg-slate-950/70 text-slate-300';
+		}
+	}
+
+	function staleBadgeLabel(task: DashboardTaskAttentionItem, signal: TaskStaleSignalKey) {
+		switch (signal) {
+			case 'staleInProgress':
+				return `stale WIP ${task.freshness.taskAgeLabel}`;
+			case 'noRecentRunActivity':
+				return `run quiet ${task.freshness.runActivityAgeLabel}`;
+			case 'activeThreadNoRecentOutput':
+				return `thread quiet ${task.freshness.threadActivityAgeLabel}`;
+			default:
+				return '';
 		}
 	}
 
@@ -131,7 +194,7 @@
 		<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
 			<div class="min-w-0 space-y-2">
 				<div class="flex flex-wrap items-center gap-2">
-					<h3 class="font-medium text-white">{session.name}</h3>
+					<h3 class="ui-wrap-anywhere font-medium text-white">{session.name}</h3>
 					<span
 						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 					>
@@ -143,7 +206,7 @@
 							sessionStateClass(session.sessionState)
 						]}
 					>
-						{sessionStateLabel(session.sessionState)}
+						{formatSessionStateLabel(session.sessionState)}
 					</span>
 					<span
 						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
@@ -164,7 +227,9 @@
 		<div class="grid gap-3 sm:grid-cols-4">
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Thread</p>
-				<p class="mt-2 text-sm font-medium text-white">{session.threadId ? 'Ready' : 'Missing'}</p>
+				<p class="mt-2 text-sm font-medium text-white">
+					{session.threadId ? 'Available' : 'Missing'}
+				</p>
 			</div>
 			<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
 				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Runs</p>
@@ -246,7 +311,7 @@
 			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.activeCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Ready</p>
+			<p class="text-sm text-slate-400">Available</p>
 			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.readyCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
@@ -256,7 +321,7 @@
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Not resumable / idle</p>
+			<p class="text-sm text-slate-400">History only / idle</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
 				{dashboard.sessionSummary.unavailableCount}
 			</p>
@@ -308,6 +373,89 @@
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
 		<div class="space-y-6">
+			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-white">Stale work watchlist</h2>
+						<p class="text-sm text-slate-400">
+							Aging tasks, quiet runs, and active threads that have stopped producing fresh output.
+						</p>
+					</div>
+					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
+						>Open task board</a
+					>
+				</div>
+
+				<div class="grid gap-3 sm:grid-cols-3">
+					<div class="rounded-xl border border-violet-900/50 bg-violet-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-violet-300 uppercase">Stale WIP</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.staleTaskSummary.staleInProgressCount}
+						</p>
+					</div>
+					<div class="rounded-xl border border-rose-900/50 bg-rose-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-rose-300 uppercase">No recent run activity</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.staleTaskSummary.noRecentRunActivityCount}
+						</p>
+					</div>
+					<div class="rounded-xl border border-amber-900/50 bg-amber-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-amber-300 uppercase">Quiet active threads</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.staleTaskSummary.activeThreadNoRecentOutputCount}
+						</p>
+					</div>
+				</div>
+
+				{#if dashboard.staleTaskSummary.totalCount === 0}
+					<p class="text-sm text-slate-400">No stale work is being surfaced right now.</p>
+				{:else}
+					<div class="space-y-3">
+						{#each staleTasks as task (task.id)}
+							<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+									<div class="min-w-0">
+										<div class="flex flex-wrap items-center gap-2">
+											<p class="font-medium text-white">{task.title}</p>
+											<span
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
+											>
+												{formatTaskStatusLabel(task.status)}
+											</span>
+											{#each task.freshness.staleSignals as signal (signal)}
+												<span
+													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
+												>
+													{staleBadgeLabel(task, signal)}
+												</span>
+											{/each}
+										</div>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{task.summary}</p>
+										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+											{task.projectName} · {task.assigneeName} · updated {task.updatedAtLabel}
+										</p>
+										<div class="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
+											{#if task.freshness.noRecentRunActivity}
+												<p>Last run activity {task.freshness.runActivityAgeLabel}</p>
+											{/if}
+											{#if task.freshness.activeThreadNoRecentOutput}
+												<p>Thread activity {task.freshness.threadActivityAgeLabel}</p>
+											{/if}
+										</div>
+									</div>
+									<a
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white"
+										href={resolve(`/app/tasks/${task.id}`)}
+									>
+										Inspect task
+									</a>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
@@ -392,7 +540,7 @@
 										<div class="flex flex-wrap items-center gap-2">
 											<p class="font-medium text-white">{task.title}</p>
 											<span
-												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
 											>
 												{formatTaskStatusLabel(task.status)}
 											</span>
@@ -410,30 +558,37 @@
 											</span>
 											{#if task.openReview}
 												<span
-													class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 												>
 													review open
 												</span>
 											{/if}
 											{#if task.pendingApproval}
 												<span
-													class="inline-flex items-center justify-center rounded-full border border-amber-800/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 												>
-													approval {task.pendingApproval.mode}
+													approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
 												</span>
 											{/if}
 											{#if task.hasUnmetDependencies}
 												<span
-													class="inline-flex items-center justify-center rounded-full border border-violet-800/70 bg-violet-950/40 px-2 py-1 text-center text-[11px] leading-none text-violet-200 uppercase"
+													class="inline-flex items-center justify-center rounded-full border border-rose-800/70 bg-rose-950/40 px-2 py-1 text-center text-[11px] leading-none text-rose-200 uppercase"
 												>
 													waiting on dependency
 												</span>
 											{/if}
+											{#each task.freshness.staleSignals as signal (signal)}
+												<span
+													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
+												>
+													{staleBadgeLabel(task, signal)}
+												</span>
+											{/each}
 										</div>
 										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{task.summary}</p>
 										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
 											{task.projectName !== 'No project' ? task.projectName : task.goalName} · {task.assigneeName}
-											· approval {task.approvalMode}
+											· approval {formatTaskApprovalModeLabel(task.approvalMode)}
 										</p>
 										{#if task.blockedReason}
 											<p class="mt-2 text-sm text-rose-200">{task.blockedReason}</p>
@@ -466,18 +621,176 @@
 
 		<div class="space-y-6">
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-white">Self-improvement opportunities</h2>
+						<p class="text-sm text-slate-400">
+							Patterns emerging from failures, blockers, reviews, stale work, and reusable thread
+							context.
+						</p>
+					</div>
+					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
+						>Open task board</a
+					>
+				</div>
+
+				<div class="grid gap-3 sm:grid-cols-3">
+					<div class="rounded-xl border border-violet-900/50 bg-violet-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-violet-300 uppercase">Open</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.improvementSummary.openCount}
+						</p>
+					</div>
+					<div class="rounded-xl border border-sky-900/50 bg-sky-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-sky-300 uppercase">Accepted</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.improvementSummary.acceptedCount}
+						</p>
+					</div>
+					<div class="rounded-xl border border-rose-900/50 bg-rose-950/30 p-4">
+						<p class="text-xs tracking-[0.16em] text-rose-300 uppercase">High severity</p>
+						<p class="mt-2 text-2xl font-semibold text-white">
+							{dashboard.improvementSummary.highSeverityCount}
+						</p>
+					</div>
+				</div>
+
+				{#if dashboard.improvementSummary.totalCount === 0}
+					<p class="text-sm text-slate-400">
+						No improvement opportunities are being surfaced right now.
+					</p>
+				{:else}
+					{#if opportunityActionError}
+						<p
+							class="rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+						>
+							{opportunityActionError}
+						</p>
+					{/if}
+					<div class="space-y-3">
+						{#each improvementOpportunities as opportunity (opportunity.id)}
+							<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+								<div class="flex flex-col gap-3">
+									<div class="min-w-0">
+										<div class="flex flex-wrap items-center gap-2">
+											<p class="font-medium text-white">{opportunity.title}</p>
+											<span
+												class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${selfImprovementSeverityToneClass(opportunity.severity)}`}
+											>
+												{opportunity.severity}
+											</span>
+											<span
+												class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${selfImprovementStatusToneClass(opportunity.status)}`}
+											>
+												{formatSelfImprovementStatusLabel(opportunity.status)}
+											</span>
+											<span
+												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+											>
+												{formatSelfImprovementCategoryLabel(opportunity.category)}
+											</span>
+										</div>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{opportunity.summary}</p>
+										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+											{opportunity.projectName ?? 'No project'} · first seen {opportunity.firstSeenAt.slice(
+												0,
+												10
+											)}
+										</p>
+										{#if opportunity.signals.length > 0}
+											<p class="ui-wrap-anywhere mt-2 text-xs text-slate-400">
+												{opportunity.signals[0]}
+											</p>
+										{/if}
+										{#if opportunity.createdTaskId}
+											<p class="mt-2 text-xs text-sky-200">
+												Draft task created: {opportunity.createdTaskTitle ??
+													opportunity.createdTaskId}
+											</p>
+										{/if}
+									</div>
+									<div class="flex flex-wrap gap-2">
+										{#if opportunity.createdTaskId}
+											<a
+												class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sm leading-none text-sky-200 transition hover:border-sky-700 hover:text-white"
+												href={resolve(`/app/tasks/${opportunity.createdTaskId}`)}
+											>
+												Open draft task
+											</a>
+										{:else if opportunity.suggestedTask}
+											<button
+												class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sm leading-none text-sky-200 transition hover:border-sky-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+												type="button"
+												onclick={() => {
+													void createOpportunityTask(opportunity.id);
+												}}
+												disabled={opportunityActionIsPending(opportunity.id)}
+											>
+												{opportunityActionIsPending(opportunity.id)
+													? 'Working...'
+													: 'Create draft task'}
+											</button>
+										{/if}
+
+										{#if opportunity.status !== 'accepted'}
+											<button
+												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+												type="button"
+												onclick={() => {
+													void updateOpportunityStatus(opportunity.id, 'accepted');
+												}}
+												disabled={opportunityActionIsPending(opportunity.id)}
+											>
+												Accept
+											</button>
+										{/if}
+
+										{#if opportunity.status !== 'dismissed'}
+											<button
+												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+												type="button"
+												onclick={() => {
+													void updateOpportunityStatus(opportunity.id, 'dismissed');
+												}}
+												disabled={opportunityActionIsPending(opportunity.id)}
+											>
+												Dismiss
+											</button>
+										{/if}
+
+										{#if opportunity.status !== 'open'}
+											<button
+												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+												type="button"
+												onclick={() => {
+													void updateOpportunityStatus(opportunity.id, 'open');
+												}}
+												disabled={opportunityActionIsPending(opportunity.id)}
+											>
+												Reopen
+											</button>
+										{/if}
+									</div>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
+			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div>
-					<h2 class="text-xl font-semibold text-white">Ready for follow-up</h2>
+					<h2 class="text-xl font-semibold text-white">Available for follow-up</h2>
 					<p class="text-sm text-slate-400">
 						Work threads that are idle and can take another instruction.
 					</p>
 				</div>
 
-				{#if followUpSessions.length === 0}
+				{#if availableSessions.length === 0}
 					<p class="text-sm text-slate-400">No resumable threads right now.</p>
 				{:else}
 					<div class="space-y-3">
-						{#each followUpSessions as session (session.id)}
+						{#each availableSessions as session (session.id)}
 							<a
 								class="block rounded-xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-slate-700"
 								href={resolve('/app/sessions')}
@@ -515,7 +828,7 @@
 										<span
 											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
-											{sessionStateLabel(session.sessionState)}
+											{formatSessionStateLabel(session.sessionState)}
 										</span>
 									</div>
 									<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>

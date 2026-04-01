@@ -1,35 +1,30 @@
 import { listAgentSessions, summarizeAgentSessions } from '$lib/server/agent-sessions';
+import { loadControlPlane, summarizeControlPlane } from '$lib/server/control-plane';
+import { loadSelfImprovementSnapshot } from '$lib/server/self-improvement-store';
 import {
-	getOpenReviewForTask,
-	getPendingApprovalForTask,
-	loadControlPlane,
-	summarizeControlPlane,
-	taskHasUnmetDependencies
-} from '$lib/server/control-plane';
+	buildTaskWorkItems,
+	selectStaleTaskWorkItems,
+	summarizeTaskFreshness
+} from '$lib/server/task-work-items';
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 	const sessions = await listAgentSessions();
 	const controlPlane = await loadControlPlane();
+	const selfImprovement = await loadSelfImprovementSnapshot({
+		data: controlPlane,
+		sessions
+	});
 	const taskMap = new Map(controlPlane.tasks.map((task) => [task.id, task]));
-	const projectMap = new Map(controlPlane.projects.map((project) => [project.id, project]));
-
-	const taskAttention = [...controlPlane.tasks]
-		.map((task) => ({
-			...task,
-			goalName: controlPlane.goals.find((goal) => goal.id === task.goalId)?.name ?? 'Unknown goal',
-			projectName: projectMap.get(task.projectId)?.name ?? 'No project',
-			assigneeName: task.assigneeWorkerId
-				? (controlPlane.workers.find((worker) => worker.id === task.assigneeWorkerId)?.name ??
-					'Unknown worker')
-				: 'Unassigned',
-			openReview: getOpenReviewForTask(controlPlane, task.id) ?? null,
-			pendingApproval: getPendingApprovalForTask(controlPlane, task.id) ?? null,
-			hasUnmetDependencies: taskHasUnmetDependencies(controlPlane, task),
-			dependencyTaskNames: task.dependencyTaskIds.map(
-				(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
-			)
-		}))
+	const taskWorkItems = buildTaskWorkItems(controlPlane, sessions);
+	const dashboardTasks = taskWorkItems.map((task) => ({
+		...task,
+		goalName: controlPlane.goals.find((goal) => goal.id === task.goalId)?.name ?? 'Unknown goal',
+		dependencyTaskNames: task.dependencyTaskIds.map(
+			(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
+		)
+	}));
+	const taskAttention = dashboardTasks
 		.filter(
 			(task) =>
 				task.status === 'blocked' ||
@@ -44,6 +39,10 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 		sessions,
 		sessionSummary: summarizeAgentSessions(sessions),
 		controlSummary: summarizeControlPlane(controlPlane),
-		taskAttention
+		taskAttention,
+		staleTaskSummary: summarizeTaskFreshness(taskWorkItems),
+		staleTasks: selectStaleTaskWorkItems(dashboardTasks),
+		improvementSummary: selfImprovement.summary,
+		improvementOpportunities: selfImprovement.opportunities.slice(0, 5)
 	};
 }

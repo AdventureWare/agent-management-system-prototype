@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
 import {
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
@@ -13,6 +14,7 @@ import {
 	parseProviderSetupStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { parseAgentSandbox } from '$lib/server/agent-sessions';
 
 function parseListField(value: FormDataEntryValue | null) {
 	return (
@@ -38,6 +40,10 @@ function readProviderForm(form: FormData) {
 		launcher: form.get('launcher')?.toString().trim() ?? '',
 		envVars: parseListField(form.get('envVars')),
 		capabilities: parseListField(form.get('capabilities')),
+		defaultThreadSandbox: parseAgentSandbox(
+			form.get('defaultThreadSandbox')?.toString(),
+			'workspace-write'
+		),
 		notes: form.get('notes')?.toString().trim() ?? ''
 	};
 }
@@ -73,6 +79,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		provider,
 		attachedWorkers,
 		recentRuns,
+		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		kindOptions: PROVIDER_KIND_OPTIONS,
 		setupStatusOptions: PROVIDER_SETUP_STATUS_OPTIONS,
 		authModeOptions: PROVIDER_AUTH_MODE_OPTIONS

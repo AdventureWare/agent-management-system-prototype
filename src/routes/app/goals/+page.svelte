@@ -1,217 +1,316 @@
 <script lang="ts">
-	import PathField from '$lib/components/PathField.svelte';
-	import { Progress, Tabs } from '@skeletonlabs/skeleton-svelte';
+	import { resolve } from '$app/paths';
+	import GoalEditor from '$lib/components/GoalEditor.svelte';
+	import { formatGoalStatusLabel, goalStatusToneClass } from '$lib/types/control-plane';
 
 	let { data, form } = $props();
-	let artifactPath = $state('');
 
-	let activeGoalCount = $derived(data.goals.filter((goal) => goal.status !== 'done').length);
-	let defaultStatus = $derived(data.statusOptions[0] ?? '');
-	let goalsByStatus = $derived.by(() =>
-		data.statusOptions.map((status) => ({
-			status,
-			goals: data.goals.filter((goal) => goal.status === status)
-		}))
+	let query = $state('');
+	let selectedStatus = $state('all');
+
+	function modalShouldStartOpen() {
+		return Boolean(form?.message);
+	}
+
+	let isCreateModalOpen = $state(modalShouldStartOpen());
+
+	let createSuccess = $derived(form?.ok && form?.successAction === 'createGoal');
+	let nestedGoalCount = $derived(data.goals.filter((goal) => goal.childGoalCount > 0).length);
+	let linkedTaskCount = $derived(
+		data.goals.reduce((count, goal) => count + goal.relatedTaskCount, 0)
+	);
+	let fullyScopedGoalCount = $derived(
+		data.goals.filter((goal) => goal.linkedProjects.length > 0 && goal.relatedTaskCount > 0).length
+	);
+
+	function closeCreateModal() {
+		isCreateModalOpen = false;
+	}
+
+	function matchesGoal(goal: (typeof data.goals)[number], term: string) {
+		const normalizedTerm = term.trim().toLowerCase();
+
+		if (!normalizedTerm) {
+			return true;
+		}
+
+		return [
+			goal.name,
+			goal.summary,
+			goal.parentGoalName,
+			goal.horizon,
+			goal.successSignal,
+			goal.artifactPath,
+			...goal.linkedProjects.map((project) => project.name),
+			...goal.linkedTasks.map((task) => `${task.title} ${task.projectName}`),
+			...goal.childGoals.map((childGoal) => childGoal.name)
+		]
+			.join(' ')
+			.toLowerCase()
+			.includes(normalizedTerm);
+	}
+
+	let filteredGoals = $derived(
+		data.goals.filter(
+			(goal) =>
+				(selectedStatus === 'all' || goal.status === selectedStatus) && matchesGoal(goal, query)
+		)
 	);
 </script>
+
+<svelte:document
+	onkeydown={(event) => {
+		if (event.key === 'Escape' && isCreateModalOpen) {
+			closeCreateModal();
+		}
+	}}
+/>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
 	<div class="flex flex-col gap-3">
 		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Goals</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">Effort folders and ownership</h1>
+		<h1 class="text-3xl font-semibold tracking-tight text-white">Browse outcomes, then manage one</h1>
 		<p class="max-w-3xl text-sm text-slate-300">
-			A goal is the top-level effort. It should map to one coordination or growth folder and give
-			every downstream task a canonical artifact path.
+			Goals now work like projects: the collection page helps you find the right outcome, while each
+			goal has its own detail page for editing workspace, parent/subgoal structure, and linked work.
 		</p>
-	</div>
-
-	<div class="grid gap-4 md:grid-cols-3">
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Goal count</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{data.goals.length}</p>
-			<p class="mt-2 text-sm text-slate-400">
-				Top-level efforts currently defined in the control plane.
-			</p>
-		</article>
-
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Active efforts</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{activeGoalCount}</p>
-			<p class="mt-2 text-sm text-slate-400">
-				Goals still moving through planning, delivery, or review.
-			</p>
-		</article>
-
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Status lanes</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{data.statusOptions.length}</p>
-			<p class="mt-2 text-sm text-slate-400">Distinct buckets used to sort the goal portfolio.</p>
-		</article>
+		<div class="pt-1">
+			<button
+				class="btn preset-filled-primary-500 font-semibold"
+				type="button"
+				onclick={() => {
+					isCreateModalOpen = true;
+				}}
+			>
+				Add goal
+			</button>
+		</div>
 	</div>
 
 	{#if form?.message}
-		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+		<p
+			aria-live="polite"
+			class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+		>
 			{form.message}
 		</p>
 	{/if}
 
-	{#if form?.ok}
+	{#if createSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
-			Goal created and appended to the control plane.
+			Goal created and relationship links saved.
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-		<form
-			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
-			method="POST"
-			action="?/createGoal"
-		>
-			<h2 class="text-xl font-semibold text-white">Create goal</h2>
-			<p class="text-sm text-slate-400">
-				Use a stable name, a lane that matches ownership, and an artifact path that downstream tasks
-				can reference without translation.
-			</p>
+	<div class="grid gap-4 md:grid-cols-4">
+		<article class="card border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Goal count</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{data.goals.length}</p>
+			<p class="mt-2 text-sm text-slate-400">Durable outcomes tracked in the control plane.</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Nested goals</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{nestedGoalCount}</p>
+			<p class="mt-2 text-sm text-slate-400">Goals already grouped into parent/subgoal structure.</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Linked tasks</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{linkedTaskCount}</p>
+			<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to a goal from the goal layer.</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Fully scoped</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{fullyScopedGoalCount}</p>
+			<p class="mt-2 text-sm text-slate-400">Goals with both project context and linked task execution.</p>
+		</article>
+	</div>
 
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-				<input
-					class="input text-white placeholder:text-slate-500"
-					name="name"
-					placeholder="Kwipoo cross-platform launch prep"
-					required
-				/>
-			</label>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Lane</span>
-				<select class="select text-white" name="lane">
-					{#each data.laneOptions as lane (lane)}
-						<option value={lane}>{lane}</option>
-					{/each}
-				</select>
-			</label>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
-				<select class="select text-white" name="status">
-					{#each data.statusOptions as status (status)}
-						<option value={status}>{status}</option>
-					{/each}
-				</select>
-			</label>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
-				<textarea
-					class="textarea min-h-28 text-white placeholder:text-slate-500"
-					name="summary"
-					placeholder="Define what this effort is coordinating and what counts as done."
-					required
-				></textarea>
-			</label>
-
+	<section class="card border border-slate-800 bg-slate-950/70 p-6">
+		<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 			<div>
-				<PathField
-					bind:value={artifactPath}
-					createMode="folder"
-					helperText="Creates the goal folder if you are defining a new effort workspace."
-					inputId="create-goal-artifact-path"
-					label="Artifact path"
-					name="artifactPath"
-					options={data.folderOptions}
-					placeholder="/absolute/path/to/coordination/or/growth/folder"
-					required
-				/>
+				<h2 class="text-xl font-semibold text-white">Goal directory</h2>
+				<p class="mt-1 text-sm text-slate-400">
+					Search by outcome, related project, task, or workspace, then open a goal to manage it.
+				</p>
 			</div>
 
-			<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-				Create goal
-			</button>
-		</form>
+			<div class="grid gap-3 sm:grid-cols-2 xl:w-[34rem]">
+				<label class="block">
+					<span class="sr-only">Search goals</span>
+					<input
+						bind:value={query}
+						class="input text-white placeholder:text-slate-500"
+						id="goal-search"
+						placeholder="Search goals…"
+					/>
+				</label>
 
-		<section class="card border border-slate-800 bg-slate-950/70 p-6">
-			<Tabs defaultValue={defaultStatus} class="space-y-4">
-				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-					<div>
-						<h2 class="text-xl font-semibold text-white">Current goals</h2>
-						<p class="mt-1 text-sm text-slate-400">
-							Review the portfolio by status before handing work down to tasks and roles.
-						</p>
-					</div>
-
-					<Tabs.List
-						class="flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-2"
-					>
+				<label class="block">
+					<span class="sr-only">Filter goals by status</span>
+					<select bind:value={selectedStatus} class="select text-white">
+						<option value="all">All statuses</option>
 						{#each data.statusOptions as status (status)}
-							<Tabs.Trigger
-								value={status}
-								class="btn border border-transparent btn-sm text-slate-300 data-[state=active]:border-sky-400/30 data-[state=active]:bg-sky-400 data-[state=active]:text-slate-950"
-							>
-								{status}
-							</Tabs.Trigger>
+							<option value={status}>{formatGoalStatusLabel(status)}</option>
 						{/each}
-					</Tabs.List>
-				</div>
+					</select>
+				</label>
+			</div>
+		</div>
 
-				<div class="space-y-4">
-					{#each goalsByStatus as group (group.status)}
-						<Tabs.Content value={group.status} class="space-y-4">
-							<Progress
-								max={Math.max(1, data.goals.length)}
-								value={group.goals.length}
-								class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"
-							>
-								<div class="flex items-center justify-between gap-3">
-									<Progress.Label class="text-sm font-medium text-slate-200">
-										{group.status} share
-									</Progress.Label>
-									<Progress.ValueText class="text-xs text-slate-500">
-										{group.goals.length} of {data.goals.length} goals
-									</Progress.ValueText>
+		{#if filteredGoals.length === 0}
+			<p class="mt-6 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
+				No goals match the current search or status filter.
+			</p>
+		{:else}
+			<div class="mt-6 grid gap-4 lg:grid-cols-2">
+				{#each filteredGoals as goal (goal.id)}
+					<a
+						class="group flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-sky-400/40 hover:bg-slate-900"
+						href={resolve(`/app/goals/${goal.id}`)}
+					>
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div class="min-w-0 space-y-2">
+								<div class="flex flex-wrap items-center gap-2">
+									<h3
+										class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
+									>
+										{goal.name}
+									</h3>
+									<span
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
+									>
+										{formatGoalStatusLabel(goal.status)}
+									</span>
 								</div>
-								<Progress.Track class="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
-									<Progress.Range class="h-full rounded-full bg-sky-400" />
-								</Progress.Track>
-							</Progress>
+								<p class="text-xs font-semibold tracking-[0.2em] text-sky-300 uppercase">
+									{goal.lane}
+								</p>
+								<p class="ui-clamp-3 text-sm text-slate-300">{goal.summary}</p>
+							</div>
+							<p class="text-xs text-slate-500">
+								{goal.parentGoalName ? `Child of ${goal.parentGoalName}` : 'Top level'}
+							</p>
+						</div>
 
-							{#if group.goals.length > 0}
-								<div class="space-y-3">
-									{#each group.goals as goal (goal.id)}
-										<article class="card border border-slate-800 bg-slate-900/60 p-4">
-											<div class="flex flex-wrap items-start justify-between gap-3">
-												<div>
-													<h3 class="font-medium text-white">{goal.name}</h3>
-													<p
-														class="mt-1 text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase"
-													>
-														{goal.lane}
-													</p>
-												</div>
-												<span
-													class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
-												>
-													{goal.status}
-												</span>
-											</div>
-											<p class="mt-3 text-sm text-slate-300">{goal.summary}</p>
-											<p class="mt-3 text-xs text-slate-500">{goal.artifactPath}</p>
-										</article>
-									{/each}
-								</div>
-							{:else}
-								<p
-									class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
-								>
-									No goals are currently parked in the {group.status} lane.
+						<div class="mt-4 grid gap-3 sm:grid-cols-3">
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Subgoals</p>
+								<p class="mt-2 text-lg font-semibold text-white">{goal.childGoalCount}</p>
+							</div>
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Projects</p>
+								<p class="mt-2 text-lg font-semibold text-white">{goal.linkedProjects.length}</p>
+							</div>
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Tasks</p>
+								<p class="mt-2 text-lg font-semibold text-white">{goal.relatedTaskCount}</p>
+							</div>
+						</div>
+
+						<div class="mt-4 space-y-2 text-sm text-slate-400">
+							{#if goal.horizon}
+								<p class="ui-clamp-2">
+									<span class="text-slate-500">Horizon:</span>
+									{goal.horizon}
 								</p>
 							{/if}
-						</Tabs.Content>
-					{/each}
-				</div>
-			</Tabs>
-		</section>
-	</div>
+							<p class="ui-clamp-2">
+								<span class="text-slate-500">Workspace:</span>
+								{goal.artifactPath || 'Not configured'}
+							</p>
+						</div>
+
+						{#if goal.linkedProjects.length > 0}
+							<div class="mt-4 flex flex-wrap gap-2">
+								{#each goal.linkedProjects.slice(0, 3) as project (project.id)}
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs text-slate-300"
+									>
+										{project.name}
+									</span>
+								{/each}
+								{#if goal.linkedProjects.length > 3}
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs text-slate-400"
+									>
+										+{goal.linkedProjects.length - 3} more
+									</span>
+								{/if}
+							</div>
+						{/if}
+
+						<div
+							class="mt-5 flex items-center justify-between border-t border-slate-800 pt-4 text-xs font-medium tracking-[0.16em] text-slate-500 uppercase"
+						>
+							<span>{goal.relatedTaskCount > 0 ? 'Execution linked' : 'Needs linked execution'}</span>
+							<span class="text-sky-300 transition group-hover:text-sky-200">Open details</span>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
+	</section>
 </section>
+
+{#if isCreateModalOpen}
+	<div
+		aria-label="Create goal dialog"
+		aria-modal="true"
+		class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm"
+		role="dialog"
+		tabindex="-1"
+		onclick={(event) => {
+			if (event.target === event.currentTarget) {
+				closeCreateModal();
+			}
+		}}
+		onkeydown={(event) => {
+			if (event.key === 'Escape') {
+				closeCreateModal();
+			}
+		}}
+	>
+		<div class="mx-auto flex min-h-full max-w-6xl items-center justify-center p-4 sm:p-6">
+			<div
+				class="max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-2xl shadow-black/40 sm:p-8"
+			>
+				<div class="flex items-start justify-between gap-4">
+					<div>
+						<h2 class="text-xl font-semibold text-white sm:text-2xl">Add goal</h2>
+						<p class="mt-2 max-w-2xl text-sm text-slate-400">
+							Capture the outcome in one place, then use the same relationship controls you’ll see
+							on the goal detail page.
+						</p>
+					</div>
+					<button
+						aria-label="Close add goal form"
+						class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-slate-600 hover:text-white"
+						type="button"
+						onclick={closeCreateModal}
+					>
+						×
+					</button>
+				</div>
+
+				<div class="mt-6">
+					<GoalEditor
+						action="?/createGoal"
+						description="Outcome first, relationships second. You can keep the workspace blank if the linked context already tells the system where the goal should live."
+						folderOptions={data.folderOptions}
+						heading="Create goal"
+						laneOptions={data.laneOptions}
+						parentGoalOptions={data.parentGoalOptions}
+						projectOptions={data.projectOptions}
+						statusOptions={data.statusOptions}
+						submitLabel="Create goal"
+						taskOptions={data.taskOptions}
+						values={form?.values ?? {}}
+					/>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}

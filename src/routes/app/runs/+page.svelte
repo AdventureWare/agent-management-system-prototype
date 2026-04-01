@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { formatRunStatusLabel, runStatusToneClass } from '$lib/types/control-plane';
 
 	let { data } = $props();
 
@@ -17,28 +18,6 @@
 	let selectedWorkerId = $state('all');
 	let selectedProviderId = $state('all');
 	let selectedTime = $state<(typeof timeOptions)[number]['value']>('all');
-
-	function statusClass(status: string) {
-		switch (status) {
-			case 'completed':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-300';
-			case 'failed':
-			case 'blocked':
-			case 'canceled':
-				return 'border-rose-900/70 bg-rose-950/40 text-rose-300';
-			case 'running':
-			case 'starting':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-300';
-			case 'awaiting_approval':
-				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
-
-	function statusLabel(status: string) {
-		return status.replace(/_/g, ' ');
-	}
 
 	function timeWindowMs(value: (typeof timeOptions)[number]['value']) {
 		switch (value) {
@@ -126,15 +105,14 @@
 	});
 
 	let activeRunCount = $derived(
-		filteredRuns.filter((run) => ['queued', 'starting', 'running', 'awaiting_approval'].includes(run.status))
-			.length
+		filteredRuns.filter((run) =>
+			['queued', 'starting', 'running', 'awaiting_approval'].includes(run.status)
+		).length
 	);
 	let attentionRunCount = $derived(
 		filteredRuns.filter((run) => ['blocked', 'failed', 'canceled'].includes(run.status)).length
 	);
-	let completedRunCount = $derived(
-		filteredRuns.filter((run) => run.status === 'completed').length
-	);
+	let completedRunCount = $derived(filteredRuns.filter((run) => run.status === 'completed').length);
 </script>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
@@ -196,7 +174,7 @@
 				<select bind:value={selectedStatus} class="select text-white">
 					<option value="all">All statuses</option>
 					{#each data.statusOptions as status (status)}
-						<option value={status}>{statusLabel(status)}</option>
+						<option value={status}>{formatRunStatusLabel(status)}</option>
 					{/each}
 				</select>
 			</label>
@@ -289,12 +267,12 @@
 												{run.id}
 											</a>
 											<span
-												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${statusClass(run.status)}`}
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusToneClass(run.status)}`}
 											>
-												{statusLabel(run.status)}
+												{formatRunStatusLabel(run.status)}
 											</span>
 										</div>
-										<p class="ui-clamp-3 text-sm text-slate-300">
+										<p class="ui-clamp-5 text-sm text-slate-300">
 											{compactText(run.summary || 'No summary recorded.', 180)}
 										</p>
 									</div>
@@ -302,19 +280,19 @@
 								<td class="px-3 py-3">
 									<div class="max-w-xs min-w-0 space-y-1">
 										<a
-											class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
+											class="ui-clamp-5 font-medium text-white transition hover:text-sky-200"
 											href={resolve(`/app/tasks/${run.taskId}`)}
 										>
 											{run.taskTitle}
 										</a>
-										<p class="ui-wrap-anywhere text-sm text-slate-400">{run.taskProjectName}</p>
+										<p class="ui-clamp-5 text-sm text-slate-400">{run.taskProjectName}</p>
 									</div>
 								</td>
 								<td class="px-3 py-3">
 									<div class="max-w-xs min-w-0 space-y-1">
 										{#if run.workerId}
 											<a
-												class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+												class="ui-clamp-5 text-sm font-medium text-sky-300 transition hover:text-sky-200"
 												href={resolve(`/app/workers/${run.workerId}`)}
 											>
 												{run.workerName}
@@ -328,7 +306,7 @@
 									<div class="max-w-xs min-w-0 space-y-1">
 										{#if run.providerId}
 											<a
-												class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+												class="ui-clamp-5 text-sm font-medium text-sky-300 transition hover:text-sky-200"
 												href={resolve(`/app/providers/${run.providerId}`)}
 											>
 												{run.providerName}
@@ -344,7 +322,7 @@
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 												Prompt digest
 											</p>
-											<p class="ui-wrap-anywhere mt-1 font-mono text-xs text-slate-200">
+											<p class="ui-clamp-5 mt-1 font-mono text-xs text-slate-200">
 												{run.promptDigest || 'Not captured'}
 											</p>
 										</div>
@@ -355,7 +333,7 @@
 											<div class="mt-1 space-y-1 text-xs text-slate-300">
 												{#if run.sessionId}
 													<a
-														class="ui-wrap-anywhere text-sky-300 transition hover:text-sky-200"
+														class="ui-clamp-5 text-sky-300 transition hover:text-sky-200"
 														href={resolve(`/app/sessions/${run.sessionId}`)}
 													>
 														{run.sessionName ?? run.sessionId}
@@ -363,7 +341,7 @@
 												{:else}
 													<p>No session linked</p>
 												{/if}
-												<p class="ui-wrap-anywhere text-slate-500">
+												<p class="ui-clamp-5 text-slate-500">
 													{run.threadId || 'No thread id recorded'}
 												</p>
 											</div>
@@ -373,13 +351,11 @@
 								<td class="px-3 py-3">
 									<div class="max-w-sm min-w-0 space-y-2 text-sm">
 										<p
-											class={run.isHeartbeatStale
-												? 'font-medium text-amber-300'
-												: 'text-slate-300'}
+											class={run.isHeartbeatStale ? 'font-medium text-amber-300' : 'text-slate-300'}
 										>
 											Heartbeat {run.heartbeatAgeLabel}
 										</p>
-										<p class="ui-clamp-3 text-slate-400">
+										<p class="ui-clamp-5 text-slate-400">
 											{compactText(run.errorSummary || 'No error summary.', 160)}
 										</p>
 									</div>
@@ -390,7 +366,7 @@
 											<p class="text-sm text-slate-400">No artifact paths</p>
 										{:else}
 											{#each run.artifactPaths.slice(0, 2) as path (path)}
-												<p class="ui-wrap-anywhere text-xs text-slate-300">{path}</p>
+												<p class="ui-clamp-5 text-xs text-slate-300">{path}</p>
 											{/each}
 											{#if run.artifactPaths.length > 2}
 												<p class="text-xs text-slate-500">

@@ -4,8 +4,8 @@ import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput } from '$lib/server/path-tools';
 import {
 	createProject,
+	goalLinksProject,
 	loadControlPlane,
-	projectMatchesPath,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -38,7 +38,7 @@ export const load: PageServerLoad = async () => {
 						.map((task) => task.goalId)
 				);
 				const goalCount = data.goals.filter(
-					(goal) => relatedTaskGoalIds.has(goal.id) || projectMatchesPath(project, goal.artifactPath)
+					(goal) => relatedTaskGoalIds.has(goal.id) || goalLinksProject(goal, project)
 				).length;
 
 				return {

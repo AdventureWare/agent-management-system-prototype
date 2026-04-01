@@ -1,5 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppDialog from '$lib/components/AppDialog.svelte';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PathField from '$lib/components/PathField.svelte';
 
 	let { data, form } = $props();
@@ -40,31 +45,22 @@
 			.includes(normalizedTerm);
 	}
 
-	let filteredProjects = $derived(data.projects.filter((project) => matchesProject(project, query)));
+	let filteredProjects = $derived(
+		data.projects.filter((project) => matchesProject(project, query))
+	);
 
 	function closeCreateModal() {
 		isCreateModalOpen = false;
 	}
 </script>
 
-<svelte:document
-	onkeydown={(event) => {
-		if (event.key === 'Escape' && isCreateModalOpen) {
-			closeCreateModal();
-		}
-	}}
-/>
-
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Projects</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">Browse project contexts first</h1>
-		<p class="max-w-3xl text-sm text-slate-300">
-			The project page should act like a directory, not a wall of forms. Search for the project you
-			want, then open one detail page to edit defaults, inspect linked work, and see how that
-			project is being used.
-		</p>
-		<div class="pt-1">
+<AppPage>
+	<PageHeader
+		eyebrow="Projects"
+		title="Browse project contexts first"
+		description="The project page should act like a directory, not a wall of forms. Search for the project you want, then open one detail page to edit defaults, inspect linked work, and see how that project is being used."
+	>
+		{#snippet actions()}
 			<button
 				class="btn preset-filled-primary-500 font-semibold"
 				type="button"
@@ -74,8 +70,8 @@
 			>
 				Add project
 			</button>
-		</div>
-	</div>
+		{/snippet}
+	</PageHeader>
 
 	{#if form?.message}
 		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
@@ -91,15 +87,11 @@
 		</p>
 	{/if}
 
-	<section class="card border border-slate-800 bg-slate-950/70 p-6">
-		<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-			<div>
-				<h2 class="text-xl font-semibold text-white">Project directory</h2>
-				<p class="mt-1 text-sm text-slate-400">
-					Search by name, summary, path, or repo hint, then open the project you want.
-				</p>
-			</div>
-
+	<CollectionToolbar
+		title="Project directory"
+		description="Search by name, summary, path, or repo hint, then open the project you want."
+	>
+		{#snippet controls()}
 			<div class="w-full xl:w-80">
 				<label class="sr-only" for="project-search">Search projects</label>
 				<input
@@ -109,12 +101,10 @@
 					placeholder="Search projects"
 				/>
 			</div>
-		</div>
+		{/snippet}
 
 		{#if filteredProjects.length === 0}
-			<p class="mt-6 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
-				No projects match the current search.
-			</p>
+			<p class="ui-empty-state mt-6">No projects match the current search.</p>
 		{:else}
 			<div class="mt-6 grid gap-4 md:grid-cols-2">
 				{#each filteredProjects as project (project.id)}
@@ -135,21 +125,15 @@
 
 						<div class="mt-4 grid gap-3 sm:grid-cols-3">
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-									Linked tasks
-								</p>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Linked tasks</p>
 								<p class="mt-2 text-lg font-semibold text-white">{project.taskCount}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-									Goals in scope
-								</p>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Goals in scope</p>
 								<p class="mt-2 text-lg font-semibold text-white">{project.goalCount}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-									Repo defaults
-								</p>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Repo defaults</p>
 								<p class="mt-2 text-lg font-semibold text-white">
 									{project.defaultRepoPath || project.defaultRepoUrl ? 'Ready' : 'Unset'}
 								</p>
@@ -175,149 +159,124 @@
 							class="mt-5 flex items-center justify-between border-t border-slate-800 pt-4 text-xs font-medium tracking-[0.16em] text-slate-500 uppercase"
 						>
 							<span>{project.defaultRepoUrl ? 'Repo attached' : 'No remote repo'}</span>
-							<span class="text-sky-300 transition group-hover:text-sky-200">
-								Open details
-							</span>
+							<span class="text-sky-300 transition group-hover:text-sky-200"> Open details </span>
 						</div>
 					</a>
 				{/each}
 			</div>
 		{/if}
 
-		<div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Repo coverage</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{configuredRepoCount}</p>
-			<p class="mt-2 text-sm text-slate-400">
-				Projects with a checkout path or remote repo already attached.
-			</p>
+		<div class="mt-6">
+			<MetricCard
+				label="Repo coverage"
+				value={configuredRepoCount}
+				detail="Projects with a checkout path or remote repo already attached."
+			/>
 		</div>
-	</section>
-</section>
+	</CollectionToolbar>
+</AppPage>
 
 {#if isCreateModalOpen}
-	<div
-		class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm"
-		role="presentation"
-		onclick={(event) => {
-			if (event.target === event.currentTarget) {
-				closeCreateModal();
-			}
-		}}
+	<AppDialog
+		bind:open={isCreateModalOpen}
+		title="Add project"
+		description="Capture durable defaults here. Editing and linked activity live on the detail page after creation."
+		closeLabel="Close add project form"
 	>
-		<div class="mx-auto flex min-h-full max-w-5xl items-center justify-center p-4 sm:p-6">
-			<form
-				class="max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-2xl shadow-black/40 sm:p-8"
-				method="POST"
-				action="?/createProject"
-			>
-				<div class="flex items-start justify-between gap-4">
+		<form class="space-y-6" method="POST" action="?/createProject">
+			<div class="space-y-4">
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+					<input
+						class="input text-white placeholder:text-slate-500"
+						name="name"
+						placeholder="Kwipoo"
+						required
+					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
+					<textarea
+						class="textarea min-h-28 text-white placeholder:text-slate-500"
+						name="summary"
+						placeholder="What this project covers and what defaults other work should inherit."
+						required
+					></textarea>
+				</label>
+
+				<div class="grid gap-4 lg:grid-cols-2">
 					<div>
-						<h2 class="text-xl font-semibold text-white sm:text-2xl">Add project</h2>
-						<p class="mt-2 max-w-2xl text-sm text-slate-400">
-							Capture durable defaults here. Editing and linked activity live on the detail page
-							after creation.
-						</p>
-					</div>
-					<button
-						class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-slate-600 hover:text-white"
-						type="button"
-						aria-label="Close add project form"
-						onclick={closeCreateModal}
-					>
-						×
-					</button>
-				</div>
-
-				<div class="mt-6 space-y-4">
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-						<input
-							class="input text-white placeholder:text-slate-500"
-							name="name"
-							placeholder="Kwipoo"
-							required
+						<PathField
+							bind:value={projectRootFolder}
+							createMode="folder"
+							helperText="Sets the default folder agents should enter for this project."
+							inputId="create-project-root-folder"
+							label="Project root folder"
+							name="projectRootFolder"
+							options={data.folderOptions}
+							placeholder="/absolute/path/to/project/root"
 						/>
-					</label>
+					</div>
 
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
-						<textarea
-							class="textarea min-h-28 text-white placeholder:text-slate-500"
-							name="summary"
-							placeholder="What this project covers and what defaults other work should inherit."
-							required
-						></textarea>
-					</label>
+					<div>
+						<PathField
+							bind:value={defaultArtifactRoot}
+							createMode="folder"
+							helperText="Create this upfront if you want downstream work to reuse one artifact root."
+							inputId="create-default-artifact-root"
+							label="Default artifact root"
+							name="defaultArtifactRoot"
+							options={data.folderOptions}
+							placeholder="/absolute/path/to/project/artifacts"
+						/>
+					</div>
 
-					<div class="grid gap-4 lg:grid-cols-2">
-						<div>
-							<PathField
-								bind:value={projectRootFolder}
-								createMode="folder"
-								helperText="Sets the default folder agents should enter for this project."
-								inputId="create-project-root-folder"
-								label="Project root folder"
-								name="projectRootFolder"
-								options={data.folderOptions}
-								placeholder="/absolute/path/to/project/root"
-							/>
-						</div>
-
-						<div>
-							<PathField
-								bind:value={defaultArtifactRoot}
-								createMode="folder"
-								helperText="Create this upfront if you want downstream work to reuse one artifact root."
-								inputId="create-default-artifact-root"
-								label="Default artifact root"
-								name="defaultArtifactRoot"
-								options={data.folderOptions}
-								placeholder="/absolute/path/to/project/artifacts"
-							/>
-						</div>
-
-						<div>
-							<PathField
-								bind:value={defaultRepoPath}
-								createMode="folder"
-								helperText="Useful when the repo checkout folder does not exist yet."
-								inputId="create-default-repo-path"
-								label="Default repo path"
-								name="defaultRepoPath"
-								options={data.folderOptions}
-								placeholder="/absolute/path/to/local/checkout"
-							/>
-						</div>
-
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Default repo URL</span>
-							<input
-								class="input text-white placeholder:text-slate-500"
-								name="defaultRepoUrl"
-								placeholder="git@github.com:org/repo.git"
-							/>
-						</label>
+					<div>
+						<PathField
+							bind:value={defaultRepoPath}
+							createMode="folder"
+							helperText="Useful when the repo checkout folder does not exist yet."
+							inputId="create-default-repo-path"
+							label="Default repo path"
+							name="defaultRepoPath"
+							options={data.folderOptions}
+							placeholder="/absolute/path/to/local/checkout"
+						/>
 					</div>
 
 					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Default branch</span>
+						<span class="mb-2 block text-sm font-medium text-slate-200">Default repo URL</span>
 						<input
 							class="input text-white placeholder:text-slate-500"
-							name="defaultBranch"
-							placeholder="main"
+							name="defaultRepoUrl"
+							placeholder="git@github.com:org/repo.git"
 						/>
 					</label>
 				</div>
 
-				<div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-					<button class="btn border border-slate-700 text-slate-200 hover:border-slate-600" type="button" onclick={closeCreateModal}>
-						Cancel
-					</button>
-					<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-						Create project
-					</button>
-				</div>
-			</form>
-		</div>
-	</div>
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Default branch</span>
+					<input
+						class="input text-white placeholder:text-slate-500"
+						name="defaultBranch"
+						placeholder="main"
+					/>
+				</label>
+			</div>
+
+			<div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+				<button
+					class="btn border border-slate-700 text-slate-200 hover:border-slate-600"
+					type="button"
+					onclick={closeCreateModal}
+				>
+					Cancel
+				</button>
+				<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+					Create project
+				</button>
+			</div>
+		</form>
+	</AppDialog>
 {/if}

@@ -1,4 +1,5 @@
 import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { SelfImprovementStatus } from '$lib/types/self-improvement';
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
@@ -62,4 +63,42 @@ export async function fetchAgentSession(sessionId: string) {
 
 export function fetchHomeDashboard() {
 	return fetchJson<HomeDashboardData>('/api/dashboard/home', 'Could not refresh dashboard.');
+}
+
+export async function updateSelfImprovementOpportunityStatus(
+	opportunityId: string,
+	status: SelfImprovementStatus,
+	decisionSummary?: string
+) {
+	const response = await fetch(`/api/improvement/opportunities/${opportunityId}/status`, {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			status,
+			decisionSummary
+		})
+	});
+	const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+	if (!response.ok) {
+		throw new Error(payload.error ?? 'Could not update the self-improvement opportunity.');
+	}
+}
+
+export async function createTaskFromSelfImprovementOpportunity(opportunityId: string) {
+	const response = await fetch(`/api/improvement/opportunities/${opportunityId}/create-task`, {
+		method: 'POST'
+	});
+	const payload = (await response.json().catch(() => ({}))) as {
+		error?: string;
+		taskId?: string;
+	};
+
+	if (!response.ok) {
+		throw new Error(payload.error ?? 'Could not create a draft task from this opportunity.');
+	}
+
+	return payload.taskId ?? null;
 }
