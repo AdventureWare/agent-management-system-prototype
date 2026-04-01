@@ -8,10 +8,19 @@
 	} = $props<{
 		children?: Snippet;
 		class?: string;
-		width?: 'wide' | 'medium';
+		width?: 'wide' | 'medium' | 'full';
 	}>();
 
-	let widthClass = $derived(width === 'medium' ? 'max-w-6xl' : 'max-w-7xl');
+	let widthClass = $derived.by(() => {
+		switch (width) {
+			case 'medium':
+				return 'max-w-6xl';
+			case 'full':
+				return 'max-w-none';
+			default:
+				return 'max-w-7xl';
+		}
+	});
 </script>
 
 <section class={['ui-page', widthClass, className]}>

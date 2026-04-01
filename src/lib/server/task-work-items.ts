@@ -48,7 +48,7 @@ function getRunActivityAt(run: Run | null) {
 	return latestIso([run.lastHeartbeatAt, run.updatedAt, run.startedAt, run.createdAt]);
 }
 
-function buildTaskFreshness(input: {
+export function buildTaskFreshness(input: {
 	task: Task;
 	latestRun: Run | null;
 	statusThread: AgentSessionDetail | null;

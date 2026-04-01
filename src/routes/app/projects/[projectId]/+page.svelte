@@ -169,6 +169,22 @@
 						/>
 					</label>
 
+					<label class="block w-full max-w-xs">
+						<span class="mb-2 block text-sm font-medium text-slate-200">
+							Default thread sandbox
+						</span>
+						<select class="select text-white" name="defaultThreadSandbox">
+							<option value="" selected={!data.project.defaultThreadSandbox}>
+								Inherit provider default
+							</option>
+							{#each data.sandboxOptions as sandbox (sandbox)}
+								<option value={sandbox} selected={data.project.defaultThreadSandbox === sandbox}>
+									{sandbox}
+								</option>
+							{/each}
+						</select>
+					</label>
+
 					<button class="btn preset-filled-primary-500 font-semibold" type="submit">
 						Save project
 					</button>
@@ -234,6 +250,14 @@
 							</p>
 							<p class="mt-2 text-sm text-slate-200">
 								{data.project.defaultBranch || 'Not configured'}
+							</p>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+							<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+								Default thread sandbox
+							</p>
+							<p class="mt-2 text-sm text-slate-200">
+								{data.project.defaultThreadSandbox || 'Inherit provider default'}
 							</p>
 						</div>
 					</div>

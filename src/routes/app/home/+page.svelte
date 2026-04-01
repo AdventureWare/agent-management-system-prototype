@@ -262,7 +262,7 @@
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
 	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Dashboard</p>
+		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Home</p>
 		<h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
 			Agent activity at a glance
 		</h1>

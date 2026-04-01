@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -14,15 +15,7 @@
 
 	let { data, form } = $props();
 
-	let createSuccess = $derived(form?.ok && form?.successAction === 'createPlanningHorizon');
-	let slotSuccess = $derived(form?.ok && form?.successAction === 'slotGoal');
 	let updateGoalPlanSuccess = $derived(form?.ok && form?.successAction === 'updateGoalPlan');
-	let activeHorizonId = $derived(
-		(form?.selectedHorizonId as string | undefined) ??
-			data.selectedHorizonId ??
-			data.selectedHorizon?.id ??
-			''
-	);
 
 	function formatDate(value: string | null) {
 		if (!value) {
@@ -60,28 +53,20 @@
 <AppPage>
 	<PageHeader
 		eyebrow="Planning"
-		title="Plan the horizon before dispatching work"
-		description="Pick a planning window, slot goals into it, and compare planned work against available worker capacity. This first slice keeps planning explicit without collapsing strategy, projects, and tasks into one screen."
+		title="Review and revise the current plan"
+		description="Choose a date window and scope, inspect what is currently planned in that frame, and adjust commitments before work is dispatched."
 	>
 		{#snippet meta()}
 			<div class="flex flex-wrap gap-2">
-				{#if data.selectedHorizon}
-					<span
-						class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${planningHorizonStatusToneClass(data.selectedHorizon.status)}`}
-					>
-						{formatPlanningHorizonStatusLabel(data.selectedHorizon.status)}
-					</span>
-					<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
-						{formatPlanningHorizonKindLabel(data.selectedHorizon.kind)}
-					</span>
-					<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
-						{formatDate(data.selectedHorizon.startDate)} to {formatDate(data.selectedHorizon.endDate)}
-					</span>
-				{:else}
-					<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
-						No horizon selected
-					</span>
-				{/if}
+				<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
+					{formatDate(data.filters.startDate)} to {formatDate(data.filters.endDate)}
+				</span>
+				<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
+					{data.metrics.goalCount} goal(s) in scope
+				</span>
+				<span class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300">
+					{data.metrics.taskCount} task(s) under review
+				</span>
 			</div>
 		{/snippet}
 	</PageHeader>
@@ -92,18 +77,6 @@
 		</p>
 	{/if}
 
-	{#if createSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Planning horizon created.
-		</p>
-	{/if}
-
-	{#if slotSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Goal added to the selected planning horizon.
-		</p>
-	{/if}
-
 	{#if updateGoalPlanSuccess}
 		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
 			Goal planning fields saved.
@@ -111,106 +84,212 @@
 	{/if}
 
 	<div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-		<MetricCard label="Horizons" value={data.metrics.horizonCount} detail="Saved planning windows." />
+		<MetricCard
+			label="Saved windows"
+			value={data.metrics.savedWindowCount}
+			detail="Legacy saved windows can still act as planning presets."
+		/>
 		<MetricCard
 			label="Goals in scope"
 			value={data.metrics.goalCount}
-			detail="Goals currently committed to the selected horizon."
+			detail="Goals due in this window or supported by work under review."
 		/>
 		<MetricCard
-			label="Tasks in scope"
-			value={data.metrics.taskCount}
-			detail="Tasks linked directly or indirectly to this horizon."
+			label="Scheduled tasks"
+			value={data.metrics.scheduledTaskCount}
+			detail={`${data.metrics.unscheduledTaskCount} undated task(s) also need attention.`}
 		/>
 		<MetricCard
 			label="Planned hours"
 			value={data.metrics.plannedHours}
-			detail={`${data.metrics.unestimatedTaskCount} task(s) still have no estimate.`}
+			detail={`${data.metrics.unestimatedTaskCount} scheduled task(s) still have no estimate.`}
 		/>
 		<MetricCard
 			label="Capacity hours"
 			value={data.metrics.totalCapacityHours}
-			detail={`${data.metrics.overAllocatedWorkerCount} worker(s) over capacity.`}
+			detail={`${data.metrics.overAllocatedWorkerCount} worker(s) over capacity in this window.`}
 		/>
 		<MetricCard
 			label="Slack"
 			value={data.metrics.remainingCapacityHours}
-			detail={`${data.unassignedTaskCount} task(s) in this horizon are still unassigned.`}
+			detail="Remaining scheduled capacity in the current planning window."
 		/>
 	</div>
-
-	<section class="ui-panel space-y-4">
-		<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-			<div>
-				<h2 class="text-xl font-semibold text-white">Planning horizons</h2>
-				<p class="mt-1 text-sm text-slate-400">
-					Switch between time windows to see which goals are committed and whether the current
-					capacity can absorb them.
-				</p>
-			</div>
-		</div>
-
-		{#if data.horizons.length === 0}
-			<p class="ui-empty-state">
-				No planning horizons exist yet. Create the first horizon to start slotting goals.
-			</p>
-		{:else}
-			<div class="flex flex-wrap gap-3">
-				{#each data.horizons as horizon (horizon.id)}
-					<a
-						class={[
-							'rounded-2xl border px-4 py-3 transition',
-							activeHorizonId === horizon.id
-								? 'border-sky-500/60 bg-sky-950/30'
-								: 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
-						]}
-						href={`/app/planning?horizon=${horizon.id}`}
-					>
-						<div class="flex flex-wrap items-center gap-2">
-							<p class="font-medium text-white">{horizon.name}</p>
-							<span
-								class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${planningHorizonStatusToneClass(horizon.status)}`}
-							>
-								{formatPlanningHorizonStatusLabel(horizon.status)}
-							</span>
-						</div>
-						<p class="mt-2 text-xs text-slate-400">
-							{formatPlanningHorizonKindLabel(horizon.kind)} · {formatDate(horizon.startDate)} to
-							{formatDate(horizon.endDate)}
-						</p>
-						<p class="mt-2 text-xs text-slate-500">
-							{horizon.goalCount} goal(s) · {horizon.taskCount} task(s) · {horizon.estimatedHours}
-							{' '}estimated hours
-						</p>
-					</a>
-				{/each}
-			</div>
-		{/if}
-	</section>
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
 		<div class="space-y-6">
 			<section class="ui-panel space-y-4">
 				<div>
-					<h2 class="text-xl font-semibold text-white">Goals in the selected horizon</h2>
+					<h2 class="text-xl font-semibold text-white">Planning window</h2>
 					<p class="mt-1 text-sm text-slate-400">
-						This is the first planning surface. Slot goals here, set a target date and priority,
-						then use the task and goal surfaces to deepen execution detail.
+						Planning here works over the current plan. Choose the date range and scope you want
+						to inspect, then review what is scheduled, what remains undated, and what needs to
+						change.
 					</p>
 				</div>
 
-				{#if !data.selectedHorizon}
-					<p class="ui-empty-state">Create or select a planning horizon to begin.</p>
-				{:else if data.horizonGoals.length === 0}
-					<p class="ui-empty-state">No goals are committed to this horizon yet.</p>
+				<form class="grid gap-4 lg:grid-cols-2" method="GET">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Start date</span>
+						<input
+							class="input text-white"
+							name="startDate"
+							required
+							type="date"
+							value={data.filters.startDate}
+						/>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">End date</span>
+						<input
+							class="input text-white"
+							name="endDate"
+							required
+							type="date"
+							value={data.filters.endDate}
+						/>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Project scope</span>
+						<select class="select text-white" name="projectId">
+							<option selected={data.filters.projectId === ''} value="">All projects</option>
+							{#each data.projectOptions as project (project.id)}
+								<option selected={data.filters.projectId === project.id} value={project.id}>
+									{project.name}
+								</option>
+							{/each}
+						</select>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Goal scope</span>
+						<select class="select text-white" name="goalId">
+							<option selected={data.filters.goalId === ''} value="">All goals</option>
+							{#each data.goalOptions as goal (goal.id)}
+								<option selected={data.filters.goalId === goal.id} value={goal.id}>
+									{goal.name}
+								</option>
+							{/each}
+						</select>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Worker scope</span>
+						<select class="select text-white" name="workerId">
+							<option selected={data.filters.workerId === ''} value="">All workers</option>
+							{#each data.workerOptions as worker (worker.id)}
+								<option selected={data.filters.workerId === worker.id} value={worker.id}>
+									{worker.name}
+								</option>
+							{/each}
+						</select>
+					</label>
+
+					<label class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 lg:col-span-2">
+						<input name="includeUnscheduled" type="hidden" value="false" />
+						<input
+							checked={data.filters.includeUnscheduled}
+							class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400"
+							name="includeUnscheduled"
+							type="checkbox"
+							value="true"
+						/>
+						<div>
+							<p class="text-sm font-medium text-white">Include undated work</p>
+							<p class="text-xs text-slate-400">
+								Pull open work without target dates into the session when it is relevant to the
+								selected scope.
+							</p>
+						</div>
+					</label>
+
+					<div class="flex flex-wrap gap-3 lg:col-span-2">
+						<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+							Apply window
+						</button>
+						<a
+							class="rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white"
+							href={resolve('/app/planning')}
+						>
+							Reset
+						</a>
+					</div>
+				</form>
+
+				{#if data.savedWindows.length > 0}
+					<div class="space-y-3 border-t border-slate-800 pt-4">
+						<div>
+							<h3 class="text-sm font-semibold tracking-[0.18em] text-slate-400 uppercase">
+								Saved windows
+							</h3>
+							<p class="mt-1 text-sm text-slate-500">
+								These are transitional presets from the older horizon model. They now act as quick
+								ways to load a date window rather than as the core planning object.
+							</p>
+						</div>
+
+						<div class="flex flex-wrap gap-3">
+							{#each data.savedWindows as windowPreset (windowPreset.id)}
+								<a
+									class={[
+										'rounded-2xl border px-4 py-3 transition',
+										data.selectedPresetId === windowPreset.id
+											? 'border-sky-500/60 bg-sky-950/30'
+											: 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
+									]}
+									href={`/app/planning?preset=${windowPreset.id}`}
+								>
+									<div class="flex flex-wrap items-center gap-2">
+										<p class="font-medium text-white">{windowPreset.name}</p>
+										<span
+											class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${planningHorizonStatusToneClass(windowPreset.status)}`}
+										>
+											{formatPlanningHorizonStatusLabel(windowPreset.status)}
+										</span>
+									</div>
+									<p class="mt-2 text-xs text-slate-400">
+										{formatPlanningHorizonKindLabel(windowPreset.kind)} ·
+										{' '}{formatDate(windowPreset.startDate)} to {formatDate(windowPreset.endDate)}
+									</p>
+									<p class="mt-2 text-xs text-slate-500">
+										{windowPreset.goalCount} goal(s) · {windowPreset.taskCount} task(s)
+									</p>
+								</a>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</section>
+
+			<section class="ui-panel space-y-4">
+				<div>
+					<h2 class="text-xl font-semibold text-white">Goals in scope</h2>
+					<p class="mt-1 text-sm text-slate-400">
+						These are the goals due in this window or actively served by work under review. This is
+						the outcome-level view of the current plan.
+					</p>
+				</div>
+
+				{#if data.goalsInScope.length === 0}
+					<p class="ui-empty-state">
+						No goals are currently in scope for this window. Try widening the date range or adjusting
+						the filters.
+					</p>
 				{:else}
 					<div class="space-y-4">
-						{#each data.horizonGoals as goal (goal.id)}
+						{#each data.goalsInScope as goal (goal.id)}
 							<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 								<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 									<div class="min-w-0 flex-1 space-y-3">
 										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="ui-wrap-anywhere text-lg font-semibold text-white">{goal.name}</h3>
+											<a
+												class="ui-wrap-anywhere text-lg font-semibold text-white transition hover:text-sky-300"
+												href={resolve(`/app/goals/${goal.id}`)}
+											>
+												{goal.name}
+											</a>
 											<span
 												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
 											>
@@ -222,14 +301,19 @@
 												{goal.confidence} confidence
 											</span>
 										</div>
+
 										<p class="ui-clamp-3 text-sm text-slate-300">{goal.summary}</p>
+
 										<div class="flex flex-wrap gap-3 text-xs text-slate-400">
+											<span>Target {formatDate(goal.targetDate)}</span>
 											<span>{goal.taskCount} task(s)</span>
-											<span>{goal.estimatedHours} estimated hours</span>
-											<span>{goal.unestimatedTaskCount} unestimated task(s)</span>
+											<span>{goal.scheduledTaskCount} scheduled</span>
+											<span>{goal.unscheduledTaskCount} undated</span>
+											<span>{goal.plannedHours} planned hrs</span>
+											<span>{goal.unestimatedTaskCount} unestimated</span>
 											<span>Priority {goal.planningPriority}</span>
-											<span>{goal.lane}</span>
 										</div>
+
 										{#if goal.linkedProjectNames.length > 0}
 											<div class="flex flex-wrap gap-2">
 												{#each goal.linkedProjectNames as projectName (projectName)}
@@ -242,21 +326,9 @@
 											</div>
 										{/if}
 									</div>
-
-									<form class="flex-shrink-0" method="POST" action="?/unslotGoal">
-										<input type="hidden" name="planningHorizonId" value={activeHorizonId} />
-										<input type="hidden" name="goalId" value={goal.id} />
-										<button
-											class="rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white"
-											type="submit"
-										>
-											Remove
-										</button>
-									</form>
 								</div>
 
 								<form class="mt-5 grid gap-4 md:grid-cols-4" method="POST" action="?/updateGoalPlan">
-									<input type="hidden" name="planningHorizonId" value={activeHorizonId} />
 									<input type="hidden" name="goalId" value={goal.id} />
 
 									<label class="block">
@@ -308,18 +380,22 @@
 
 			<section class="ui-panel space-y-4">
 				<div>
-					<h2 class="text-xl font-semibold text-white">Task rollup</h2>
+					<h2 class="text-xl font-semibold text-white">Scheduled work in window</h2>
 					<p class="mt-1 text-sm text-slate-400">
-						Tasks already tied to this horizon through direct planning fields or the goal they serve.
+						These tasks already carry a target date inside the selected window. This is the part of
+						the current plan that is most concretely committed.
 					</p>
 				</div>
 
-				{#if data.horizonTasks.length === 0}
-					<p class="ui-empty-state">No tasks are linked to this horizon yet.</p>
+				{#if data.scheduledTasks.length === 0}
+					<p class="ui-empty-state">No tasks are currently scheduled in this window.</p>
 				{:else}
 					<div class="space-y-3">
-						{#each data.horizonTasks as task (task.id)}
-							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+						{#each data.scheduledTasks as task (task.id)}
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
+								href={resolve(`/app/tasks/${task.id}`)}
+							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div class="min-w-0 space-y-2">
 										<div class="flex flex-wrap items-center gap-2">
@@ -331,6 +407,9 @@
 											</span>
 										</div>
 										<p class="text-xs text-slate-400">{task.goalName} · {task.projectName}</p>
+										{#if task.blockedReason}
+											<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
+										{/if}
 									</div>
 									<div class="text-right text-xs text-slate-400">
 										<p>{task.assigneeName}</p>
@@ -338,7 +417,7 @@
 										<p class="mt-1">{formatDate(task.targetDate)}</p>
 									</div>
 								</div>
-							</div>
+							</a>
 						{/each}
 					</div>
 				{/if}
@@ -346,51 +425,50 @@
 
 			<section class="ui-panel space-y-4">
 				<div>
-					<h2 class="text-xl font-semibold text-white">Available goals</h2>
+					<h2 class="text-xl font-semibold text-white">Undated work pulled into scope</h2>
 					<p class="mt-1 text-sm text-slate-400">
-						These goals are not committed to any horizon yet. Add them once the current window can
-						realistically absorb them.
+						These tasks do not yet have a target date, but they are still relevant to the current
+						planning session because of the selected goals, projects, workers, or due outcomes in
+						this window.
 					</p>
 				</div>
 
-				{#if data.availableGoals.length === 0}
-					<p class="ui-empty-state">Every goal is already assigned to a planning horizon.</p>
-				{:else if !activeHorizonId}
-					<p class="ui-empty-state">Create or select a horizon before slotting goals.</p>
+				{#if data.unscheduledTasks.length === 0}
+					<p class="ui-empty-state">
+						No undated tasks were pulled into this session. Either the current scope is already dated
+						or the filter excludes undated work.
+					</p>
 				{:else}
 					<div class="space-y-3">
-						{#each data.availableGoals as goal (goal.id)}
-							<form
-								class="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 lg:flex-row lg:items-start lg:justify-between"
-								method="POST"
-								action="?/slotGoal"
+						{#each data.unscheduledTasks as task (task.id)}
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
+								href={resolve(`/app/tasks/${task.id}`)}
 							>
-								<input type="hidden" name="planningHorizonId" value={activeHorizonId} />
-								<input type="hidden" name="goalId" value={goal.id} />
-
-								<div class="min-w-0 flex-1 space-y-2">
-									<div class="flex flex-wrap items-center gap-2">
-										<p class="ui-wrap-anywhere font-medium text-white">{goal.name}</p>
-										<span
-											class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
-										>
-											{formatGoalStatusLabel(goal.status)}
-										</span>
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div class="min-w-0 space-y-2">
+										<div class="flex flex-wrap items-center gap-2">
+											<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
+											<span
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
+											>
+												{formatTaskStatusLabel(task.status)}
+											</span>
+											<span class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] text-amber-200">
+												Undated
+											</span>
+										</div>
+										<p class="text-xs text-slate-400">{task.goalName} · {task.projectName}</p>
+										{#if task.blockedReason}
+											<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
+										{/if}
 									</div>
-									<p class="ui-clamp-2 text-sm text-slate-300">{goal.summary}</p>
-									<p class="text-xs text-slate-500">
-										{goal.linkedProjectNames.join(', ') || 'No linked projects'} ·
-										{' '}{goal.existingTaskCount} existing task(s)
-									</p>
+									<div class="text-right text-xs text-slate-400">
+										<p>{task.assigneeName}</p>
+										<p class="mt-1">{task.estimateHours ?? 'No estimate'} hrs</p>
+									</div>
 								</div>
-
-								<button
-									class="btn preset-filled-primary-500 font-semibold"
-									type="submit"
-								>
-									Add to horizon
-								</button>
-							</form>
+							</a>
 						{/each}
 					</div>
 				{/if}
@@ -398,106 +476,12 @@
 		</div>
 
 		<div class="space-y-6">
-			<form class="ui-panel space-y-4" method="POST" action="?/createPlanningHorizon">
-				<div class="space-y-2">
-					<h2 class="text-xl font-semibold text-white">Create planning horizon</h2>
-					<p class="text-sm text-slate-400">
-						Start with a concrete timebox. Goals and tasks can then inherit that planning context.
-					</p>
-				</div>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-					<input
-						class="input text-white placeholder:text-slate-500"
-						name="name"
-						placeholder="Q2 2026"
-						required
-						value={form?.values?.name ?? ''}
-					/>
-				</label>
-
-				<div class="grid gap-4 sm:grid-cols-2">
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Kind</span>
-						<select class="select text-white" name="kind">
-							{#each data.horizonKindOptions as kind (kind)}
-								<option selected={(form?.values?.kind ?? 'quarter') === kind} value={kind}>
-									{formatPlanningHorizonKindLabel(kind)}
-								</option>
-							{/each}
-						</select>
-					</label>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
-						<select class="select text-white" name="status">
-							{#each data.horizonStatusOptions as status (status)}
-								<option selected={(form?.values?.status ?? 'draft') === status} value={status}>
-									{formatPlanningHorizonStatusLabel(status)}
-								</option>
-							{/each}
-						</select>
-					</label>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Start date</span>
-						<input
-							class="input text-white"
-							name="startDate"
-							required
-							type="date"
-							value={form?.values?.startDate ?? ''}
-						/>
-					</label>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">End date</span>
-						<input
-							class="input text-white"
-							name="endDate"
-							required
-							type="date"
-							value={form?.values?.endDate ?? ''}
-						/>
-					</label>
-				</div>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Capacity unit</span>
-					<select class="select text-white" name="capacityUnit">
-						{#each data.capacityUnitOptions as capacityUnit (capacityUnit)}
-							<option
-								selected={(form?.values?.capacityUnit ?? 'hours') === capacityUnit}
-								value={capacityUnit}
-							>
-								{capacityUnit}
-							</option>
-						{/each}
-					</select>
-				</label>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>
-					<textarea
-						class="textarea min-h-24 text-white placeholder:text-slate-500"
-						name="notes"
-						placeholder="What this horizon is trying to accomplish and what constraints matter."
-					>{form?.values?.notes ?? ''}</textarea>
-				</label>
-
-				<button class="btn preset-filled-primary-500 w-full font-semibold" type="submit">
-					Create horizon
-				</button>
-			</form>
-
 			<section class="ui-panel space-y-4">
 				<div>
 					<h2 class="text-xl font-semibold text-white">Capacity view</h2>
 					<p class="mt-1 text-sm text-slate-400">
-						Capacity uses `weeklyCapacityHours` when present and falls back to a coarse estimate from
-						execution slot count. This keeps the first slice useful without requiring a full staffing
-						model first.
+						Capacity is shown against currently scheduled work in the selected window. This keeps
+						the planning view tied to actual commitments rather than abstract backlog size.
 					</p>
 				</div>
 

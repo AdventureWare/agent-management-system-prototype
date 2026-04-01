@@ -1,12 +1,24 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { formatWorkerStatusLabel, workerStatusToneClass } from '$lib/types/control-plane';
 
 	let { data, form } = $props();
+	const CREATE_WORKER_DRAFT_KEY = 'ams:create-worker';
 
+	let createWorkerDraftReady = $state(false);
+	let workerName = $state('');
+	let workerProviderId = $state('');
+	let workerRoleId = $state('');
+	let workerLocation = $state('cloud');
+	let workerStatus = $state('idle');
+	let workerCapacity = $state('1');
+	let workerNote = $state('');
+	let workerTags = $state('');
 	let query = $state('');
 
 	let localWorkerCount = $derived(
@@ -43,6 +55,86 @@
 	}
 
 	let filteredWorkers = $derived(data.workers.filter((worker) => matchesWorker(worker, query)));
+
+	let createSuccess = $derived(form?.ok && form?.successAction === 'createWorker');
+
+	function defaultWorkerProviderId() {
+		return data.providers[0]?.id ?? '';
+	}
+
+	function defaultWorkerRoleId() {
+		return data.roles[0]?.id ?? '';
+	}
+
+	function defaultWorkerLocation() {
+		return data.locationOptions[0] ?? 'cloud';
+	}
+
+	function defaultWorkerStatus() {
+		return data.statusOptions[0] ?? 'idle';
+	}
+
+	function normalizeWorkerLocation(value: string | undefined) {
+		return data.locationOptions.find((option) => option === value) ?? defaultWorkerLocation();
+	}
+
+	function normalizeWorkerStatus(value: string | undefined) {
+		return data.statusOptions.find((option) => option === value) ?? defaultWorkerStatus();
+	}
+
+	onMount(() => {
+		if (createSuccess) {
+			clearFormDraft(CREATE_WORKER_DRAFT_KEY);
+			createWorkerDraftReady = true;
+			return;
+		}
+
+		const savedDraft = readFormDraft<{
+			name: string;
+			providerId: string;
+			roleId: string;
+			location: string;
+			status: string;
+			capacity: string;
+			note: string;
+			tags: string;
+		}>(CREATE_WORKER_DRAFT_KEY);
+
+		if (savedDraft) {
+			workerName = savedDraft.name ?? '';
+			workerProviderId = savedDraft.providerId ?? defaultWorkerProviderId();
+			workerRoleId = savedDraft.roleId ?? defaultWorkerRoleId();
+			workerLocation = normalizeWorkerLocation(savedDraft.location);
+			workerStatus = normalizeWorkerStatus(savedDraft.status);
+			workerCapacity = savedDraft.capacity ?? '1';
+			workerNote = savedDraft.note ?? '';
+			workerTags = savedDraft.tags ?? '';
+		}
+
+		workerProviderId = workerProviderId || defaultWorkerProviderId();
+		workerRoleId = workerRoleId || defaultWorkerRoleId();
+		workerLocation = normalizeWorkerLocation(workerLocation);
+		workerStatus = normalizeWorkerStatus(workerStatus);
+
+		createWorkerDraftReady = true;
+	});
+
+	$effect(() => {
+		if (!createWorkerDraftReady) {
+			return;
+		}
+
+		writeFormDraft(CREATE_WORKER_DRAFT_KEY, {
+			name: workerName,
+			providerId: workerProviderId === defaultWorkerProviderId() ? '' : workerProviderId,
+			roleId: workerRoleId === defaultWorkerRoleId() ? '' : workerRoleId,
+			location: workerLocation === defaultWorkerLocation() ? '' : workerLocation,
+			status: workerStatus === defaultWorkerStatus() ? '' : workerStatus,
+			capacity: workerCapacity === '1' ? '' : workerCapacity,
+			note: workerNote,
+			tags: workerTags
+		});
+	});
 </script>
 
 <AppPage>
@@ -175,7 +267,12 @@
 			</section>
 		</div>
 
-		<form class="ui-panel space-y-4" method="POST" action="?/createWorker">
+		<form
+			class="ui-panel space-y-4"
+			method="POST"
+			action="?/createWorker"
+			data-persist-scope="manual"
+		>
 			<div class="space-y-2">
 				<h2 class="text-xl font-semibold text-white">Register worker</h2>
 				<p class="text-sm text-slate-400">
@@ -187,6 +284,7 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 				<input
+					bind:value={workerName}
 					class="input text-white placeholder:text-slate-500"
 					name="name"
 					placeholder="Cloud growth researcher"
@@ -197,7 +295,7 @@
 			<div class="grid gap-4 sm:grid-cols-2">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Provider</span>
-					<select class="select text-white" name="providerId">
+					<select bind:value={workerProviderId} class="select text-white" name="providerId">
 						{#each data.providers as provider (provider.id)}
 							<option value={provider.id}>{provider.name}</option>
 						{/each}
@@ -206,7 +304,7 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Role</span>
-					<select class="select text-white" name="roleId">
+					<select bind:value={workerRoleId} class="select text-white" name="roleId">
 						{#each data.roles as role (role.id)}
 							<option value={role.id}>{role.name}</option>
 						{/each}
@@ -217,7 +315,7 @@
 			<div class="grid gap-4 sm:grid-cols-3">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Location</span>
-					<select class="select text-white" name="location">
+					<select bind:value={workerLocation} class="select text-white" name="location">
 						{#each data.locationOptions as location (location)}
 							<option value={location}>{location}</option>
 						{/each}
@@ -226,7 +324,7 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
-					<select class="select text-white" name="status">
+					<select bind:value={workerStatus} class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
 							<option value={status}>{formatWorkerStatusLabel(status)}</option>
 						{/each}
@@ -235,13 +333,20 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Capacity</span>
-					<input class="input text-white" name="capacity" type="number" min="1" value="1" />
+					<input
+						bind:value={workerCapacity}
+						class="input text-white"
+						name="capacity"
+						type="number"
+						min="1"
+					/>
 				</label>
 			</div>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Note</span>
 				<textarea
+					bind:value={workerNote}
 					class="textarea min-h-24 text-white placeholder:text-slate-500"
 					name="note"
 					placeholder="What this worker is best used for."
@@ -251,6 +356,7 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Tags</span>
 				<input
+					bind:value={workerTags}
 					class="input text-white placeholder:text-slate-500"
 					name="tags"
 					placeholder="svelte, ios, growth, research"

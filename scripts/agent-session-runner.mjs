@@ -69,7 +69,10 @@ const child = spawn(config.codexBin, buildCodexArgs(config), {
 	env: {
 		...process.env,
 		NO_COLOR: '1'
-	}
+	},
+	// Managed runs pass the task prompt as argv. If stdin remains as a live pipe,
+	// Codex can block forever waiting for extra input in background executions.
+	stdio: ['ignore', 'pipe', 'pipe']
 });
 
 await writeState(config.statePath, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTaskThreadName, resolveTaskThreadName } from './task-threads';
+import { buildTaskThreadName, buildTaskThreadPrompt, resolveTaskThreadName } from './task-threads';
 
 describe('task thread naming', () => {
 	it('builds a standardized task thread name', () => {
@@ -36,5 +36,18 @@ describe('task thread naming', () => {
 				taskId: 'task_thread_naming'
 			})
 		).toBe('Task ideation: Agent Management System Prototype');
+	});
+
+	it('includes installed skill names in the task prompt when available', () => {
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Standardize skill discovery',
+				taskInstructions: 'Show installed skills before running a task.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				availableSkillNames: ['skill-installer', 'web-design-guidelines']
+			})
+		).toContain('Installed skills available: skill-installer, web-design-guidelines');
 	});
 });

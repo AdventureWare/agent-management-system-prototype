@@ -8,6 +8,27 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		render(Page, {
 			form: {} as never,
 			data: {
+				availableSkills: {
+					totalCount: 2,
+					globalCount: 1,
+					projectCount: 1,
+					previewSkills: [
+						{
+							id: 'skill-installer',
+							description: 'Install Codex skills',
+							global: true,
+							project: false,
+							sourceLabel: 'Global'
+						},
+						{
+							id: 'web-design-guidelines',
+							description: 'Review UI against guidelines',
+							global: false,
+							project: true,
+							sourceLabel: 'Project'
+						}
+					]
+				},
 				attachmentRoot: '/tmp/project/agent_output',
 				artifactBrowser: {
 					rootPath: '/tmp/project/agent_output',
@@ -72,6 +93,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					threadSessionId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
+					targetDate: '2026-04-22',
 					runCount: 1,
 					latestRunId: 'run_1',
 					latestRun: null,
@@ -102,11 +124,18 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 
 		expect(document.body.textContent).toContain('Attached files');
 		expect(document.body.textContent).toContain('Browse task outputs');
-		expect(document.body.textContent).toContain('Primary actions');
-		expect(document.body.textContent).toContain('Save changes or queue work now');
+		expect(document.body.textContent).toContain('Skill access');
+		expect(document.body.textContent).toContain(
+			'2 installed skills are available to new task threads.'
+		);
 		expect(document.body.textContent).toContain('brief.md');
 		expect(document.body.textContent).toContain('task-attachments');
 		expect(document.body.textContent).toContain('/tmp/project/agent_output');
+		expect(document.body.textContent).toContain('Target date');
+		expect(document.body.textContent).toContain('Apr 22, 2026');
+		expect(
+			(document.querySelector('input[name="targetDate"]') as HTMLInputElement | null)?.value
+		).toBe('2026-04-22');
 		expect(
 			Array.from(document.querySelectorAll('a')).some(
 				(link) => link.textContent?.trim() === 'Download'
@@ -119,7 +148,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		).toBe(true);
 		expect(
 			Array.from(document.querySelectorAll('button')).some((button) =>
-				button.textContent?.includes('Save task')
+				button.textContent?.includes('Save changes')
 			)
 		).toBe(true);
 		expect(
@@ -137,6 +166,12 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		render(Page, {
 			form: {} as never,
 			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
 				attachmentRoot: '/tmp/project/agent_output',
 				artifactBrowser: {
 					rootPath: '/tmp/project/agent_output',
@@ -236,6 +271,12 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		render(Page, {
 			form: {} as never,
 			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
 				attachmentRoot: '/tmp/project/agent_output',
 				artifactBrowser: {
 					rootPath: '/tmp/project/agent_output',
@@ -346,5 +387,105 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain(
 			'This task is already running. Open the current work thread or wait for the current run to finish before running again.'
 		);
+	});
+
+	it('shows a stalled recovery call to action for stuck active runs', async () => {
+		render(Page, {
+			form: {} as never,
+			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
+				stalledRecovery: {
+					eligible: true,
+					headline: 'This task appears stalled.',
+					detail:
+						'No run heartbeat for 20m ago. No thread output for 22m ago. Recovering will retire the current run and queue fresh work.'
+				},
+				attachmentRoot: '/tmp/project/agent_output',
+				artifactBrowser: {
+					rootPath: '/tmp/project/agent_output',
+					rootKind: 'directory',
+					browsePath: '/tmp/project/agent_output',
+					inspectingParentDirectory: false,
+					directoryEntries: [],
+					directoryEntriesTruncated: false,
+					knownOutputs: [],
+					errorMessage: ''
+				},
+				project: {
+					id: 'project_1',
+					name: 'Agent Management System Prototype',
+					summary: 'Primary app project',
+					projectRootFolder: '/tmp/project',
+					defaultArtifactRoot: '/tmp/project/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
+				},
+				projects: [],
+				workers: [],
+				statusOptions: TASK_STATUS_OPTIONS,
+				relatedRuns: [],
+				dependencyTasks: [],
+				task: {
+					id: 'task_1',
+					title: 'Attach a brief',
+					summary: 'Need source documents',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					lane: 'product',
+					goalId: '',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					assigneeName: 'Unassigned',
+					threadSessionId: 'session_1',
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 2,
+					latestRunId: 'run_2',
+					latestRun: null,
+					activeRun: {
+						id: 'run_2',
+						taskId: 'task_1',
+						status: 'running'
+					},
+					hasActiveRun: true,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T11:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z',
+					updatedAtLabel: 'just now',
+					openReview: null,
+					pendingApproval: null,
+					linkThread: {
+						id: 'session_1',
+						name: 'Thread continuity',
+						sessionState: 'working'
+					},
+					linkThreadKind: 'assigned',
+					statusThread: {
+						id: 'session_1',
+						name: 'Thread continuity',
+						sessionState: 'working',
+						lastActivityAt: '2026-03-30T12:00:00.000Z'
+					}
+				},
+				candidateThreads: [],
+				suggestedThread: null
+			} as never
+		});
+
+		expect(document.body.textContent).toContain('Stalled recovery');
+		expect(document.body.textContent).toContain('This task appears stalled.');
+		expect(document.body.textContent).toContain('Recover stalled run');
 	});
 });

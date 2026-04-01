@@ -2,13 +2,15 @@
 	import { resolve } from '$app/paths';
 	import { fetchAgentSession } from '$lib/client/agent-data';
 	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import {
 		ACTIVE_REFRESH_INTERVAL_MS,
 		ACTIVITY_CLOCK_INTERVAL_MS,
 		formatActivityAge,
-		formatSessionStateLabel
+		formatSessionStateLabel,
+		getSessionActivityMeta
 	} from '$lib/session-activity';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
 	import {
@@ -531,6 +533,10 @@
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
+
+	function executionMeta(detail: AgentSessionDetail) {
+		return getSessionActivityMeta(detail, now);
+	}
 </script>
 
 {#snippet sessionStatus(detail: AgentSessionDetail)}
@@ -569,43 +575,48 @@
 			history below is one start or follow-up execution inside this thread.
 		</p>
 
-		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Latest run</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-					{detail.latestRun ? runModeLabel(detail.latestRun) : 'None yet'}
-				</p>
-				<p class="mt-1 text-xs text-slate-500">
-					{detail.latestRun ? latestRunStatus(detail.latestRun) : 'No runs recorded'}
-				</p>
-			</div>
-			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Reply state</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-					{replyStateLabel(detail)}
-				</p>
-				<p class="mt-1 text-xs text-slate-500">{replyStateDetail(detail)}</p>
-			</div>
-			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Thread</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{threadLabel(detail)}</p>
-				<p class="mt-1 text-xs text-slate-500">
-					{detail.threadId
-						? 'A Codex thread id is available for follow-up work.'
-						: 'No thread id yet.'}
-				</p>
-			</div>
-			<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Follow-up</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{resumeLabel(detail)}</p>
-				<p class="mt-1 text-xs text-slate-500">
-					{detail.canResume
-						? 'You can send the next instruction now.'
-						: detail.hasActiveRun
-							? 'Wait for the active run to finish first.'
-							: 'This thread cannot accept a follow-up yet.'}
-				</p>
-			</div>
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+			<DetailFactCard
+				label="Latest run"
+				value={detail.latestRun ? runModeLabel(detail.latestRun) : 'None yet'}
+				detail={detail.latestRun ? latestRunStatus(detail.latestRun) : 'No runs recorded'}
+				class="rounded-lg border-transparent bg-black/20"
+				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+			/>
+			<DetailFactCard
+				label="Execution"
+				value={executionMeta(detail).label}
+				detail={executionMeta(detail).detail}
+				class="rounded-lg border-transparent bg-black/20"
+				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+			/>
+			<DetailFactCard
+				label="Reply state"
+				value={replyStateLabel(detail)}
+				detail={replyStateDetail(detail)}
+				class="rounded-lg border-transparent bg-black/20"
+				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+			/>
+			<DetailFactCard
+				label="Thread"
+				value={threadLabel(detail)}
+				detail={detail.threadId
+					? 'A Codex thread id is available for follow-up work.'
+					: 'No thread id yet.'}
+				class="rounded-lg border-transparent bg-black/20"
+				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+			/>
+			<DetailFactCard
+				label="Follow-up"
+				value={resumeLabel(detail)}
+				detail={detail.canResume
+					? 'You can send the next instruction now.'
+					: detail.hasActiveRun
+						? 'Wait for the active run to finish first.'
+						: 'This thread cannot accept a follow-up yet.'}
+				class="rounded-lg border-transparent bg-black/20"
+				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+			/>
 		</div>
 
 		<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
@@ -759,38 +770,20 @@
 			</form>
 
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-				<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-					<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Started</p>
-					<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-						{formatTimestamp(session.createdAt)}
-					</p>
-				</div>
-				<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-					<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Last activity</p>
-					<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-						{formatActivityAge(session.lastActivityAt, now)}
-					</p>
-					<p class="mt-1 text-xs text-slate-500">{formatTimestamp(session.lastActivityAt)}</p>
-				</div>
-				<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-					<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Thread</p>
-					<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">{threadLabel(session)}</p>
-					{#if session.threadId}
-						<p class="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500">
-							{session.threadId}
-						</p>
-					{/if}
-				</div>
-				<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-					<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Runs</p>
-					<p class="mt-2 text-sm font-medium text-white">{session.runCount}</p>
-				</div>
-				<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-					<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Resume</p>
-					<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-						{resumeLabel(session)}
-					</p>
-				</div>
+				<DetailFactCard label="Started" value={formatTimestamp(session.createdAt)} />
+				<DetailFactCard
+					label="Last activity"
+					value={formatActivityAge(session.lastActivityAt, now)}
+					detail={formatTimestamp(session.lastActivityAt)}
+				/>
+				<DetailFactCard
+					label="Thread"
+					value={threadLabel(session)}
+					detail={session.threadId || ''}
+					detailClass="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500"
+				/>
+				<DetailFactCard label="Runs" value={session.runCount} />
+				<DetailFactCard label="Resume" value={resumeLabel(session)} />
 			</div>
 
 			<div class="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -821,24 +814,15 @@
 							</div>
 
 							<div class="grid gap-3 sm:grid-cols-3">
-								<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-									<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Queued</p>
-									<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-										{formatTimestamp(selectedRun.createdAt)}
-									</p>
-								</div>
-								<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-									<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Finished</p>
-									<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-										{formatTimestamp(selectedRun.state?.finishedAt ?? null)}
-									</p>
-								</div>
-								<div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-									<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Thread target</p>
-									<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-										{selectedRun.requestedThreadId ?? 'Start a new thread'}
-									</p>
-								</div>
+								<DetailFactCard label="Queued" value={formatTimestamp(selectedRun.createdAt)} />
+								<DetailFactCard
+									label="Finished"
+									value={formatTimestamp(selectedRun.state?.finishedAt ?? null)}
+								/>
+								<DetailFactCard
+									label="Thread target"
+									value={selectedRun.requestedThreadId ?? 'Start a new thread'}
+								/>
 							</div>
 
 							<div class="space-y-3">

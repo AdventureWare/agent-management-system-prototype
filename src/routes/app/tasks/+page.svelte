@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import DataTableSection from '$lib/components/DataTableSection.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
@@ -21,9 +25,18 @@
 	let selectedTaskIds = $state.raw<string[]>([]);
 	let selectedStaleFilters = $state.raw<TaskStaleSignalKey[]>([]);
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
+	let createTaskDraftReady = $state(false);
 	let pendingCreateAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
+
+	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
+
+	function createDialogShouldStartOpen() {
+		return form?.formContext === 'taskCreate' && !form?.ok;
+	}
+
+	let isCreateModalOpen = $state(createDialogShouldStartOpen());
 
 	const STALE_FILTERS = [
 		{ key: 'staleInProgress', label: 'Stale in-progress' },
@@ -62,6 +75,25 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function formatDateLabel(value: string | null | undefined) {
+		if (!value) {
+			return 'No target date';
+		}
+
+		const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
+
+		if (!year || !month || !day) {
+			return value;
+		}
+
+		return new Intl.DateTimeFormat('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
 
 	function formatAttachmentSize(sizeBytes: number) {
@@ -168,6 +200,8 @@
 			task.projectName,
 			task.assigneeName,
 			task.status,
+			task.targetDate ?? '',
+			formatDateLabel(task.targetDate),
 			task.artifactPath,
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
 			task.statusThread?.name ?? '',
@@ -300,6 +334,9 @@
 	);
 	let activeTasks = $derived(filteredTasks.filter((task) => task.status !== 'done'));
 	let completedTasks = $derived(filteredTasks.filter((task) => task.status === 'done'));
+	let staleTaskCount = $derived(
+		data.tasks.filter((task) => task.freshness.staleSignals.length > 0).length
+	);
 	let staleFilterCounts = $derived.by(() => ({
 		staleInProgress: data.tasks.filter((task) => task.freshness.staleInProgress).length,
 		noRecentRunActivity: data.tasks.filter((task) => task.freshness.noRecentRunActivity).length,
@@ -307,6 +344,96 @@
 			(task) => task.freshness.activeThreadNoRecentOutput
 		).length
 	}));
+	let createTaskFormValues = $derived(
+		form?.formContext === 'taskCreate'
+			? {
+					projectId: form.projectId?.toString() ?? '',
+					name: form.name?.toString() ?? '',
+					instructions: form.instructions?.toString() ?? '',
+					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
+					targetDate: form.targetDate?.toString() ?? '',
+					submitMode: form.submitMode?.toString() === 'createAndRun' ? 'createAndRun' : 'create'
+				}
+			: {
+					projectId: '',
+					name: '',
+					instructions: '',
+					assigneeWorkerId: '',
+					targetDate: '',
+					submitMode: 'create'
+				}
+	);
+	let createTaskProjectId = $state('');
+	let createTaskName = $state('');
+	let createTaskInstructions = $state('');
+	let createTaskAssigneeWorkerId = $state('');
+	let createTaskTargetDate = $state('');
+	let selectedProjectSkillSummary = $derived(
+		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
+	);
+
+	$effect(() => {
+		if (form?.formContext === 'taskCreate') {
+			createTaskProjectId = createTaskFormValues.projectId;
+			createTaskName = createTaskFormValues.name;
+			createTaskInstructions = createTaskFormValues.instructions;
+			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
+			createTaskTargetDate = createTaskFormValues.targetDate;
+			return;
+		}
+
+		if (createTaskDraftReady && !createTaskProjectId && data.projects.length === 1) {
+			createTaskProjectId = data.projects[0]?.id ?? '';
+		}
+	});
+
+	onMount(() => {
+		if (createSuccess || createAndRunSuccess) {
+			clearFormDraft(CREATE_TASK_DRAFT_KEY);
+			createTaskDraftReady = true;
+			return;
+		}
+
+		if (form?.formContext === 'taskCreate') {
+			createTaskDraftReady = true;
+			return;
+		}
+
+		const savedDraft = readFormDraft<{
+			projectId: string;
+			name: string;
+			instructions: string;
+			assigneeWorkerId: string;
+			targetDate: string;
+		}>(CREATE_TASK_DRAFT_KEY);
+
+		if (savedDraft) {
+			createTaskProjectId = savedDraft.projectId ?? '';
+			createTaskName = savedDraft.name ?? '';
+			createTaskInstructions = savedDraft.instructions ?? '';
+			createTaskAssigneeWorkerId = savedDraft.assigneeWorkerId ?? '';
+			createTaskTargetDate = savedDraft.targetDate ?? '';
+			isCreateModalOpen = true;
+		}
+
+		createTaskDraftReady = true;
+	});
+
+	$effect(() => {
+		if (!createTaskDraftReady) {
+			return;
+		}
+
+		const defaultProjectId = data.projects.length === 1 ? (data.projects[0]?.id ?? '') : '';
+
+		writeFormDraft(CREATE_TASK_DRAFT_KEY, {
+			projectId: createTaskProjectId === defaultProjectId ? '' : createTaskProjectId,
+			name: createTaskName,
+			instructions: createTaskInstructions,
+			assigneeWorkerId: createTaskAssigneeWorkerId,
+			targetDate: createTaskTargetDate
+		});
+	});
 </script>
 
 {#snippet taskTable(
@@ -322,7 +449,7 @@
 		empty={rows.length === 0}
 		{emptyMessage}
 	>
-		<table class="min-w-[980px] divide-y divide-slate-800 text-left">
+		<table class="w-full min-w-[980px] divide-y divide-slate-800 text-left">
 			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
 				<tr>
 					<th class="px-3 py-3 font-medium">
@@ -395,6 +522,11 @@
 								{#if task.hasUnmetDependencies}
 									<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
 								{/if}
+								{#if task.targetDate}
+									<p class="mt-2 text-xs text-slate-500">
+										Target {formatDateLabel(task.targetDate)}
+									</p>
+								{/if}
 							</div>
 						</td>
 						<td class="px-3 py-3 align-top text-sm text-slate-300">
@@ -456,78 +588,117 @@
 	</DataTableSection>
 {/snippet}
 
-<AppPage class="min-w-0">
-	<PageHeader
+<AppPage width="full" class="min-w-0">
+	<div class="flex flex-col gap-6 px-6 sm:px-8 xl:px-12 2xl:px-16">
+		<PageHeader
 		eyebrow="Tasks"
 		title="Browse the queue, then open one task"
 		description="Tasks should read like an operating queue. Scan by status, search for a specific brief, and use the detail page for editing, launching threads, and deeper execution context."
-	/>
+		>
+			{#snippet actions()}
+				<button
+					class="btn preset-filled-primary-500 font-semibold"
+					type="button"
+					onclick={() => {
+						isCreateModalOpen = true;
+					}}
+				>
+					Add task
+				</button>
+			{/snippet}
+		</PageHeader>
 
-	{#if form?.message}
-		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
-			{form.message}
-		</p>
-	{/if}
+		{#if form?.message}
+			<p
+				aria-live="polite"
+				class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+			>
+				{form.message}
+			</p>
+		{/if}
 
-	{#if createAndRunSuccess}
-		<p
-			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-		>
-			Task created and launched in a work thread.
-			{#if createdAttachmentCount > 0}
-				{createdAttachmentCount === 1
-					? ' 1 attachment saved with it.'
-					: ` ${createdAttachmentCount} attachments saved with it.`}
-			{/if}
-			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
-					Open thread details
-				</a>
-				to follow the run.
-			{/if}
-		</p>
-	{:else if createSuccess}
-		<p
-			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-		>
-			Task created and linked to its project.
-			{#if createdAttachmentCount > 0}
-				{createdAttachmentCount === 1
-					? ' 1 attachment saved with it.'
-					: ` ${createdAttachmentCount} attachments saved with it.`}
-			{/if}
-		</p>
-	{:else if ideationSuccess}
-		<p
-			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-		>
-			Task ideation queued for {form?.projectName?.toString() || 'the selected project'}.
-			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
-					Open thread details
-				</a>
-				to review the suggested tasks.
-			{/if}
-		</p>
-	{:else if ideationDraftCreateSuccess}
-		<p
-			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-		>
-			{ideationDraftCreateCount === 1
-				? `1 draft task created for ${form?.projectName?.toString() || 'the selected project'}.`
-				: `${ideationDraftCreateCount} draft tasks created for ${form?.projectName?.toString() || 'the selected project'}.`}
-		</p>
-	{:else if deleteSuccess}
-		<p
-			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-		>
-			{deleteCount === 1
-				? 'Task deleted and removed from the queue.'
-				: `${deleteCount} tasks deleted and removed from the queue.`}
-		</p>
-	{/if}
+		{#if createAndRunSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				Task created and launched in a work thread.
+				{#if createdAttachmentCount > 0}
+					{createdAttachmentCount === 1
+						? ' 1 attachment saved with it.'
+						: ` ${createdAttachmentCount} attachments saved with it.`}
+				{/if}
+				{#if form?.sessionId}
+					<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+						Open thread details
+					</a>
+					to follow the run.
+				{/if}
+			</p>
+		{:else if createSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				Task created and linked to its project.
+				{#if createdAttachmentCount > 0}
+					{createdAttachmentCount === 1
+						? ' 1 attachment saved with it.'
+						: ` ${createdAttachmentCount} attachments saved with it.`}
+				{/if}
+			</p>
+		{:else if ideationSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				Task ideation queued for {form?.projectName?.toString() || 'the selected project'}.
+				{#if form?.sessionId}
+					<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+						Open thread details
+					</a>
+					to review the suggested tasks.
+				{/if}
+			</p>
+		{:else if ideationDraftCreateSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				{ideationDraftCreateCount === 1
+					? `1 draft task created for ${form?.projectName?.toString() || 'the selected project'}.`
+					: `${ideationDraftCreateCount} draft tasks created for ${form?.projectName?.toString() || 'the selected project'}.`}
+			</p>
+		{:else if deleteSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				{deleteCount === 1
+					? 'Task deleted and removed from the queue.'
+					: `${deleteCount} tasks deleted and removed from the queue.`}
+			</p>
+		{/if}
 
-	{#if data.projects.length === 0}
+		<div class="grid gap-3 md:grid-cols-3">
+			<MetricCard
+				label="Active queue"
+				value={activeTasks.length}
+				detail="Draft, ready, blocked, review, and in-progress tasks that still need attention."
+			/>
+			<MetricCard
+				label="Completed"
+				value={completedTasks.length}
+				detail="Finished tasks still available for reference and follow-up."
+			/>
+			<MetricCard
+				label="Stale signals"
+				value={staleTaskCount}
+				detail="Tasks currently flagged for stale work, quiet threads, or inactive runs."
+			/>
+		</div>
+
+		{#if data.projects.length === 0}
 		<section class="card rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
 			<h2 class="text-xl font-semibold text-white">Create a project first</h2>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
@@ -540,181 +711,7 @@
 				Open projects
 			</a>
 		</section>
-	{:else}
-		<section
-			class="card border border-sky-900/60 bg-slate-950/80 p-6 shadow-[0_0_0_1px_rgba(14,165,233,0.08)]"
-		>
-			<div
-				class="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start"
-			>
-				<form
-					class="min-w-0 space-y-4"
-					method="POST"
-					action="?/createTask"
-					enctype="multipart/form-data"
-					onpaste={handleCreateTaskAttachmentPaste}
-				>
-					<div class="space-y-2">
-						<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-							Quick create
-						</p>
-						<h2 class="text-xl font-semibold text-white">Create task</h2>
-						<p class="max-w-2xl text-sm text-slate-300">
-							Add a new work item directly from the top of the queue. Editing, launch controls, and
-							run history stay on the task detail page after creation.
-						</p>
-					</div>
-
-					<div class="grid gap-4 md:grid-cols-2">
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
-							<select class="select text-white" name="projectId" required>
-								<option value="" disabled selected>Select a project</option>
-								{#each data.projects as project (project.id)}
-									<option value={project.id}>{project.name}</option>
-								{/each}
-							</select>
-						</label>
-
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-							<input
-								class="input text-white placeholder:text-slate-500"
-								name="name"
-								placeholder="Build the first task creation flow"
-								required
-							/>
-						</label>
-
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Assign to worker</span>
-							<select class="select text-white" name="assigneeWorkerId">
-								<option value="">Leave unassigned</option>
-								{#each data.workers as worker (worker.id)}
-									<option value={worker.id}>{worker.name}</option>
-								{/each}
-							</select>
-						</label>
-					</div>
-
-					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Instructions</span>
-						<textarea
-							class="textarea min-h-40 text-white placeholder:text-slate-500"
-							name="instructions"
-							placeholder="Describe the work, expected outcome, and any constraints."
-							required
-						></textarea>
-					</label>
-
-					<div class="space-y-3">
-						<div>
-							<p class="text-sm font-medium text-slate-200">Attachments</p>
-							<p class="mt-2 max-w-2xl text-sm text-slate-400">
-								Attach source files during intake. You can choose multiple files or paste files
-								anywhere in this form.
-							</p>
-						</div>
-
-						<label class="block">
-							<span class="sr-only">Attach files</span>
-							<input
-								bind:this={createTaskAttachmentInput}
-								class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
-								name="attachments"
-								type="file"
-								multiple
-								onchange={syncPendingCreateAttachments}
-							/>
-						</label>
-
-						<div
-							class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-4 text-sm text-slate-300"
-						>
-							<p class="font-medium text-white">Paste files into the form to attach them</p>
-							<p class="mt-2 text-slate-400">
-								Copied screenshots, images, and files are added to the same upload list as the file
-								picker.
-							</p>
-						</div>
-
-						{#if pendingCreateAttachments.length > 0}
-							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-								<div class="flex flex-wrap items-center justify-between gap-3">
-									<p class="text-sm font-medium text-white">
-										{pendingCreateAttachments.length === 1
-											? '1 attachment selected'
-											: `${pendingCreateAttachments.length} attachments selected`}
-									</p>
-									<button
-										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
-										type="button"
-										onclick={clearPendingCreateAttachments}
-									>
-										Clear
-									</button>
-								</div>
-								<div class="mt-4 space-y-3">
-									{#each pendingCreateAttachments as attachment (attachment.id)}
-										<div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-											<p class="ui-wrap-anywhere font-medium text-white">{attachment.name}</p>
-											<p class="mt-2 text-sm text-slate-300">
-												{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
-											</p>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<div class="flex flex-wrap items-center gap-3">
-						<button
-							class="btn preset-filled-primary-500 font-semibold"
-							name="submitMode"
-							type="submit"
-							value="create"
-						>
-							Create task
-						</button>
-						<button
-							class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
-							name="submitMode"
-							type="submit"
-							value="createAndRun"
-						>
-							Create and run
-						</button>
-						<p class="text-sm text-slate-400">
-							Choose a project, name the work clearly, then create a queued task or launch it
-							immediately.
-						</p>
-					</div>
-				</form>
-
-				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-						Queue snapshot
-					</p>
-					<h3 class="mt-2 text-lg font-semibold text-white">Create before you triage</h3>
-					<p class="mt-2 text-sm text-slate-300">
-						Keep quick intake at the top, then use filters and detail views below to manage the
-						queue.
-					</p>
-					<div class="mt-4 grid gap-3 sm:grid-cols-2">
-						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Active</p>
-							<p class="mt-2 text-2xl font-semibold text-white">{activeTasks.length}</p>
-						</div>
-						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Completed</p>
-							<p class="mt-2 text-2xl font-semibold text-white">{completedTasks.length}</p>
-						</div>
-					</div>
-				</div>
-			</div>
-		</section>
-
+		{:else}
 		<div class="space-y-6">
 			<CollectionToolbar
 				title="Task index"
@@ -727,7 +724,7 @@
 							id="task-search"
 							bind:value={query}
 							class="input text-white placeholder:text-slate-500"
-							placeholder="Search tasks"
+							placeholder="Search tasks…"
 						/>
 					</div>
 
@@ -801,14 +798,12 @@
 				{/snippet}
 			</CollectionToolbar>
 
-			<SelectionActionBar
-				title="Bulk actions"
-				description={selectedTaskIds.length === 0
-					? 'Select tasks from the queue to remove them in one pass.'
-					: `${selectedTaskIds.length} task${selectedTaskIds.length === 1 ? '' : 's'} selected.`}
-			>
-				{#snippet actions()}
-					{#if selectedTaskIds.length > 0}
+			{#if selectedTaskIds.length > 0}
+				<SelectionActionBar
+					title="Bulk actions"
+					description={`${selectedTaskIds.length} task${selectedTaskIds.length === 1 ? '' : 's'} selected.`}
+				>
+					{#snippet actions()}
 						<button
 							class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
 							type="button"
@@ -827,9 +822,9 @@
 								Delete selected
 							</button>
 						</form>
-					{/if}
-				{/snippet}
-			</SelectionActionBar>
+					{/snippet}
+				</SelectionActionBar>
+			{/if}
 
 			{@render taskTable(
 				'Active queue',
@@ -1078,4 +1073,244 @@
 			</details>
 		</div>
 	{/if}
+
+	{#if data.projects.length > 0 && isCreateModalOpen}
+		<AppDialog
+			bind:open={isCreateModalOpen}
+			title="Create task"
+			description="Create a new work item without taking focus away from the queue. Editing, launch controls, and deeper execution history stay on the task detail page after creation."
+			closeLabel="Close create task dialog"
+			bodyClass="p-0"
+		>
+			<form
+				class="grid gap-6 p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start"
+				method="POST"
+				action="?/createTask"
+				data-persist-scope="manual"
+				enctype="multipart/form-data"
+				onpaste={handleCreateTaskAttachmentPaste}
+			>
+				<div class="min-w-0 space-y-4">
+					<div class="grid gap-4 md:grid-cols-3">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
+							<select
+								bind:value={createTaskProjectId}
+								class="select text-white"
+								name="projectId"
+								required
+							>
+								<option value="" disabled>Select a project</option>
+								{#each data.projects as project (project.id)}
+									<option value={project.id}>{project.name}</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+							<input
+								class="input text-white placeholder:text-slate-500"
+								bind:value={createTaskName}
+								name="name"
+								placeholder="Build the first task creation flow…"
+								required
+							/>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Target date</span>
+							<input
+								class="input text-white"
+								bind:value={createTaskTargetDate}
+								name="targetDate"
+								type="date"
+							/>
+						</label>
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+							Skill coverage
+						</p>
+						{#if selectedProjectSkillSummary}
+							<p class="mt-2 text-sm text-white">
+								{selectedProjectSkillSummary.totalCount === 0
+									? 'No installed Codex skills were found for this project workspace yet.'
+									: `${selectedProjectSkillSummary.totalCount} installed skill${selectedProjectSkillSummary.totalCount === 1 ? '' : 's'} will be available when this task launches.`}
+							</p>
+							<p class="mt-2 text-sm text-slate-400">
+								{selectedProjectSkillSummary.projectCount} project-local ·
+								{selectedProjectSkillSummary.globalCount} global
+							</p>
+							{#if selectedProjectSkillSummary.previewSkills.length > 0}
+								<div class="mt-3 flex flex-wrap gap-2">
+									{#each selectedProjectSkillSummary.previewSkills as skill (skill.id)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-xs text-slate-200"
+											title={skill.description || undefined}
+										>
+											{skill.id}
+											<span class="text-slate-500"> · {skill.sourceLabel}</span>
+										</span>
+									{/each}
+								</div>
+							{/if}
+						{:else}
+							<p class="mt-2 text-sm text-slate-400">
+								Select a project to preview the skills available to its future task threads.
+							</p>
+						{/if}
+					</div>
+
+					<div class="grid gap-4 md:grid-cols-1">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Assign to worker</span>
+							<select
+								bind:value={createTaskAssigneeWorkerId}
+								class="select text-white"
+								name="assigneeWorkerId"
+							>
+								<option value="">Leave unassigned</option>
+								{#each data.workers as worker (worker.id)}
+									<option value={worker.id}>{worker.name}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Instructions</span>
+						<textarea
+							bind:value={createTaskInstructions}
+							class="textarea min-h-40 text-white placeholder:text-slate-500"
+							name="instructions"
+							placeholder="Describe the work, expected outcome, and any constraints…"
+							required
+						></textarea>
+					</label>
+
+					<div class="space-y-3">
+						<div>
+							<p class="text-sm font-medium text-slate-200">Attachments</p>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								Attach source files during intake. You can choose multiple files or paste files
+								anywhere in this form.
+							</p>
+						</div>
+
+						<label class="block">
+							<span class="sr-only">Attach files</span>
+							<input
+								bind:this={createTaskAttachmentInput}
+								class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
+								name="attachments"
+								type="file"
+								multiple
+								onchange={syncPendingCreateAttachments}
+							/>
+						</label>
+
+						<div
+							class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-4 text-sm text-slate-300"
+						>
+							<p class="font-medium text-white">Paste files into the form to attach them</p>
+							<p class="mt-2 text-slate-400">
+								Copied screenshots, images, and files are added to the same upload list as the file
+								picker.
+							</p>
+						</div>
+
+						{#if pendingCreateAttachments.length > 0}
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<div class="flex flex-wrap items-center justify-between gap-3">
+									<p class="text-sm font-medium text-white">
+										{pendingCreateAttachments.length === 1
+											? '1 attachment selected'
+											: `${pendingCreateAttachments.length} attachments selected`}
+									</p>
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+										type="button"
+										onclick={clearPendingCreateAttachments}
+									>
+										Clear
+									</button>
+								</div>
+								<div class="mt-4 space-y-3">
+									{#each pendingCreateAttachments as attachment (attachment.id)}
+										<div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+											<p class="ui-wrap-anywhere font-medium text-white">{attachment.name}</p>
+											<p class="mt-2 text-sm text-slate-300">
+												{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+											</p>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<div class="flex flex-wrap items-center gap-3">
+						<button
+							class="btn preset-filled-primary-500 font-semibold"
+							name="submitMode"
+							type="submit"
+							value="create"
+						>
+							Create task
+						</button>
+						<button
+							class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
+							name="submitMode"
+							type="submit"
+							value="createAndRun"
+						>
+							Create and run
+						</button>
+						<p class="text-sm text-slate-400">
+							Choose a project, name the work clearly, then create a queued task or launch it
+							immediately.
+						</p>
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+						Queue snapshot
+					</p>
+					<h3 class="mt-2 text-lg font-semibold text-white">Create with context</h3>
+					<p class="mt-2 text-sm text-slate-300">
+						Keep intake lightweight. Create the work item here, then return to the queue or open the
+						task detail page for deeper editing and execution controls.
+					</p>
+					<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+						<MetricCard
+							label="Active queue"
+							value={activeTasks.length}
+							detail="Work still in draft, ready, blocked, review, or in progress."
+						/>
+						<MetricCard
+							label="Completed"
+							value={completedTasks.length}
+							detail="Finished work kept around for reference and follow-up."
+						/>
+					</div>
+					{#if selectedProjectSkillSummary}
+						<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Skills in this workspace
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{selectedProjectSkillSummary.totalCount === 0
+									? 'This project currently exposes no installed skills to new task threads.'
+									: `${selectedProjectSkillSummary.totalCount} skills available across project-local and global roots.`}
+							</p>
+						</div>
+					{/if}
+				</div>
+			</form>
+		</AppDialog>
+		{/if}
+	</div>
 </AppPage>

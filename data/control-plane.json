@@ -89,11 +89,12 @@
       "id": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
       "name": "Personal Knowledge",
       "summary": "Increasing my own knowledge",
-      "projectRootFolder": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault",
-      "defaultArtifactRoot": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault",
+      "projectRootFolder": "/Users/colinfreed/Projects/Personal Knowledge",
+      "defaultArtifactRoot": "/Users/colinfreed/Projects/Personal Knowledge/agent_output",
       "defaultRepoPath": "",
       "defaultRepoUrl": "",
-      "defaultBranch": ""
+      "defaultBranch": "",
+      "defaultThreadSandbox": "danger-full-access"
     },
     {
       "id": "project_1ef6aafb-6d6b-4384-943e-ecc0ea93c4b6",
@@ -103,7 +104,8 @@
       "defaultArtifactRoot": "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system/agent_output",
       "defaultRepoPath": "",
       "defaultRepoUrl": "",
-      "defaultBranch": ""
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
     },
     {
       "id": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
@@ -113,7 +115,8 @@
       "defaultArtifactRoot": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "defaultRepoPath": "",
       "defaultRepoUrl": "",
-      "defaultBranch": ""
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
     },
     {
       "id": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
@@ -123,7 +126,8 @@
       "defaultArtifactRoot": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "defaultRepoPath": "",
       "defaultRepoUrl": "",
-      "defaultBranch": ""
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
     }
   ],
   "goals": [
@@ -256,20 +260,50 @@
   ],
   "tasks": [
     {
-      "id": "task_98de75c0-f609-4a7d-9cbe-b49e11881be8",
-      "title": "Stabilize repeated failure path for Planning work and chunking",
-      "summary": "Investigate the repeated failed or blocked runs for this task. Latest failure detail: The linked work thread failed. Document the root cause and add a concrete safeguard so future runs do not hit the same failure mode.",
-      "projectId": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
-      "lane": "ops",
+      "id": "task_4b40e084-b648-45f6-ae44-474beddbf83e",
+      "title": "Maintain form input values",
+      "summary": "The forms (starting with create task at least) should keep their input values/state between reloads. i.e., I don't want my work to be lost in a form if the page reloads",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "in_draft",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
       "desiredRoleId": "role_coordinator",
       "assigneeWorkerId": null,
-      "threadSessionId": null,
+      "threadSessionId": "session_fab11977-b617-4630-aca3-21625bb67bec",
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "parentTaskId": null,
+      "planningHorizonId": null,
+      "estimateHours": null,
+      "targetDate": "2026-04-01",
+      "planningOrder": 0,
+      "source": "manual",
+      "runCount": 1,
+      "latestRunId": "run_4e5fa551-d0ce-4f14-953c-89c55053167a",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-01T20:38:44.170Z",
+      "updatedAt": "2026-04-01T20:57:06.386Z"
+    },
+    {
+      "id": "task_6174b461-aebd-48bb-9d16-fdb131abe316",
+      "title": "Format Tasks page content width (retry)",
+      "summary": "The content on the Tasks page doesn't take up the full width of the like container, there's space on the right that's empty for no apparent reason and it looks weird. Please have at least the Tasks queue table take up like full width",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_d15221b7-aeee-4133-9624-928a871eef98",
       "blockedReason": "",
       "dependencyTaskIds": [],
       "parentTaskId": null,
@@ -278,12 +312,132 @@
       "targetDate": null,
       "planningOrder": 0,
       "source": "manual",
-      "runCount": 0,
-      "latestRunId": null,
+      "runCount": 3,
+      "latestRunId": "run_eb3df87e-82fd-4e29-91bf-55cc4f37516c",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-01T19:59:01.355Z",
+      "updatedAt": "2026-04-01T21:04:03.245Z"
+    },
+    {
+      "id": "task_00c8cab0-5495-47aa-b213-3fec3a7a82e5",
+      "title": "Add Target Date field to tasks",
+      "summary": "Add a Target Date field to Tasks. Use the appropriate field type and all that, obviously.",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_64fed16b-509c-47b3-875b-0cc23cd1ff14",
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "parentTaskId": null,
+      "planningHorizonId": null,
+      "estimateHours": null,
+      "targetDate": null,
+      "planningOrder": 0,
+      "source": "manual",
+      "runCount": 3,
+      "latestRunId": "run_cea74bd7-ee5c-4e0b-8f5c-761fe2617695",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-01T16:14:14.613Z",
+      "updatedAt": "2026-04-01T20:36:36.309Z"
+    },
+    {
+      "id": "task_a2aadb79-d594-4f32-bd1f-a6ab1d28b7a5",
+      "title": "Remove noise from prototype",
+      "summary": "Please review the like existing entities/features (e.g. Projects, Planning, Runs, Goals, etc.) in this app and explain what each is currently doing or being used for, from what you can tell.",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_460432e7-f695-43f0-b664-02e875cf784f",
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "parentTaskId": null,
+      "planningHorizonId": null,
+      "estimateHours": null,
+      "targetDate": null,
+      "planningOrder": 0,
+      "source": "manual",
+      "runCount": 3,
+      "latestRunId": "run_85babf7b-75c1-4aa8-80ca-3bf06e9907f4",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-01T14:37:54.627Z",
+      "updatedAt": "2026-04-01T21:30:54.673Z"
+    },
+    {
+      "id": "task_8175f25f-8e01-4045-993b-54072dee843d",
+      "title": "RAG knowledge and notes",
+      "summary": "Please expand on the Retrieval-Augmented Generation note and related notes in my obsidian vault. Especially add any knowledge or info that would be useful for designing or implemented a RAG engine.",
+      "projectId": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_f7b3d93c-2f10-4960-a78b-fa2646b5fc49",
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "parentTaskId": null,
+      "planningHorizonId": null,
+      "estimateHours": null,
+      "targetDate": null,
+      "planningOrder": 0,
+      "source": "manual",
+      "runCount": 1,
+      "latestRunId": "run_892878d7-adbc-4279-be8b-00692ad7bace",
+      "artifactPath": "/Users/colinfreed/Projects/Personal Knowledge/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-01T13:29:55.769Z",
+      "updatedAt": "2026-04-01T14:01:47.087Z"
+    },
+    {
+      "id": "task_98de75c0-f609-4a7d-9cbe-b49e11881be8",
+      "title": "Stabilize repeated failure path for Planning work and chunking",
+      "summary": "Investigate the repeated failed or blocked runs for this task. Latest failure detail: The linked work thread failed. Document the root cause and add a concrete safeguard so future runs do not hit the same failure mode.",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "ops",
+      "goalId": "",
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_aed53da3-a103-4360-b9f3-52dbe786b2cf",
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "parentTaskId": null,
+      "planningHorizonId": null,
+      "estimateHours": null,
+      "targetDate": null,
+      "planningOrder": 0,
+      "source": "manual",
+      "runCount": 2,
+      "latestRunId": "run_1147e1bb-37e1-445d-91a2-3864b2bf0e73",
       "artifactPath": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault",
       "attachments": [],
       "createdAt": "2026-04-01T03:14:04.792Z",
-      "updatedAt": "2026-04-01T03:14:04.792Z"
+      "updatedAt": "2026-04-01T14:15:53.696Z"
     },
     {
       "id": "task_8d950fb2-4c0e-4ffe-92c8-f4fdbf6c7f73",
@@ -293,7 +447,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -313,7 +467,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-01T03:02:37.726Z",
-      "updatedAt": "2026-04-01T03:23:59.905Z"
+      "updatedAt": "2026-04-01T16:20:30.278Z"
     },
     {
       "id": "task_7018ac46-0101-4274-a105-be123e08ddfd",
@@ -373,7 +527,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-01T02:32:53.678Z",
-      "updatedAt": "2026-04-01T03:22:27.691Z"
+      "updatedAt": "2026-04-01T12:21:38.544Z"
     },
     {
       "id": "task_1a4924ec-fd8b-42fa-b38b-8b5b4d855121",
@@ -383,7 +537,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -403,7 +557,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-01T00:02:42.572Z",
-      "updatedAt": "2026-04-01T00:19:01.199Z"
+      "updatedAt": "2026-04-01T12:42:12.718Z"
     },
     {
       "id": "task_3e016e6d-1531-48c1-9a70-9ee1d4703ad9",
@@ -433,7 +587,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T23:31:29.697Z",
-      "updatedAt": "2026-04-01T03:17:27.487Z"
+      "updatedAt": "2026-04-01T21:30:40.486Z"
     },
     {
       "id": "task_098054ed-a8ee-4091-b4e7-c4cd89aed8e2",
@@ -443,7 +597,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -463,37 +617,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T22:51:16.125Z",
-      "updatedAt": "2026-03-31T23:23:09.733Z"
-    },
-    {
-      "id": "task_799276fa-fbfb-48e6-9f3d-76ea909fe499",
-      "title": "Planning work and chunking",
-      "summary": "Please add notes in the appropriate directory for effective planning of work and like effectively chunking and breaking up work, prioritizing it, understanding what skills and tools and capabilities are required, and how to organize information and context to improve efficiency and quality of work and planning",
-      "projectId": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
-      "lane": "product",
-      "goalId": "",
-      "priority": "medium",
-      "status": "blocked",
-      "riskLevel": "medium",
-      "approvalMode": "none",
-      "requiresReview": true,
-      "desiredRoleId": "role_coordinator",
-      "assigneeWorkerId": null,
-      "threadSessionId": "session_a242d974-ec21-41f8-ba3f-e7f8628333bc",
-      "blockedReason": "The linked work thread failed.",
-      "dependencyTaskIds": [],
-      "parentTaskId": null,
-      "planningHorizonId": null,
-      "estimateHours": null,
-      "targetDate": null,
-      "planningOrder": 0,
-      "source": "manual",
-      "runCount": 1,
-      "latestRunId": "run_481c2930-ce6a-4cf4-b0db-e6f22283e2fd",
-      "artifactPath": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault",
-      "attachments": [],
-      "createdAt": "2026-03-31T21:52:45.922Z",
-      "updatedAt": "2026-03-31T21:52:46.228Z"
+      "updatedAt": "2026-04-01T14:16:13.401Z"
     },
     {
       "id": "task_c1c3d77d-7824-4a6f-b8c1-06f397728f50",
@@ -503,7 +627,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -532,7 +656,7 @@
         }
       ],
       "createdAt": "2026-03-31T20:45:32.142Z",
-      "updatedAt": "2026-03-31T20:55:12.828Z"
+      "updatedAt": "2026-04-01T14:18:33.068Z"
     },
     {
       "id": "task_61dd2dbd-aaff-42d7-9fe6-4be49aa5c330",
@@ -542,7 +666,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -562,7 +686,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T20:13:10.038Z",
-      "updatedAt": "2026-03-31T20:34:11.062Z"
+      "updatedAt": "2026-04-01T14:16:22.245Z"
     },
     {
       "id": "task_214286ac-2e11-47cd-a3bb-a86d2be5f12a",
@@ -1135,36 +1259,6 @@
       "updatedAt": "2026-03-31T15:22:09.963Z"
     },
     {
-      "id": "task_54dfeed4-e312-4b26-be6e-f9f510a7cc47",
-      "title": "Demo profiles",
-      "summary": "Please start putting together personas and data to use for them to make like dummy/demo profiles",
-      "projectId": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
-      "lane": "product",
-      "goalId": "",
-      "priority": "medium",
-      "status": "review",
-      "riskLevel": "medium",
-      "approvalMode": "none",
-      "requiresReview": true,
-      "desiredRoleId": "role_coordinator",
-      "assigneeWorkerId": null,
-      "threadSessionId": "session_e24e900d-2058-439e-a6f4-88b5f13eda2d",
-      "blockedReason": "",
-      "dependencyTaskIds": [],
-      "parentTaskId": null,
-      "planningHorizonId": null,
-      "estimateHours": null,
-      "targetDate": null,
-      "planningOrder": 0,
-      "source": "manual",
-      "runCount": 1,
-      "latestRunId": "run_41f97f06-f9b3-4515-9fd0-5e5c6aac799a",
-      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
-      "attachments": [],
-      "createdAt": "2026-03-31T01:57:00.534Z",
-      "updatedAt": "2026-03-31T02:03:04.066Z"
-    },
-    {
       "id": "task_30711630-725e-4322-b946-3c19c3062e75",
       "title": "Create draft tasks directly from ideation thread output",
       "summary": "Add a workflow that lets the operator review an ideation thread's suggested tasks and create selected ones as draft tasks with project, summary, and default routing prefilled. Reuse the existing ideation thread/session linkage instead of inventing a second ideation store.",
@@ -1172,7 +1266,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -1192,72 +1286,12 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T01:41:01.000Z",
-      "updatedAt": "2026-03-31T01:56:06.139Z"
+      "updatedAt": "2026-04-01T14:17:49.607Z"
     },
     {
       "id": "task_2c46ac6e-d3be-4e9b-9471-f44f9ba2d1a1",
       "title": "Expose full task routing and governance fields in create/edit flows",
       "summary": "Expand task create/edit flows to support priority, risk level, approval mode, requires review, desired role, goal link, blocked reason, and dependency task selection. Keep the quick-create flow lightweight, but make the detail page a complete editor for the task model.",
-      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
-      "lane": "product",
-      "goalId": "",
-      "priority": "medium",
-      "status": "ready",
-      "riskLevel": "medium",
-      "approvalMode": "none",
-      "requiresReview": true,
-      "desiredRoleId": "role_coordinator",
-      "assigneeWorkerId": null,
-      "threadSessionId": null,
-      "blockedReason": "",
-      "dependencyTaskIds": [],
-      "parentTaskId": null,
-      "planningHorizonId": null,
-      "estimateHours": null,
-      "targetDate": null,
-      "planningOrder": 0,
-      "source": "manual",
-      "runCount": 0,
-      "latestRunId": null,
-      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
-      "attachments": [],
-      "createdAt": "2026-03-31T01:41:01.000Z",
-      "updatedAt": "2026-03-31T01:41:01.000Z"
-    },
-    {
-      "id": "task_454def29-535b-43ee-868b-e51d582af8d5",
-      "title": "Add goal-linking workflow for project tasks",
-      "summary": "Add a simple goal-linking workflow so tasks can be attached to an existing goal or a new goal from the task/project pages. Surface unlinked-task counts and make it easy to batch-link related tasks after a burst of ideation.",
-      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
-      "lane": "product",
-      "goalId": "",
-      "priority": "medium",
-      "status": "ready",
-      "riskLevel": "medium",
-      "approvalMode": "none",
-      "requiresReview": true,
-      "desiredRoleId": "role_coordinator",
-      "assigneeWorkerId": null,
-      "threadSessionId": null,
-      "blockedReason": "",
-      "dependencyTaskIds": [],
-      "parentTaskId": null,
-      "planningHorizonId": null,
-      "estimateHours": null,
-      "targetDate": null,
-      "planningOrder": 0,
-      "source": "manual",
-      "runCount": 0,
-      "latestRunId": null,
-      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
-      "attachments": [],
-      "createdAt": "2026-03-31T01:41:01.000Z",
-      "updatedAt": "2026-03-31T01:41:01.000Z"
-    },
-    {
-      "id": "task_bb236250-777c-4617-86e0-c1d411257e7f",
-      "title": "Add project setup health checks and missing-context warnings",
-      "summary": "Add a project health panel that flags missing root folder, artifact root, repo path, repo URL, and default branch, and explain which features are degraded by each missing field. If possible, offer a one-click autofill from the local git checkout for repo URL and current branch.",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
       "goalId": "",
@@ -1313,36 +1347,6 @@
       "attachments": [],
       "createdAt": "2026-03-31T01:41:01.000Z",
       "updatedAt": "2026-03-31T15:09:10.924Z"
-    },
-    {
-      "id": "task_3927bae9-93e4-4298-80ce-6bcae8ae09f2",
-      "title": "Reconcile task status automatically from thread/run outcomes",
-      "summary": "Add a reconciliation pass that compares task-linked sessions and latest runs, then updates control-plane run/task state or raises an explicit needs-resolution signal when a thread finishes, fails, or becomes unavailable. Prefer non-destructive syncing over silently marking work done.",
-      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
-      "lane": "product",
-      "goalId": "",
-      "priority": "medium",
-      "status": "ready",
-      "riskLevel": "medium",
-      "approvalMode": "none",
-      "requiresReview": true,
-      "desiredRoleId": "role_coordinator",
-      "assigneeWorkerId": null,
-      "threadSessionId": null,
-      "blockedReason": "",
-      "dependencyTaskIds": [],
-      "parentTaskId": null,
-      "planningHorizonId": null,
-      "estimateHours": null,
-      "targetDate": null,
-      "planningOrder": 0,
-      "source": "manual",
-      "runCount": 0,
-      "latestRunId": null,
-      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
-      "attachments": [],
-      "createdAt": "2026-03-31T01:41:01.000Z",
-      "updatedAt": "2026-03-31T01:41:01.000Z"
     },
     {
       "id": "task_15291ca3-eba9-4f90-9920-d7fceeccc805",
@@ -1442,7 +1446,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -1462,7 +1466,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T01:12:56.618Z",
-      "updatedAt": "2026-03-31T15:24:42.981Z"
+      "updatedAt": "2026-04-01T14:18:19.112Z"
     },
     {
       "id": "task_fb13954a-0458-495a-819d-b5e37c364961",
@@ -1622,7 +1626,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -1642,7 +1646,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-03-30T23:10:44.178Z",
-      "updatedAt": "2026-03-30T23:52:10.080Z"
+      "updatedAt": "2026-04-01T14:17:25.939Z"
     },
     {
       "id": "task_9fe4f15e-a753-43f9-8066-d57a079864c0",
@@ -1827,13 +1831,273 @@
   ],
   "runs": [
     {
+      "id": "run_4e5fa551-d0ce-4f14-953c-89c55053167a",
+      "taskId": "task_4b40e084-b648-45f6-ae44-474beddbf83e",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T20:38:44.198Z",
+      "updatedAt": "2026-04-01T20:57:06.389Z",
+      "startedAt": "2026-04-01T20:38:44.198Z",
+      "endedAt": "2026-04-01T20:56:04.346Z",
+      "threadId": null,
+      "sessionId": "session_fab11977-b617-4630-aca3-21625bb67bec",
+      "promptDigest": "f134205e5aed2035",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-01T20:52:47.905Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_85babf7b-75c1-4aa8-80ca-3bf06e9907f4",
+      "taskId": "task_a2aadb79-d594-4f32-bd1f-a6ab1d28b7a5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T20:30:18.387Z",
+      "updatedAt": "2026-04-01T21:30:54.673Z",
+      "startedAt": "2026-04-01T20:30:18.387Z",
+      "endedAt": "2026-04-01T21:30:54.673Z",
+      "threadId": null,
+      "sessionId": "session_460432e7-f695-43f0-b664-02e875cf784f",
+      "promptDigest": "9d76141379367163",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-01T21:30:05.703Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_cea74bd7-ee5c-4e0b-8f5c-761fe2617695",
+      "taskId": "task_00c8cab0-5495-47aa-b213-3fec3a7a82e5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T20:29:33.265Z",
+      "updatedAt": "2026-04-01T20:36:36.312Z",
+      "startedAt": "2026-04-01T20:29:33.265Z",
+      "endedAt": "2026-04-01T20:36:00.709Z",
+      "threadId": null,
+      "sessionId": "session_64fed16b-509c-47b3-875b-0cc23cd1ff14",
+      "promptDigest": "eea868654bcf4f6d",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-01T20:35:45.096Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_eb3df87e-82fd-4e29-91bf-55cc4f37516c",
+      "taskId": "task_6174b461-aebd-48bb-9d16-fdb131abe316",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T20:24:51.729Z",
+      "updatedAt": "2026-04-01T21:04:03.248Z",
+      "startedAt": "2026-04-01T20:24:51.729Z",
+      "endedAt": "2026-04-01T21:00:21.080Z",
+      "threadId": null,
+      "sessionId": "session_d15221b7-aeee-4133-9624-928a871eef98",
+      "promptDigest": "ef778354e36b0eb7",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-01T20:57:55.600Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_48bbae6a-89a1-40df-b8c6-32621369b43e",
+      "taskId": "task_6174b461-aebd-48bb-9d16-fdb131abe316",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T20:13:10.224Z",
+      "updatedAt": "2026-04-01T20:13:10.877Z",
+      "startedAt": "2026-04-01T20:13:10.224Z",
+      "endedAt": "2026-04-01T20:13:10.877Z",
+      "threadId": null,
+      "sessionId": "session_c5b454b4-e331-468c-afcf-23fb8cc3b6f0",
+      "promptDigest": "ef778354e36b0eb7",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T20:13:10.877Z",
+      "errorSummary": "Codex never advanced past startup because the managed run was stuck waiting for stdin input. Restart the manager and retry the task."
+    },
+    {
+      "id": "run_44b17868-7644-453c-9911-13dd7da3035c",
+      "taskId": "task_6174b461-aebd-48bb-9d16-fdb131abe316",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T19:59:01.381Z",
+      "updatedAt": "2026-04-01T20:02:00.780Z",
+      "startedAt": "2026-04-01T19:59:01.380Z",
+      "endedAt": "2026-04-01T20:02:00.780Z",
+      "threadId": null,
+      "sessionId": "session_b03b8bb9-2af7-4566-833b-bcd107eda0a4",
+      "promptDigest": "ef778354e36b0eb7",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T20:02:00.780Z",
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+    },
+    {
+      "id": "run_7b006e2d-4c9a-4056-bf98-681531b726e1",
+      "taskId": "task_00c8cab0-5495-47aa-b213-3fec3a7a82e5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T19:39:12.333Z",
+      "updatedAt": "2026-04-01T19:39:13.508Z",
+      "startedAt": "2026-04-01T19:39:12.333Z",
+      "endedAt": "2026-04-01T19:39:13.508Z",
+      "threadId": null,
+      "sessionId": "session_64bc896d-3520-4910-bd46-bd9224b32635",
+      "promptDigest": "eea868654bcf4f6d",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T19:39:13.508Z",
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+    },
+    {
+      "id": "run_65b84715-fe3b-4cf6-b8f3-a9b0d7bee12c",
+      "taskId": "task_00c8cab0-5495-47aa-b213-3fec3a7a82e5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T16:14:14.636Z",
+      "updatedAt": "2026-04-01T16:14:15.669Z",
+      "startedAt": "2026-04-01T16:14:14.636Z",
+      "endedAt": "2026-04-01T16:14:15.669Z",
+      "threadId": null,
+      "sessionId": "session_ccf71908-662c-4e3e-a2ca-2a69e620b37c",
+      "promptDigest": "5b8208052daf09a1",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T16:14:15.669Z",
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+    },
+    {
+      "id": "run_ed684899-9a03-46c3-812b-62da32ebfd76",
+      "taskId": "task_a2aadb79-d594-4f32-bd1f-a6ab1d28b7a5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T16:08:04.198Z",
+      "updatedAt": "2026-04-01T16:08:05.372Z",
+      "startedAt": "2026-04-01T16:08:04.198Z",
+      "endedAt": "2026-04-01T16:08:05.372Z",
+      "threadId": null,
+      "sessionId": "session_20df611b-8ce2-4500-ba4a-6175bec7cb12",
+      "promptDigest": "43c60577deb2ee18",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T16:08:05.372Z",
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+    },
+    {
+      "id": "run_f94f9e60-23d9-419a-9358-8cedc55f4061",
+      "taskId": "task_a2aadb79-d594-4f32-bd1f-a6ab1d28b7a5",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "canceled",
+      "createdAt": "2026-04-01T14:37:54.654Z",
+      "updatedAt": "2026-04-01T16:07:33.579Z",
+      "startedAt": "2026-04-01T14:37:54.653Z",
+      "endedAt": "2026-04-01T16:07:33.579Z",
+      "threadId": null,
+      "sessionId": "session_1e4e04e7-f384-4100-8395-fe72de1d4a2d",
+      "promptDigest": "43c60577deb2ee18",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task blocked after the linked work thread was canceled.",
+      "lastHeartbeatAt": "2026-04-01T14:37:54.653Z",
+      "errorSummary": "The linked work thread was canceled."
+    },
+    {
+      "id": "run_892878d7-adbc-4279-be8b-00692ad7bace",
+      "taskId": "task_8175f25f-8e01-4045-993b-54072dee843d",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T13:29:55.783Z",
+      "updatedAt": "2026-04-01T14:01:47.094Z",
+      "startedAt": "2026-04-01T13:29:55.782Z",
+      "endedAt": "2026-04-01T13:36:05.224Z",
+      "threadId": null,
+      "sessionId": "session_f7b3d93c-2f10-4960-a78b-fa2646b5fc49",
+      "promptDigest": "8c3441eb2ea54eef",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Personal Knowledge/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-01T13:29:55.782Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_1147e1bb-37e1-445d-91a2-3864b2bf0e73",
+      "taskId": "task_98de75c0-f609-4a7d-9cbe-b49e11881be8",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-01T12:09:44.808Z",
+      "updatedAt": "2026-04-01T14:15:53.699Z",
+      "startedAt": "2026-04-01T12:09:44.808Z",
+      "endedAt": "2026-04-01T13:23:17.845Z",
+      "threadId": null,
+      "sessionId": "session_aed53da3-a103-4360-b9f3-52dbe786b2cf",
+      "promptDigest": "13a33a233bd433ec",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-01T13:22:16.704Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_138f8a4e-4e2e-4880-9e31-b3a9a38f3efe",
+      "taskId": "task_98de75c0-f609-4a7d-9cbe-b49e11881be8",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "failed",
+      "createdAt": "2026-04-01T12:04:34.868Z",
+      "updatedAt": "2026-04-01T12:04:35.101Z",
+      "startedAt": "2026-04-01T12:04:34.868Z",
+      "endedAt": "2026-04-01T12:04:35.101Z",
+      "threadId": null,
+      "sessionId": "session_0d288ee3-6a4b-448c-a594-97ad39bff4d4",
+      "promptDigest": "08211a1c5eb9afaf",
+      "artifactPaths": [
+        "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault"
+      ],
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-01T12:04:34.868Z",
+      "errorSummary": "The linked work thread failed."
+    },
+    {
       "id": "run_25d225e0-7e72-4c58-b046-cc7e31db7537",
       "taskId": "task_8d950fb2-4c0e-4ffe-92c8-f4fdbf6c7f73",
       "workerId": null,
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-01T03:02:37.740Z",
-      "updatedAt": "2026-04-01T03:23:59.905Z",
+      "updatedAt": "2026-04-01T16:20:30.281Z",
       "startedAt": "2026-04-01T03:02:37.739Z",
       "endedAt": "2026-04-01T03:23:59.905Z",
       "threadId": null,
@@ -1842,7 +2106,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T03:12:36.392Z",
       "errorSummary": ""
     },
@@ -1873,9 +2137,9 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-01T02:32:53.691Z",
-      "updatedAt": "2026-04-01T03:22:27.691Z",
+      "updatedAt": "2026-04-01T12:21:38.544Z",
       "startedAt": "2026-04-01T02:32:53.689Z",
-      "endedAt": "2026-04-01T03:22:27.691Z",
+      "endedAt": "2026-04-01T12:21:38.544Z",
       "threadId": null,
       "sessionId": "session_88352c5e-856b-4991-8606-ff6ced2d9c75",
       "promptDigest": "b9c09eb741e9a8b7",
@@ -1883,7 +2147,7 @@
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-01T03:06:45.516Z",
+      "lastHeartbeatAt": "2026-04-01T12:20:50.801Z",
       "errorSummary": ""
     },
     {
@@ -1893,7 +2157,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-01T00:02:42.587Z",
-      "updatedAt": "2026-04-01T00:19:01.199Z",
+      "updatedAt": "2026-04-01T12:42:12.723Z",
       "startedAt": "2026-04-01T00:02:42.587Z",
       "endedAt": "2026-04-01T00:19:01.199Z",
       "threadId": null,
@@ -1902,7 +2166,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T00:02:42.587Z",
       "errorSummary": ""
     },
@@ -1913,9 +2177,9 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T23:31:29.712Z",
-      "updatedAt": "2026-04-01T03:17:27.487Z",
+      "updatedAt": "2026-04-01T21:30:40.486Z",
       "startedAt": "2026-03-31T23:31:29.712Z",
-      "endedAt": "2026-04-01T03:17:27.487Z",
+      "endedAt": "2026-04-01T21:30:40.486Z",
       "threadId": null,
       "sessionId": "session_b9ba64fe-c0be-494b-b264-4d64f9b8f314",
       "promptDigest": "e6a29b6cdcd666ac",
@@ -1923,7 +2187,7 @@
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-01T03:07:27.292Z",
+      "lastHeartbeatAt": "2026-04-01T21:29:57.873Z",
       "errorSummary": ""
     },
     {
@@ -1933,7 +2197,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T22:51:16.169Z",
-      "updatedAt": "2026-03-31T23:23:09.733Z",
+      "updatedAt": "2026-04-01T14:16:13.403Z",
       "startedAt": "2026-03-31T22:51:16.168Z",
       "endedAt": "2026-03-31T23:23:09.733Z",
       "threadId": null,
@@ -1942,29 +2206,9 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T23:18:49.500Z",
       "errorSummary": ""
-    },
-    {
-      "id": "run_481c2930-ce6a-4cf4-b0db-e6f22283e2fd",
-      "taskId": "task_799276fa-fbfb-48e6-9f3d-76ea909fe499",
-      "workerId": null,
-      "providerId": "provider_local_codex",
-      "status": "failed",
-      "createdAt": "2026-03-31T21:52:45.932Z",
-      "updatedAt": "2026-03-31T21:52:46.228Z",
-      "startedAt": "2026-03-31T21:52:45.932Z",
-      "endedAt": "2026-03-31T21:52:46.228Z",
-      "threadId": null,
-      "sessionId": "session_a242d974-ec21-41f8-ba3f-e7f8628333bc",
-      "promptDigest": "b9bcebffad7248d1",
-      "artifactPaths": [
-        "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault"
-      ],
-      "summary": "Task blocked after the linked work thread failed.",
-      "lastHeartbeatAt": "2026-03-31T21:52:45.932Z",
-      "errorSummary": "The linked work thread failed."
     },
     {
       "id": "run_6024f9bb-6788-41a5-9306-6916d2e14e9f",
@@ -1973,7 +2217,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T20:45:32.157Z",
-      "updatedAt": "2026-03-31T20:55:12.828Z",
+      "updatedAt": "2026-04-01T14:18:33.070Z",
       "startedAt": "2026-03-31T20:45:32.156Z",
       "endedAt": "2026-03-31T20:55:12.828Z",
       "threadId": null,
@@ -1982,7 +2226,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T20:45:32.156Z",
       "errorSummary": ""
     },
@@ -1993,7 +2237,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T20:25:44.670Z",
-      "updatedAt": "2026-03-31T20:34:11.062Z",
+      "updatedAt": "2026-04-01T14:16:22.247Z",
       "startedAt": "2026-03-31T20:25:44.670Z",
       "endedAt": "2026-03-31T20:34:11.062Z",
       "threadId": null,
@@ -2002,7 +2246,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T20:25:44.670Z",
       "errorSummary": ""
     },
@@ -2427,26 +2671,6 @@
       "errorSummary": ""
     },
     {
-      "id": "run_41f97f06-f9b3-4515-9fd0-5e5c6aac799a",
-      "taskId": "task_54dfeed4-e312-4b26-be6e-f9f510a7cc47",
-      "workerId": null,
-      "providerId": "provider_local_codex",
-      "status": "completed",
-      "createdAt": "2026-03-31T01:57:20.643Z",
-      "updatedAt": "2026-03-31T02:03:04.066Z",
-      "startedAt": "2026-03-31T01:57:20.642Z",
-      "endedAt": "2026-03-31T02:03:04.066Z",
-      "threadId": null,
-      "sessionId": "session_e24e900d-2058-439e-a6f4-88b5f13eda2d",
-      "promptDigest": "8ae8414063771d06",
-      "artifactPaths": [
-        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
-      ],
-      "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-03-31T01:57:20.642Z",
-      "errorSummary": ""
-    },
-    {
       "id": "run_67a08b86-5980-4c23-a450-728359ce3352",
       "taskId": "task_1d9934e4-9120-4137-8d0b-4aab40abb1a9",
       "workerId": null,
@@ -2473,7 +2697,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T01:45:51.864Z",
-      "updatedAt": "2026-03-31T01:56:06.139Z",
+      "updatedAt": "2026-04-01T14:17:49.610Z",
       "startedAt": "2026-03-31T01:45:51.863Z",
       "endedAt": "2026-03-31T01:56:06.139Z",
       "threadId": null,
@@ -2482,7 +2706,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T01:45:51.864Z",
       "errorSummary": ""
     },
@@ -2513,7 +2737,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-31T01:15:34.379Z",
-      "updatedAt": "2026-03-31T15:24:42.981Z",
+      "updatedAt": "2026-04-01T14:18:19.114Z",
       "startedAt": "2026-03-31T01:15:34.378Z",
       "endedAt": "2026-03-31T15:24:42.981Z",
       "threadId": null,
@@ -2522,7 +2746,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T15:23:34.277Z",
       "errorSummary": ""
     },
@@ -2573,7 +2797,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-03-30T23:47:39.999Z",
-      "updatedAt": "2026-03-30T23:52:10.080Z",
+      "updatedAt": "2026-04-01T14:17:25.942Z",
       "startedAt": "2026-03-30T23:47:39.999Z",
       "endedAt": "2026-03-30T23:52:10.080Z",
       "threadId": null,
@@ -2582,7 +2806,7 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T23:47:39.999Z",
       "errorSummary": ""
     },
@@ -2749,6 +2973,78 @@
   ],
   "reviews": [
     {
+      "id": "review_0989bdec-f589-4496-8974-420eabdb05a5",
+      "taskId": "task_4b40e084-b648-45f6-ae44-474beddbf83e",
+      "runId": "run_4e5fa551-d0ce-4f14-953c-89c55053167a",
+      "status": "dismissed",
+      "createdAt": "2026-04-01T20:50:42.133Z",
+      "updatedAt": "2026-04-01T20:52:47.450Z",
+      "resolvedAt": "2026-04-01T20:52:47.450Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_220f9f9c-ac69-49ec-882e-6c73cc073751",
+      "taskId": "task_a2aadb79-d594-4f32-bd1f-a6ab1d28b7a5",
+      "runId": "run_85babf7b-75c1-4aa8-80ca-3bf06e9907f4",
+      "status": "dismissed",
+      "createdAt": "2026-04-01T20:38:44.638Z",
+      "updatedAt": "2026-04-01T20:43:49.789Z",
+      "resolvedAt": "2026-04-01T20:43:49.789Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_7c845273-ad0c-44e6-9b6c-b0452b4cf1ba",
+      "taskId": "task_00c8cab0-5495-47aa-b213-3fec3a7a82e5",
+      "runId": "run_cea74bd7-ee5c-4e0b-8f5c-761fe2617695",
+      "status": "approved",
+      "createdAt": "2026-04-01T20:36:18.018Z",
+      "updatedAt": "2026-04-01T20:36:36.309Z",
+      "resolvedAt": "2026-04-01T20:36:36.309Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_edfc21fc-13b6-45ac-b0ea-4ab39b71b578",
+      "taskId": "task_6174b461-aebd-48bb-9d16-fdb131abe316",
+      "runId": "run_eb3df87e-82fd-4e29-91bf-55cc4f37516c",
+      "status": "dismissed",
+      "createdAt": "2026-04-01T20:27:35.195Z",
+      "updatedAt": "2026-04-01T20:28:54.002Z",
+      "resolvedAt": "2026-04-01T20:28:54.002Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_939957d8-8485-4ba3-bda9-96065cdddcc1",
+      "taskId": "task_8175f25f-8e01-4045-993b-54072dee843d",
+      "runId": "run_892878d7-adbc-4279-be8b-00692ad7bace",
+      "status": "approved",
+      "createdAt": "2026-04-01T13:40:48.038Z",
+      "updatedAt": "2026-04-01T14:01:47.087Z",
+      "resolvedAt": "2026-04-01T14:01:47.087Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_d14d5fa9-c718-4c71-ad4d-768b01634ebe",
+      "taskId": "task_98de75c0-f609-4a7d-9cbe-b49e11881be8",
+      "runId": "run_1147e1bb-37e1-445d-91a2-3864b2bf0e73",
+      "status": "dismissed",
+      "createdAt": "2026-04-01T12:24:30.045Z",
+      "updatedAt": "2026-04-01T12:31:29.990Z",
+      "resolvedAt": "2026-04-01T12:31:29.990Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
       "id": "review_0a208620-e62b-46dc-af9d-539468b7a10b",
       "taskId": "task_8d950fb2-4c0e-4ffe-92c8-f4fdbf6c7f73",
       "runId": "run_25d225e0-7e72-4c58-b046-cc7e31db7537",
@@ -2788,13 +3084,13 @@
       "id": "review_4f240b5c-3fd7-40fc-966b-11a161f5c05a",
       "taskId": "task_1a4924ec-fd8b-42fa-b38b-8b5b4d855121",
       "runId": "run_48599da1-19ee-4542-8130-38812ddb4407",
-      "status": "open",
+      "status": "approved",
       "createdAt": "2026-04-01T00:19:03.233Z",
-      "updatedAt": "2026-04-01T00:19:03.233Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-01T12:42:12.718Z",
+      "resolvedAt": "2026-04-01T12:42:12.718Z",
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
+      "summary": "Approved from the thread detail page while completing the task."
     },
     {
       "id": "review_71f596b7-4bb3-40b7-b75b-8d990d40ad4b",
@@ -2824,25 +3120,25 @@
       "id": "review_9a9f3447-fe27-40e5-ba86-bf0095e14fa8",
       "taskId": "task_c1c3d77d-7824-4a6f-b8c1-06f397728f50",
       "runId": "run_6024f9bb-6788-41a5-9306-6916d2e14e9f",
-      "status": "open",
+      "status": "approved",
       "createdAt": "2026-03-31T20:55:17.753Z",
-      "updatedAt": "2026-03-31T20:55:17.753Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-01T14:18:33.068Z",
+      "resolvedAt": "2026-04-01T14:18:33.068Z",
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
+      "summary": "Approved from the thread detail page while completing the task."
     },
     {
       "id": "review_2f5060c6-5ced-41c0-b1fb-f3cadfe4fb5f",
       "taskId": "task_61dd2dbd-aaff-42d7-9fe6-4be49aa5c330",
       "runId": "run_36722be5-e891-49fd-8c2d-1f68c4d26cff",
-      "status": "open",
+      "status": "approved",
       "createdAt": "2026-03-31T20:34:13.696Z",
-      "updatedAt": "2026-03-31T20:34:13.696Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-01T14:16:22.245Z",
+      "resolvedAt": "2026-04-01T14:16:22.245Z",
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
+      "summary": "Approved from the thread detail page while completing the task."
     },
     {
       "id": "review_bcd8d06b-dcc2-429a-abbc-d981e62b3baa",
@@ -3136,13 +3432,13 @@
       "id": "review_e18436a8-d2e3-4906-affb-9330d608b36f",
       "taskId": "task_aec99dca-0630-4b11-b3f3-80722a6b19d6",
       "runId": "run_f1355cfb-1aeb-489d-b926-51a00b00148c",
-      "status": "open",
+      "status": "approved",
       "createdAt": "2026-03-31T02:07:16.508Z",
-      "updatedAt": "2026-03-31T02:07:16.508Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-01T14:17:25.939Z",
+      "resolvedAt": "2026-04-01T14:17:25.939Z",
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
+      "summary": "Approved from the thread detail page while completing the task."
     },
     {
       "id": "review_69b1fe7c-66ec-4a02-861b-48a857341a06",
@@ -3244,25 +3540,13 @@
       "id": "review_1b5a1b70-4055-424c-8c3f-c096c92eb3a7",
       "taskId": "task_30711630-725e-4322-b946-3c19c3062e75",
       "runId": "run_b6980698-999a-43a5-ad5c-e4505078bb7d",
-      "status": "open",
+      "status": "approved",
       "createdAt": "2026-03-31T02:07:16.508Z",
-      "updatedAt": "2026-03-31T02:07:16.508Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-01T14:17:49.607Z",
+      "resolvedAt": "2026-04-01T14:17:49.607Z",
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
-    },
-    {
-      "id": "review_46ddd9a4-f21f-4645-b506-dd37e812e21b",
-      "taskId": "task_54dfeed4-e312-4b26-be6e-f9f510a7cc47",
-      "runId": "run_41f97f06-f9b3-4515-9fd0-5e5c6aac799a",
-      "status": "open",
-      "createdAt": "2026-03-31T02:07:16.508Z",
-      "updatedAt": "2026-03-31T02:07:16.508Z",
-      "resolvedAt": null,
-      "requestedByWorkerId": null,
-      "reviewerWorkerId": null,
-      "summary": "Task entered the review queue."
+      "summary": "Approved from the thread detail page while completing the task."
     }
   ],
   "approvals": []

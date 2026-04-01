@@ -1,13 +1,17 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { resolveTaskThreadName } from '$lib/server/task-threads';
 import { deriveThreadTopicLabels } from '$lib/server/task-thread-topics';
+import {
+	getCodexSkillExecutionIssue,
+	getWorkspaceExecutionIssue
+} from '$lib/server/task-execution-workspace';
 import {
 	buildSessionAttachmentPrompt,
 	persistSessionAttachments
@@ -37,6 +41,11 @@ const SESSION_RUNNER_SCRIPT = resolve(process.cwd(), 'scripts', 'agent-session-r
 const CODEX_HOME = process.env.CODEX_HOME?.trim() || resolve(homedir(), '.codex');
 const CODEX_STATE_DB_FILE = resolve(CODEX_HOME, 'state_5.sqlite');
 const STALE_RUN_GRACE_MS = 5 * 60 * 1000;
+const STARTUP_AUTH_FAILURE_GRACE_MS = 30 * 1000;
+const STARTUP_STDIN_STALL_GRACE_MS = 60 * 1000;
+const AUTH_REFRESH_FAILURE_MARKER =
+	'Auth(TokenRefreshFailed("Failed to parse server response"))';
+const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
 
 function defaultDb(): AgentSessionsDb {
 	return {
@@ -101,10 +110,7 @@ export async function loadAgentSessionsDb(): Promise<AgentSessionsDb> {
 														typeof item.name === 'string' && item.name.trim()
 															? item.name
 															: 'Attachment',
-													path:
-														typeof item.path === 'string'
-															? normalizePathInput(item.path)
-															: '',
+													path: typeof item.path === 'string' ? normalizePathInput(item.path) : '',
 													contentType:
 														typeof item.contentType === 'string' && item.contentType.trim()
 															? item.contentType
@@ -908,10 +914,206 @@ function getRunActivityAt(
 	return run.activityAt ?? run.state?.startedAt ?? run.updatedAt ?? run.createdAt;
 }
 
+function isActiveRunStatus(status: AgentRunStatus | null | undefined) {
+	return status === 'queued' || status === 'running';
+}
+
+function getDerivedRunFinishedAt(
+	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state'>,
+	now = Date.now()
+) {
+	return (
+		latestIso([
+			run.activityAt,
+			run.state?.finishedAt,
+			run.updatedAt,
+			run.state?.startedAt,
+			run.createdAt
+		]) ?? new Date(now).toISOString()
+	);
+}
+
+function parseExitLogLine(line: string) {
+	const match = line.match(/^=== EXIT code=(.+?) signal=(.+?) ===$/);
+
+	if (!match) {
+		return null;
+	}
+
+	const [, rawCode, rawSignal] = match;
+	const exitCode = rawCode === 'null' ? null : Number(rawCode);
+	const signal = rawSignal === 'null' ? null : rawSignal;
+
+	return {
+		exitCode: Number.isFinite(exitCode) ? exitCode : null,
+		signal
+	};
+}
+
+function getRunExitInfo(run: Pick<AgentRunDetail, 'logTail'>) {
+	for (const line of [...run.logTail].reverse()) {
+		const parsed = parseExitLogLine(line.trim());
+
+		if (parsed) {
+			return parsed;
+		}
+	}
+
+	return null;
+}
+
+function hasStructuredCodexOutput(run: Pick<AgentRunDetail, 'logTail'>) {
+	return run.logTail.some((line) => line.trim().startsWith('{'));
+}
+
+function hasThreadStarted(run: Pick<AgentRunDetail, 'logTail' | 'state'>) {
+	return Boolean(
+		run.state?.codexThreadId ||
+			run.logTail.some((line) => Boolean(extractThreadIdFromOutputLine(line.trim())))
+	);
+}
+
+function hasAuthRefreshStartupFailure(run: Pick<AgentRunDetail, 'logTail'>) {
+	return run.logTail.some((line) => line.includes(AUTH_REFRESH_FAILURE_MARKER));
+}
+
+function hasStartupStdinWait(run: Pick<AgentRunDetail, 'logTail'>) {
+	return run.logTail.some((line) => line.includes(STDIN_WAIT_MARKER));
+}
+
+function isStartupAuthFailure(
+	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage' | 'mode'>,
+	now = Date.now()
+) {
+	if (run.mode !== 'start' || !hasAuthRefreshStartupFailure(run)) {
+		return false;
+	}
+
+	if (run.lastMessage || hasStructuredCodexOutput(run) || hasThreadStarted(run)) {
+		return false;
+	}
+
+	const hasTerminalEvidence = Boolean(run.state?.finishedAt || getRunExitInfo(run));
+
+	if (hasTerminalEvidence) {
+		return true;
+	}
+
+	const activityAt = Date.parse(getRunActivityAt(run));
+
+	if (Number.isNaN(activityAt)) {
+		return false;
+	}
+
+	return now - activityAt >= STARTUP_AUTH_FAILURE_GRACE_MS;
+}
+
+function isStartupStdinStall(
+	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail' | 'lastMessage'>,
+	now = Date.now()
+) {
+	if (!hasStartupStdinWait(run)) {
+		return false;
+	}
+
+	if (run.lastMessage || hasStructuredCodexOutput(run) || hasThreadStarted(run)) {
+		return false;
+	}
+
+	const activityAt = Date.parse(getRunActivityAt(run));
+
+	if (Number.isNaN(activityAt)) {
+		return false;
+	}
+
+	return now - activityAt >= STARTUP_STDIN_STALL_GRACE_MS;
+}
+
+function isPidAlive(pid: number) {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		const code = typeof error === 'object' && error && 'code' in error ? error.code : null;
+
+		if (code === 'ESRCH') {
+			return false;
+		}
+
+		return true;
+	}
+}
+
+function deriveActiveRunCompletionFromEvidence(run: AgentRunDetail, now = Date.now()) {
+	if (!run.state || !isActiveRunStatus(run.state.status)) {
+		return null;
+	}
+
+	const finishedAt = getDerivedRunFinishedAt(run, now);
+	const startupAuthFailure = isStartupAuthFailure(run, now);
+	const startupStdinStall = isStartupStdinStall(run, now);
+	const exitInfo = getRunExitInfo(run);
+
+	if (startupAuthFailure) {
+		return {
+			...run.state,
+			status: 'failed',
+			pid: null,
+			finishedAt,
+			exitCode: run.state.exitCode ?? exitInfo?.exitCode ?? -1,
+			signal: exitInfo?.signal ?? null
+		} satisfies AgentRunState;
+	}
+
+	if (startupStdinStall) {
+		return {
+			...run.state,
+			status: 'failed',
+			pid: null,
+			finishedAt,
+			exitCode: run.state.exitCode ?? exitInfo?.exitCode ?? -1,
+			signal: exitInfo?.signal ?? null
+		} satisfies AgentRunState;
+	}
+
+	if (exitInfo) {
+		return {
+			...run.state,
+			status:
+				exitInfo.signal === 'SIGTERM'
+					? ('canceled' as const)
+					: exitInfo.exitCode === 0
+						? ('completed' as const)
+						: ('failed' as const),
+			pid: null,
+			finishedAt,
+			exitCode: exitInfo.exitCode,
+			signal: exitInfo.signal
+		} satisfies AgentRunState;
+	}
+
+	if (
+		typeof run.state.pid === 'number' &&
+		Number.isFinite(run.state.pid) &&
+		!isPidAlive(run.state.pid)
+	) {
+		return {
+			...run.state,
+			status: run.lastMessage ? 'completed' : 'failed',
+			pid: null,
+			finishedAt,
+			exitCode: run.state.exitCode ?? (run.lastMessage ? 0 : -1),
+			signal: null
+		} satisfies AgentRunState;
+	}
+
+	return null;
+}
+
 function isStaleActiveRun(run: AgentRunDetail, now = Date.now()) {
 	const state = run.state;
 
-	if (!state || (state.status !== 'queued' && state.status !== 'running')) {
+	if (!state || !isActiveRunStatus(state.status)) {
 		return false;
 	}
 
@@ -929,14 +1131,24 @@ function isStaleActiveRun(run: AgentRunDetail, now = Date.now()) {
 }
 
 export function deriveRunState(run: AgentRunDetail, now = Date.now()) {
-	if (!isStaleActiveRun(run, now) || !run.state) {
+	if (!run.state) {
+		return run.state;
+	}
+
+	const completedFromEvidence = deriveActiveRunCompletionFromEvidence(run, now);
+
+	if (completedFromEvidence) {
+		return completedFromEvidence;
+	}
+
+	if (!isStaleActiveRun(run, now)) {
 		return run.state;
 	}
 
 	return {
 		...run.state,
 		status: 'failed',
-		finishedAt: run.state.startedAt ?? run.updatedAt ?? new Date(now).toISOString(),
+		finishedAt: getDerivedRunFinishedAt(run, now),
 		exitCode: run.state.exitCode ?? -1,
 		signal: null
 	} satisfies AgentRunState;
@@ -1265,10 +1477,62 @@ type SessionMessageQueueUpdate = {
 	queuedAt: string;
 };
 
+type SessionActiveUpdate = {
+	taskStatus: TaskStatus;
+	runStatus: RunStatus;
+	runSummary: string;
+	activeAt: string;
+};
+
+function deriveRunFailureDetail(
+	run: Pick<
+		AgentRunDetail,
+		| 'activityAt'
+		| 'createdAt'
+		| 'updatedAt'
+		| 'state'
+		| 'logTail'
+		| 'lastMessage'
+		| 'mode'
+	> | null | undefined
+) {
+	if (!run) {
+		return '';
+	}
+
+	if (isStartupAuthFailure(run)) {
+		return 'Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.';
+	}
+
+	if (isStartupStdinStall(run)) {
+		return 'Codex never advanced past startup because the managed run was stuck waiting for stdin input. Restart the manager and retry the task.';
+	}
+
+	const meaningfulLogLine = [...run.logTail]
+		.reverse()
+		.map((line) => line.trim())
+		.find(
+			(line) =>
+				line.length > 0 &&
+				!line.startsWith('===') &&
+				!line.startsWith('cwd=') &&
+				!line.startsWith('RUNNER ERROR:')
+		);
+
+	if (meaningfulLogLine) {
+		return meaningfulLogLine;
+	}
+
+	const exitCode = run.state?.exitCode;
+	return exitCode === null || exitCode === undefined
+		? ''
+		: `The linked work thread exited with code ${exitCode}.`;
+}
+
 function deriveLifecycleUpdateFromSessionDetail(
 	detail: Pick<
 		AgentSessionDetail,
-		'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'
+		'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt' | 'latestRun'
 	>
 ): SessionLifecycleUpdate | null {
 	if (detail.hasActiveRun) {
@@ -1290,14 +1554,18 @@ function deriveLifecycleUpdateFromSessionDetail(
 				blockedReason: '',
 				finishedAt
 			};
-		case 'failed':
+		case 'failed': {
+			const failedDetail =
+				deriveRunFailureDetail(detail.latestRun) || 'The linked work thread failed.';
+
 			return {
 				taskStatus: 'blocked',
 				runStatus: 'failed',
 				summary: 'Task blocked after the linked work thread failed.',
-				blockedReason: 'The linked work thread failed.',
+				blockedReason: failedDetail,
 				finishedAt
 			};
+		}
 		case 'canceled':
 			return {
 				taskStatus: 'blocked',
@@ -1322,24 +1590,38 @@ function createSessionMessageQueueUpdate(queuedAt: string): SessionMessageQueueU
 	};
 }
 
+function createSessionActiveUpdate(activeAt: string): SessionActiveUpdate {
+	return {
+		taskStatus: 'in_progress',
+		runStatus: 'running',
+		runSummary: 'Linked work thread is actively running.',
+		activeAt
+	};
+}
+
 export function reconcileControlPlaneSessionState(
 	data: ControlPlaneData,
 	detail: Pick<
 		AgentSessionDetail,
-		'id' | 'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt'
+		'id' | 'hasActiveRun' | 'canResume' | 'latestRunStatus' | 'lastActivityAt' | 'latestRun'
 	>
 ) {
 	const lifecycleUpdate = deriveLifecycleUpdateFromSessionDetail(detail);
+	const activeUpdate = detail.hasActiveRun
+		? createSessionActiveUpdate(detail.lastActivityAt ?? new Date().toISOString())
+		: null;
 
-	if (!lifecycleUpdate) {
+	if (!lifecycleUpdate && !activeUpdate) {
 		return data;
 	}
+
+	const terminalUpdate = lifecycleUpdate;
 
 	const runIdsToUpdate = new Set<string>();
 	let changed = false;
 
 	const tasks = data.tasks.map((task) => {
-		if (task.status !== 'in_progress') {
+		if (!activeUpdate && task.status !== 'in_progress') {
 			return task;
 		}
 
@@ -1353,17 +1635,34 @@ export function reconcileControlPlaneSessionState(
 			return task;
 		}
 
+		if (activeUpdate && task.status === 'done') {
+			return task;
+		}
+
 		changed = true;
 
 		if (task.latestRunId) {
 			runIdsToUpdate.add(task.latestRunId);
 		}
 
+		if (activeUpdate) {
+			return {
+				...task,
+				status: activeUpdate.taskStatus,
+				blockedReason: '',
+				updatedAt: activeUpdate.activeAt
+			};
+		}
+
+		if (!terminalUpdate) {
+			return task;
+		}
+
 		return {
 			...task,
-			status: lifecycleUpdate.taskStatus,
-			blockedReason: lifecycleUpdate.blockedReason,
-			updatedAt: lifecycleUpdate.finishedAt
+			status: terminalUpdate.taskStatus,
+			blockedReason: terminalUpdate.blockedReason,
+			updatedAt: terminalUpdate.finishedAt
 		};
 	});
 
@@ -1374,19 +1673,37 @@ export function reconcileControlPlaneSessionState(
 	return {
 		...data,
 		tasks,
-		runs: data.runs.map((run) =>
-			runIdsToUpdate.has(run.id)
-				? {
-						...run,
-						status: lifecycleUpdate.runStatus,
-						summary: lifecycleUpdate.summary,
-						updatedAt: lifecycleUpdate.finishedAt,
-						endedAt: run.endedAt ?? lifecycleUpdate.finishedAt,
-						errorSummary:
-							lifecycleUpdate.runStatus === 'completed' ? '' : lifecycleUpdate.blockedReason
-					}
-				: run
-		)
+		runs: data.runs.map((run) => {
+			if (!runIdsToUpdate.has(run.id)) {
+				return run;
+			}
+
+			if (activeUpdate) {
+				return {
+					...run,
+					status: activeUpdate.runStatus,
+					summary: activeUpdate.runSummary,
+					updatedAt: activeUpdate.activeAt,
+					startedAt: run.startedAt ?? activeUpdate.activeAt,
+					endedAt: null,
+					lastHeartbeatAt: activeUpdate.activeAt,
+					errorSummary: ''
+				};
+			}
+
+			if (!terminalUpdate) {
+				return run;
+			}
+
+			return {
+				...run,
+				status: terminalUpdate.runStatus,
+				summary: terminalUpdate.summary,
+				updatedAt: terminalUpdate.finishedAt,
+				endedAt: run.endedAt ?? terminalUpdate.finishedAt,
+				errorSummary: terminalUpdate.runStatus === 'completed' ? '' : terminalUpdate.blockedReason
+			};
+		})
 	};
 }
 
@@ -1697,6 +2014,22 @@ export async function startAgentSession(input: {
 	sandbox: AgentSandbox;
 	model: string | null;
 }) {
+	const workspaceIssue = getWorkspaceExecutionIssue({
+		cwd: input.cwd,
+		sandbox: input.sandbox,
+		scopeLabel: 'Project root'
+	});
+
+	if (workspaceIssue) {
+		throw new Error(workspaceIssue);
+	}
+
+	const codexSkillIssue = getCodexSkillExecutionIssue(input.cwd);
+
+	if (codexSkillIssue) {
+		throw new Error(codexSkillIssue);
+	}
+
 	const sessionId = createSessionId();
 	const runId = createRunId();
 	const now = new Date().toISOString();
@@ -1754,7 +2087,8 @@ export async function updateAgentSessionSandbox(sessionId: string, sandbox: Agen
 	}
 
 	const now = new Date().toISOString();
-	const baseSession = existingSession ?? materializeNativeSession(nativeThread as NativeCodexThread);
+	const baseSession =
+		existingSession ?? materializeNativeSession(nativeThread as NativeCodexThread);
 	const updatedSession: AgentSession = {
 		...baseSession,
 		sandbox,
@@ -1847,6 +2181,21 @@ export async function sendAgentSessionMessage(
 		attachments: persistedAttachments.attachments,
 		inlineAttachmentContents: persistedAttachments.inlineAttachmentContents
 	});
+	const workspaceIssue = getWorkspaceExecutionIssue({
+		cwd: session.cwd,
+		sandbox: session.sandbox,
+		scopeLabel: 'Project root'
+	});
+
+	if (workspaceIssue) {
+		throw new Error(workspaceIssue);
+	}
+
+	const codexSkillIssue = getCodexSkillExecutionIssue(session.cwd);
+
+	if (codexSkillIssue) {
+		throw new Error(codexSkillIssue);
+	}
 
 	const runId = createRunId();
 	const now = new Date().toISOString();
@@ -1890,6 +2239,75 @@ export async function sendAgentSessionMessage(
 	return {
 		sessionId,
 		runId
+	};
+}
+
+export async function recoverAgentSession(sessionId: string) {
+	const detail = await getAgentSession(sessionId);
+
+	if (!detail) {
+		throw new Error('Session not found.');
+	}
+
+	if (detail.origin !== 'managed') {
+		throw new Error('Only managed sessions can be recovered.');
+	}
+
+	if (!detail.latestRun || !detail.hasActiveRun) {
+		throw new Error('Session does not have an active run to recover.');
+	}
+
+	const now = new Date().toISOString();
+	const pid = detail.latestRun.state?.pid ?? null;
+	let signal: string | null = null;
+	let status: AgentRunStatus = 'failed';
+
+	if (typeof pid === 'number' && Number.isFinite(pid)) {
+		try {
+			process.kill(pid, 'SIGTERM');
+			signal = 'SIGTERM';
+			status = 'canceled';
+		} catch {
+			status = 'failed';
+		}
+	}
+
+	const nextState: AgentRunState = {
+		status,
+		pid: null,
+		startedAt: detail.latestRun.state?.startedAt ?? detail.latestRun.createdAt,
+		finishedAt: now,
+		exitCode: detail.latestRun.state?.exitCode ?? null,
+		signal,
+		codexThreadId: detail.latestRun.state?.codexThreadId ?? detail.threadId
+	};
+
+	await mkdir(dirname(detail.latestRun.statePath), { recursive: true });
+	await writeFile(detail.latestRun.statePath, JSON.stringify(nextState, null, 2));
+
+	const controlPlane = await loadControlPlane();
+	const reconciledControlPlane = reconcileControlPlaneSessionState(controlPlane, {
+		id: detail.id,
+		hasActiveRun: false,
+		canResume: Boolean(detail.threadId),
+		latestRunStatus: status,
+		lastActivityAt: now,
+		latestRun: {
+			...detail.latestRun,
+			state: nextState
+		}
+	});
+
+	if (reconciledControlPlane !== controlPlane) {
+		await updateControlPlane(() => reconciledControlPlane);
+	}
+
+	return {
+		sessionId,
+		runId: detail.latestRun.id,
+		status,
+		signal,
+		recoveredAt: now
 	};
 }
 

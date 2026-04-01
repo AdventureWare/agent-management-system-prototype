@@ -1,5 +1,5 @@
 import { page } from 'vitest/browser';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
@@ -22,6 +22,7 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		threadSessionId: null,
 		blockedReason: '',
 		dependencyTaskIds: [],
+		targetDate: null,
 		runCount: 0,
 		latestRunId: null,
 		artifactPath: '/tmp/project/out',
@@ -89,10 +90,11 @@ function createIdeationReview(overrides: Record<string, unknown> = {}) {
 
 function renderPage(
 	tasks = [] as ReturnType<typeof createTask>[],
-	ideationReviews = [] as ReturnType<typeof createIdeationReview>[]
+	ideationReviews = [] as ReturnType<typeof createIdeationReview>[],
+	form: Record<string, unknown> = {}
 ) {
 	render(Page, {
-		form: {} as never,
+		form: form as never,
 		data: {
 			deleted: false,
 			statusOptions: TASK_STATUS_OPTIONS,
@@ -110,6 +112,30 @@ function renderPage(
 					defaultBranch: ''
 				}
 			],
+			projectSkillSummaries: [
+				{
+					projectId: 'project_1',
+					totalCount: 2,
+					globalCount: 1,
+					projectCount: 1,
+					previewSkills: [
+						{
+							id: 'skill-installer',
+							description: 'Install Codex skills',
+							global: true,
+							project: false,
+							sourceLabel: 'Global'
+						},
+						{
+							id: 'web-design-guidelines',
+							description: 'Review UI against guidelines',
+							global: false,
+							project: true,
+							sourceLabel: 'Project'
+						}
+					]
+				}
+			],
 			workers: [],
 			tasks
 		} as never
@@ -117,8 +143,23 @@ function renderPage(
 }
 
 describe('/app/tasks/+page.svelte', () => {
+	afterEach(() => {
+		window.localStorage.clear();
+	});
+
+	it('stretches the active queue table to the full section width', () => {
+		renderPage([createTask()]);
+
+		const appPage = document.querySelector('.ui-page');
+		const queueTable = document.querySelector('table');
+
+		expect(appPage?.className).toContain('max-w-none');
+		expect(queueTable?.className).toContain('w-full');
+	});
+
 	it('renders the project selector before the task name in the create form', async () => {
 		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
 
 		const createFormLabels = Array.from(
 			document.querySelectorAll('form[action="?/createTask"] label > span:first-child')
@@ -129,13 +170,17 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('renders create and run controls in the quick create form', async () => {
 		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
 
-		await expect.element(page.getByRole('button', { name: 'Create task' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Create task', exact: true }))
+			.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
 	});
 
 	it('renders a multi-file attachment control in the quick create form', async () => {
 		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
 
 		const attachmentInput = document.querySelector(
 			'form[action="?/createTask"] input[name="attachments"]'
@@ -150,6 +195,7 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('adds pasted files to the quick create attachment list', async () => {
 		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
 
 		const createForm = document.querySelector(
 			'form[action="?/createTask"]'
@@ -176,6 +222,66 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(attachmentInput?.files?.[0]?.name).toBe('brief.md');
 		await expect.element(page.getByText('1 attachment selected')).toBeInTheDocument();
 		await expect.element(page.getByText('brief.md')).toBeInTheDocument();
+	});
+
+	it('shows project skill coverage inside the create dialog', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+
+		await expect.element(page.getByText('Skill coverage')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('2 installed skills will be available when this task launches.'))
+			.toBeInTheDocument();
+		await expect.element(page.getByText('skill-installer')).toBeInTheDocument();
+		await expect.element(page.getByText('web-design-guidelines')).toBeInTheDocument();
+	});
+
+	it('restores a saved create-task draft after reload', async () => {
+		window.localStorage.setItem(
+			'ams:create-task',
+			JSON.stringify({
+				projectId: 'project_1',
+				name: 'Keep my draft',
+				instructions: 'Persist this between reloads.',
+				assigneeWorkerId: '',
+				targetDate: '2026-04-10'
+			})
+		);
+
+		renderPage();
+
+		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+
+		const nameInput = document.querySelector(
+			'form[action="?/createTask"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const targetDateInput = document.querySelector(
+			'form[action="?/createTask"] input[name="targetDate"]'
+		) as HTMLInputElement | null;
+		const instructionsInput = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(nameInput?.value).toBe('Keep my draft');
+		expect(targetDateInput?.value).toBe('2026-04-10');
+		expect(instructionsInput?.value).toBe('Persist this between reloads.');
+	});
+
+	it('clears a saved create-task draft after successful creation', () => {
+		window.localStorage.setItem(
+			'ams:create-task',
+			JSON.stringify({
+				projectId: 'project_1',
+				name: 'Stale draft'
+			})
+		);
+
+		renderPage([], [], {
+			ok: true,
+			successAction: 'createTask'
+		});
+
+		expect(window.localStorage.getItem('ams:create-task')).toBeNull();
 	});
 
 	it('filters the active queue with stale work chips', async () => {
@@ -205,13 +311,31 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect.element(page.getByText('Stale in-progress task')).toBeInTheDocument();
-		await expect.element(page.getByText('Fresh ready task')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Stale in-progress task', { exact: true }))
+			.toBeInTheDocument();
+		await expect.element(page.getByText('Fresh ready task', { exact: true })).toBeInTheDocument();
 
 		await page.getByRole('button', { name: /Stale in-progress \(1\)/i }).click();
 
-		await expect.element(page.getByText('Stale in-progress task')).toBeInTheDocument();
-		await expect.element(page.getByText('Fresh ready task')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Stale in-progress task', { exact: true }))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Fresh ready task', { exact: true }))
+			.not.toBeInTheDocument();
+	});
+
+	it('shows the target date in the queue when a task has one', async () => {
+		renderPage([
+			createTask({
+				id: 'task_target_date',
+				title: 'Task with date',
+				targetDate: '2026-04-18'
+			})
+		]);
+
+		await expect.element(page.getByText('Target Apr 18, 2026')).toBeInTheDocument();
 	});
 
 	it('renders task ideation in a collapsed section below the queue', async () => {

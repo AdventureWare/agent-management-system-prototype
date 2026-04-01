@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { persistPageFields } from '$lib/client/persist-page-fields';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let { children } = $props();
 </script>
 
 <Sidebar>
-	{@render children()}
+	<div use:persistPageFields>
+		{@render children()}
+	</div>
 </Sidebar>

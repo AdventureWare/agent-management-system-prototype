@@ -41,14 +41,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-		).toEqual([
-			'exec',
-			'resume',
-			'--json',
-			'--skip-git-repo-check',
-			'thread_123',
-			'-o',
-			'/tmp/last-message.txt',
+			).toEqual([
+				'exec',
+				'resume',
+				'--json',
+				'--skip-git-repo-check',
+				'--disable',
+				'apps',
+				'-c',
+				'mcp_servers.supabase.enabled=false',
+				'thread_123',
+				'-o',
+				'/tmp/last-message.txt',
 			'follow up'
 		]);
 	});
@@ -63,14 +67,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-		).toEqual([
-			'exec',
-			'resume',
-			'--json',
-			'--skip-git-repo-check',
-			'--full-auto',
-			'-m',
-			'gpt-5',
+			).toEqual([
+				'exec',
+				'resume',
+				'--json',
+				'--skip-git-repo-check',
+				'--disable',
+				'apps',
+				'-c',
+				'mcp_servers.supabase.enabled=false',
+				'--full-auto',
+				'-m',
+				'gpt-5',
 			'thread_123',
 			'-o',
 			'/tmp/last-message.txt',
@@ -88,14 +96,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-		).toEqual([
-			'exec',
-			'resume',
-			'--json',
-			'--skip-git-repo-check',
-			'--dangerously-bypass-approvals-and-sandbox',
-			'thread_123',
-			'-o',
+			).toEqual([
+				'exec',
+				'resume',
+				'--json',
+				'--skip-git-repo-check',
+				'--disable',
+				'apps',
+				'-c',
+				'mcp_servers.supabase.enabled=false',
+				'--dangerously-bypass-approvals-and-sandbox',
+				'thread_123',
+				'-o',
 			'/tmp/last-message.txt',
 			'follow up'
 		]);
@@ -111,13 +123,17 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'start work'
 			})
-		).toEqual([
-			'exec',
-			'--json',
-			'--skip-git-repo-check',
-			'-C',
-			'/tmp/project',
-			'--sandbox',
+			).toEqual([
+				'exec',
+				'--json',
+				'--skip-git-repo-check',
+				'--disable',
+				'apps',
+				'-c',
+				'mcp_servers.supabase.enabled=false',
+				'-C',
+				'/tmp/project',
+				'--sandbox',
 			'workspace-write',
 			'-o',
 			'/tmp/last-message.txt',
@@ -209,6 +225,234 @@ describe('agent session helpers', () => {
 		});
 
 		vi.useRealTimers();
+	});
+
+	it('keeps auth refresh startup noise running during the initial grace window', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-01T16:14:20.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_auth_failure',
+			sessionId: 'session_auth_failure',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-04-01T16:14:14.718Z',
+			updatedAt: '2026-04-01T16:14:15.667Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: 76910,
+				startedAt: '2026-04-01T16:14:14.718Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: null
+			},
+			lastMessage: null,
+			logTail: [
+				'=== 2026-04-01T16:14:14.721Z START ===',
+				'cwd=/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',
+				'Reading additional input from stdin...',
+				'2026-04-01T16:14:15.667723Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(TokenRefreshFailed("Failed to parse server response"))'
+			],
+			activityAt: '2026-04-01T16:14:15.667Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'running',
+			pid: 76910,
+			startedAt: '2026-04-01T16:14:14.718Z',
+			finishedAt: null,
+			exitCode: null,
+			signal: null,
+			codexThreadId: null
+		});
+
+		vi.useRealTimers();
+	});
+
+	it('marks fresh thread launches as failed when auth refresh dies before thread startup', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-01T16:15:00.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_auth_start_failed',
+			sessionId: 'session_auth_start_failed',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-04-01T16:14:14.718Z',
+			updatedAt: '2026-04-01T16:14:15.667Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: 76910,
+				startedAt: '2026-04-01T16:14:14.718Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: null
+			},
+			lastMessage: null,
+			logTail: [
+				'=== 2026-04-01T16:14:14.721Z START ===',
+				'cwd=/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',
+				'Reading additional input from stdin...',
+				'2026-04-01T16:14:15.667723Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(TokenRefreshFailed("Failed to parse server response"))'
+			],
+			activityAt: '2026-04-01T16:14:15.667Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'failed',
+			pid: null,
+			startedAt: '2026-04-01T16:14:14.718Z',
+			finishedAt: '2026-04-01T16:14:15.667Z',
+			exitCode: -1,
+			signal: null,
+			codexThreadId: null
+		});
+
+		vi.useRealTimers();
+	});
+
+	it('treats auth-refresh startup failures as failed even when the runner exits code 0', () => {
+		const run: AgentRunDetail = {
+			id: 'run_auth_exit_zero',
+			sessionId: 'session_auth_exit_zero',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-04-01T16:14:14.718Z',
+			updatedAt: '2026-04-01T16:14:15.900Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: 76910,
+				startedAt: '2026-04-01T16:14:14.718Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: null
+			},
+			lastMessage: null,
+			logTail: [
+				'=== 2026-04-01T16:14:14.721Z START ===',
+				'cwd=/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',
+				'Reading additional input from stdin...',
+				'2026-04-01T16:14:15.667723Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(TokenRefreshFailed("Failed to parse server response"))',
+				'=== EXIT code=0 signal=null ==='
+			],
+			activityAt: '2026-04-01T16:14:15.900Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'failed',
+			pid: null,
+			startedAt: '2026-04-01T16:14:14.718Z',
+			finishedAt: '2026-04-01T16:14:15.900Z',
+			exitCode: 0,
+			signal: null,
+			codexThreadId: null
+		});
+	});
+
+	it('marks startup runs as failed when they remain stuck waiting on stdin', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-01T20:15:00.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_stdin_stall',
+			sessionId: 'session_stdin_stall',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-04-01T20:13:10.328Z',
+			updatedAt: '2026-04-01T20:13:10.331Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: 31371,
+				startedAt: '2026-04-01T20:13:10.328Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: null
+			},
+			lastMessage: null,
+			logTail: [
+				'=== 2026-04-01T20:13:10.331Z START ===',
+				'cwd=/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',
+				'Reading additional input from stdin...'
+			],
+			activityAt: '2026-04-01T20:13:10.331Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'failed',
+			pid: null,
+			startedAt: '2026-04-01T20:13:10.328Z',
+			finishedAt: '2026-04-01T20:13:10.331Z',
+			exitCode: -1,
+			signal: null,
+			codexThreadId: null
+		});
+
+		vi.useRealTimers();
+	});
+
+	it('marks active runs as completed when the runner already wrote a clean exit marker', () => {
+		const run: AgentRunDetail = {
+			id: 'run_completed_log',
+			sessionId: 'session_completed_log',
+			mode: 'message',
+			prompt: 'follow up',
+			requestedThreadId: 'thread_123',
+			createdAt: '2026-04-01T16:20:00.000Z',
+			updatedAt: '2026-04-01T16:25:00.000Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: 22222,
+				startedAt: '2026-04-01T16:20:00.000Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: 'thread_123'
+			},
+			lastMessage: 'Done.',
+			logTail: [
+				'Assistant: Done.',
+				'=== EXIT code=0 signal=null ==='
+			],
+			activityAt: '2026-04-01T16:25:00.000Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'completed',
+			pid: null,
+			startedAt: '2026-04-01T16:20:00.000Z',
+			finishedAt: '2026-04-01T16:25:00.000Z',
+			exitCode: 0,
+			signal: null,
+			codexThreadId: 'thread_123'
+		});
 	});
 
 	it('builds follow-up prompts that include attached thread files as immediate context', () => {
@@ -400,13 +644,332 @@ describe('agent session helpers', () => {
 			hasActiveRun: false,
 			canResume: true,
 			latestRunStatus: 'completed',
-			lastActivityAt: '2026-03-30T20:15:00.000Z'
+			lastActivityAt: '2026-03-30T20:15:00.000Z',
+			latestRun: null
 		});
 
 		expect(next.tasks[0]?.status).toBe('review');
 		expect(next.runs[0]?.status).toBe('completed');
 		expect(next.runs[0]?.endedAt).toBe('2026-03-30T20:15:00.000Z');
 		expect(next.runs[0]?.summary).toBe('Task run finished and is ready for review.');
+	});
+
+	it('preserves the specific failed-thread detail when blocking a linked task', () => {
+		const data: ControlPlaneData = {
+			providers: [],
+			roles: [],
+			projects: [],
+			goals: [],
+			workers: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Planning work and chunking',
+					summary: 'Collect notes about planning and chunking work.',
+					projectId: 'project_1',
+					lane: 'product',
+					goalId: 'goal_1',
+					priority: 'medium',
+					status: 'in_progress',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					threadSessionId: 'session_1',
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_1',
+					artifactPath: '/tmp/artifacts',
+					attachments: [],
+					createdAt: '2026-03-30T20:00:00.000Z',
+					updatedAt: '2026-03-30T20:00:00.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_1',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-03-30T20:00:00.000Z',
+					updatedAt: '2026-03-30T20:00:00.000Z',
+					startedAt: '2026-03-30T20:00:00.000Z',
+					endedAt: null,
+					threadId: null,
+					sessionId: 'session_1',
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Running task.',
+					lastHeartbeatAt: '2026-03-30T20:00:00.000Z',
+					errorSummary: ''
+				}
+			],
+			reviews: [],
+			approvals: []
+		};
+
+		const next = reconcileControlPlaneSessionState(data, {
+			id: 'session_1',
+			hasActiveRun: false,
+			canResume: false,
+			latestRunStatus: 'failed',
+			lastActivityAt: '2026-03-30T20:15:00.000Z',
+			latestRun: {
+				id: 'run_1',
+				sessionId: 'session_1',
+				mode: 'start',
+				prompt: 'start work',
+				requestedThreadId: null,
+				createdAt: '2026-03-30T20:00:00.000Z',
+				updatedAt: '2026-03-30T20:15:00.000Z',
+				logPath: '/tmp/codex.log',
+				statePath: '/tmp/state.json',
+				messagePath: '/tmp/last-message.txt',
+				configPath: '/tmp/config.json',
+				state: {
+					status: 'failed',
+					pid: 123,
+					startedAt: '2026-03-30T20:00:00.000Z',
+					finishedAt: '2026-03-30T20:15:00.000Z',
+					exitCode: 1,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: null,
+				logTail: [
+					'=== 2026-03-30T20:00:00.000Z START ===',
+					'cwd=/restricted/project',
+					'Error: Operation not permitted (os error 1)',
+					'=== EXIT code=1 signal=null ==='
+				],
+				activityAt: '2026-03-30T20:15:00.000Z'
+			}
+		});
+
+		expect(next.tasks[0]?.status).toBe('blocked');
+		expect(next.tasks[0]?.blockedReason).toBe('Error: Operation not permitted (os error 1)');
+		expect(next.runs[0]?.status).toBe('failed');
+		expect(next.runs[0]?.errorSummary).toBe('Error: Operation not permitted (os error 1)');
+	});
+
+	it('surfaces a concrete auth startup failure reason for linked tasks', () => {
+		const data: ControlPlaneData = {
+			providers: [],
+			roles: [],
+			projects: [],
+			goals: [],
+			workers: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Add target date field',
+					summary: 'Start the task in a fresh thread.',
+					projectId: 'project_1',
+					lane: 'product',
+					goalId: 'goal_1',
+					priority: 'medium',
+					status: 'in_progress',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					threadSessionId: 'session_1',
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_1',
+					artifactPath: '/tmp/artifacts',
+					attachments: [],
+					createdAt: '2026-04-01T16:14:14.000Z',
+					updatedAt: '2026-04-01T16:14:14.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_1',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-04-01T16:14:14.000Z',
+					updatedAt: '2026-04-01T16:14:14.000Z',
+					startedAt: '2026-04-01T16:14:14.000Z',
+					endedAt: null,
+					threadId: null,
+					sessionId: 'session_1',
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Running task.',
+					lastHeartbeatAt: '2026-04-01T16:14:14.000Z',
+					errorSummary: ''
+				}
+			],
+			reviews: [],
+			approvals: []
+		};
+
+		const next = reconcileControlPlaneSessionState(data, {
+			id: 'session_1',
+			hasActiveRun: false,
+			canResume: false,
+			latestRunStatus: 'failed',
+			lastActivityAt: '2026-04-01T16:14:15.900Z',
+			latestRun: {
+				id: 'run_1',
+				sessionId: 'session_1',
+				mode: 'start',
+				prompt: 'start work',
+				requestedThreadId: null,
+				createdAt: '2026-04-01T16:14:14.000Z',
+				updatedAt: '2026-04-01T16:14:15.900Z',
+				logPath: '/tmp/codex.log',
+				statePath: '/tmp/state.json',
+				messagePath: '/tmp/last-message.txt',
+				configPath: '/tmp/config.json',
+				state: {
+					status: 'failed',
+					pid: null,
+					startedAt: '2026-04-01T16:14:14.000Z',
+					finishedAt: '2026-04-01T16:14:15.900Z',
+					exitCode: 0,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: null,
+				logTail: [
+					'=== 2026-04-01T16:14:14.721Z START ===',
+					'cwd=/Users/colinfreed/Projects/Experiments/agent-management-system-prototype',
+					'Reading additional input from stdin...',
+					'2026-04-01T16:14:15.667723Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(TokenRefreshFailed("Failed to parse server response"))',
+					'=== EXIT code=0 signal=null ==='
+				],
+				activityAt: '2026-04-01T16:14:15.900Z'
+			}
+		});
+
+		expect(next.tasks[0]?.blockedReason).toBe(
+			'Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.'
+		);
+		expect(next.runs[0]?.errorSummary).toBe(
+			'Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.'
+		);
+	});
+
+	it('reopens linked blocked tasks when the session is actively running', () => {
+		const data: ControlPlaneData = {
+			providers: [],
+			roles: [],
+			projects: [],
+			goals: [],
+			workers: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Documentation sync',
+					summary: 'Keep the task active while the linked session is still running.',
+					projectId: 'project_1',
+					lane: 'product',
+					goalId: 'goal_1',
+					priority: 'medium',
+					status: 'blocked',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					threadSessionId: 'session_1',
+					blockedReason: 'False transport error.',
+					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_1',
+					artifactPath: '/tmp/artifacts',
+					attachments: [],
+					createdAt: '2026-04-01T16:36:41.901Z',
+					updatedAt: '2026-04-01T16:36:42.920Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_1',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'failed',
+					createdAt: '2026-04-01T16:36:41.929Z',
+					updatedAt: '2026-04-01T16:36:42.920Z',
+					startedAt: '2026-04-01T16:36:41.929Z',
+					endedAt: '2026-04-01T16:36:42.920Z',
+					threadId: null,
+					sessionId: 'session_1',
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Task blocked after the linked work thread failed.',
+					lastHeartbeatAt: '2026-04-01T16:36:41.929Z',
+					errorSummary: 'False transport error.'
+				}
+			],
+			reviews: [],
+			approvals: []
+		};
+
+		const next = reconcileControlPlaneSessionState(data, {
+			id: 'session_1',
+			hasActiveRun: true,
+			canResume: false,
+			latestRunStatus: 'running',
+			lastActivityAt: '2026-04-01T16:38:00.000Z',
+			latestRun: {
+				id: 'run_1',
+				sessionId: 'session_1',
+				mode: 'start',
+				prompt: 'start work',
+				requestedThreadId: null,
+				createdAt: '2026-04-01T16:36:41.929Z',
+				updatedAt: '2026-04-01T16:38:00.000Z',
+				logPath: '/tmp/codex.log',
+				statePath: '/tmp/state.json',
+				messagePath: '/tmp/last-message.txt',
+				configPath: '/tmp/config.json',
+				state: {
+					status: 'running',
+					pid: 123,
+					startedAt: '2026-04-01T16:36:42.006Z',
+					finishedAt: null,
+					exitCode: null,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: null,
+				logTail: [
+					'2026-04-01T16:36:42.918672Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(TokenRefreshFailed("Failed to parse server response"))',
+					'{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Still running."}}'
+				],
+				activityAt: '2026-04-01T16:38:00.000Z'
+			}
+		});
+
+		expect(next.tasks[0]).toEqual(
+			expect.objectContaining({
+				id: 'task_1',
+				status: 'in_progress',
+				blockedReason: '',
+				updatedAt: '2026-04-01T16:38:00.000Z'
+			})
+		);
+		expect(next.runs[0]).toEqual(
+			expect.objectContaining({
+				id: 'run_1',
+				status: 'running',
+				summary: 'Linked work thread is actively running.',
+				endedAt: null,
+				lastHeartbeatAt: '2026-04-01T16:38:00.000Z',
+				errorSummary: ''
+			})
+		);
 	});
 
 	it('moves linked review tasks back to in progress when a follow-up message is queued', () => {
@@ -493,11 +1056,7 @@ describe('agent session helpers', () => {
 			]
 		};
 
-		const next = reconcileControlPlaneSessionMessage(
-			data,
-			'session_1',
-			'2026-03-30T20:20:00.000Z'
-		);
+		const next = reconcileControlPlaneSessionMessage(data, 'session_1', '2026-03-30T20:20:00.000Z');
 
 		expect(next.tasks[0]).toEqual(
 			expect.objectContaining({

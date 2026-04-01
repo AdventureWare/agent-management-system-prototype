@@ -35,6 +35,8 @@ import {
 	parseIdeationTaskSuggestions
 } from '$lib/server/task-ideation';
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
+import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import type { ControlPlaneData, Project, Role } from '$lib/types/control-plane';
 
 function readTaskForm(form: FormData) {
@@ -42,8 +44,13 @@ function readTaskForm(form: FormData) {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
-		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? ''
+		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
+		targetDate: form.get('targetDate')?.toString().trim() ?? ''
 	};
+}
+
+function isValidDate(value: string) {
+	return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function readCreateTaskSubmitMode(form: FormData) {
@@ -54,6 +61,28 @@ function readTaskAttachments(form: FormData) {
 	return form
 		.getAll('attachments')
 		.filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+function getActionErrorMessage(error: unknown, fallback: string) {
+	return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function failTaskCreate(
+	status: number,
+	payload: {
+		message: string;
+		name: string;
+		instructions: string;
+		projectId: string;
+		assigneeWorkerId: string;
+		targetDate: string;
+		submitMode: 'create' | 'createAndRun';
+	}
+) {
+	return fail(status, {
+		formContext: 'taskCreate',
+		...payload
+	});
 }
 
 function getDefaultDraftRole(data: ControlPlaneData): Role | null {
@@ -112,11 +141,25 @@ export const load: PageServerLoad = async ({ url }) => {
 			Boolean(review && (review.suggestionCount > 0 || review.hasActiveRun || review.hasSavedReply))
 		)
 		.sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
+	const projectSkillSummaries = [...data.projects]
+		.map((project) => {
+			const installedSkills = listInstalledCodexSkills(project.projectRootFolder);
+
+			return {
+				projectId: project.id,
+				totalCount: installedSkills.length,
+				globalCount: installedSkills.filter((skill) => skill.global).length,
+				projectCount: installedSkills.filter((skill) => skill.project).length,
+				previewSkills: installedSkills.slice(0, 8)
+			};
+		})
+		.sort((left, right) => left.projectId.localeCompare(right.projectId));
 
 	return {
 		deleted: url.searchParams.get('deleted') === '1',
 		statusOptions: TASK_STATUS_OPTIONS,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
+		projectSkillSummaries,
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
 		ideationReviews,
@@ -165,19 +208,47 @@ export const actions: Actions = {
 		let sessionId = ideationThread?.id ?? null;
 		let reusedThread = false;
 		const ideationProvider = selectExecutionProvider(current);
-		const ideationSandbox = resolveThreadSandbox({ provider: ideationProvider });
+		const ideationSandbox = resolveThreadSandbox({ project, provider: ideationProvider });
+		const workspaceIssue = getWorkspaceExecutionIssue({
+			cwd: workspace,
+			sandbox: ideationSandbox,
+			scopeLabel: 'Ideation workspace'
+		});
+
+		if (workspaceIssue) {
+			return fail(400, { message: workspaceIssue });
+		}
 
 		if (ideationThread?.canResume) {
-			await sendAgentSessionMessage(ideationThread.id, prompt);
+			try {
+				await sendAgentSessionMessage(ideationThread.id, prompt);
+			} catch (error) {
+				return fail(400, {
+					message: getActionErrorMessage(
+						error,
+						'Could not queue work in the project ideation thread.'
+					)
+				});
+			}
+
 			reusedThread = true;
 		} else {
-			const session = await startAgentSession({
-				name: buildProjectTaskIdeationThreadName(project.name),
-				cwd: workspace,
-				prompt,
-				sandbox: ideationSandbox,
-				model: null
-			});
+			let session;
+
+			try {
+				session = await startAgentSession({
+					name: buildProjectTaskIdeationThreadName(project.name),
+					cwd: workspace,
+					prompt,
+					sandbox: ideationSandbox,
+					model: null
+				});
+			} catch (error) {
+				return fail(400, {
+					message: getActionErrorMessage(error, 'Could not start the project ideation thread.')
+				});
+			}
+
 			sessionId = session.sessionId;
 		}
 
@@ -193,13 +264,31 @@ export const actions: Actions = {
 
 	createTask: async ({ request }) => {
 		const form = await request.formData();
-		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
+		const { name, instructions, projectId, assigneeWorkerId, targetDate } = readTaskForm(form);
 		const submitMode = readCreateTaskSubmitMode(form);
 		const uploads = readTaskAttachments(form);
 
 		if (!name || !instructions || !projectId) {
-			return fail(400, {
-				message: 'Name, instructions, and project are required.'
+			return failTaskCreate(400, {
+				message: 'Name, instructions, and project are required.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
+			});
+		}
+
+		if (targetDate && !isValidDate(targetDate)) {
+			return failTaskCreate(400, {
+				message: 'Target date must use YYYY-MM-DD format.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
 			});
 		}
 
@@ -210,16 +299,38 @@ export const actions: Actions = {
 			: null;
 
 		if (!project) {
-			return fail(400, { message: 'Project not found.' });
+			return failTaskCreate(400, {
+				message: 'Project not found.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
+			});
 		}
 
 		if (assigneeWorkerId && !assigneeWorker) {
-			return fail(400, { message: 'Worker not found.' });
+			return failTaskCreate(400, {
+				message: 'Worker not found.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
+			});
 		}
 
 		if (submitMode === 'createAndRun' && !project.projectRootFolder) {
-			return fail(400, {
-				message: 'This task cannot launch a work thread until its project has a root folder.'
+			return failTaskCreate(400, {
+				message: 'This task cannot launch a work thread until its project has a root folder.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
 			});
 		}
 
@@ -231,8 +342,15 @@ export const actions: Actions = {
 		);
 
 		if (uploads.length > 0 && !attachmentRoot) {
-			return fail(400, {
-				message: 'This project needs an artifact root before files can be attached during creation.'
+			return failTaskCreate(400, {
+				message:
+					'This project needs an artifact root before files can be attached during creation.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
 			});
 		}
 
@@ -252,6 +370,7 @@ export const actions: Actions = {
 			requiresReview: true,
 			desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
 			assigneeWorkerId: assigneeWorker?.id ?? null,
+			targetDate: targetDate || null,
 			artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
 		});
 		const attachments =
@@ -284,21 +403,56 @@ export const actions: Actions = {
 			taskInstructions: instructions,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder ?? '',
-			defaultArtifactRoot: project.defaultArtifactRoot
+			defaultArtifactRoot: project.defaultArtifactRoot,
+			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
+				.slice(0, 12)
+				.map((skill) => skill.id)
 		});
 		const provider = selectExecutionProvider(current, assigneeWorker);
-		const sandbox = resolveThreadSandbox({ worker: assigneeWorker, provider });
-		const session = await startAgentSession({
-			name: buildTaskThreadName({
-				projectName: project.name,
-				taskName: createdTask.title,
-				taskId: createdTask.id
-			}),
+		const sandbox = resolveThreadSandbox({ worker: assigneeWorker, project, provider });
+		const workspaceIssue = getWorkspaceExecutionIssue({
 			cwd: project.projectRootFolder ?? '',
-			prompt,
 			sandbox,
-			model: null
+			scopeLabel: 'Project root'
 		});
+
+		if (workspaceIssue) {
+			return failTaskCreate(400, {
+				message: workspaceIssue,
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
+			});
+		}
+
+		let session;
+
+		try {
+			session = await startAgentSession({
+				name: buildTaskThreadName({
+					projectName: project.name,
+					taskName: createdTask.title,
+					taskId: createdTask.id
+				}),
+				cwd: project.projectRootFolder ?? '',
+				prompt,
+				sandbox,
+				model: null
+			});
+		} catch (error) {
+			return failTaskCreate(400, {
+				message: getActionErrorMessage(error, 'Could not start a work thread for this task.'),
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				submitMode
+			});
+		}
 		const providerId = provider?.id ?? null;
 		const now = new Date().toISOString();
 		const run = createRun({
@@ -439,7 +593,7 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
-		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
+		const { name, instructions, projectId, assigneeWorkerId, targetDate } = readTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
@@ -449,6 +603,10 @@ export const actions: Actions = {
 			return fail(400, {
 				message: 'Name, instructions, and project are required.'
 			});
+		}
+
+		if (targetDate && !isValidDate(targetDate)) {
+			return fail(400, { message: 'Target date must use YYYY-MM-DD format.' });
 		}
 
 		let taskUpdated = false;
@@ -485,6 +643,7 @@ export const actions: Actions = {
 						status,
 						assigneeWorkerId: assigneeWorker?.id ?? null,
 						desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
+						targetDate: targetDate || null,
 						artifactPath:
 							task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
 						updatedAt: new Date().toISOString()
@@ -558,11 +717,15 @@ export const actions: Actions = {
 			taskInstructions: effectiveInstructions,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
-			defaultArtifactRoot: project.defaultArtifactRoot
+			defaultArtifactRoot: project.defaultArtifactRoot,
+			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
+				.slice(0, 12)
+				.map((skill) => skill.id)
 		});
 		const provider = selectExecutionProvider(current, effectiveWorker);
 		const sandbox = resolveThreadSandbox({
 			worker: effectiveWorker,
+			project,
 			provider
 		});
 		const assignedThread = task.threadSessionId
@@ -582,23 +745,49 @@ export const actions: Actions = {
 			});
 		}
 
+		const workspaceIssue = getWorkspaceExecutionIssue({
+			cwd: project.projectRootFolder,
+			sandbox,
+			scopeLabel: 'Project root'
+		});
+
+		if (workspaceIssue) {
+			return fail(400, { message: workspaceIssue });
+		}
+
 		if (compatibleAssignedThread?.canResume) {
-			await sendAgentSessionMessage(compatibleAssignedThread.id, prompt);
+			try {
+				await sendAgentSessionMessage(compatibleAssignedThread.id, prompt);
+			} catch (error) {
+				return fail(400, {
+					message: getActionErrorMessage(error, 'Could not queue work in the linked thread.')
+				});
+			}
+
 			sessionId = compatibleAssignedThread.id;
 			threadId = compatibleAssignedThread.threadId;
 			reusedAssignedThread = true;
 		} else {
-			const session = await startAgentSession({
-				name: buildTaskThreadName({
-					projectName: project.name,
-					taskName: effectiveName,
-					taskId: task.id
-				}),
-				cwd: project.projectRootFolder,
-				prompt,
-				sandbox,
-				model: null
-			});
+			let session;
+
+			try {
+				session = await startAgentSession({
+					name: buildTaskThreadName({
+						projectName: project.name,
+						taskName: effectiveName,
+						taskId: task.id
+					}),
+					cwd: project.projectRootFolder,
+					prompt,
+					sandbox,
+					model: null
+				});
+			} catch (error) {
+				return fail(400, {
+					message: getActionErrorMessage(error, 'Could not start a work thread for this task.')
+				});
+			}
+
 			sessionId = session.sessionId;
 			threadId = null;
 		}

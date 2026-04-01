@@ -359,6 +359,7 @@ export type Project = {
 	defaultRepoPath: string;
 	defaultRepoUrl: string;
 	defaultBranch: string;
+	defaultThreadSandbox?: AgentSandbox | null;
 };
 
 export type Worker = {

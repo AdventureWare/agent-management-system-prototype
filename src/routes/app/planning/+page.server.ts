@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { buildPlanningPageData } from '$lib/server/planning';
+import { buildPlanningPageData, selectPlanningHorizon } from '$lib/server/planning';
 import {
 	createPlanningHorizon,
 	loadControlPlane,
@@ -17,20 +17,57 @@ function isValidDate(value: string) {
 	return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function formatDateInput(date: Date) {
+	return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number) {
+	const next = new Date(date);
+	next.setDate(next.getDate() + days);
+	return next;
+}
+
 function readSelectedHorizonId(form: FormData) {
 	return form.get('planningHorizonId')?.toString().trim() ?? '';
 }
 
+function readFilterValue(value: string | null) {
+	const trimmed = value?.trim() ?? '';
+	return trimmed.length > 0 ? trimmed : '';
+}
+
 export const load: PageServerLoad = async ({ url }) => {
 	const data = await loadControlPlane();
-	const selectedHorizonId = url.searchParams.get('horizon');
+	const selectedPresetId = readFilterValue(url.searchParams.get('preset') ?? url.searchParams.get('horizon'));
+	const selectedPreset = selectedPresetId ? selectPlanningHorizon(data, selectedPresetId) : null;
+	const includeUnscheduledValues = url.searchParams.getAll('includeUnscheduled');
+	const today = new Date();
+	const defaultStartDate = formatDateInput(today);
+	const defaultEndDate = formatDateInput(addDays(today, 13));
+	const rawStartDate = readFilterValue(url.searchParams.get('startDate'));
+	const rawEndDate = readFilterValue(url.searchParams.get('endDate'));
+	const startDate =
+		(isValidDate(rawStartDate) && rawStartDate) ||
+		selectedPreset?.startDate ||
+		defaultStartDate;
+	const endDate =
+		(isValidDate(rawEndDate) && rawEndDate) ||
+		selectedPreset?.endDate ||
+		defaultEndDate;
+	const normalizedStartDate = startDate <= endDate ? startDate : endDate;
+	const normalizedEndDate = startDate <= endDate ? endDate : startDate;
 
 	return {
-		...buildPlanningPageData(data, selectedHorizonId),
-		selectedHorizonId,
-		horizonKindOptions: PLANNING_HORIZON_KIND_OPTIONS,
-		horizonStatusOptions: PLANNING_HORIZON_STATUS_OPTIONS,
-		capacityUnitOptions: PLANNING_CAPACITY_UNIT_OPTIONS,
+		...buildPlanningPageData(data, {
+			startDate: normalizedStartDate,
+			endDate: normalizedEndDate,
+			projectId: readFilterValue(url.searchParams.get('projectId')),
+			goalId: readFilterValue(url.searchParams.get('goalId')),
+			workerId: readFilterValue(url.searchParams.get('workerId')),
+			includeUnscheduled:
+				includeUnscheduledValues.length === 0 || includeUnscheduledValues.includes('true')
+		}),
+		selectedPresetId,
 		confidenceOptions: PLANNING_CONFIDENCE_OPTIONS
 	};
 };
@@ -166,13 +203,12 @@ export const actions: Actions = {
 		};
 	},
 
-	updateGoalPlan: async ({ request }) => {
-		const form = await request.formData();
-		const planningHorizonId = readSelectedHorizonId(form);
-		const goalId = form.get('goalId')?.toString().trim() ?? '';
-		const targetDate = form.get('targetDate')?.toString().trim() ?? '';
-		const planningPriority = Number.parseInt(
-			form.get('planningPriority')?.toString().trim() ?? '0',
+		updateGoalPlan: async ({ request }) => {
+			const form = await request.formData();
+			const goalId = form.get('goalId')?.toString().trim() ?? '';
+			const targetDate = form.get('targetDate')?.toString().trim() ?? '';
+			const planningPriority = Number.parseInt(
+				form.get('planningPriority')?.toString().trim() ?? '0',
 			10
 		);
 		const confidence = form.get('confidence')?.toString().trim() ?? 'medium';
@@ -181,12 +217,11 @@ export const actions: Actions = {
 			return fail(400, { message: 'Goal ID is required.' });
 		}
 
-		if (targetDate && !isValidDate(targetDate)) {
-			return fail(400, {
-				message: 'Target date must use YYYY-MM-DD format.',
-				selectedHorizonId: planningHorizonId
-			});
-		}
+			if (targetDate && !isValidDate(targetDate)) {
+				return fail(400, {
+					message: 'Target date must use YYYY-MM-DD format.'
+				});
+			}
 
 		let goalUpdated = false;
 
@@ -216,10 +251,9 @@ export const actions: Actions = {
 			return fail(404, { message: 'Goal not found.' });
 		}
 
-		return {
-			ok: true,
-			successAction: 'updateGoalPlan',
-			selectedHorizonId: planningHorizonId
-		};
-	}
-};
+			return {
+				ok: true,
+				successAction: 'updateGoalPlan'
+			};
+		}
+	};

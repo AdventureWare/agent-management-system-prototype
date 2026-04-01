@@ -376,10 +376,7 @@ function normalizeProvider(provider: LegacyProvider): Provider {
 					: '',
 		envVars: normalizeProviderList(provider.envVars),
 		capabilities: normalizeProviderList(provider.capabilities),
-		defaultThreadSandbox: normalizeAgentSandbox(
-			provider.defaultThreadSandbox,
-			'workspace-write'
-		),
+		defaultThreadSandbox: normalizeAgentSandbox(provider.defaultThreadSandbox, 'workspace-write'),
 		notes: typeof provider.notes === 'string' ? provider.notes : ''
 	};
 }
@@ -471,8 +468,7 @@ function normalizePlanningHorizon(horizon: LegacyPlanningHorizon): PlanningHoriz
 	const now = new Date().toISOString();
 	const kindValue = typeof horizon.kind === 'string' ? horizon.kind : '';
 	const statusValue = typeof horizon.status === 'string' ? horizon.status : '';
-	const capacityUnitValue =
-		typeof horizon.capacityUnit === 'string' ? horizon.capacityUnit : '';
+	const capacityUnitValue = typeof horizon.capacityUnit === 'string' ? horizon.capacityUnit : '';
 
 	return {
 		id: typeof horizon.id === 'string' ? horizon.id : createPlanningHorizonId(),
@@ -513,7 +509,8 @@ function normalizeProject(
 		defaultRepoUrl:
 			typeof legacyProject.defaultRepoUrl === 'string' ? legacyProject.defaultRepoUrl : '',
 		defaultBranch:
-			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : ''
+			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : '',
+		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox)
 	};
 }
 
@@ -709,9 +706,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 				)
 			: [],
 		parentTaskId:
-			typeof task.parentTaskId === 'string' && task.parentTaskId.trim()
-				? task.parentTaskId
-				: null,
+			typeof task.parentTaskId === 'string' && task.parentTaskId.trim() ? task.parentTaskId : null,
 		planningHorizonId:
 			typeof task.planningHorizonId === 'string' && task.planningHorizonId.trim()
 				? task.planningHorizonId
@@ -720,9 +715,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		targetDate: normalizeOptionalDate(task.targetDate),
 		planningOrder: normalizeNonNegativeInteger(task.planningOrder, 0),
 		source:
-			typeof task.source === 'string' && isTaskPlanningSource(task.source)
-				? task.source
-				: 'manual',
+			typeof task.source === 'string' && isTaskPlanningSource(task.source) ? task.source : 'manual',
 		runCount:
 			typeof task.runCount === 'number' && Number.isFinite(task.runCount) && task.runCount >= 0
 				? task.runCount
@@ -1175,6 +1168,7 @@ export function createProject(input: {
 	defaultRepoPath?: string;
 	defaultRepoUrl?: string;
 	defaultBranch?: string;
+	defaultThreadSandbox?: AgentSandbox | null;
 }): Project {
 	return {
 		id: createProjectId(),
@@ -1184,7 +1178,8 @@ export function createProject(input: {
 		defaultArtifactRoot: normalizePathInput(input.defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
 		defaultRepoUrl: input.defaultRepoUrl ?? '',
-		defaultBranch: input.defaultBranch ?? ''
+		defaultBranch: input.defaultBranch ?? '',
+		defaultThreadSandbox: input.defaultThreadSandbox ?? null
 	};
 }
 
@@ -1445,11 +1440,13 @@ export function createWorker(input: {
 
 export function resolveThreadSandbox(input: {
 	worker?: Pick<Worker, 'threadSandboxOverride'> | null;
+	project?: Pick<Project, 'defaultThreadSandbox'> | null;
 	provider?: Pick<Provider, 'defaultThreadSandbox'> | null;
 	fallback?: AgentSandbox;
 }) {
 	return (
 		input.worker?.threadSandboxOverride ??
+		input.project?.defaultThreadSandbox ??
 		input.provider?.defaultThreadSandbox ??
 		input.fallback ??
 		'workspace-write'

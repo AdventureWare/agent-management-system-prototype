@@ -1,5 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
+import { parseAgentSandbox } from '$lib/server/agent-sessions';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput } from '$lib/server/path-tools';
 import {
@@ -9,6 +11,11 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 
+function readProjectThreadSandbox(value: FormDataEntryValue | null) {
+	const sandbox = value?.toString().trim() ?? '';
+	return sandbox ? parseAgentSandbox(sandbox, 'workspace-write') : null;
+}
+
 function readProjectForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
@@ -17,7 +24,8 @@ function readProjectForm(form: FormData) {
 		defaultArtifactRoot: normalizePathInput(form.get('defaultArtifactRoot')?.toString()),
 		defaultRepoPath: normalizePathInput(form.get('defaultRepoPath')?.toString()),
 		defaultRepoUrl: form.get('defaultRepoUrl')?.toString().trim() ?? '',
-		defaultBranch: form.get('defaultBranch')?.toString().trim() ?? ''
+		defaultBranch: form.get('defaultBranch')?.toString().trim() ?? '',
+		defaultThreadSandbox: readProjectThreadSandbox(form.get('defaultThreadSandbox'))
 	};
 }
 
@@ -54,7 +62,8 @@ export const load: PageServerLoad = async () => {
 				};
 			})
 			.sort((a, b) => a.name.localeCompare(b.name)),
-		folderOptions: await loadFolderPickerOptions()
+		folderOptions: await loadFolderPickerOptions(),
+		sandboxOptions: AGENT_SANDBOX_OPTIONS
 	};
 };
 

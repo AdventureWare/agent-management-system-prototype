@@ -1,4 +1,11 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import {
+		clearFormDraft,
+		isFormDraftEmpty,
+		readFormDraft,
+		writeFormDraft
+	} from '$lib/client/form-drafts';
 	import PathField from '$lib/components/PathField.svelte';
 	import {
 		formatGoalStatusLabel,
@@ -62,7 +69,9 @@
 		parentGoalOptions,
 		projectOptions,
 		taskOptions,
-		showIdField = false
+		showIdField = false,
+		draftStorageKey = null,
+		clearDraftOnSuccess = false
 	}: {
 		action: string;
 		submitLabel: string;
@@ -76,8 +85,17 @@
 		projectOptions: ProjectOption[];
 		taskOptions: TaskOption[];
 		showIdField?: boolean;
+		draftStorageKey?: string | null;
+		clearDraftOnSuccess?: boolean;
 	} = $props();
 
+	let draftReady = $state(false);
+	let name = $state('');
+	let summary = $state('');
+	let lane = $state('product');
+	let status = $state('ready');
+	let horizon = $state('');
+	let successSignal = $state('');
 	let projectQuery = $state('');
 	let taskQuery = $state('');
 	let selectedProjectIds = $state.raw<string[]>([]);
@@ -96,11 +114,16 @@
 	$effect(() => {
 		const nextValuesKey = JSON.stringify({
 			goalId: values.goalId ?? '',
+			name: values.name ?? '',
+			summary: values.summary ?? '',
+			lane: values.lane ?? 'product',
+			status: values.status ?? 'ready',
+			horizon: values.horizon ?? '',
+			successSignal: values.successSignal ?? '',
 			projectIds: values.projectIds ?? [],
 			taskIds: values.taskIds ?? [],
 			parentGoalId: values.parentGoalId ?? '',
-			artifactPath: values.artifactPath ?? '',
-			name: values.name ?? ''
+			artifactPath: values.artifactPath ?? ''
 		});
 
 		if (lastValuesKey === nextValuesKey) {
@@ -108,6 +131,12 @@
 		}
 
 		lastValuesKey = nextValuesKey;
+		name = values.name ?? '';
+		summary = values.summary ?? '';
+		lane = values.lane ?? 'product';
+		status = values.status ?? 'ready';
+		horizon = values.horizon ?? '';
+		successSignal = values.successSignal ?? '';
 		selectedProjectIds = [...(values.projectIds ?? [])];
 		selectedTaskIds = [...(values.taskIds ?? [])];
 		selectedParentGoalId = values.parentGoalId ?? '';
@@ -116,13 +145,78 @@
 		showTaskBrowser = false;
 	});
 
+	onMount(() => {
+		if (!draftStorageKey) {
+			draftReady = true;
+			return;
+		}
+
+		if (clearDraftOnSuccess) {
+			clearFormDraft(draftStorageKey);
+			draftReady = true;
+			return;
+		}
+
+		const hasIncomingValues = !isFormDraftEmpty({
+			name: values.name ?? '',
+			summary: values.summary ?? '',
+			horizon: values.horizon ?? '',
+			successSignal: values.successSignal ?? '',
+			artifactPath: values.artifactPath ?? '',
+			parentGoalId: values.parentGoalId ?? '',
+			projectIds: values.projectIds ?? [],
+			taskIds: values.taskIds ?? [],
+			lane: values.lane ?? '',
+			status: values.status ?? ''
+		});
+
+		if (hasIncomingValues) {
+			draftReady = true;
+			return;
+		}
+
+		const savedDraft = readFormDraft<GoalFormValues>(draftStorageKey);
+
+		if (savedDraft) {
+			name = savedDraft.name ?? '';
+			summary = savedDraft.summary ?? '';
+			lane = savedDraft.lane ?? 'product';
+			status = savedDraft.status ?? 'ready';
+			horizon = savedDraft.horizon ?? '';
+			successSignal = savedDraft.successSignal ?? '';
+			artifactPath = savedDraft.artifactPath ?? '';
+			selectedParentGoalId = savedDraft.parentGoalId ?? '';
+			selectedProjectIds = [...(savedDraft.projectIds ?? [])];
+			selectedTaskIds = [...(savedDraft.taskIds ?? [])];
+		}
+
+		draftReady = true;
+	});
+
+	$effect(() => {
+		if (!draftStorageKey || !draftReady) {
+			return;
+		}
+
+		writeFormDraft(draftStorageKey, {
+			name,
+			summary,
+			lane: lane === 'product' ? '' : lane,
+			status: status === 'ready' ? '' : status,
+			horizon,
+			successSignal,
+			artifactPath,
+			parentGoalId: selectedParentGoalId,
+			projectIds: selectedProjectIds,
+			taskIds: selectedTaskIds
+		});
+	});
+
 	let selectedProjectIdSet = $derived(new Set(selectedProjectIds));
 	let selectedTaskIdSet = $derived(new Set(selectedTaskIds));
 	let projectMap = $derived(new Map(projectOptions.map((project) => [project.id, project])));
 	let taskMap = $derived(new Map(taskOptions.map((task) => [task.id, task])));
-	let parentGoalMap = $derived(
-		new Map(parentGoalOptions.map((goal) => [goal.id, goal]))
-	);
+	let parentGoalMap = $derived(new Map(parentGoalOptions.map((goal) => [goal.id, goal])));
 	let selectedProjects = $derived(
 		selectedProjectIds
 			.map((projectId) => projectMap.get(projectId))
@@ -179,13 +273,7 @@
 		}
 
 		return taskOptions.filter((task) =>
-			[
-				task.title,
-				task.projectName,
-				task.status,
-				task.currentGoalName,
-				task.currentGoalId
-			]
+			[task.title, task.projectName, task.status, task.currentGoalName, task.currentGoalId]
 				.join(' ')
 				.toLowerCase()
 				.includes(normalizedQuery)
@@ -235,7 +323,12 @@
 	}
 </script>
 
-<form class="space-y-6" method="POST" {action}>
+<form
+	class="space-y-6"
+	method="POST"
+	{action}
+	data-persist-scope={draftStorageKey ? 'manual' : undefined}
+>
 	{#if showIdField && values.goalId}
 		<input type="hidden" name="goalId" value={values.goalId} />
 	{/if}
@@ -256,41 +349,40 @@
 		<label class="block">
 			<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 			<input
+				bind:value={name}
 				class="input text-white placeholder:text-slate-500"
 				name="name"
 				placeholder="Improve goal planning & linking UX…"
 				required
-				value={values.name ?? ''}
 			/>
 		</label>
 
 		<label class="block">
 			<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
 			<textarea
+				bind:value={summary}
 				class="textarea min-h-28 text-white placeholder:text-slate-500"
 				name="summary"
 				placeholder="Describe the desired outcome and why it matters…"
-				required>{values.summary ?? ''}</textarea
-			>
+				required
+			></textarea>
 		</label>
 
 		<div class="grid gap-4 lg:grid-cols-2">
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Lane</span>
-				<select class="select text-white" name="lane">
+				<select bind:value={lane} class="select text-white" name="lane">
 					{#each laneOptions as lane (lane)}
-						<option value={lane} selected={lane === (values.lane ?? 'product')}>{lane}</option>
+						<option value={lane}>{lane}</option>
 					{/each}
 				</select>
 			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
-				<select class="select text-white" name="status">
+				<select bind:value={status} class="select text-white" name="status">
 					{#each statusOptions as status (status)}
-						<option value={status} selected={status === (values.status ?? 'ready')}>
-							{formatGoalStatusLabel(status)}
-						</option>
+						<option value={status}>{formatGoalStatusLabel(status)}</option>
 					{/each}
 				</select>
 			</label>
@@ -298,10 +390,10 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Horizon</span>
 				<input
+					bind:value={horizon}
 					class="input text-white placeholder:text-slate-500"
 					name="horizon"
 					placeholder="Now, next quarter, later this year…"
-					value={values.horizon ?? ''}
 				/>
 			</label>
 
@@ -319,18 +411,17 @@
 		<label class="block">
 			<span class="mb-2 block text-sm font-medium text-slate-200">Success signal</span>
 			<textarea
+				bind:value={successSignal}
 				class="textarea min-h-24 text-white placeholder:text-slate-500"
 				name="successSignal"
-				placeholder="What evidence will show this goal is actually working…">{values.successSignal ?? ''}</textarea
-			>
+				placeholder="What evidence will show this goal is actually working…"
+			></textarea>
 		</label>
 	</div>
 
 	<div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 		<div>
-			<h3 class="text-sm font-semibold tracking-[0.2em] text-slate-300 uppercase">
-				Relationships
-			</h3>
+			<h3 class="text-sm font-semibold tracking-[0.2em] text-slate-300 uppercase">Relationships</h3>
 			<p class="mt-1 text-sm text-slate-500">
 				Use the same pattern for every relationship: pick the parent, link projects, and assign the
 				tasks that should roll up into this goal.
@@ -379,7 +470,9 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-500">
+					<p
+						class="rounded-2xl border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-500"
+					>
 						No projects linked yet. Add one if you want stronger context or a recommended workspace.
 					</p>
 				{/if}
@@ -395,7 +488,9 @@
 					</label>
 
 					{#if filteredProjectOptions.length === 0}
-						<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500">
+						<p
+							class="rounded-2xl border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
+						>
 							No projects match the current search.
 						</p>
 					{:else}
@@ -472,7 +567,9 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-500">
+					<p
+						class="rounded-2xl border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-500"
+					>
 						No tasks assigned yet. Add tasks only when the goal already has execution work under it.
 					</p>
 				{/if}
@@ -488,7 +585,9 @@
 					</label>
 
 					{#if filteredTaskOptions.length === 0}
-						<p class="rounded-2xl border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500">
+						<p
+							class="rounded-2xl border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
+						>
 							No tasks match the current search.
 						</p>
 					{:else}
@@ -541,7 +640,9 @@
 		</div>
 
 		{#if recommendedArtifactPath}
-			<div class="rounded-2xl border border-sky-800/40 bg-sky-950/20 px-4 py-3 text-sm text-sky-100">
+			<div
+				class="rounded-2xl border border-sky-800/40 bg-sky-950/20 px-4 py-3 text-sm text-sky-100"
+			>
 				<p class="ui-wrap-anywhere">
 					Recommended workspace: <span class="font-medium">{recommendedArtifactPath}</span>
 				</p>

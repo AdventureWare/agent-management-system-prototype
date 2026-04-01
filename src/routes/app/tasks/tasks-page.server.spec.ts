@@ -45,6 +45,7 @@ const createTaskMock = vi.hoisted(() =>
 			projectId: string;
 			desiredRoleId: string;
 			artifactPath: string;
+			targetDate?: string | null;
 			status?: string;
 		}) => ({
 			id: `task_${input.title.toLowerCase().replace(/\s+/g, '_')}`,
@@ -63,6 +64,7 @@ const createTaskMock = vi.hoisted(() =>
 			threadSessionId: null,
 			blockedReason: '',
 			dependencyTaskIds: [],
+			targetDate: input.targetDate ?? null,
 			runCount: 0,
 			latestRunId: null,
 			artifactPath: input.artifactPath,
@@ -79,6 +81,9 @@ const startAgentSessionMock = vi.hoisted(() =>
 		runId: 'runner_created'
 	}))
 );
+const getWorkspaceExecutionIssueMock = vi.hoisted(() =>
+	vi.fn<(_: { cwd: string; sandbox: string; scopeLabel?: string }) => string | null>(() => null)
+);
 
 const buildPromptDigestMock = vi.hoisted(() => vi.fn(() => 'digest_create_and_run'));
 const buildTaskThreadNameMock = vi.hoisted(() =>
@@ -88,6 +93,24 @@ const buildTaskThreadNameMock = vi.hoisted(() =>
 	)
 );
 const buildTaskThreadPromptMock = vi.hoisted(() => vi.fn(() => 'task prompt'));
+const listInstalledCodexSkillsMock = vi.hoisted(() =>
+	vi.fn(() => [
+		{
+			id: 'skill-installer',
+			description: 'Install Codex skills',
+			global: true,
+			project: false,
+			sourceLabel: 'Global'
+		},
+		{
+			id: 'web-design-guidelines',
+			description: 'Review UI against guidelines',
+			global: false,
+			project: true,
+			sourceLabel: 'Project'
+		}
+	])
+);
 
 const parseIdeationTaskSuggestionsMock = vi.hoisted(() =>
 	vi.fn(() => [
@@ -121,8 +144,15 @@ vi.mock('$lib/server/control-plane', () => ({
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseTaskStatus: vi.fn((_value: string, fallback: string) => fallback),
 	resolveThreadSandbox: vi.fn(
-		(input: { worker?: { threadSandboxOverride: string | null } | null; provider?: { defaultThreadSandbox: string } | null }) =>
-			input.worker?.threadSandboxOverride ?? input.provider?.defaultThreadSandbox ?? 'workspace-write'
+		(input: {
+			worker?: { threadSandboxOverride: string | null } | null;
+			project?: { defaultThreadSandbox?: string | null } | null;
+			provider?: { defaultThreadSandbox: string } | null;
+		}) =>
+			input.worker?.threadSandboxOverride ??
+			input.project?.defaultThreadSandbox ??
+			input.provider?.defaultThreadSandbox ??
+			'workspace-write'
 	),
 	selectExecutionProvider: vi.fn(
 		(data: ControlPlaneData, worker?: { providerId: string } | null) =>
@@ -168,6 +198,14 @@ vi.mock('$lib/server/task-threads', () => ({
 	buildTaskThreadPrompt: buildTaskThreadPromptMock
 }));
 
+vi.mock('$lib/server/codex-skills', () => ({
+	listInstalledCodexSkills: listInstalledCodexSkillsMock
+}));
+
+vi.mock('$lib/server/task-execution-workspace', () => ({
+	getWorkspaceExecutionIssue: getWorkspaceExecutionIssueMock
+}));
+
 vi.mock('$lib/server/task-ideation', () => ({
 	buildProjectTaskIdeationPrompt: vi.fn(),
 	buildProjectTaskIdeationThreadName: vi.fn(
@@ -190,10 +228,13 @@ describe('tasks page server actions', () => {
 		buildPromptDigestMock.mockClear();
 		buildTaskThreadNameMock.mockClear();
 		buildTaskThreadPromptMock.mockClear();
+		listInstalledCodexSkillsMock.mockClear();
 		createRunMock.mockClear();
 		createTaskMock.mockClear();
 		parseIdeationTaskSuggestionsMock.mockClear();
 		startAgentSessionMock.mockClear();
+		getWorkspaceExecutionIssueMock.mockReset();
+		getWorkspaceExecutionIssueMock.mockReturnValue(null);
 		controlPlaneState.current = {
 			providers: [
 				{
@@ -340,6 +381,7 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Add create and run button');
 		form.set('instructions', 'Add a second action in the create task form.');
+		form.set('targetDate', '2026-04-18');
 
 		const result = await actions.createTask({
 			request: new Request('http://localhost/app/tasks', {
@@ -360,10 +402,40 @@ describe('tasks page server actions', () => {
 			expect.objectContaining({
 				title: 'Add create and run button',
 				status: 'ready',
+				targetDate: '2026-04-18',
 				threadSessionId: null,
 				runCount: 0
 			})
 		);
+	});
+
+	it('rejects an invalid target date during task creation', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Add create and run button');
+		form.set('instructions', 'Add a second action in the create task form.');
+		form.set('targetDate', '04/18/2026');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message: 'Target date must use YYYY-MM-DD format.',
+				targetDate: '04/18/2026'
+			}
+		});
+		expect(createTaskMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				targetDate: '04/18/2026'
+			})
+		);
+		expect(controlPlaneState.saved).toBeNull();
 	});
 
 	it('attaches uploaded files while creating a queued task', async () => {
@@ -400,16 +472,14 @@ describe('tasks page server actions', () => {
 					expect.objectContaining({
 						id: 'attachment_created',
 						name: 'brief.md',
-						path:
-							'/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-brief.md',
+						path: '/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-brief.md',
 						contentType: 'text/markdown',
 						sizeBytes: 5
 					}),
 					expect.objectContaining({
 						id: 'attachment_created',
 						name: 'diagram.png',
-						path:
-							'/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-diagram.png',
+						path: '/tmp/project/agent_output/task-attachments/task_create_task_with_source_files/attachment_created-diagram.png',
 						contentType: 'image/png',
 						sizeBytes: 7
 					})
@@ -446,12 +516,12 @@ describe('tasks page server actions', () => {
 				taskInstructions: 'Create the task and immediately start its work thread.',
 				projectName: 'Agent Management System Prototype',
 				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/agent_output'
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				availableSkillNames: ['skill-installer', 'web-design-guidelines']
 			})
 		);
 		expect(startAgentSessionMock).toHaveBeenCalledWith({
-			name:
-				'Task thread · Create and run from the task form · Agent Management System Prototype · task_create_and_run_from_the_task_form',
+			name: 'Task thread · Create and run from the task form · Agent Management System Prototype · task_create_and_run_from_the_task_form',
 			cwd: '/tmp/project',
 			prompt: 'task prompt',
 			sandbox: 'workspace-write',
@@ -490,8 +560,35 @@ describe('tasks page server actions', () => {
 		);
 	});
 
+	it('prefers the project default sandbox over the provider default during create-and-run', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.defaultThreadSandbox =
+			'danger-full-access';
+		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox =
+			'read-only';
+
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Launch with project sandbox');
+		form.set('instructions', 'Use the project sandbox preference.');
+		form.set('submitMode', 'createAndRun');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(startAgentSessionMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sandbox: 'danger-full-access'
+			})
+		);
+	});
+
 	it('uses the provider thread sandbox default when launching from create-and-run', async () => {
-		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox = 'read-only';
+		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox =
+			'read-only';
 
 		const form = new FormData();
 		form.set('projectId', 'project_ams');
@@ -511,5 +608,35 @@ describe('tasks page server actions', () => {
 				sandbox: 'read-only'
 			})
 		);
+	});
+
+	it('rejects create-and-run when the project root is not writable in the sandbox', async () => {
+		getWorkspaceExecutionIssueMock.mockReturnValue(
+			'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
+		);
+
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Create and run from the task form');
+		form.set('instructions', 'Create the task and immediately start its work thread.');
+		form.set('submitMode', 'createAndRun');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message:
+					'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
+			}
+		});
+		expect(startAgentSessionMock).not.toHaveBeenCalled();
+		expect(createRunMock).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved).toBeNull();
 	});
 });

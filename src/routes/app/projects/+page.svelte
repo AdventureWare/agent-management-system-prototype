@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -8,9 +10,17 @@
 	import PathField from '$lib/components/PathField.svelte';
 
 	let { data, form } = $props();
+	const CREATE_PROJECT_DRAFT_KEY = 'ams:create-project';
+
+	let createProjectDraftReady = $state(false);
+	let projectName = $state('');
+	let projectSummary = $state('');
 	let projectRootFolder = $state('');
 	let defaultArtifactRoot = $state('');
 	let defaultRepoPath = $state('');
+	let defaultRepoUrl = $state('');
+	let defaultBranch = $state('');
+	let defaultThreadSandbox = $state('');
 	let query = $state('');
 
 	function modalShouldStartOpen() {
@@ -38,7 +48,8 @@
 			project.defaultArtifactRoot,
 			project.defaultRepoPath,
 			project.defaultRepoUrl,
-			project.defaultBranch
+			project.defaultBranch,
+			project.defaultThreadSandbox ?? ''
 		]
 			.join(' ')
 			.toLowerCase()
@@ -52,6 +63,56 @@
 	function closeCreateModal() {
 		isCreateModalOpen = false;
 	}
+
+	onMount(() => {
+		if (createSuccess) {
+			clearFormDraft(CREATE_PROJECT_DRAFT_KEY);
+			createProjectDraftReady = true;
+			return;
+		}
+
+		const savedDraft = readFormDraft<{
+			name: string;
+			summary: string;
+			projectRootFolder: string;
+			defaultArtifactRoot: string;
+			defaultRepoPath: string;
+			defaultRepoUrl: string;
+			defaultBranch: string;
+			defaultThreadSandbox: string;
+		}>(CREATE_PROJECT_DRAFT_KEY);
+
+		if (savedDraft) {
+			projectName = savedDraft.name ?? '';
+			projectSummary = savedDraft.summary ?? '';
+			projectRootFolder = savedDraft.projectRootFolder ?? '';
+			defaultArtifactRoot = savedDraft.defaultArtifactRoot ?? '';
+			defaultRepoPath = savedDraft.defaultRepoPath ?? '';
+			defaultRepoUrl = savedDraft.defaultRepoUrl ?? '';
+			defaultBranch = savedDraft.defaultBranch ?? '';
+			defaultThreadSandbox = savedDraft.defaultThreadSandbox ?? '';
+			isCreateModalOpen = true;
+		}
+
+		createProjectDraftReady = true;
+	});
+
+	$effect(() => {
+		if (!createProjectDraftReady) {
+			return;
+		}
+
+		writeFormDraft(CREATE_PROJECT_DRAFT_KEY, {
+			name: projectName,
+			summary: projectSummary,
+			projectRootFolder,
+			defaultArtifactRoot,
+			defaultRepoPath,
+			defaultRepoUrl,
+			defaultBranch,
+			defaultThreadSandbox
+		});
+	});
 </script>
 
 <AppPage>
@@ -153,6 +214,10 @@
 								<span class="text-slate-500">Branch:</span>
 								{project.defaultBranch || 'Not configured'}
 							</p>
+							<p class="ui-clamp-2">
+								<span class="text-slate-500">Thread sandbox:</span>
+								{project.defaultThreadSandbox || 'Inherit provider default'}
+							</p>
 						</div>
 
 						<div
@@ -183,11 +248,12 @@
 		description="Capture durable defaults here. Editing and linked activity live on the detail page after creation."
 		closeLabel="Close add project form"
 	>
-		<form class="space-y-6" method="POST" action="?/createProject">
+		<form class="space-y-6" method="POST" action="?/createProject" data-persist-scope="manual">
 			<div class="space-y-4">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 					<input
+						bind:value={projectName}
 						class="input text-white placeholder:text-slate-500"
 						name="name"
 						placeholder="Kwipoo"
@@ -198,6 +264,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
 					<textarea
+						bind:value={projectSummary}
 						class="textarea min-h-28 text-white placeholder:text-slate-500"
 						name="summary"
 						placeholder="What this project covers and what defaults other work should inherit."
@@ -248,6 +315,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Default repo URL</span>
 						<input
+							bind:value={defaultRepoUrl}
 							class="input text-white placeholder:text-slate-500"
 							name="defaultRepoUrl"
 							placeholder="git@github.com:org/repo.git"
@@ -258,10 +326,31 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Default branch</span>
 					<input
+						bind:value={defaultBranch}
 						class="input text-white placeholder:text-slate-500"
 						name="defaultBranch"
 						placeholder="main"
 					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">
+						Default thread sandbox
+					</span>
+					<select
+						bind:value={defaultThreadSandbox}
+						class="select text-white"
+						name="defaultThreadSandbox"
+					>
+						<option value="">Inherit provider default</option>
+						{#each data.sandboxOptions as sandbox (sandbox)}
+							<option value={sandbox}>{sandbox}</option>
+						{/each}
+					</select>
+					<span class="mt-2 block text-xs text-slate-500">
+						Use this when one project consistently needs a broader sandbox than the global provider
+						default.
+					</span>
 				</label>
 			</div>
 

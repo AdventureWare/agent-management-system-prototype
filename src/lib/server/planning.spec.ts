@@ -191,22 +191,31 @@ describe('planning helpers', () => {
 	});
 
 	it('builds planning metrics, goal summaries, and worker loads', () => {
-		const snapshot = buildPlanningPageData(buildFixture(), 'horizon_active');
+		const snapshot = buildPlanningPageData(buildFixture(), {
+			startDate: '2026-04-01',
+			endDate: '2026-04-15',
+			includeUnscheduled: true
+		});
 
-		expect(snapshot.metrics.horizonCount).toBe(2);
+		expect(snapshot.metrics.savedWindowCount).toBe(2);
 		expect(snapshot.metrics.goalCount).toBe(1);
 		expect(snapshot.metrics.taskCount).toBe(2);
+		expect(snapshot.metrics.scheduledTaskCount).toBe(1);
 		expect(snapshot.metrics.plannedHours).toBe(12);
 		expect(snapshot.metrics.totalCapacityHours).toBe(26);
 		expect(snapshot.metrics.unestimatedTaskCount).toBe(1);
-		expect(snapshot.horizonGoals[0]).toEqual(
+		expect(snapshot.metrics.unscheduledTaskCount).toBe(1);
+		expect(snapshot.goalsInScope[0]).toEqual(
 			expect.objectContaining({
 				id: 'goal_1',
 				taskCount: 2,
-				estimatedHours: 12
+				scheduledTaskCount: 1,
+				unscheduledTaskCount: 1,
+				plannedHours: 12
 			})
 		);
-		expect(snapshot.availableGoals.map((goal) => goal.id)).toEqual(['goal_2']);
+		expect(snapshot.scheduledTasks.map((task) => task.id)).toEqual(['task_1']);
+		expect(snapshot.unscheduledTasks.map((task) => task.id)).toEqual(['task_2']);
 		expect(snapshot.workerLoads.find((worker) => worker.id === 'worker_1')).toEqual(
 			expect.objectContaining({
 				plannedHours: 12,
@@ -214,5 +223,18 @@ describe('planning helpers', () => {
 				remainingHours: 6
 			})
 		);
+	});
+
+	it('narrows planning scope by worker filter', () => {
+		const snapshot = buildPlanningPageData(buildFixture(), {
+			startDate: '2026-04-01',
+			endDate: '2026-04-15',
+			workerId: 'worker_1',
+			includeUnscheduled: true
+		});
+
+		expect(snapshot.scheduledTasks.map((task) => task.id)).toEqual(['task_1']);
+		expect(snapshot.unscheduledTasks).toEqual([]);
+		expect(snapshot.goalsInScope.map((goal) => goal.id)).toEqual(['goal_1']);
 	});
 });

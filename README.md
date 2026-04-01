@@ -1,13 +1,14 @@
 # Agent Management System Prototype
 
-This prototype is the start of a very small remote-work control plane for Codex.
+This prototype is the start of a small remote-work control plane for Codex.
 
 Current scope:
 
-- server-backed Codex session data in `data/agent-sessions.json`
-- one main UI at `/app/sessions`
-- background Codex session launching and follow-up prompts
-- logs, state files, and last-message capture per run
+- server-backed task, run, worker, and thread data in `data/control-plane.json` and `data/agent-sessions.json`
+- a task-first operator UI under `/app/*`
+- background Codex thread launching, reuse, and follow-up prompts
+- run history, prompt digests, logs, artifacts, and last-message capture
+- supporting control-plane directories for projects, goals, planning windows, workers, roles, and providers
 - self-improvement opportunity analysis from tasks, runs, reviews, and thread state
 - session APIs under `/api/agents/sessions/*`
 
@@ -22,6 +23,24 @@ The immediate problem is not advanced orchestration. It is having one shared pla
 - send a follow-up prompt into the same session later
 
 That gives you the first useful "work while I am away" loop before adding auth, queueing, or richer orchestration.
+
+## How to read the prototype right now
+
+The current center of gravity is:
+
+- `Tasks`: the main work queue and launch point
+- `Runs`: the execution ledger
+- `Threads` (stored as sessions): the resumable Codex context container
+
+The rest of the top-level surfaces are real, but mostly play supporting roles today:
+
+- `Projects`: workspace and repo defaults
+- `Goals`: outcome grouping and relationship mapping
+- `Planning`: date-window review over the existing goals/tasks/workers model
+- `Workers`, `Roles`, `Providers`: routing and capacity metadata
+- `Home`: a cross-cutting operator dashboard
+
+See `docs/current-product-surfaces.md` for a route-by-route audit of what each surface is currently doing in code.
 
 ## Run locally
 
@@ -88,3 +107,4 @@ The runner script is:
 ## Product docs
 
 - `docs/product-spec.md`
+- `docs/current-product-surfaces.md`

@@ -157,6 +157,9 @@ describe('/app/sessions/+page.svelte', () => {
 			id: 'run-active',
 			sessionId: 'session-active',
 			lastMessage: null,
+			logTail: [
+				'{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still running."}}'
+			],
 			state: {
 				status: 'running',
 				pid: 123,
@@ -232,7 +235,7 @@ describe('/app/sessions/+page.svelte', () => {
 			} as never
 		});
 
-		await expect.element(page.getByText('Live activity')).toBeVisible();
+		await expect.element(page.getByText('Confirmed active')).toBeVisible();
 		await expect
 			.element(page.getByRole('link', { name: /View thread details for Active session/i }))
 			.toHaveAttribute('href', '/app/sessions/session-active');
@@ -246,6 +249,9 @@ describe('/app/sessions/+page.svelte', () => {
 			id: 'run-active',
 			sessionId: 'session-active',
 			lastMessage: null,
+			logTail: [
+				'{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still running."}}'
+			],
 			state: {
 				status: 'running',
 				pid: 123,

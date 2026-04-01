@@ -9,6 +9,7 @@ import {
 	createTask,
 	deleteTask,
 	projectMatchesPath,
+	resolveThreadSandbox,
 	syncGovernanceQueues,
 	summarizeControlPlane,
 	taskHasUnmetDependencies
@@ -347,6 +348,7 @@ describe('control-plane helpers', () => {
 		expect(project.defaultRepoPath).toBe('');
 		expect(project.defaultRepoUrl).toBe('');
 		expect(project.defaultBranch).toBe('');
+		expect(project.defaultThreadSandbox).toBeNull();
 	});
 
 	it('strips shell-style wrapping quotes from project paths', () => {
@@ -377,6 +379,15 @@ describe('control-plane helpers', () => {
 		expect(projectMatchesPath(project, '/tmp/prototype-app')).toBe(false);
 		expect(projectMatchesPath(project, '/tmp/checkouts/prototype/src')).toBe(true);
 		expect(projectMatchesPath(project, '/tmp/unrelated/output')).toBe(false);
+	});
+
+	it('prefers the project default sandbox before the provider default', () => {
+		expect(
+			resolveThreadSandbox({
+				project: { defaultThreadSandbox: 'danger-full-access' },
+				provider: { defaultThreadSandbox: 'workspace-write' }
+			})
+		).toBe('danger-full-access');
 	});
 
 	it('creates providers with configurable setup defaults', () => {

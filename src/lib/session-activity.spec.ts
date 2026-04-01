@@ -50,13 +50,72 @@ describe('session activity labels', () => {
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,
-				lastActivityAt: '2026-03-31T09:58:00.000Z'
+				lastActivityAt: '2026-03-31T09:59:20.000Z'
 			}),
 			Date.parse('2026-03-31T10:00:00.000Z')
 		);
 
 		expect(meta.label).toBe('Working');
-		expect(meta.detail).toBe('The agent is still working, but no saved reply has landed yet.');
+		expect(meta.detail).toBe('The run is marked active, but only minimal local runner output is visible so far.');
+	});
+
+	it('marks recent structured output as confirmed active', () => {
+		const meta: SessionActivityMeta = getSessionActivityMeta(
+			createSession({
+				sessionState: 'working',
+				latestRunStatus: 'running',
+				hasActiveRun: true,
+				canResume: false,
+				lastActivityAt: '2026-03-31T09:59:56.000Z',
+				latestRun: {
+					id: 'run-1',
+					sessionId: 'session-1',
+					mode: 'start',
+					prompt: 'start work',
+					requestedThreadId: null,
+					createdAt: '2026-03-31T09:59:00.000Z',
+					updatedAt: '2026-03-31T09:59:56.000Z',
+					logPath: '/tmp/log',
+					statePath: '/tmp/state',
+					messagePath: '/tmp/message',
+					configPath: '/tmp/config',
+					state: {
+						status: 'running',
+						pid: 123,
+						startedAt: '2026-03-31T09:59:00.000Z',
+						finishedAt: null,
+						exitCode: null,
+						signal: null,
+						codexThreadId: 'thread-1'
+					},
+					lastMessage: null,
+					logTail: ['{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still running."}}'],
+					activityAt: '2026-03-31T09:59:56.000Z'
+				}
+			}),
+			Date.parse('2026-03-31T10:00:00.000Z')
+		);
+
+		expect(meta.label).toBe('Confirmed active');
+		expect(meta.detail).toBe('Recent Codex output confirms the run is still moving.');
+	});
+
+	it('marks older active runs without recent proof as suspect stalled', () => {
+		const meta: SessionActivityMeta = getSessionActivityMeta(
+			createSession({
+				sessionState: 'waiting',
+				latestRunStatus: 'running',
+				hasActiveRun: true,
+				canResume: false,
+				lastActivityAt: '2026-03-31T09:55:00.000Z'
+			}),
+			Date.parse('2026-03-31T10:00:00.000Z')
+		);
+
+		expect(meta.label).toBe('Suspect stalled');
+		expect(meta.detail).toBe(
+			'The run is still marked active, but there is no recent structured Codex output to prove it is moving.'
+		);
 	});
 
 	it('describes a resumable thread as available', () => {

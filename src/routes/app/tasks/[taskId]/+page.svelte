@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { PlayIcon, SaveIcon } from '@lucide/svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
+	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
@@ -27,6 +27,7 @@
 	);
 	let threadAssignSuccess = $derived(form?.ok && form?.successAction === 'updateTaskThread');
 	let launchSuccess = $derived(form?.ok && form?.successAction === 'launchTaskSession');
+	let recoverSuccess = $derived(form?.ok && form?.successAction === 'recoverTaskSession');
 	let showAllCandidateThreads = $state(false);
 	let visibleCandidateThreads = $derived(
 		showAllCandidateThreads ? data.candidateThreads : data.candidateThreads.slice(0, 3)
@@ -73,6 +74,25 @@
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
 
+	function formatDateLabel(value: string | null | undefined) {
+		if (!value) {
+			return 'Not set';
+		}
+
+		const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
+
+		if (!year || !month || !day) {
+			return value;
+		}
+
+		return new Intl.DateTimeFormat('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		}).format(new Date(Date.UTC(year, month - 1, day)));
+	}
+
 	function formatAttachmentSize(sizeBytes: number) {
 		if (sizeBytes < 1024) {
 			return `${sizeBytes} B`;
@@ -104,17 +124,6 @@
 	let runTaskButtonLabel = $derived(
 		taskHasActiveRun ? formatActiveRunStateLabel(data.task.activeRun?.status) : 'Run task'
 	);
-	let runTaskHelperLabel = $derived.by(() => {
-		if (taskHasActiveRun) {
-			return 'Unavailable while this task is active';
-		}
-
-		if (!taskIsReadyToRun) {
-			return 'Ready status required';
-		}
-
-		return 'Queue execution now';
-	});
 	let runTaskDisabledTitle = $derived.by(() => {
 		if (taskHasActiveRun) {
 			return 'A run is already in progress for this task.';
@@ -156,6 +165,40 @@
 		title={data.task.title}
 		description={data.task.summary}
 	>
+		{#snippet actions()}
+			<div class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
+				<button
+					class="btn border border-slate-700 font-semibold text-slate-100"
+					type="submit"
+					form="task-update-form"
+				>
+					Save changes
+				</button>
+				<button
+					class={`btn font-semibold transition ${
+						runTaskDisabled
+							? 'cursor-not-allowed border border-slate-700 bg-slate-800/80 text-slate-400'
+							: 'preset-filled-primary-500'
+					}`}
+					type="submit"
+					form="task-update-form"
+					formaction="?/launchTaskSession"
+					disabled={runTaskDisabled}
+					aria-disabled={runTaskDisabled}
+					title={runTaskDisabledTitle || undefined}
+				>
+					{runTaskButtonLabel}
+				</button>
+				{#if data.task.linkThread}
+					<a
+						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+					>
+						{threadActionLabel()}
+					</a>
+				{/if}
+			</div>
+		{/snippet}
 		{#snippet meta()}
 			<div class="flex flex-wrap items-center gap-3">
 				<span
@@ -168,94 +211,156 @@
 		{/snippet}
 	</DetailHeader>
 
-	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Project</p>
-			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">{data.task.projectName}</p>
-			{#if data.project}
-				<a
-					class="mt-2 inline-flex text-sm text-sky-300 transition hover:text-sky-200"
-					href={resolve(`/app/projects/${data.project.id}`)}
-				>
-					Open project details
-				</a>
-			{/if}
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Assignee</p>
-			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">{data.task.assigneeName}</p>
-			<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-				Desired role: {data.task.desiredRoleId || 'Not set'}
-			</p>
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Runs recorded</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{data.task.runCount}</p>
-			<p class="mt-2 text-sm text-slate-400">Updated {data.task.updatedAtLabel}</p>
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Thread access</p>
-			{#if data.task.linkThread}
-				<div class="mt-3 flex flex-wrap items-center gap-3">
-					<a
-						class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
-					>
-						{threadActionLabel()}
-					</a>
-					<p class="ui-wrap-anywhere text-sm font-medium text-white">{data.task.linkThread.name}</p>
-				</div>
-				{#if data.task.statusThread}
-					<div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
-						<SessionActivityIndicator compact session={data.task.statusThread} />
+	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+		<DetailFactCard
+			label="Project"
+			value={data.task.projectName}
+			href={data.project ? resolve(`/app/projects/${data.project.id}`) : undefined}
+			hrefLabel={data.project ? 'Open project details' : undefined}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+		/>
+		<DetailFactCard
+			label="Assignee"
+			value={data.task.assigneeName}
+			detail={`Desired role: ${data.task.desiredRoleId || 'Not set'}`}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+			detailClass="ui-wrap-anywhere mt-2 text-sm text-slate-400"
+		/>
+		<DetailFactCard
+			label="Runs recorded"
+			value={data.task.runCount}
+			detail={`Updated ${data.task.updatedAtLabel}`}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="mt-3 text-3xl font-semibold text-white"
+			detailClass="mt-2 text-sm text-slate-400"
+		/>
+		<DetailFactCard
+			label="Target date"
+			value={formatDateLabel(data.task.targetDate)}
+			detail={
+				data.task.targetDate
+					? `Scheduled for ${data.task.targetDate}`
+					: 'Set a task-level target date to make queue timing visible.'
+			}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="mt-3 text-lg font-semibold text-white"
+			detailClass="mt-2 text-sm text-slate-400"
+		/>
+		<DetailFactCard
+			label="Thread access"
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+		>
+			{#snippet children()}
+				{#if data.task.linkThread}
+					<div class="mt-1 flex flex-wrap items-center gap-3">
+						<a
+							class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+							href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						>
+							{threadActionLabel()}
+						</a>
+						<p class="ui-wrap-anywhere text-sm font-medium text-white">
+							{data.task.linkThread.name}
+						</p>
 					</div>
-				{/if}
-				{#if data.task.linkThread.id !== data.task.statusThread?.id}
-					<p class="mt-2 text-xs text-slate-500">
-						{formatSessionStateLabel(data.task.linkThread.sessionState)}
+					{#if data.task.statusThread}
+						<div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+							<SessionActivityIndicator compact session={data.task.statusThread} />
+						</div>
+					{/if}
+					{#if data.task.linkThread.id !== data.task.statusThread?.id}
+						<p class="mt-2 text-xs text-slate-500">
+							{formatSessionStateLabel(data.task.linkThread.sessionState)}
+						</p>
+					{/if}
+				{:else}
+					<p class="mt-1 text-lg font-semibold text-white">None yet</p>
+					<p class="mt-2 text-sm text-slate-400">
+						Launch the task to create a thread, or assign an existing thread below.
 					</p>
 				{/if}
-			{:else}
-				<p class="mt-3 text-lg font-semibold text-white">None yet</p>
-				<p class="mt-2 text-sm text-slate-400">
-					Launch the task to create a thread, or assign an existing thread below.
-				</p>
-			{/if}
-		</article>
+			{/snippet}
+		</DetailFactCard>
 	</div>
 
+	<section class="card border border-slate-800 bg-slate-950/70 px-5 py-4">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Skill access</p>
+				<p class="mt-2 text-sm text-white">
+					{data.availableSkills.totalCount === 0
+						? 'No installed skills were discovered for this task workspace yet.'
+						: `${data.availableSkills.totalCount} installed skill${data.availableSkills.totalCount === 1 ? '' : 's'} are available to new task threads.`}
+				</p>
+				<p class="mt-1 text-sm text-slate-400">
+					{data.availableSkills.projectCount} project-local · {data.availableSkills.globalCount}
+					global
+				</p>
+			</div>
+
+			{#if data.availableSkills.previewSkills.length > 0}
+				<div class="flex flex-wrap gap-2 lg:max-w-2xl lg:justify-end">
+					{#each data.availableSkills.previewSkills as skill (skill.id)}
+						<span
+							class="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1 text-xs text-slate-200"
+							title={skill.description || undefined}
+						>
+							{skill.id}
+							<span class="text-slate-500"> · {skill.sourceLabel}</span>
+						</span>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</section>
+
 	{#if form?.message}
-		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+		<p
+			aria-live="polite"
+			class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+		>
 			{form.message}
 		</p>
 	{/if}
 
 	{#if updateSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Task updates saved.
 		</p>
 	{:else if attachSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			File attached to the task.
 		</p>
 	{:else if removeAttachmentSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Attachment removed from the task.
 		</p>
 	{:else if threadAssignSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Thread assignment updated.
 		</p>
 	{:else if launchSuccess}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Task queued in its work thread.
@@ -266,15 +371,76 @@
 				for `{form.sessionId}`.
 			{/if}
 		</p>
+	{:else if recoverSuccess}
+		<p
+			aria-live="polite"
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Recovered the stalled run and queued fresh work.
+			{#if form?.sessionId}
+				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+					Open thread details
+				</a>
+				for `{form.sessionId}`.
+			{/if}
+		</p>
 	{:else if governanceSuccessMessage}
 		<p
+			aria-live="polite"
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			{governanceSuccessMessage}
 		</p>
 	{/if}
 
-	<nav class="card border border-slate-800/90 bg-slate-950/70 px-5 py-4">
+	{#if runTaskDisabled}
+		<section class="card border border-sky-900/50 bg-sky-950/25 px-5 py-4">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
+						Run availability
+					</p>
+					<p class="mt-2 text-sm font-medium text-sky-100">{runTaskDisabledTitle}</p>
+					<p class="mt-1 text-sm text-sky-100/80">{runTaskDisabledMessage}</p>
+					{#if data.stalledRecovery?.eligible}
+						<div class="mt-4 rounded-2xl border border-amber-900/50 bg-amber-950/25 px-4 py-3">
+							<p class="text-xs font-semibold tracking-[0.16em] text-amber-300 uppercase">
+								Stalled recovery
+							</p>
+							<p class="mt-2 text-sm font-medium text-amber-100">
+								{data.stalledRecovery.headline}
+							</p>
+							<p class="mt-1 text-sm text-amber-100/80">{data.stalledRecovery.detail}</p>
+						</div>
+					{/if}
+				</div>
+				<div class="flex flex-col gap-3 sm:items-end">
+					{#if taskHasActiveRun && data.task.linkThread}
+						<a
+							class="inline-flex items-center justify-center rounded-full border border-sky-800/60 px-4 py-2 text-sm font-medium text-sky-200 transition hover:border-sky-500/60 hover:text-sky-100"
+							href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						>
+							{threadActionLabel() || 'Open current work thread'}
+						</a>
+					{/if}
+					{#if data.stalledRecovery?.eligible}
+						<button
+							class="inline-flex items-center justify-center rounded-full border border-amber-700/70 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-500/60 hover:text-white"
+							type="submit"
+							form="task-update-form"
+							formaction="?/recoverTaskSession"
+						>
+							Recover stalled run
+						</button>
+					{/if}
+				</div>
+			</div>
+		</section>
+	{/if}
+
+	<nav
+		class="sticky top-4 z-10 card border border-slate-800/90 bg-slate-950/85 px-5 py-4 backdrop-blur"
+	>
 		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 			<div>
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
@@ -320,8 +486,9 @@
 	</nav>
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-		<form id="task-configuration" method="POST" action="?/updateTask">
+		<form id="task-update-form" method="POST" action="?/updateTask">
 			<DetailSection
+				id="task-configuration"
 				eyebrow="Task details"
 				title="Edit task brief and execution settings"
 				description="Keep the collection page lightweight. Use this page to edit the task itself."
@@ -364,7 +531,7 @@
 						</p>
 					</div>
 
-					<div class="mt-5 grid gap-4 lg:grid-cols-[1fr_220px]">
+					<div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
 						<label class="block">
 							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
 							<select class="select text-white" name="projectId" required>
@@ -385,6 +552,16 @@
 									</option>
 								{/each}
 							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Target date</span>
+							<input
+								class="input text-white"
+								name="targetDate"
+								type="date"
+								value={data.task.targetDate ?? ''}
+							/>
 						</label>
 					</div>
 
@@ -413,98 +590,32 @@
 					</div>
 
 					<div class="mt-5 grid gap-4 sm:grid-cols-2">
-						<div
-							class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300"
-						>
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Created
-							</p>
-							<p class="mt-2">{new Date(data.task.createdAt).toLocaleString()}</p>
-						</div>
-						<div
-							class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300"
-						>
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Artifact path
-							</p>
-							<p class="ui-wrap-anywhere mt-2">{data.task.artifactPath || 'Not set'}</p>
-						</div>
+						<DetailFactCard
+							label="Created"
+							value={new Date(data.task.createdAt).toLocaleString()}
+							class="rounded-2xl p-4 text-sm text-slate-300"
+							valueClass="mt-2 text-sm text-slate-300"
+						/>
+						<DetailFactCard
+							label="Artifact path"
+							value={data.task.artifactPath || 'Not set'}
+							class="rounded-2xl p-4 text-sm text-slate-300"
+							valueClass="ui-wrap-anywhere mt-2 text-sm text-slate-300"
+						/>
 					</div>
 				</section>
 
-				<div
-					class="rounded-3xl border border-sky-900/50 bg-gradient-to-br from-slate-900 via-slate-950 to-sky-950/60 p-4 shadow-[0_18px_60px_-28px_rgba(14,165,233,0.45)]"
-				>
-					<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-						<div class="max-w-xl">
-							<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-								Primary actions
-							</p>
-							<h3 class="mt-2 text-lg font-semibold text-white">Save changes or queue work now</h3>
-							<p class="mt-2 text-sm text-slate-300">
-								Use Save to update the task brief. Use Run to launch the task with the current form
-								values and continue execution in its work thread.
-							</p>
-						</div>
-
-						<div class="grid gap-3 sm:grid-cols-2 xl:min-w-[25rem]">
-							<button
-								class="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-slate-600 bg-slate-900/85 px-5 py-4 text-left font-semibold text-slate-50 shadow-[0_12px_30px_-20px_rgba(15,23,42,1)] transition hover:border-slate-500 hover:bg-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-200"
-								type="submit"
-							>
-								<span>
-									<span class="block text-sm font-semibold">Save task</span>
-									<span
-										class="mt-1 block text-xs font-medium tracking-[0.16em] text-slate-400 uppercase"
-									>
-										Update details only
-									</span>
-								</span>
-								<SaveIcon class="size-4 shrink-0 text-slate-300" />
-							</button>
-
-							<button
-								class={`flex min-h-14 items-center justify-between gap-3 rounded-2xl border px-5 py-4 text-left font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 ${
-									runTaskDisabled
-										? 'cursor-not-allowed border-slate-700 bg-slate-800/80 text-slate-400 shadow-none focus-visible:outline-slate-500'
-										: 'border-sky-700/80 bg-sky-500 text-slate-950 shadow-[0_18px_40px_-20px_rgba(56,189,248,0.9)] hover:border-sky-300 hover:bg-sky-400 focus-visible:outline-sky-200'
-								}`}
-								type="submit"
-								formaction="?/launchTaskSession"
-								disabled={runTaskDisabled}
-								aria-disabled={runTaskDisabled}
-							>
-								<span>
-									<span class="block text-sm font-semibold">{runTaskButtonLabel}</span>
-									<span
-										class={`mt-1 block text-xs font-medium tracking-[0.16em] uppercase ${
-											runTaskDisabled ? 'text-slate-500' : 'text-sky-950/80'
-										}`}
-									>
-										{runTaskHelperLabel}
-									</span>
-								</span>
-								<PlayIcon class="size-4 shrink-0" />
-							</button>
-						</div>
+				<div class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+							Save behavior
+						</p>
+						<h3 class="text-lg font-semibold text-white">Actions stay in the page header</h3>
+						<p class="text-sm text-slate-400">
+							Save changes or run the task from the top of the page so you do not need to scroll
+							back to find the primary controls after editing.
+						</p>
 					</div>
-
-					{#if runTaskDisabled}
-						<div
-							class="mt-4 rounded-2xl border border-sky-900/50 bg-sky-950/30 px-4 py-3 text-sm text-sky-100"
-						>
-							<p class="font-medium">{runTaskDisabledTitle}</p>
-							<p class="mt-1 text-sky-100/80">{runTaskDisabledMessage}</p>
-							{#if taskHasActiveRun && data.task.linkThread}
-								<a
-									class="mt-3 inline-flex text-sm text-sky-200 underline underline-offset-4 transition hover:text-sky-100"
-									href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
-								>
-									{threadActionLabel() || 'Open current work thread'}
-								</a>
-							{/if}
-						</div>
-					{/if}
 				</div>
 			</DetailSection>
 		</form>

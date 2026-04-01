@@ -16,6 +16,36 @@ export type SessionActivityMeta = {
 	animate: boolean;
 };
 
+function hasStructuredProgressEvidence(session: AgentSessionDetail) {
+	if (session.latestRun?.lastMessage) {
+		return true;
+	}
+
+	return (
+		session.latestRun?.logTail.some(
+			(line) =>
+				line.startsWith('{"type":"item.started"') ||
+				line.startsWith('{"type":"item.completed"') ||
+				line.startsWith('{"type":"agent_message"') ||
+				line.startsWith('{"type":"response_item"') ||
+				line.startsWith('{"type":"event_msg"')
+		) ?? false
+	);
+}
+
+function hasStartupEvidence(session: AgentSessionDetail) {
+	if (session.latestRun?.state?.codexThreadId) {
+		return true;
+	}
+
+	return (
+		session.latestRun?.logTail.some(
+			(line) =>
+				line.startsWith('{"type":"thread.started"') || line.startsWith('{"type":"turn.started"')
+		) ?? false
+	);
+}
+
 export function formatSessionStateLabel(state: AgentSessionDetail['sessionState']) {
 	switch (state) {
 		case 'starting':
@@ -100,19 +130,44 @@ export function getSessionActivityMeta(
 				animate: true
 			};
 		case 'waiting':
-			return {
-				label: isLive ? 'Live activity' : formatSessionStateLabel(session.sessionState),
-				detail: 'The agent is still working, but no saved reply has landed yet.',
-				ageLabel,
-				tone: 'live',
-				animate: true
-			};
 		case 'working':
+			if (!isRecent) {
+				return {
+					label: 'Suspect stalled',
+					detail: hasStructuredProgressEvidence(session)
+						? 'This run showed real Codex output earlier, but nothing new has landed recently.'
+						: 'The run is still marked active, but there is no recent structured Codex output to prove it is moving.',
+					ageLabel,
+					tone: 'attention',
+					animate: false
+				};
+			}
+
+			if (hasStructuredProgressEvidence(session)) {
+				return {
+					label: isLive ? 'Confirmed active' : 'Confirmed running',
+					detail: 'Recent Codex output confirms the run is still moving.',
+					ageLabel,
+					tone: 'live',
+					animate: true
+				};
+			}
+
+			if (hasStartupEvidence(session)) {
+				return {
+					label: isLive ? 'Starting up' : 'Awaiting proof',
+					detail: 'The run has startup output, but there is not enough work output yet to confirm progress.',
+					ageLabel,
+					tone: 'progress',
+					animate: true
+				};
+			}
+
 			return {
-				label: isLive ? 'Live activity' : formatSessionStateLabel(session.sessionState),
-				detail: 'The latest run is still in progress and has already emitted thread output.',
+				label: isLive ? 'Awaiting proof' : formatSessionStateLabel(session.sessionState),
+				detail: 'The run is marked active, but only minimal local runner output is visible so far.',
 				ageLabel,
-				tone: 'live',
+				tone: 'progress',
 				animate: true
 			};
 		case 'ready':

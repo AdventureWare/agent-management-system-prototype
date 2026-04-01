@@ -12,6 +12,7 @@ export function buildTaskThreadPrompt(input: {
 	projectName: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
+	availableSkillNames?: string[];
 }) {
 	const contextLines = [
 		`Task: ${input.taskName}`,
@@ -21,6 +22,10 @@ export function buildTaskThreadPrompt(input: {
 
 	if (input.defaultArtifactRoot) {
 		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
+	}
+
+	if (input.availableSkillNames?.length) {
+		contextLines.push(`Installed skills available: ${input.availableSkillNames.join(', ')}`);
 	}
 
 	return [

@@ -15,31 +15,36 @@
 			Agent Control Plane
 		</p>
 		<h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-			A minimal control plane for keeping Codex working on your laptop while you are away.
+			A task-first control plane for keeping Codex work moving while you are away.
 		</h1>
 		<p class="max-w-3xl text-base text-slate-300 sm:text-lg">
-			The first usable goal is simple: remotely assign a task, start a background Codex run, and
-			check how many runs are active or finished.
+			The real workflow today is tasks, runs, and resumable threads. Projects, goals, planning,
+			workers, roles, and providers are already modeled, but they currently support that core loop
+			more than they replace it.
 		</p>
 		<div class="flex flex-wrap gap-3">
 			<a
 				class="rounded-lg bg-sky-500 px-4 py-2 font-medium text-slate-950"
-				href={resolve('/app/sessions')}
+				href={resolve('/app/home')}
 			>
-				Open remote work
+				Open operator home
 			</a>
 			<a
 				class="rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-100"
 				href={resolve('/app/sessions')}
 			>
-				Launch Codex run
+				Open threads
 			</a>
 		</div>
 	</div>
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Server-backed</p>
+			<p class="text-sm text-slate-400">Projects</p>
+			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.projectCount}</p>
+		</div>
+		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+			<p class="text-sm text-slate-400">Goals</p>
 			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.goalCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
@@ -47,33 +52,29 @@
 			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.runningTaskCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Blocked tasks</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.blockedTaskCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Workers online</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.onlineWorkerCount}</p>
+			<p class="text-sm text-slate-400">Runs recorded</p>
+			<p class="mt-2 text-3xl font-semibold text-white">{data.summary.runCount}</p>
 		</div>
 	</div>
 
 	<div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
 		<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
-			<h2 class="text-xl font-semibold text-white">What this prototype handles now</h2>
+			<h2 class="text-xl font-semibold text-white">Primary workflow right now</h2>
 			<ul class="mt-4 space-y-3 text-sm text-slate-300">
-				<li>Background Codex runs launched from a browser.</li>
-				<li>Logs and last-message capture on disk.</li>
-				<li>A single page to monitor active and finished runs.</li>
-				<li>Follow-up instructions into the same Codex thread after the first run finishes.</li>
+				<li>Create and manage tasks as the main work object.</li>
+				<li>Launch background Codex work and reuse existing threads when possible.</li>
+				<li>Track run outcomes, errors, prompt digests, and artifacts.</li>
+				<li>Review blockers, approvals, stale work, and follow-up opportunities.</li>
 			</ul>
 		</section>
 
 		<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
-			<h2 class="text-xl font-semibold text-white">Next layers after this slice</h2>
+			<h2 class="text-xl font-semibold text-white">Supporting structure already in place</h2>
 			<ul class="mt-4 space-y-3 text-sm text-slate-300">
-				<li>Authentication before exposing it beyond your laptop.</li>
-				<li>Auto-refresh or websocket status updates.</li>
-				<li>A simple task inbox that launches sessions automatically.</li>
-				<li>Deployment or secure remote access so you can use it away from home.</li>
+				<li>Projects for workspace, artifact, repo, branch, and sandbox defaults.</li>
+				<li>Goals for outcome grouping and linked project/task relationships.</li>
+				<li>Planning for reviewing date windows, load, and goal commitments.</li>
+				<li>Workers, roles, and providers for routing, staffing, and execution metadata.</li>
 			</ul>
 		</section>
 	</div>

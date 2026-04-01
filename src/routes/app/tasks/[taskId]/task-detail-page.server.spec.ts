@@ -44,13 +44,28 @@ const createRun = vi.hoisted(() =>
 );
 
 const projectMatchesPath = vi.hoisted(() => vi.fn(() => true));
+const getWorkspaceExecutionIssue = vi.hoisted(() =>
+	vi.fn<(_: { cwd: string; sandbox: string; scopeLabel?: string }) => string | null>(() => null)
+);
 const getAgentSession = vi.hoisted(() => vi.fn());
+const recoverAgentSession = vi.hoisted(() => vi.fn());
 const sendAgentSessionMessage = vi.hoisted(() => vi.fn());
 const startAgentSession = vi.hoisted(() =>
 	vi.fn(async () => ({
 		sessionId: 'session_new',
 		runId: 'run_new'
 	}))
+);
+const listInstalledCodexSkills = vi.hoisted(() =>
+	vi.fn(() => [
+		{
+			id: 'skill-installer',
+			description: 'Install Codex skills',
+			global: true,
+			project: false,
+			sourceLabel: 'Global'
+		}
+	])
 );
 
 const controlPlaneState = vi.hoisted(() => ({
@@ -78,8 +93,15 @@ vi.mock('$lib/server/control-plane', () => ({
 	parseTaskStatus: vi.fn((_value: string, fallback: string) => fallback),
 	projectMatchesPath,
 	resolveThreadSandbox: vi.fn(
-		(input: { worker?: { threadSandboxOverride: string | null } | null; provider?: { defaultThreadSandbox: string } | null }) =>
-			input.worker?.threadSandboxOverride ?? input.provider?.defaultThreadSandbox ?? 'workspace-write'
+		(input: {
+			worker?: { threadSandboxOverride: string | null } | null;
+			project?: { defaultThreadSandbox?: string | null } | null;
+			provider?: { defaultThreadSandbox: string } | null;
+		}) =>
+			input.worker?.threadSandboxOverride ??
+			input.project?.defaultThreadSandbox ??
+			input.provider?.defaultThreadSandbox ??
+			'workspace-write'
 	),
 	selectExecutionProvider: vi.fn(
 		(data: ControlPlaneData, worker?: { providerId: string } | null) =>
@@ -101,6 +123,7 @@ vi.mock('$lib/server/agent-sessions', () => ({
 	cancelAgentSession: vi.fn(),
 	getAgentSession,
 	listAgentSessions: vi.fn(async () => []),
+	recoverAgentSession,
 	sendAgentSessionMessage,
 	startAgentSession
 }));
@@ -114,7 +137,19 @@ vi.mock('$lib/server/task-threads', () => ({
 	buildTaskThreadPrompt: vi.fn(() => 'run the task')
 }));
 
+vi.mock('$lib/server/codex-skills', () => ({
+	listInstalledCodexSkills
+}));
+
+vi.mock('$lib/server/task-execution-workspace', () => ({
+	getWorkspaceExecutionIssue
+}));
+
 vi.mock('$lib/task-thread-context', () => ({
+	isActiveTaskThread: vi.fn(
+		(thread: { sessionState?: string } | null | undefined) =>
+			Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''))
+	),
 	selectTaskThreadContext: vi.fn(() => ({
 		linkThread: null,
 		linkThreadKind: 'assigned',
@@ -133,10 +168,14 @@ describe('task detail page server actions', () => {
 		createRun.mockClear();
 		projectMatchesPath.mockReset();
 		projectMatchesPath.mockReturnValue(true);
+		getWorkspaceExecutionIssue.mockReset();
+		getWorkspaceExecutionIssue.mockReturnValue(null);
 		getAgentSession.mockReset();
 		getAgentSession.mockResolvedValue(null);
+		recoverAgentSession.mockReset();
 		sendAgentSessionMessage.mockReset();
 		startAgentSession.mockReset();
+		listInstalledCodexSkills.mockClear();
 		startAgentSession.mockResolvedValue({
 			sessionId: 'session_new',
 			runId: 'run_new'
@@ -194,6 +233,7 @@ describe('task detail page server actions', () => {
 					threadSessionId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
+					targetDate: null,
 					runCount: 1,
 					latestRunId: null,
 					artifactPath: '/tmp/project/agent_output',
@@ -207,6 +247,59 @@ describe('task detail page server actions', () => {
 			approvals: []
 		};
 		controlPlaneState.saved = null;
+	});
+
+	it('updates the task target date from the detail form', async () => {
+		const form = new FormData();
+		form.set('name', 'Attach a brief');
+		form.set('instructions', 'Need source documents');
+		form.set('projectId', 'project_1');
+		form.set('targetDate', '2026-04-22');
+
+		const result = await actions.updateTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'updateTask',
+				taskId: 'task_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				targetDate: '2026-04-22'
+			})
+		);
+	});
+
+	it('rejects an invalid task target date from the detail form', async () => {
+		const form = new FormData();
+		form.set('name', 'Attach a brief');
+		form.set('instructions', 'Need source documents');
+		form.set('projectId', 'project_1');
+		form.set('targetDate', '04/22/2026');
+
+		const result = await actions.updateTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message: 'Target date must use YYYY-MM-DD format.'
+			}
+		});
+		expect(controlPlaneState.saved).toBeNull();
 	});
 
 	it('attaches an uploaded file to the task artifact area', async () => {
@@ -364,6 +457,126 @@ describe('task detail page server actions', () => {
 		expect(controlPlaneState.saved).toBeNull();
 	});
 
+	it('recovers a stale active run and requeues the task in the existing thread', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				{
+					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+					status: 'in_progress',
+					threadSessionId: 'session_active',
+					latestRunId: 'run_active',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_active',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: 'provider_local_codex',
+					status: 'running',
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z',
+					startedAt: '2026-03-30T12:00:00.000Z',
+					endedAt: null,
+					threadId: 'thread_active',
+					sessionId: 'session_active',
+					promptDigest: 'digest_active',
+					artifactPaths: ['/tmp/project/agent_output'],
+					summary: 'Already running.',
+					lastHeartbeatAt: '2026-03-30T12:00:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+		getAgentSession.mockResolvedValue({
+			id: 'session_active',
+			name: 'Task thread continuity',
+			cwd: '/tmp/project',
+			sandbox: 'workspace-write',
+			model: null,
+			threadId: 'thread_active',
+			archivedAt: null,
+			createdAt: '2026-03-30T11:55:00.000Z',
+			updatedAt: '2026-03-30T12:00:00.000Z',
+			origin: 'managed',
+			sessionState: 'working',
+			latestRunStatus: 'running',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-30T12:00:00.000Z',
+			lastActivityLabel: '30m ago',
+			sessionSummary: 'Thread appears stalled.',
+			lastExitCode: null,
+			runTimeline: [],
+			relatedTasks: [],
+			latestRun: null,
+			runs: []
+		});
+		recoverAgentSession.mockImplementation(async () => {
+			controlPlaneState.current = {
+				...(controlPlaneState.current as ControlPlaneData),
+				tasks: [
+					{
+						...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+						status: 'blocked',
+						blockedReason: 'Recovered stalled run.',
+						updatedAt: '2026-03-30T12:45:00.000Z'
+					}
+				],
+				runs: (controlPlaneState.current as ControlPlaneData).runs.map((run) =>
+					run.id === 'run_active'
+						? {
+								...run,
+								status: 'failed',
+								endedAt: '2026-03-30T12:45:00.000Z',
+								updatedAt: '2026-03-30T12:45:00.000Z',
+								errorSummary: 'Recovered stalled run.'
+							}
+						: run
+				)
+			};
+
+			return {
+				sessionId: 'session_active',
+				runId: 'run_active',
+				status: 'failed',
+				signal: null,
+				recoveredAt: '2026-03-30T12:45:00.000Z'
+			};
+		});
+
+		const result = await actions.recoverTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(recoverAgentSession).toHaveBeenCalledWith('session_active');
+		expect(sendAgentSessionMessage).toHaveBeenCalledWith('session_active', 'run the task');
+		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				status: 'in_progress',
+				blockedReason: '',
+				threadSessionId: 'session_active',
+				latestRunId: 'run_test'
+			})
+		);
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'recoverTaskSession',
+				taskId: 'task_1',
+				sessionId: 'session_active'
+			})
+		);
+	});
+
 	it('rejects launching a task when the submitted status is not ready', async () => {
 		controlPlaneState.current = {
 			...(controlPlaneState.current as ControlPlaneData),
@@ -392,6 +605,32 @@ describe('task detail page server actions', () => {
 		expect(createRun).not.toHaveBeenCalled();
 		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
 		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved).toBeNull();
+	});
+
+	it('rejects launching a task when the project root is not writable in the sandbox', async () => {
+		getWorkspaceExecutionIssue.mockReturnValue(
+			'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
+		);
+
+		const result = await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message:
+					'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
+			}
+		});
+		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
+		expect(createRun).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
 	});
 
@@ -439,6 +678,27 @@ describe('task detail page server actions', () => {
 			request: new Request('http://localhost/app/tasks/task_1', {
 				method: 'POST',
 				body: form
+			})
+		} as never);
+
+		expect(startAgentSession).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sandbox: 'danger-full-access'
+			})
+		);
+	});
+
+	it('prefers the project default sandbox over the provider default on the task detail page', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.defaultThreadSandbox =
+			'danger-full-access';
+		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox =
+			'read-only';
+
+		await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
 			})
 		} as never);
 

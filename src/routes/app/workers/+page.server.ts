@@ -91,7 +91,7 @@ export const actions: Actions = {
 			]
 		}));
 
-		return { ok: true };
+		return { ok: true, successAction: 'createWorker' };
 	},
 
 	updateWorker: async ({ request }) => {

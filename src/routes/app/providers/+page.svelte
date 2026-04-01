@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -10,7 +12,23 @@
 	} from '$lib/types/control-plane';
 
 	let { data, form } = $props();
+	const CREATE_PROVIDER_DRAFT_KEY = 'ams:create-provider';
 
+	let createProviderDraftReady = $state(false);
+	let providerName = $state('');
+	let providerService = $state('');
+	let providerDescription = $state('');
+	let providerKind = $state('cloud');
+	let providerAuthMode = $state('custom');
+	let providerSetupStatus = $state('planned');
+	let providerDefaultModel = $state('');
+	let providerLauncher = $state('');
+	let providerDefaultThreadSandbox = $state('workspace-write');
+	let providerBaseUrl = $state('');
+	let providerEnvVars = $state('');
+	let providerCapabilities = $state('');
+	let providerNotes = $state('');
+	let providerEnabled = $state(true);
 	let query = $state('');
 
 	function modalShouldStartOpen() {
@@ -58,6 +76,112 @@
 	function closeCreateModal() {
 		isCreateModalOpen = false;
 	}
+
+	function defaultProviderKind() {
+		return data.kindOptions[0] ?? 'cloud';
+	}
+
+	function defaultProviderAuthMode() {
+		return data.authModeOptions[0] ?? 'custom';
+	}
+
+	function defaultProviderSetupStatus() {
+		return data.setupStatusOptions[0] ?? 'planned';
+	}
+
+	function defaultProviderThreadSandbox() {
+		return 'workspace-write';
+	}
+
+	function normalizeProviderKind(value: string | undefined) {
+		return data.kindOptions.find((option) => option === value) ?? defaultProviderKind();
+	}
+
+	function normalizeProviderAuthMode(value: string | undefined) {
+		return data.authModeOptions.find((option) => option === value) ?? defaultProviderAuthMode();
+	}
+
+	function normalizeProviderSetupStatus(value: string | undefined) {
+		return (
+			data.setupStatusOptions.find((option) => option === value) ?? defaultProviderSetupStatus()
+		);
+	}
+
+	onMount(() => {
+		if (createSuccess) {
+			clearFormDraft(CREATE_PROVIDER_DRAFT_KEY);
+			createProviderDraftReady = true;
+			return;
+		}
+
+		const savedDraft = readFormDraft<{
+			name: string;
+			service: string;
+			description: string;
+			kind: string;
+			authMode: string;
+			setupStatus: string;
+			defaultModel: string;
+			launcher: string;
+			defaultThreadSandbox: string;
+			baseUrl: string;
+			envVars: string;
+			capabilities: string;
+			notes: string;
+			enabled: boolean;
+		}>(CREATE_PROVIDER_DRAFT_KEY);
+
+		if (savedDraft) {
+			providerName = savedDraft.name ?? '';
+			providerService = savedDraft.service ?? '';
+			providerDescription = savedDraft.description ?? '';
+			providerKind = normalizeProviderKind(savedDraft.kind);
+			providerAuthMode = normalizeProviderAuthMode(savedDraft.authMode);
+			providerSetupStatus = normalizeProviderSetupStatus(savedDraft.setupStatus);
+			providerDefaultModel = savedDraft.defaultModel ?? '';
+			providerLauncher = savedDraft.launcher ?? '';
+			providerDefaultThreadSandbox =
+				savedDraft.defaultThreadSandbox ?? defaultProviderThreadSandbox();
+			providerBaseUrl = savedDraft.baseUrl ?? '';
+			providerEnvVars = savedDraft.envVars ?? '';
+			providerCapabilities = savedDraft.capabilities ?? '';
+			providerNotes = savedDraft.notes ?? '';
+			providerEnabled = savedDraft.enabled ?? true;
+			isCreateModalOpen = true;
+		}
+
+		providerKind = normalizeProviderKind(providerKind);
+		providerAuthMode = normalizeProviderAuthMode(providerAuthMode);
+		providerSetupStatus = normalizeProviderSetupStatus(providerSetupStatus);
+
+		createProviderDraftReady = true;
+	});
+
+	$effect(() => {
+		if (!createProviderDraftReady) {
+			return;
+		}
+
+		writeFormDraft(CREATE_PROVIDER_DRAFT_KEY, {
+			name: providerName,
+			service: providerService,
+			description: providerDescription,
+			kind: providerKind === defaultProviderKind() ? '' : providerKind,
+			authMode: providerAuthMode === defaultProviderAuthMode() ? '' : providerAuthMode,
+			setupStatus: providerSetupStatus === defaultProviderSetupStatus() ? '' : providerSetupStatus,
+			defaultModel: providerDefaultModel,
+			launcher: providerLauncher,
+			defaultThreadSandbox:
+				providerDefaultThreadSandbox === defaultProviderThreadSandbox()
+					? ''
+					: providerDefaultThreadSandbox,
+			baseUrl: providerBaseUrl,
+			envVars: providerEnvVars,
+			capabilities: providerCapabilities,
+			notes: providerNotes,
+			enabled: providerEnabled === true ? undefined : providerEnabled
+		});
+	});
 </script>
 
 <AppPage>
@@ -221,12 +345,13 @@
 		description="Create one record per provider you actually expect to route work through."
 		closeLabel="Close add provider form"
 	>
-		<form class="space-y-6" method="POST" action="?/createProvider">
+		<form class="space-y-6" method="POST" action="?/createProvider" data-persist-scope="manual">
 			<div class="space-y-4">
 				<div class="grid gap-4 sm:grid-cols-2">
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 						<input
+							bind:value={providerName}
 							class="input text-white placeholder:text-slate-500"
 							name="name"
 							placeholder="OpenAI Codex CLI"
@@ -237,6 +362,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Service</span>
 						<input
+							bind:value={providerService}
 							class="input text-white placeholder:text-slate-500"
 							name="service"
 							placeholder="OpenAI"
@@ -248,6 +374,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
 					<textarea
+						bind:value={providerDescription}
 						class="textarea min-h-24 text-white placeholder:text-slate-500"
 						name="description"
 						placeholder="What this provider is for and when it should be selected."
@@ -257,7 +384,7 @@
 				<div class="grid gap-4 md:grid-cols-3">
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Access surface</span>
-						<select class="select text-white" name="kind">
+						<select bind:value={providerKind} class="select text-white" name="kind">
 							{#each data.kindOptions as kind (kind)}
 								<option value={kind}>{kind}</option>
 							{/each}
@@ -266,7 +393,7 @@
 
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Auth mode</span>
-						<select class="select text-white" name="authMode">
+						<select bind:value={providerAuthMode} class="select text-white" name="authMode">
 							{#each data.authModeOptions as authMode (authMode)}
 								<option value={authMode}>{authMode}</option>
 							{/each}
@@ -275,7 +402,7 @@
 
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Setup status</span>
-						<select class="select text-white" name="setupStatus">
+						<select bind:value={providerSetupStatus} class="select text-white" name="setupStatus">
 							{#each data.setupStatusOptions as setupStatus (setupStatus)}
 								<option value={setupStatus}>{formatProviderSetupStatusLabel(setupStatus)}</option>
 							{/each}
@@ -287,6 +414,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Default model</span>
 						<input
+							bind:value={providerDefaultModel}
 							class="input text-white placeholder:text-slate-500"
 							name="defaultModel"
 							placeholder="gpt-5.4"
@@ -296,6 +424,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Launcher or command</span>
 						<input
+							bind:value={providerLauncher}
 							class="input text-white placeholder:text-slate-500"
 							name="launcher"
 							placeholder="codex"
@@ -305,9 +434,13 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Default thread sandbox</span>
-					<select class="select text-white" name="defaultThreadSandbox">
+					<select
+						bind:value={providerDefaultThreadSandbox}
+						class="select text-white"
+						name="defaultThreadSandbox"
+					>
 						{#each data.sandboxOptions as sandbox (sandbox)}
-							<option value={sandbox} selected={sandbox === 'workspace-write'}>{sandbox}</option>
+							<option value={sandbox}>{sandbox}</option>
 						{/each}
 					</select>
 				</label>
@@ -315,6 +448,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Base URL</span>
 					<input
+						bind:value={providerBaseUrl}
 						class="input text-white placeholder:text-slate-500"
 						name="baseUrl"
 						placeholder="https://api.openai.com/v1"
@@ -325,6 +459,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Environment variables</span>
 						<input
+							bind:value={providerEnvVars}
 							class="input text-white placeholder:text-slate-500"
 							name="envVars"
 							placeholder="OPENAI_API_KEY, OPENAI_ORG_ID"
@@ -334,6 +469,7 @@
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Capabilities</span>
 						<input
+							bind:value={providerCapabilities}
 							class="input text-white placeholder:text-slate-500"
 							name="capabilities"
 							placeholder="repo edits, planning, citations"
@@ -344,6 +480,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>
 					<textarea
+						bind:value={providerNotes}
 						class="textarea min-h-28 text-white placeholder:text-slate-500"
 						name="notes"
 						placeholder="Operator notes, caveats, or handoff guidance."
@@ -353,7 +490,7 @@
 				<label
 					class="inline-flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200"
 				>
-					<input checked class="checkbox" name="enabled" type="checkbox" />
+					<input bind:checked={providerEnabled} class="checkbox" name="enabled" type="checkbox" />
 					<span>Enable this provider immediately</span>
 				</label>
 
