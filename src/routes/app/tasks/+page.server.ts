@@ -43,7 +43,12 @@ import {
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
-import type { ControlPlaneData, Project, Role } from '$lib/types/control-plane';
+import {
+	applyGoalRelationships,
+	getGoalLinkedProjectIds,
+	getGoalLinkedTaskIds
+} from '$lib/server/goal-relationships';
+import type { ControlPlaneData, Goal, Project, Role, Task } from '$lib/types/control-plane';
 
 function readTaskForm(form: FormData) {
 	const parseNameList = (value: FormDataEntryValue | null) => [
@@ -158,6 +163,104 @@ function parseSuggestionIndexes(form: FormData) {
 	];
 }
 
+const ROOT_GOAL_PARENT_KEY = '__root__';
+
+function buildTaskGoalOptions(goals: Goal[]) {
+	const goalIds = new Set(goals.map((goal) => goal.id));
+	const childrenByParent = new Map<string, Goal[]>();
+
+	for (const goal of goals) {
+		const parentKey =
+			goal.parentGoalId && goalIds.has(goal.parentGoalId)
+				? goal.parentGoalId
+				: ROOT_GOAL_PARENT_KEY;
+		const siblings = childrenByParent.get(parentKey) ?? [];
+		siblings.push(goal);
+		childrenByParent.set(parentKey, siblings);
+	}
+
+	for (const siblings of childrenByParent.values()) {
+		siblings.sort((left, right) => left.name.localeCompare(right.name));
+	}
+
+	const orderedGoals: Array<{
+		id: string;
+		name: string;
+		label: string;
+		depth: number;
+		parentGoalId: string | null;
+		status: Goal['status'];
+		lane: Goal['lane'];
+	}> = [];
+	const visitedGoalIds = new Set<string>();
+
+	function visitChildren(parentKey: string, depth: number) {
+		for (const goal of childrenByParent.get(parentKey) ?? []) {
+			if (visitedGoalIds.has(goal.id)) {
+				continue;
+			}
+
+			visitedGoalIds.add(goal.id);
+			orderedGoals.push({
+				id: goal.id,
+				name: goal.name,
+				label: `${depth > 0 ? `${'  '.repeat(depth)}- ` : ''}${goal.name}`,
+				depth,
+				parentGoalId: goal.parentGoalId ?? null,
+				status: goal.status,
+				lane: goal.lane
+			});
+			visitChildren(goal.id, depth + 1);
+		}
+	}
+
+	visitChildren(ROOT_GOAL_PARENT_KEY, 0);
+
+	for (const goal of [...goals].sort((left, right) => left.name.localeCompare(right.name))) {
+		if (visitedGoalIds.has(goal.id)) {
+			continue;
+		}
+
+		orderedGoals.push({
+			id: goal.id,
+			name: goal.name,
+			label: goal.name,
+			depth: 0,
+			parentGoalId: goal.parentGoalId ?? null,
+			status: goal.status,
+			lane: goal.lane
+		});
+		visitChildren(goal.id, 1);
+	}
+
+	return orderedGoals;
+}
+
+function prependCreatedTask(data: ControlPlaneData, task: Task, goalId: string) {
+	const nextData = {
+		...data,
+		tasks: [task, ...data.tasks]
+	};
+
+	if (!goalId) {
+		return nextData;
+	}
+
+	const goal = nextData.goals.find((candidate) => candidate.id === goalId);
+
+	if (!goal) {
+		return nextData;
+	}
+
+	return applyGoalRelationships({
+		data: nextData,
+		goalId: goal.id,
+		parentGoalId: goal.parentGoalId ?? null,
+		projectIds: getGoalLinkedProjectIds(nextData, goal),
+		taskIds: getGoalLinkedTaskIds(nextData, goal)
+	});
+}
+
 function readCreateTaskPrefill(url: URL) {
 	const open = url.searchParams.get('create') === '1';
 	const parseOption = <T extends readonly string[]>(
@@ -263,6 +366,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		deleted: url.searchParams.get('deleted') === '1',
 		createTaskPrefill: readCreateTaskPrefill(url),
 		statusOptions: TASK_STATUS_OPTIONS,
+		goals: buildTaskGoalOptions(data.goals),
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		projectSkillSummaries,
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
@@ -432,6 +536,7 @@ export const actions: Actions = {
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === projectId);
+		const goal = goalId ? current.goals.find((candidate) => candidate.id === goalId) : null;
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
@@ -439,6 +544,27 @@ export const actions: Actions = {
 		if (!project) {
 			return failTaskCreate(400, {
 				message: 'Project not found.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
+				requiredCapabilityNames,
+				requiredToolNames,
+				submitMode
+			});
+		}
+
+		if (goalId && !goal) {
+			return failTaskCreate(400, {
+				message: 'Goal not found.',
 				name,
 				instructions,
 				projectId,
@@ -532,7 +658,7 @@ export const actions: Actions = {
 			current.roles.find((role) => role.id === 'role_coordinator')?.id ??
 			current.roles[0]?.id ??
 			'';
-		const nextGoalId = current.goals.some((goal) => goal.id === goalId) ? goalId : '';
+		const nextGoalId = goal?.id ?? '';
 		const nextDesiredRoleId = current.roles.some((role) => role.id === desiredRoleId)
 			? desiredRoleId
 			: (assigneeWorker?.roleId ?? coordinatorRoleId);
@@ -564,12 +690,7 @@ export const actions: Actions = {
 		const createdTask = attachments.length > 0 ? { ...baseTask, attachments } : baseTask;
 
 		if (submitMode !== 'createAndRun') {
-			await updateControlPlane((data) => {
-				return {
-					...data,
-					tasks: [createdTask, ...data.tasks]
-				};
-			});
+			await updateControlPlane((data) => prependCreatedTask(data, createdTask, nextGoalId));
 
 			return {
 				ok: true,
@@ -671,18 +792,17 @@ export const actions: Actions = {
 		});
 
 		await updateControlPlane((data) => {
+			const nextTask: Task = {
+				...createdTask,
+				threadSessionId: session.sessionId,
+				status: 'in_progress',
+				updatedAt: now
+			};
+			const nextData = prependCreatedTask(data, nextTask, nextGoalId);
+
 			return {
-				...data,
-				runs: [run, ...data.runs],
-				tasks: [
-					{
-						...createdTask,
-						threadSessionId: session.sessionId,
-						status: 'in_progress',
-						updatedAt: now
-					},
-					...data.tasks
-				]
+				...nextData,
+				runs: [run, ...data.runs]
 			};
 		});
 

@@ -1210,14 +1210,13 @@
 				bodyClass="p-0"
 			>
 				<form
-					class="grid gap-6 p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start"
+					class="space-y-6 p-6"
 					method="POST"
 					action="?/createTask"
 					data-persist-scope="manual"
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
-					<input type="hidden" name="goalId" value={createTaskGoalId} />
 					<input type="hidden" name="lane" value={createTaskLane} />
 					<input type="hidden" name="priority" value={createTaskPriority} />
 					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
@@ -1229,7 +1228,7 @@
 					/>
 					<input type="hidden" name="desiredRoleId" value={createTaskDesiredRoleId} />
 					<div class="min-w-0 space-y-4">
-						<div class="grid gap-4 md:grid-cols-3">
+						<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 							<label class="block">
 								<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
 								<select
@@ -1254,6 +1253,23 @@
 									placeholder="Build the first task creation flow…"
 									required
 								/>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Goal</span>
+								<select
+									bind:value={createTaskGoalId}
+									class="select text-white"
+									name="goalId"
+								>
+									<option value="">No goal linked</option>
+									{#each data.goals as goal (goal.id)}
+										<option value={goal.id}>{goal.label}</option>
+									{/each}
+								</select>
+								<span class="mt-2 block text-xs text-slate-500">
+									Optional. Link the task to the outcome it advances.
+								</span>
 							</label>
 
 							<label class="block">
@@ -1441,41 +1457,6 @@
 								immediately.
 							</p>
 						</div>
-					</div>
-
-					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-						<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-							Queue snapshot
-						</p>
-						<h3 class="mt-2 text-lg font-semibold text-white">Create with context</h3>
-						<p class="mt-2 text-sm text-slate-300">
-							Keep intake lightweight. Create the work item here, then return to the queue or open
-							the task detail page for deeper editing and execution controls.
-						</p>
-						<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-							<MetricCard
-								label="Active queue"
-								value={activeTasks.length}
-								detail="Work still in draft, ready, blocked, review, or in progress."
-							/>
-							<MetricCard
-								label="Completed"
-								value={completedTasks.length}
-								detail="Finished work kept around for reference and follow-up."
-							/>
-						</div>
-						{#if selectedProjectSkillSummary}
-							<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-									Skills in this workspace
-								</p>
-								<p class="mt-2 text-sm text-slate-300">
-									{selectedProjectSkillSummary.totalCount === 0
-										? 'This project currently exposes no installed skills to new task threads.'
-										: `${selectedProjectSkillSummary.totalCount} skills available across project-local and global roots.`}
-								</p>
-							</div>
-						{/if}
 					</div>
 				</form>
 			</AppDialog>

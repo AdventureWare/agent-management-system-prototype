@@ -43,6 +43,7 @@ const createTaskMock = vi.hoisted(() =>
 			title: string;
 			summary: string;
 			projectId: string;
+			goalId: string;
 			desiredRoleId: string;
 			artifactPath: string;
 			targetDate?: string | null;
@@ -55,7 +56,7 @@ const createTaskMock = vi.hoisted(() =>
 			summary: input.summary,
 			projectId: input.projectId,
 			lane: 'product',
-			goalId: '',
+			goalId: input.goalId,
 			priority: 'medium',
 			status: input.status ?? 'ready',
 			riskLevel: 'medium',
@@ -165,6 +166,19 @@ vi.mock('$lib/server/control-plane', () => ({
 	getPendingApprovalForTask: vi.fn(() => null),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseTaskStatus: vi.fn((_value: string, fallback: string) => fallback),
+	projectMatchesPath: vi.fn(
+		(
+			project: { defaultArtifactRoot?: string; projectRootFolder?: string },
+			artifactPath: string
+		) => {
+			const normalizedPath = artifactPath.trim();
+			return Boolean(
+				normalizedPath &&
+					(project.defaultArtifactRoot === normalizedPath ||
+						project.projectRootFolder === normalizedPath)
+			);
+		}
+	),
 	resolveThreadSandbox: vi.fn(
 		(input: {
 			worker?: { threadSandboxOverride: string | null } | null;
@@ -299,7 +313,20 @@ describe('tasks page server actions', () => {
 					defaultBranch: ''
 				}
 			],
-			goals: [],
+			goals: [
+				{
+					id: 'goal_queue_quality',
+					name: 'Reduce task intake friction',
+					lane: 'product',
+					status: 'running',
+					summary: 'Improve task intake and routing quality.',
+					artifactPath: '/tmp/project/goals/queue-quality',
+					successSignal: 'Operators can link work to goals during intake.',
+					parentGoalId: null,
+					projectIds: ['project_ams'],
+					taskIds: ['task_existing']
+				}
+			],
 			workers: [],
 			tasks: [
 				{
@@ -308,7 +335,7 @@ describe('tasks page server actions', () => {
 					summary: 'Existing task already in queue.',
 					projectId: 'project_ams',
 					lane: 'product',
-					goalId: '',
+					goalId: 'goal_queue_quality',
 					priority: 'medium',
 					status: 'ready',
 					riskLevel: 'medium',
@@ -441,6 +468,42 @@ describe('tasks page server actions', () => {
 				runCount: 0
 			})
 		);
+	});
+
+	it('links a newly created task to the selected goal', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('goalId', 'goal_queue_quality');
+		form.set('name', 'Link new task to goal');
+		form.set('instructions', 'Create a task directly under the queue-quality goal.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				goalId: 'goal_queue_quality'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Link new task to goal',
+				goalId: 'goal_queue_quality'
+			})
+		);
+		expect(
+			controlPlaneState.saved?.goals.find((goal) => goal.id === 'goal_queue_quality')?.taskIds
+		).toEqual(['task_existing', 'task_link_new_task_to_goal']);
 	});
 
 	it('rejects an invalid target date during task creation', async () => {

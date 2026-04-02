@@ -88,6 +88,8 @@
 	let selectedRunId = $state('');
 	let selectedSidebarView = $state<'follow_up' | 'details' | 'attachments'>('follow_up');
 	let conversationHistoryExpanded = $state(false);
+	let expandedConversationRunIds = $state.raw<string[]>([]);
+	let latestInstructionExpanded = $state(false);
 	let followUpAttachmentInput = $state<HTMLInputElement | null>(null);
 	let followUpPrompt = $state('');
 	let pendingFollowUpAttachments = $state.raw<
@@ -153,6 +155,7 @@
 	let sessionState = $derived.by(() => (session ? describeSessionState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
 	let latestContextRun = $derived.by(() => session?.latestRun ?? session?.runs[0] ?? null);
+	let latestInstructionNeedsClamp = $derived((latestContextRun?.prompt?.trim().length ?? 0) > 180);
 	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
 		if (taskResponseAction) {
 			return {
@@ -257,7 +260,19 @@
 
 		if (currentSessionId !== previousConversationSessionId) {
 			conversationHistoryExpanded = false;
+			expandedConversationRunIds = [];
 			previousConversationSessionId = currentSessionId;
+		}
+	});
+
+	let previousLatestInstructionRunId = '';
+
+	$effect(() => {
+		const currentLatestInstructionRunId = latestContextRun?.id ?? '';
+
+		if (currentLatestInstructionRunId !== previousLatestInstructionRunId) {
+			latestInstructionExpanded = false;
+			previousLatestInstructionRunId = currentLatestInstructionRunId;
 		}
 	});
 
@@ -542,6 +557,23 @@
 
 	function selectRun(runId: string) {
 		selectedRunId = runId;
+	}
+
+	function isConversationRunExpanded(runId: string) {
+		return expandedConversationRunIds.includes(runId);
+	}
+
+	function toggleConversationRunExpanded(runId: string) {
+		if (isConversationRunExpanded(runId)) {
+			expandedConversationRunIds = expandedConversationRunIds.filter((id) => id !== runId);
+			return;
+		}
+
+		expandedConversationRunIds = [...expandedConversationRunIds, runId];
+	}
+
+	function conversationRunNumber(runId: string) {
+		return runNumberById.get(runId) ?? 0;
 	}
 
 	function formatTimestamp(iso: string | null) {
@@ -1135,36 +1167,60 @@
 
 							{#if latestContextRun}
 								<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.48fr)]">
-									<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
-										<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Agent response</p>
-										<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-200">
-											{responseText(latestContextRun)}
-										</p>
-									</div>
-
-									<div class="min-w-0 space-y-4">
+									<div class="min-w-0 space-y-4 xl:col-span-2">
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
-											<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-												Latest instruction
-											</p>
-											<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-300">
-												{latestContextRun.prompt}
-											</p>
+											<div
+												class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+											>
+												<div class="min-w-0">
+													<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+														Latest instruction
+													</p>
+													<p
+														class={[
+															'ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-300',
+															latestInstructionExpanded ? '' : 'ui-clamp-2'
+														]}
+													>
+														{latestContextRun.prompt}
+													</p>
+												</div>
+												{#if latestInstructionNeedsClamp}
+													<AppButton
+														size="sm"
+														type="button"
+														variant="ghost"
+														onclick={() => {
+															latestInstructionExpanded = !latestInstructionExpanded;
+														}}
+													>
+														{latestInstructionExpanded
+															? 'Collapse instruction'
+															: 'Expand instruction'}
+													</AppButton>
+												{/if}
+											</div>
 										</div>
 
-										<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-											<DetailFactCard
-												label="Queued"
-												value={formatTimestamp(latestContextRun.createdAt)}
-												class="rounded-lg border-transparent bg-black/20"
-												labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-											/>
-											<DetailFactCard
-												label="Finished"
-												value={formatTimestamp(latestContextRun.state?.finishedAt ?? null)}
-												class="rounded-lg border-transparent bg-black/20"
-												labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-											/>
+										<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.48fr)]">
+											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Agent response
+												</p>
+												<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-200">
+													{responseText(latestContextRun)}
+												</p>
+												<div
+													class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500"
+												>
+													<p class="ui-wrap-anywhere">
+														<span class="tracking-[0.12em] text-slate-600 uppercase">Finished</span>
+														<span class="ml-2">
+															{formatTimestamp(latestContextRun.state?.finishedAt ?? null)}
+														</span>
+													</p>
+												</div>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -1380,7 +1436,7 @@
 					<DetailSection
 						eyebrow="Conversation"
 						title="Conversation history"
-						description="Inspect each turn in the thread and open any run to read the full prompt and response."
+						description="Inspect each turn in the thread, expand full text inline, or pin an older turn above without losing the newest response."
 						bodyClass="space-y-3"
 					>
 						{#if hiddenConversationRunCount > 0}
@@ -1418,23 +1474,19 @@
 							</p>
 						{:else}
 							{#each visibleConversationRuns as run (run.id)}
-								<button
+								<article
+									data-testid={`conversation-run-${run.id}`}
 									class={[
 										'w-full rounded-xl border p-4 text-left transition',
 										selectedRun?.id === run.id
 											? 'border-sky-800/70 bg-sky-950/20'
 											: 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
 									]}
-									type="button"
-									aria-pressed={selectedRun?.id === run.id}
-									onclick={() => {
-										selectRun(run.id);
-									}}
 								>
 									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 										<div class="min-w-0">
 											<p class="text-sm font-medium text-white">
-												Turn {runNumberById.get(run.id) ?? 0} · {runModeLabel(run)}
+												Turn {conversationRunNumber(run.id)} · {runModeLabel(run)}
 											</p>
 											<p class="mt-1 text-xs text-slate-500">
 												Queued {formatTimestamp(run.createdAt)}
@@ -1452,18 +1504,58 @@
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 												Instruction
 											</p>
-											<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
-												{compactText(run.prompt, 180)}
-											</p>
+											{#if isConversationRunExpanded(run.id)}
+												<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-300">
+													{run.prompt}
+												</p>
+											{:else}
+												<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
+													{compactText(run.prompt, 180)}
+												</p>
+											{/if}
 										</div>
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Response</p>
-											<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
-												{compactText(responseText(run), 180)}
-											</p>
+											{#if isConversationRunExpanded(run.id)}
+												<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-300">
+													{responseText(run)}
+												</p>
+											{:else}
+												<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
+													{compactText(responseText(run), 180)}
+												</p>
+											{/if}
 										</div>
 									</div>
-								</button>
+
+									<div class="mt-3 flex flex-wrap items-center gap-2">
+										<AppButton
+											size="sm"
+											type="button"
+											variant={selectedRun?.id === run.id ? 'ghost' : 'neutral'}
+											onclick={() => {
+												selectRun(run.id);
+											}}
+										>
+											{selectedRun?.id === run.id
+												? `Viewing Turn ${conversationRunNumber(run.id)}`
+												: `Inspect Turn ${conversationRunNumber(run.id)}`}
+										</AppButton>
+										<AppButton
+											size="sm"
+											type="button"
+											variant="ghost"
+											onclick={() => {
+												toggleConversationRunExpanded(run.id);
+												selectRun(run.id);
+											}}
+										>
+											{isConversationRunExpanded(run.id)
+												? 'Collapse full text'
+												: 'Expand full text'}
+										</AppButton>
+									</div>
+								</article>
 							{/each}
 						{/if}
 					</DetailSection>

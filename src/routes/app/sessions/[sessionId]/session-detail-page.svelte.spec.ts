@@ -90,7 +90,8 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			requestedThreadId: 'thread-1',
 			createdAt: '2026-03-27T13:00:00.000Z',
 			updatedAt: '2026-03-27T13:03:00.000Z',
-			prompt: 'Refine the implementation and add coverage.',
+			prompt:
+				'Refine the implementation and add coverage while keeping the latest instruction readable at a glance, preserving the thread context hierarchy, avoiding oversized instruction blocks in the decision pane, and making sure the operator can still expand the full text when they need to inspect the exact wording of the last request.',
 			lastMessage: 'Follow-up response from the agent.'
 		});
 		const middleRun = createRun({
@@ -204,6 +205,8 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect.element(page.getByText('Current task')).toBeVisible();
 		await expect.element(page.getByRole('heading', { name: 'Decision context' })).toBeVisible();
 		await expect.element(page.getByText('Most recent response')).toBeVisible();
+		await expect.element(page.getByText('Latest instruction')).toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Expand instruction' })).toBeVisible();
 		await expect.element(page.getByText('Relevant context')).toBeVisible();
 		await expect.element(page.getByText('Working on')).toBeVisible();
 		await expect
@@ -235,10 +238,28 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Approve response and complete task' }))
 			.toBeEnabled();
+		await page.getByRole('button', { name: 'Expand instruction' }).click();
+		await expect.element(page.getByRole('button', { name: 'Collapse instruction' })).toBeVisible();
 		await expect.element(page.getByRole('button', { name: /Show 1 older turn/i })).toBeVisible();
 		await page.getByRole('button', { name: /Show 1 older turn/i }).click();
+		const initialRunCard = page.getByTestId('conversation-run-run-initial');
 
-		await page.getByRole('button', { name: /Turn 1/i }).click();
+		await expect
+			.element(initialRunCard.getByText(/without hiding the final clue for older turns\./i))
+			.not.toBeInTheDocument();
+		await initialRunCard.getByRole('button', { name: 'Expand full text' }).click();
+		await expect
+			.element(initialRunCard.getByText(/without hiding the final clue for older turns\./i))
+			.toBeVisible();
+		await expect
+			.element(
+				initialRunCard.getByText(
+					/Initial response with the older run sentinel that should only be visible in the selected run detail after choosing the first turn\./i
+				)
+			)
+			.toBeVisible();
+
+		await page.getByRole('button', { name: 'Viewing Turn 1' }).click();
 
 		await expect
 			.element(page.getByRole('heading', { name: 'Inspect earlier context' }))

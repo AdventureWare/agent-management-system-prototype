@@ -88,6 +88,19 @@ function createIdeationReview(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function createGoal(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 'goal_1',
+		name: 'Reduce task intake friction',
+		label: 'Reduce task intake friction',
+		depth: 0,
+		parentGoalId: null,
+		status: 'running',
+		lane: 'product',
+		...overrides
+	};
+}
+
 function renderPage(
 	tasks = [] as ReturnType<typeof createTask>[],
 	ideationReviews = [] as ReturnType<typeof createIdeationReview>[],
@@ -105,10 +118,12 @@ function renderPage(
 				instructions: '',
 				assigneeWorkerId: '',
 				targetDate: '',
+				goalId: '',
 				requiredCapabilityNames: '',
 				requiredToolNames: '',
 				...createTaskPrefill
 			},
+			goals: [createGoal()],
 			statusOptions: TASK_STATUS_OPTIONS,
 			defaultDraftRoleName: 'Coordinator',
 			ideationReviews,
@@ -188,6 +203,20 @@ describe('/app/tasks/+page.svelte', () => {
 			.element(page.getByRole('button', { name: 'Create task', exact: true }))
 			.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
+	});
+
+	it('renders a goal selector and removes the queue snapshot pane from the create form', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+
+		const goalSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="goalId"]'
+		) as HTMLSelectElement | null;
+
+		expect(goalSelect).not.toBeNull();
+		expect(goalSelect?.value).toBe('');
+		await expect.element(page.getByText('Reduce task intake friction')).toBeInTheDocument();
+		await expect.element(page.getByText('Queue snapshot')).not.toBeInTheDocument();
 	});
 
 	it('renders a multi-file attachment control in the quick create form', async () => {
@@ -298,7 +327,8 @@ describe('/app/tasks/+page.svelte', () => {
 				open: true,
 				projectId: 'project_1',
 				name: 'Follow-up: Default task',
-				instructions: 'Create a new task from detail context.'
+				instructions: 'Create a new task from detail context.',
+				goalId: 'goal_1'
 			}
 		);
 
@@ -310,9 +340,13 @@ describe('/app/tasks/+page.svelte', () => {
 		const instructionsInput = document.querySelector(
 			'form[action="?/createTask"] textarea[name="instructions"]'
 		) as HTMLTextAreaElement | null;
+		const goalSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="goalId"]'
+		) as HTMLSelectElement | null;
 
 		expect(nameInput?.value).toBe('Follow-up: Default task');
 		expect(instructionsInput?.value).toBe('Create a new task from detail context.');
+		expect(goalSelect?.value).toBe('goal_1');
 	});
 
 	it('clears a saved create-task draft after successful creation', () => {
