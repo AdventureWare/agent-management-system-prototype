@@ -4,23 +4,40 @@ import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
 import {
 	getAgentThread,
 	parseAgentSandbox,
+	recoverAgentThread,
+	sendAgentThreadMessage,
+	startAgentThread,
 	updateAgentThreadSandbox
 } from '$lib/server/agent-threads';
 import {
 	createApproval,
 	createDecision,
+	createRun,
 	createReview,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { buildPromptDigest } from '$lib/server/task-threads';
 import type { Approval, ControlPlaneData, Review, Run, Task } from '$lib/types/control-plane';
 
 type SessionTaskResponseAction = {
 	taskId: string;
 	taskTitle: string;
+	taskProjectId: string;
 	taskStatus: Task['status'];
+	taskGoalId: string;
+	taskLane: Task['lane'];
+	taskPriority: Task['priority'];
+	taskRiskLevel: Task['riskLevel'];
+	taskApprovalMode: Task['approvalMode'];
+	taskRequiresReview: boolean;
+	taskDesiredRoleId: string;
+	taskAssigneeWorkerId: string;
+	taskTargetDate: string;
+	taskRequiredCapabilityNames: string[];
+	taskRequiredToolNames: string[];
 	openReview: Review | null;
 	pendingApproval: Approval | null;
 	canApproveAndComplete: boolean;
@@ -129,12 +146,161 @@ function buildTaskResponseAction(input: {
 	return {
 		taskId: task.id,
 		taskTitle: task.title,
+		taskProjectId: task.projectId,
 		taskStatus: task.status,
+		taskGoalId: task.goalId,
+		taskLane: task.lane,
+		taskPriority: task.priority,
+		taskRiskLevel: task.riskLevel,
+		taskApprovalMode: task.approvalMode,
+		taskRequiresReview: task.requiresReview,
+		taskDesiredRoleId: task.desiredRoleId,
+		taskAssigneeWorkerId: task.assigneeWorkerId ?? '',
+		taskTargetDate: task.targetDate ?? '',
+		taskRequiredCapabilityNames: task.requiredCapabilityNames ?? [],
+		taskRequiredToolNames: task.requiredToolNames ?? [],
 		openReview,
 		pendingApproval,
 		canApproveAndComplete: disabledReason.length === 0,
 		helperText,
 		disabledReason
+	};
+}
+
+function getLatestThreadPrompt(session: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>) {
+	const prompt = session.latestRun?.prompt?.trim() ?? '';
+
+	if (!prompt) {
+		throw new Error('No saved request is available to replay from this thread.');
+	}
+
+	return prompt;
+}
+
+function getTasksToCarryForward(data: ControlPlaneData, sessionId: string) {
+	const directlyAssignedTasks = data.tasks.filter(
+		(task) => task.threadSessionId === sessionId && task.status !== 'done'
+	);
+
+	if (directlyAssignedTasks.length > 0) {
+		return directlyAssignedTasks;
+	}
+
+	const resolvedTask = resolveSessionTask(data, sessionId);
+
+	if (!resolvedTask || resolvedTask.status === 'done') {
+		return [];
+	}
+
+	return [resolvedTask];
+}
+
+function reopenTasksForThreadRetry(input: {
+	data: ControlPlaneData;
+	sourceSessionId: string;
+	targetSessionId: string;
+	threadId: string | null;
+	prompt: string;
+	tasks: Task[];
+	runSummary: string;
+	decisionSummary: (task: Task) => string;
+}) {
+	if (input.tasks.length === 0) {
+		return input.data;
+	}
+
+	const now = new Date().toISOString();
+	const existingRunsById = new Map(input.data.runs.map((run) => [run.id, run]));
+	const nextRuns = input.tasks.map((task) => {
+		const latestRun = task.latestRunId ? (existingRunsById.get(task.latestRunId) ?? null) : null;
+
+		return createRun({
+			taskId: task.id,
+			workerId: latestRun?.workerId ?? null,
+			providerId: latestRun?.providerId ?? null,
+			status: 'running',
+			startedAt: now,
+			threadId: input.threadId,
+			sessionId: input.targetSessionId,
+			promptDigest: buildPromptDigest(input.prompt),
+			artifactPaths: latestRun?.artifactPaths.length
+				? latestRun.artifactPaths
+				: task.artifactPath
+					? [task.artifactPath]
+					: [],
+			summary: input.runSummary,
+			lastHeartbeatAt: now
+		});
+	});
+	const nextRunByTaskId = new Map(nextRuns.map((run) => [run.taskId, run]));
+	const taskIds = new Set(input.tasks.map((task) => task.id));
+
+	return {
+		...input.data,
+		tasks: input.data.tasks.map((task) => {
+			if (!taskIds.has(task.id)) {
+				return task;
+			}
+
+			const nextRun = nextRunByTaskId.get(task.id);
+
+			if (!nextRun) {
+				return task;
+			}
+
+			return {
+				...task,
+				threadSessionId: input.targetSessionId,
+				latestRunId: nextRun.id,
+				runCount: task.runCount + 1,
+				status: 'in_progress' as const,
+				blockedReason: '',
+				updatedAt: now
+			};
+		}),
+		runs: [...nextRuns, ...input.data.runs],
+		reviews: input.data.reviews.map((review) =>
+			taskIds.has(review.taskId) && review.status === 'open'
+				? {
+						...review,
+						status: 'dismissed' as const,
+						updatedAt: now,
+						resolvedAt: now,
+						summary:
+							input.targetSessionId === input.sourceSessionId
+								? 'Dismissed after the thread was recovered and re-queued from the thread detail page.'
+								: 'Dismissed after work moved to a new thread from the thread detail page.'
+					}
+				: review
+		),
+		approvals: input.data.approvals.map((approval) =>
+			taskIds.has(approval.taskId) &&
+			approval.mode === 'before_complete' &&
+			approval.status === 'pending'
+				? {
+						...approval,
+						status: 'canceled' as const,
+						updatedAt: now,
+						resolvedAt: now,
+						summary:
+							input.targetSessionId === input.sourceSessionId
+								? 'Canceled after the thread was recovered and re-queued from the thread detail page.'
+								: 'Canceled after work moved to a new thread from the thread detail page.'
+					}
+				: approval
+		),
+		decisions: [
+			...input.tasks.map((task) =>
+				createDecision({
+					taskId: task.id,
+					runId: nextRunByTaskId.get(task.id)?.id ?? null,
+					decisionType: 'task_recovered',
+					summary: input.decisionSummary(task),
+					createdAt: now
+				})
+			),
+			...(input.data.decisions ?? [])
+		]
 	};
 }
 
@@ -172,6 +338,169 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'updateSessionSandbox',
 			sessionId: params.sessionId
+		};
+	},
+
+	recoverSessionThread: async ({ params }) => {
+		const session = await getAgentThread(params.sessionId);
+
+		if (!session) {
+			return fail(404, { message: 'Thread not found.' });
+		}
+
+		let prompt = '';
+
+		try {
+			prompt = getLatestThreadPrompt(session);
+		} catch (err) {
+			return fail(409, {
+				message: err instanceof Error ? err.message : 'No saved request is available to recover.'
+			});
+		}
+
+		if (session.hasActiveRun) {
+			if (session.origin !== 'managed') {
+				return fail(409, {
+					message:
+						'Imported Codex threads with an active run cannot be force-recovered yet. Move the latest request to a new thread instead.'
+				});
+			}
+
+			try {
+				await recoverAgentThread(params.sessionId);
+			} catch (err) {
+				return fail(400, {
+					message: err instanceof Error ? err.message : 'Could not recover the active work thread.'
+				});
+			}
+		}
+
+		const refreshed = await getAgentThread(params.sessionId);
+
+		if (!refreshed?.canResume || !refreshed.threadId) {
+			return fail(409, {
+				message:
+					'This thread cannot be recovered in place because no resumable Codex thread id is available. Move the latest request to a new thread instead.'
+			});
+		}
+
+		try {
+			await sendAgentThreadMessage(params.sessionId, prompt);
+		} catch (err) {
+			return fail(400, {
+				message:
+					err instanceof Error
+						? err.message
+						: 'Could not re-queue the latest request in this thread.'
+			});
+		}
+
+		const current = await loadControlPlane();
+		const tasksToCarryForward = getTasksToCarryForward(current, params.sessionId);
+
+		if (tasksToCarryForward.length > 0) {
+			await updateControlPlane((data) =>
+				reopenTasksForThreadRetry({
+					data,
+					sourceSessionId: params.sessionId,
+					targetSessionId: params.sessionId,
+					threadId: refreshed.threadId,
+					prompt,
+					tasks: getTasksToCarryForward(data, params.sessionId),
+					runSummary: 'Recovered the work thread and re-queued the latest request.',
+					decisionSummary: (task) =>
+						`Recovered thread ${params.sessionId} from the thread detail page and re-queued the latest request for ${task.title}.`
+				})
+			);
+		}
+
+		return {
+			ok: true,
+			successAction: 'recoverSessionThread',
+			sessionId: params.sessionId
+		};
+	},
+
+	moveLatestRequestToNewThread: async ({ params }) => {
+		const session = await getAgentThread(params.sessionId);
+
+		if (!session) {
+			return fail(404, { message: 'Thread not found.' });
+		}
+
+		let prompt = '';
+
+		try {
+			prompt = getLatestThreadPrompt(session);
+		} catch (err) {
+			return fail(409, {
+				message: err instanceof Error ? err.message : 'No saved request is available to move.'
+			});
+		}
+
+		if (session.hasActiveRun) {
+			if (session.origin !== 'managed') {
+				return fail(409, {
+					message:
+						'Imported Codex threads with an active run cannot be force-recovered yet. Wait for the run to finish or cancel it before moving work.'
+				});
+			}
+
+			try {
+				await recoverAgentThread(params.sessionId);
+			} catch (err) {
+				return fail(400, {
+					message:
+						err instanceof Error
+							? err.message
+							: 'Could not retire the current run before moving work.'
+				});
+			}
+		}
+
+		let nextThread: Awaited<ReturnType<typeof startAgentThread>>;
+
+		try {
+			nextThread = await startAgentThread({
+				name: session.name,
+				cwd: session.cwd,
+				prompt,
+				sandbox: session.sandbox,
+				model: session.model
+			});
+		} catch (err) {
+			return fail(400, {
+				message:
+					err instanceof Error
+						? err.message
+						: 'Could not start a new thread for the latest request.'
+			});
+		}
+
+		const current = await loadControlPlane();
+		const tasksToCarryForward = getTasksToCarryForward(current, params.sessionId);
+
+		if (tasksToCarryForward.length > 0) {
+			await updateControlPlane((data) =>
+				reopenTasksForThreadRetry({
+					data,
+					sourceSessionId: params.sessionId,
+					targetSessionId: nextThread.sessionId,
+					threadId: null,
+					prompt,
+					tasks: getTasksToCarryForward(data, params.sessionId),
+					runSummary: 'Moved the latest request into a new work thread.',
+					decisionSummary: (task) =>
+						`Moved the latest request from thread ${params.sessionId} to fresh thread ${nextThread.sessionId} from the thread detail page for ${task.title}.`
+				})
+			);
+		}
+
+		return {
+			ok: true,
+			successAction: 'moveLatestRequestToNewThread',
+			sessionId: nextThread.sessionId,
+			previousSessionId: params.sessionId
 		};
 	},
 

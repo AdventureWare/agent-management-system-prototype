@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
@@ -214,15 +215,8 @@
 					</label>
 
 					<div class="flex flex-wrap gap-3 lg:col-span-2">
-						<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-							Apply window
-						</button>
-						<a
-							class="rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white"
-							href={resolve('/app/planning')}
-						>
-							Reset
-						</a>
+						<AppButton type="submit" variant="primary">Apply window</AppButton>
+						<AppButton href={resolve('/app/planning')} variant="neutral">Reset</AppButton>
 					</div>
 				</form>
 
@@ -237,12 +231,7 @@
 						type="hidden"
 						value={data.filters.includeUnscheduled ? 'true' : 'false'}
 					/>
-					<button
-						class="btn border border-amber-800/70 bg-amber-950/40 font-semibold text-amber-200"
-						type="submit"
-					>
-						Capture planning session
-					</button>
+					<AppButton type="submit" variant="warning">Capture planning session</AppButton>
 					<p class="self-center text-xs text-slate-400">
 						Save this planning window as a session record with the goals, tasks, and linked
 						decisions currently in scope.
@@ -355,12 +344,7 @@
 									</label>
 
 									<div class="flex items-end">
-										<button
-											class="btn w-full preset-filled-primary-500 font-semibold"
-											type="submit"
-										>
-											Save
-										</button>
+										<AppButton class="w-full" type="submit" variant="primary">Save</AppButton>
 									</div>
 								</form>
 							</article>

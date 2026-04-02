@@ -11,7 +11,9 @@ export const SELF_IMPROVEMENT_SOURCE_OPTIONS = [
 	'blocked_tasks',
 	'stale_tasks',
 	'review_feedback',
-	'thread_reuse_gap'
+	'thread_reuse_gap',
+	'planning_gaps',
+	'captured_suggestions'
 ] as const;
 
 export const SELF_IMPROVEMENT_SEVERITY_OPTIONS = ['low', 'medium', 'high'] as const;
@@ -158,6 +160,18 @@ export type SelfImprovementOpportunityRecord = {
 
 export type TrackedSelfImprovementOpportunity = SelfImprovementOpportunity &
 	SelfImprovementOpportunityRecord;
+
+export type SelfImprovementCapturedSuggestion = {
+	id: string;
+	title: string;
+	summary: string;
+	category: SelfImprovementCategory;
+	severity: SelfImprovementSeverity;
+	projectId: string | null;
+	goalId: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
 
 export type SelfImprovementFeedbackSignal = {
 	id: string;

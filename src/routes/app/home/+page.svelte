@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { appNavigationSections } from '$lib/app-navigation';
 	import {
@@ -61,6 +62,7 @@
 	let improvementOpportunities = $derived(dashboard.improvementOpportunities);
 	let opportunityActionIds = $state.raw<string[]>([]);
 	let opportunityActionError = $state<string | null>(null);
+	let opportunityActionNotice = $state<string | null>(null);
 
 	function userIsEditingFormControl() {
 		const activeElement = document.activeElement;
@@ -101,20 +103,26 @@
 		return opportunityActionIds.includes(opportunityId);
 	}
 
-	async function runOpportunityAction(opportunityId: string, action: () => Promise<void>) {
+	async function runOpportunityAction<T>(
+		opportunityId: string,
+		action: () => Promise<T>
+	): Promise<T | null> {
 		if (opportunityActionIsPending(opportunityId)) {
-			return;
+			return null;
 		}
 
 		opportunityActionIds = [...opportunityActionIds, opportunityId];
 		opportunityActionError = null;
+		opportunityActionNotice = null;
 
 		try {
-			await action();
+			const result = await action();
 			await refreshDashboard({ force: true });
+			return result;
 		} catch (err) {
 			opportunityActionError =
-				err instanceof Error ? err.message : 'Could not update the self-improvement opportunity.';
+				err instanceof Error ? err.message : 'Could not update the suggestion.';
+			return null;
 		} finally {
 			opportunityActionIds = opportunityActionIds.filter((id) => id !== opportunityId);
 		}
@@ -127,9 +135,14 @@
 	}
 
 	async function createOpportunityTask(opportunityId: string) {
-		await runOpportunityAction(opportunityId, async () => {
-			await createTaskFromSelfImprovementOpportunity(opportunityId);
+		const taskId = await runOpportunityAction(opportunityId, async () => {
+			return createTaskFromSelfImprovementOpportunity(opportunityId);
 		});
+
+		if (taskId) {
+			opportunityActionNotice = 'Opened the created follow-up task.';
+			await goto(resolve(`/app/tasks/${taskId}`));
+		}
 	}
 
 	function sessionStateClass(state: AgentThreadDetail['sessionState']) {
@@ -423,7 +436,7 @@
 						</p>
 					</div>
 					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/improvements')}
-						>Open improvements</a
+						>Open suggestions</a
 					>
 				</div>
 
@@ -664,7 +677,7 @@
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<h2 class="text-xl font-semibold text-white">Self-improvement opportunities</h2>
+						<h2 class="text-xl font-semibold text-white">Suggestions</h2>
 						<p class="text-sm text-slate-400">
 							Patterns emerging from failures, blockers, reviews, stale work, and reusable thread
 							context.
@@ -697,15 +710,20 @@
 				</div>
 
 				{#if dashboard.improvementSummary.totalCount === 0}
-					<p class="text-sm text-slate-400">
-						No improvement opportunities are being surfaced right now.
-					</p>
+					<p class="text-sm text-slate-400">No suggestions are being surfaced right now.</p>
 				{:else}
 					{#if opportunityActionError}
 						<p
 							class="rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
 						>
 							{opportunityActionError}
+						</p>
+					{/if}
+					{#if opportunityActionNotice}
+						<p
+							class="rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+						>
+							{opportunityActionNotice}
 						</p>
 					{/if}
 					<div class="space-y-3">
@@ -745,7 +763,7 @@
 										{/if}
 										{#if opportunity.createdTaskId}
 											<p class="mt-2 text-xs text-sky-200">
-												Draft task created: {opportunity.createdTaskTitle ??
+												Follow-up task created: {opportunity.createdTaskTitle ??
 													opportunity.createdTaskId}
 											</p>
 										{/if}
@@ -756,7 +774,7 @@
 												class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sm leading-none text-sky-200 transition hover:border-sky-700 hover:text-white"
 												href={resolve(`/app/tasks/${opportunity.createdTaskId}`)}
 											>
-												Open draft task
+												Open follow-up task
 											</a>
 										{:else if opportunity.suggestedTask}
 											<button
@@ -769,11 +787,11 @@
 											>
 												{opportunityActionIsPending(opportunity.id)
 													? 'Working...'
-													: 'Create draft task'}
+													: 'Create follow-up task'}
 											</button>
 										{/if}
 
-										{#if opportunity.status !== 'accepted'}
+										{#if !opportunity.suggestedTask && opportunity.status !== 'accepted'}
 											<button
 												class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-sm leading-none text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
 												type="button"

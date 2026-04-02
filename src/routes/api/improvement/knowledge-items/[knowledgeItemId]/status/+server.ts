@@ -15,7 +15,7 @@ export const POST = async ({ params, request }) => {
 	const knowledgeItemId = params.knowledgeItemId?.trim() ?? '';
 
 	if (!knowledgeItemId) {
-		error(400, 'Knowledge item ID is required.');
+		error(400, 'Saved lesson ID is required.');
 	}
 
 	const body = (await request.json().catch(() => ({}))) as {
@@ -24,7 +24,7 @@ export const POST = async ({ params, request }) => {
 	const status = parseStatus(body.status ?? '');
 
 	if (!status) {
-		error(400, 'A valid knowledge item status is required.');
+		error(400, 'A valid saved lesson status is required.');
 	}
 
 	const knowledgeItem = await setSelfImprovementKnowledgeItemStatus({
@@ -33,7 +33,7 @@ export const POST = async ({ params, request }) => {
 	});
 
 	if (!knowledgeItem) {
-		error(404, 'Knowledge item not found.');
+		error(404, 'Saved lesson not found.');
 	}
 
 	return json({

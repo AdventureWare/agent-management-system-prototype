@@ -56,7 +56,7 @@ function buildFixture(): ControlPlaneData {
 				lane: 'product',
 				status: 'ready',
 				summary: 'Child summary',
-				artifactPath: '/tmp/goals/child',
+				artifactPath: '/tmp/project-two/goals/child',
 				successSignal: '',
 				parentGoalId: 'goal_parent',
 				projectIds: [],
@@ -160,9 +160,11 @@ describe('goal relationship helpers', () => {
 	it('derives task and project links from both goal records and task goal ownership', () => {
 		const data = buildFixture();
 		const goal = data.goals[0];
+		const childGoal = data.goals[1];
 
 		expect(getGoalLinkedTaskIds(data, goal)).toEqual(['task_1']);
 		expect(getGoalLinkedProjectIds(data, goal)).toEqual(['project_1']);
+		expect(getGoalLinkedProjectIds(data, childGoal)).toEqual(['project_2']);
 	});
 
 	it('builds a recursive goal scope across descendant goals', () => {

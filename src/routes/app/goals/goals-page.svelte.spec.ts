@@ -16,7 +16,7 @@ describe('/app/goals/+page.svelte', () => {
 						status: 'running',
 						summary: 'Establish repeatable acquisition and retention loops.',
 						artifactPath: '/tmp/project/agent_output/goals/grow-kwipoo',
-						horizon: 'Later this year',
+						targetDate: '2026-05-20',
 						successSignal: 'The team can point to a reliable acquisition channel.',
 						parentGoalId: null,
 						parentGoalName: '',
@@ -46,7 +46,7 @@ describe('/app/goals/+page.svelte', () => {
 						status: 'ready',
 						summary: 'Prove whether creator partnerships can become a repeatable channel.',
 						artifactPath: '/tmp/project/agent_output/goals/creator-partnerships',
-						horizon: 'This quarter',
+						targetDate: null,
 						successSignal: 'At least one creator channel shows repeatable traction.',
 						parentGoalId: 'goal_parent',
 						parentGoalName: 'Grow Kwipoo into a repeatable business',
@@ -91,6 +91,8 @@ describe('/app/goals/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Subgoal');
 		expect(document.body.textContent).toContain('1 project');
 		expect(document.body.textContent).toContain('1 task');
+		expect(document.body.textContent).toContain('May 20, 2026');
+		expect(document.body.textContent).toContain('Unscheduled');
 		expect(document.body.textContent).toContain('Open');
 	});
 });

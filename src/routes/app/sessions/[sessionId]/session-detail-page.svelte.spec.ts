@@ -93,6 +93,15 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 			prompt: 'Refine the implementation and add coverage.',
 			lastMessage: 'Follow-up response from the agent.'
 		});
+		const middleRun = createRun({
+			id: 'run-middle',
+			mode: 'message',
+			requestedThreadId: 'thread-1',
+			createdAt: '2026-03-27T12:30:00.000Z',
+			updatedAt: '2026-03-27T12:35:00.000Z',
+			prompt: 'Tighten the layout and keep the summary readable.',
+			lastMessage: 'Middle response with another checkpoint.'
+		});
 		const session: AgentSessionDetail = {
 			id: 'session-1',
 			name: 'Session detail inspector',
@@ -133,7 +142,7 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 				}
 			],
 			latestRun: followUpRun,
-			runs: [followUpRun, initialRun]
+			runs: [followUpRun, middleRun, initialRun]
 		};
 
 		render(Page, {
@@ -144,7 +153,19 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 				taskResponseAction: {
 					taskId: 'task-1',
 					taskTitle: 'Session detail inspector task',
+					taskProjectId: 'project_1',
 					taskStatus: 'review',
+					taskGoalId: 'goal_1',
+					taskLane: 'product',
+					taskPriority: 'high',
+					taskRiskLevel: 'medium',
+					taskApprovalMode: 'before_complete',
+					taskRequiresReview: true,
+					taskDesiredRoleId: 'role_builder',
+					taskAssigneeWorkerId: 'worker_1',
+					taskTargetDate: '2026-04-04',
+					taskRequiredCapabilityNames: ['svelte', 'ux'],
+					taskRequiredToolNames: ['codex'],
 					openReview: {
 						status: 'open',
 						summary: 'Review the latest thread output.'
@@ -191,6 +212,7 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Open task detail' }).first())
 			.toHaveAttribute('href', '/app/tasks/task-1');
+		await expect.element(page.getByRole('button', { name: 'Create new task' })).toBeVisible();
 		await expect
 			.element(page.getByRole('link', { name: /Back to threads/i }))
 			.toHaveAttribute('href', '/app/sessions');
@@ -213,6 +235,8 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Approve response and complete task' }))
 			.toBeEnabled();
+		await expect.element(page.getByRole('button', { name: /Show 1 older turn/i })).toBeVisible();
+		await page.getByRole('button', { name: /Show 1 older turn/i }).click();
 
 		await page.getByRole('button', { name: /Turn 1/i }).click();
 
@@ -232,5 +256,67 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 					.first()
 			)
 			.toBeVisible();
+	});
+
+	it('shows recovery controls when a thread needs attention', async () => {
+		const failedRun = createRun({
+			id: 'run-failed',
+			mode: 'message',
+			requestedThreadId: 'thread-1',
+			state: {
+				status: 'failed',
+				pid: null,
+				startedAt: '2026-03-27T12:01:00.000Z',
+				finishedAt: '2026-03-27T12:05:00.000Z',
+				exitCode: 1,
+				signal: null,
+				codexThreadId: 'thread-1'
+			},
+			lastMessage: null,
+			prompt: 'Retry the build and finish the fix.'
+		});
+		const session: AgentSessionDetail = {
+			id: 'session-1',
+			name: 'Broken thread',
+			cwd: '/tmp/project',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4',
+			origin: 'managed',
+			threadId: 'thread-1',
+			attachments: [],
+			archivedAt: null,
+			createdAt: '2026-03-27T12:00:00.000Z',
+			updatedAt: '2026-03-27T12:05:00.000Z',
+			sessionState: 'attention',
+			latestRunStatus: 'failed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-27T12:05:00.000Z',
+			lastActivityLabel: 'moments ago',
+			sessionSummary: 'The latest run failed and needs a recovery decision.',
+			lastExitCode: 1,
+			runTimeline: timeline,
+			relatedTasks: [],
+			latestRun: failedRun,
+			runs: [failedRun]
+		};
+
+		render(Page, {
+			form: null as never,
+			data: {
+				session,
+				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				taskResponseAction: null
+			} as never
+		});
+
+		await expect.element(page.getByRole('heading', { name: 'Recover or move work' })).toBeVisible();
+		await expect
+			.element(page.getByRole('button', { name: 'Recover in this thread' }))
+			.toBeEnabled();
+		await expect
+			.element(page.getByRole('button', { name: 'Move latest request to new thread' }))
+			.toBeEnabled();
 	});
 });

@@ -4,7 +4,9 @@ import { projectMatchesPath, taskHasUnmetDependencies } from '$lib/server/contro
 import {
 	getGoalDescendantGoalIds,
 	getGoalLinkedProjectIds,
+	getGoalLinkedProjects,
 	getGoalLinkedTaskIds,
+	getGoalLinkedTasks,
 	getGoalScopeProjectIds,
 	getGoalScopeTaskIds
 } from '$lib/server/goal-relationships';
@@ -27,6 +29,7 @@ import {
 } from '$lib/types/self-improvement';
 
 const ACTIVE_TASK_STATUSES = new Set(['ready', 'in_progress', 'blocked', 'review']);
+const FORWARD_PROGRESS_TASK_STATUSES = new Set(['ready', 'in_progress', 'review']);
 const SEVERITY_RANK: Record<SelfImprovementSeverity, number> = {
 	high: 3,
 	medium: 2,
@@ -430,6 +433,180 @@ function buildBlockedTaskOpportunities(data: ControlPlaneData) {
 			})
 		];
 	});
+}
+
+function buildPlanningGapOpportunities(data: ControlPlaneData) {
+	const goalOpportunities = data.goals.flatMap((goal) => {
+		if (goal.status === 'done') {
+			return [];
+		}
+
+		const linkedTasks = getGoalLinkedTasks(data, goal);
+		const openTasks = linkedTasks.filter((task) => task.status !== 'done');
+		const forwardProgressTasks = openTasks.filter((task) =>
+			FORWARD_PROGRESS_TASK_STATUSES.has(task.status)
+		);
+
+		if (forwardProgressTasks.length > 0) {
+			return [];
+		}
+
+		const blockedTasks = openTasks.filter((task) => task.status === 'blocked');
+		const draftTasks = openTasks.filter((task) => task.status === 'in_draft');
+		const linkedProjects = getGoalLinkedProjects(data, goal);
+		const primaryProject =
+			linkedProjects[0] ??
+			(goal.projectIds ?? [])
+				.map((projectId) => data.projects.find((candidate) => candidate.id === projectId) ?? null)
+				.find((project): project is Project => Boolean(project)) ??
+			null;
+		const signals = [
+			openTasks.length === 0
+				? 'Goal currently has no active non-done tasks linked to it.'
+				: `Open goal tasks exist, but none are ready or in progress: ${openTasks.map((task) => task.title).join(', ')}.`,
+			goal.successSignal ? `Goal success signal: ${goal.successSignal}` : '',
+			blockedTasks.length > 0
+				? `Blocked goal tasks: ${blockedTasks.map((task) => task.title).join(', ')}.`
+				: '',
+			draftTasks.length > 0
+				? `Draft-only goal tasks: ${draftTasks.map((task) => task.title).join(', ')}.`
+				: ''
+		].filter(Boolean);
+		const priority: SelfImprovementTaskDraft['priority'] =
+			blockedTasks.length > 0 || goal.status === 'blocked' ? 'high' : 'medium';
+
+		return [
+			createOpportunity({
+				subjectId: goal.id,
+				title: `Generate next steps for ${goal.name}`,
+				summary:
+					'This goal does not currently have an actionable next-step task. The system should generate a concrete follow-up task instead of leaving the goal without momentum.',
+				category: 'coordination',
+				source: 'planning_gaps',
+				severity: priority === 'high' ? 'high' : 'medium',
+				confidence: goal.successSignal ? 'high' : 'medium',
+				projectId: primaryProject?.id ?? null,
+				projectName: primaryProject?.name ?? null,
+				signals,
+				recommendedActions: [
+					'Create the next concrete task that advances the goal instead of leaving it in a planning gap.',
+					'Attach the next task to the goal and make the intended success signal explicit.',
+					blockedTasks.length > 0
+						? 'Turn blocked goal work into a recovery, decomposition, or prerequisite task.'
+						: 'Prefer a ready task over more vague planning or passive monitoring.'
+				],
+				relatedTaskIds: openTasks.map((task) => task.id),
+				relatedRunIds: [],
+				relatedSessionIds: openTasks
+					.map((task) => task.threadSessionId)
+					.filter((sessionId): sessionId is string => Boolean(sessionId)),
+				suggestedTask: {
+					title: `Plan next step for ${goal.name}`,
+					summary: [
+						`Create the next highest-value task for the goal "${goal.name}".`,
+						goal.summary ? `Goal summary: ${goal.summary}` : '',
+						goal.successSignal ? `Success signal: ${goal.successSignal}` : '',
+						openTasks.length > 0
+							? `Current non-done goal tasks are not actionable yet: ${openTasks.map((task) => task.title).join(', ')}.`
+							: 'There are no active non-done tasks currently linked to the goal.'
+					]
+						.filter(Boolean)
+						.join(' '),
+					priority
+				},
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Goal planning heuristic for ${goal.name}`,
+					'Capture how to keep this goal supplied with concrete next-step tasks instead of leaving it without momentum.',
+					signals.join(' '),
+					[
+						'Define the next concrete task before the goal loses momentum.',
+						'Attach the task to the goal and record the intended success signal.',
+						'When current goal tasks are blocked, decompose them into recovery or prerequisite work.'
+					].join(' '),
+					[primaryProject?.name ?? 'Cross-project planning work', `Goal: ${goal.name}`]
+				)
+			})
+		];
+	});
+
+	const projectOpportunities = data.projects.flatMap((project) => {
+		const projectTasks = data.tasks.filter((task) => task.projectId === project.id);
+		const openTasks = projectTasks.filter((task) => task.status !== 'done');
+		const forwardProgressTasks = openTasks.filter((task) =>
+			FORWARD_PROGRESS_TASK_STATUSES.has(task.status)
+		);
+		const linkedGoals = data.goals.filter(
+			(goal) => goal.status !== 'done' && getGoalLinkedProjectIds(data, goal).includes(project.id)
+		);
+
+		if (linkedGoals.length > 0 || forwardProgressTasks.length > 0) {
+			return [];
+		}
+
+		if (openTasks.length === 0) {
+			return [];
+		}
+
+		const blockedTasks = openTasks.filter((task) => task.status === 'blocked');
+		const draftTasks = openTasks.filter((task) => task.status === 'in_draft');
+
+		return [
+			createOpportunity({
+				subjectId: project.id,
+				title: `Generate next project steps for ${project.name}`,
+				summary:
+					'This project has work in flight, but nothing currently ready to advance. The system should generate a concrete next-step task to restore momentum.',
+				category: 'coordination',
+				source: 'planning_gaps',
+				severity: blockedTasks.length > 0 ? 'high' : 'medium',
+				confidence: 'medium',
+				projectId: project.id,
+				projectName: project.name,
+				signals: [
+					`Open project tasks: ${openTasks.map((task) => task.title).join(', ')}.`,
+					blockedTasks.length > 0
+						? `Blocked project tasks: ${blockedTasks.map((task) => task.title).join(', ')}.`
+						: '',
+					draftTasks.length > 0
+						? `Draft-only project tasks: ${draftTasks.map((task) => task.title).join(', ')}.`
+						: '',
+					'The project has no linked active goals to generate next-step work from.'
+				].filter(Boolean),
+				recommendedActions: [
+					'Create a concrete next-step task that restores forward motion for the project.',
+					'If the project should be goal-driven, attach the next task to a project goal.',
+					'Convert blocked or draft-only work into a ready task with a clear owner and outcome.'
+				],
+				relatedTaskIds: openTasks.map((task) => task.id),
+				relatedRunIds: [],
+				relatedSessionIds: openTasks
+					.map((task) => task.threadSessionId)
+					.filter((sessionId): sessionId is string => Boolean(sessionId)),
+				suggestedTask: {
+					title: `Plan next project step for ${project.name}`,
+					summary: [
+						`Create the next concrete task for the project "${project.name}".`,
+						`Current open work is not yet actionable: ${openTasks.map((task) => task.title).join(', ')}.`,
+						'Prefer a ready task with a clear outcome over leaving the project in blocked or draft-only churn.'
+					].join(' '),
+					priority: blockedTasks.length > 0 ? 'high' : 'medium'
+				},
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Project planning heuristic for ${project.name}`,
+					'Capture how to turn blocked or draft-only project work into concrete next-step tasks.',
+					`Open project tasks are not currently actionable: ${openTasks.map((task) => task.title).join(', ')}.`,
+					[
+						'Create a ready task whenever project work is blocked or draft-only.',
+						'Attach the next task to a goal when the project should be goal-driven.',
+						'Keep at least one concrete next-step task available for the project.'
+					].join(' '),
+					[project.name, 'Projects without an actionable next-step task']
+				)
+			})
+		];
+	});
+
+	return [...goalOpportunities, ...projectOpportunities];
 }
 
 function buildStaleTaskOpportunities(
@@ -988,6 +1165,7 @@ export function buildSelfImprovementAnalysis(input: {
 	const opportunities = [
 		...buildExecutionOpportunities(input.data),
 		...buildBlockedTaskOpportunities(input.data),
+		...buildPlanningGapOpportunities(input.data),
 		...buildStaleTaskOpportunities(input.data, input.sessions, input.now),
 		...buildReviewFeedbackOpportunities(input.data),
 		...buildThreadReuseOpportunities(input.data, input.sessions)

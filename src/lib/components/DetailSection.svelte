@@ -70,9 +70,9 @@
 						{eyebrow}
 					</p>
 				{/if}
-				<h2 class="mt-2 text-xl font-semibold text-white">{title}</h2>
+				<h2 class="ui-wrap-anywhere mt-2 text-xl font-semibold text-white">{title}</h2>
 				{#if description}
-					<p class="mt-2 max-w-2xl text-sm text-slate-400">{description}</p>
+					<p class="ui-wrap-anywhere mt-2 max-w-2xl text-sm text-slate-400">{description}</p>
 				{/if}
 			</div>
 

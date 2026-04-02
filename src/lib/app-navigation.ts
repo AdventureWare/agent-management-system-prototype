@@ -44,7 +44,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		description: 'Cross-cutting system state',
 		links: [
 			{ id: 'home', label: 'Home', href: '/app/home' },
-			{ id: 'improvements', label: 'Improvements', href: '/app/improvements' }
+			{ id: 'improvements', label: 'Suggestions', href: '/app/improvements' }
 		]
 	},
 	{

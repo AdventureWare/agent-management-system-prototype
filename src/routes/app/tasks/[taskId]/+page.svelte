@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
@@ -8,6 +9,7 @@
 	import PageTabs from '$lib/components/PageTabs.svelte';
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import {
 		approvalStatusToneClass,
 		formatDecisionTypeLabel,
@@ -72,6 +74,10 @@
 	let governanceSignalCount = $derived(
 		(data.task.openReview ? 1 : 0) + (data.task.pendingApproval ? 1 : 0)
 	);
+	let taskTitleExpanded = $state(false);
+	let taskInstructionsExpanded = $state(false);
+	let taskTitleNeedsClamp = $derived(data.task.title.trim().length > 140);
+	let taskInstructionsNeedClamp = $derived(data.task.summary.trim().length > 360);
 
 	function threadActionLabel() {
 		if (!data.task.linkThread) {
@@ -176,6 +182,13 @@
 			: 'border-slate-800 bg-slate-950/70';
 	}
 
+	function createFollowUpTaskInstructions() {
+		return [
+			`Create a follow-up task related to "${data.task.title}".`,
+			`Current task summary:\n${compactText(data.task.summary, 420)}`
+		].join('\n\n');
+	}
+
 	let taskHasActiveRun = $derived(Boolean(data.task.hasActiveRun));
 	let taskIsReadyToRun = $derived(data.task.status === 'ready');
 	let runTaskDisabled = $derived(!taskIsReadyToRun || taskHasActiveRun);
@@ -222,38 +235,38 @@
 		eyebrow="Task detail"
 		title={data.task.title}
 		description={data.task.summary}
+		titleClass={taskTitleExpanded ? '' : 'ui-clamp-3'}
+		descriptionClass={taskInstructionsExpanded ? '' : 'ui-clamp-5'}
 	>
 		{#snippet actions()}
 			<div class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
-				<button
-					class="btn border border-slate-700 font-semibold text-slate-100"
-					type="submit"
-					form="task-update-form"
-				>
-					Save changes
-				</button>
-				<button
-					class={`btn font-semibold transition ${
-						runTaskDisabled
-							? 'cursor-not-allowed border border-slate-700 bg-slate-800/80 text-slate-400'
-							: 'preset-filled-primary-500'
-					}`}
+				<form method="GET" action={resolve('/app/tasks')}>
+					<input type="hidden" name="create" value="1" />
+					<input type="hidden" name="projectId" value={data.task.projectId} />
+					<input type="hidden" name="name" value={`Follow-up: ${data.task.title}`} />
+					<input type="hidden" name="instructions" value={createFollowUpTaskInstructions()} />
+					<AppButton type="submit" variant="accent">Create follow-up task</AppButton>
+				</form>
+				<AppButton type="submit" variant="neutral" form="task-update-form">Save changes</AppButton>
+				<AppButton
+					variant={runTaskDisabled ? 'neutral' : 'primary'}
 					type="submit"
 					form="task-update-form"
 					formaction="?/launchTaskSession"
 					disabled={runTaskDisabled}
-					aria-disabled={runTaskDisabled}
+					reserveLabel="Task starting"
 					title={runTaskDisabledTitle || undefined}
 				>
 					{runTaskButtonLabel}
-				</button>
+				</AppButton>
 				{#if data.task.linkThread}
-					<a
-						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+					<AppButton
 						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						variant="accent"
+						reserveLabel="Open assigned thread"
 					>
 						{threadActionLabel()}
-					</a>
+					</AppButton>
 				{/if}
 			</div>
 		{/snippet}
@@ -265,6 +278,30 @@
 					{formatTaskStatusLabel(data.task.status)}
 				</span>
 				<span class="text-sm text-slate-500">Updated {data.task.updatedAtLabel}</span>
+				{#if taskTitleNeedsClamp}
+					<AppButton
+						size="sm"
+						type="button"
+						variant="ghost"
+						onclick={() => {
+							taskTitleExpanded = !taskTitleExpanded;
+						}}
+					>
+						{taskTitleExpanded ? 'Collapse title' : 'Expand title'}
+					</AppButton>
+				{/if}
+				{#if taskInstructionsNeedClamp}
+					<AppButton
+						size="sm"
+						type="button"
+						variant="ghost"
+						onclick={() => {
+							taskInstructionsExpanded = !taskInstructionsExpanded;
+						}}
+					>
+						{taskInstructionsExpanded ? 'Collapse instructions' : 'Expand instructions'}
+					</AppButton>
+				{/if}
 			</div>
 		{/snippet}
 	</DetailHeader>
@@ -315,12 +352,14 @@
 		>
 			{#if data.task.linkThread}
 				<div class="mt-1 flex flex-wrap items-center gap-3">
-					<a
-						class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+					<AppButton
 						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						size="sm"
+						variant="accent"
+						reserveLabel="Open assigned thread"
 					>
 						{threadActionLabel()}
-					</a>
+					</AppButton>
 					<p class="ui-wrap-anywhere text-sm font-medium text-white">
 						{data.task.linkThread.name}
 					</p>
@@ -1041,9 +1080,9 @@
 											<p class="thread-name-clamp mt-2 text-sm font-medium text-white">
 												{data.suggestedThread.name}
 											</p>
-											{#if data.suggestedThread.topicLabels?.length > 0}
+											{#if uniqueTopicLabels(data.suggestedThread.topicLabels).length > 0}
 												<div class="mt-3 flex flex-wrap gap-2">
-													{#each data.suggestedThread.topicLabels as topicLabel (topicLabel)}
+													{#each uniqueTopicLabels(data.suggestedThread.topicLabels) as topicLabel (topicLabel)}
 														<span
 															class="badge border border-emerald-900/60 bg-emerald-950/30 text-[0.65rem] tracking-[0.16em] text-emerald-100 uppercase"
 														>
@@ -1177,9 +1216,9 @@
 															: 'Blocked'}
 												</p>
 											</div>
-											{#if thread.topicLabels?.length > 0}
+											{#if uniqueTopicLabels(thread.topicLabels).length > 0}
 												<div class="mt-3 flex flex-wrap gap-2">
-													{#each thread.topicLabels as topicLabel (topicLabel)}
+													{#each uniqueTopicLabels(thread.topicLabels) as topicLabel (topicLabel)}
 														<span
 															class="badge border border-sky-900/50 bg-sky-950/30 text-[0.65rem] tracking-[0.16em] text-sky-200 uppercase"
 														>

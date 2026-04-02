@@ -4,10 +4,15 @@ import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
-import { DatabaseSync } from 'node:sqlite';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { resolveTaskThreadName } from '$lib/server/task-threads';
 import { deriveThreadCategorization } from '$lib/server/task-thread-topics';
+import { listCodexStateThreadRows } from '$lib/server/codex-state-db';
+import {
+	isAgentSessionsSqliteEmpty,
+	loadAgentSessionsFromSqlite,
+	saveAgentSessionsToSqlite
+} from '$lib/server/db/agent-sessions-store';
 import {
 	getCodexSkillExecutionIssue,
 	getWorkspaceExecutionIssue
@@ -57,6 +62,10 @@ function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
 }
 
+function getAgentSessionsStorageBackend() {
+	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+}
+
 async function ensureAgentSessionsDb() {
 	try {
 		await readFile(AGENT_SESSIONS_DB_FILE, 'utf8');
@@ -66,91 +75,130 @@ async function ensureAgentSessionsDb() {
 	}
 }
 
-export async function loadAgentSessionsDb(): Promise<AgentSessionsDb> {
-	await ensureAgentSessionsDb();
-	const raw = await readFile(AGENT_SESSIONS_DB_FILE, 'utf8');
+function normalizeAgentSessionsDb(parsed: Partial<AgentSessionsDb>): AgentSessionsDb {
+	return {
+		sessions: Array.isArray(parsed.sessions)
+			? parsed.sessions
+					.filter((session) => Boolean(session) && typeof session === 'object')
+					.map((session) => {
+						const candidate = session as Partial<AgentSession>;
 
+						return {
+							...candidate,
+							id: typeof candidate.id === 'string' ? candidate.id : createSessionId(),
+							name: typeof candidate.name === 'string' ? candidate.name : 'Untitled session',
+							cwd: typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '',
+							sandbox: parseAgentSandbox(candidate.sandbox, 'workspace-write'),
+							model:
+								typeof candidate.model === 'string' && candidate.model.trim()
+									? candidate.model
+									: null,
+							threadId:
+								typeof candidate.threadId === 'string' && candidate.threadId.trim()
+									? candidate.threadId
+									: null,
+							attachments: Array.isArray(candidate.attachments)
+								? candidate.attachments
+										.filter((attachment) => Boolean(attachment) && typeof attachment === 'object')
+										.map((attachment) => {
+											const item = attachment as Partial<AgentSessionAttachment>;
+
+											return {
+												id:
+													typeof item.id === 'string' && item.id.trim()
+														? item.id
+														: `session_attachment_${randomUUID()}`,
+												name:
+													typeof item.name === 'string' && item.name.trim()
+														? item.name
+														: 'Attachment',
+												path: typeof item.path === 'string' ? normalizePathInput(item.path) : '',
+												contentType:
+													typeof item.contentType === 'string' && item.contentType.trim()
+														? item.contentType
+														: 'application/octet-stream',
+												sizeBytes:
+													typeof item.sizeBytes === 'number' &&
+													Number.isFinite(item.sizeBytes) &&
+													item.sizeBytes >= 0
+														? item.sizeBytes
+														: 0,
+												attachedAt:
+													typeof item.attachedAt === 'string' && item.attachedAt.trim()
+														? item.attachedAt
+														: new Date().toISOString()
+											};
+										})
+										.filter((attachment) => attachment.path.length > 0)
+								: [],
+							archivedAt:
+								typeof candidate.archivedAt === 'string' && candidate.archivedAt.trim()
+									? candidate.archivedAt
+									: null,
+							createdAt:
+								typeof candidate.createdAt === 'string'
+									? candidate.createdAt
+									: new Date().toISOString(),
+							updatedAt:
+								typeof candidate.updatedAt === 'string'
+									? candidate.updatedAt
+									: new Date().toISOString()
+						};
+					})
+			: [],
+		runs: Array.isArray(parsed.runs) ? parsed.runs : []
+	};
+}
+
+function parseAgentSessionsDb(raw: string) {
 	try {
-		const parsed = JSON.parse(raw) as Partial<AgentSessionsDb>;
-
-		return {
-			sessions: Array.isArray(parsed.sessions)
-				? parsed.sessions
-						.filter((session) => Boolean(session) && typeof session === 'object')
-						.map((session) => {
-							const candidate = session as Partial<AgentSession>;
-
-							return {
-								...candidate,
-								id: typeof candidate.id === 'string' ? candidate.id : createSessionId(),
-								name: typeof candidate.name === 'string' ? candidate.name : 'Untitled session',
-								cwd: typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '',
-								sandbox: parseAgentSandbox(candidate.sandbox, 'workspace-write'),
-								model:
-									typeof candidate.model === 'string' && candidate.model.trim()
-										? candidate.model
-										: null,
-								threadId:
-									typeof candidate.threadId === 'string' && candidate.threadId.trim()
-										? candidate.threadId
-										: null,
-								attachments: Array.isArray(candidate.attachments)
-									? candidate.attachments
-											.filter((attachment) => Boolean(attachment) && typeof attachment === 'object')
-											.map((attachment) => {
-												const item = attachment as Partial<AgentSessionAttachment>;
-
-												return {
-													id:
-														typeof item.id === 'string' && item.id.trim()
-															? item.id
-															: `session_attachment_${randomUUID()}`,
-													name:
-														typeof item.name === 'string' && item.name.trim()
-															? item.name
-															: 'Attachment',
-													path: typeof item.path === 'string' ? normalizePathInput(item.path) : '',
-													contentType:
-														typeof item.contentType === 'string' && item.contentType.trim()
-															? item.contentType
-															: 'application/octet-stream',
-													sizeBytes:
-														typeof item.sizeBytes === 'number' &&
-														Number.isFinite(item.sizeBytes) &&
-														item.sizeBytes >= 0
-															? item.sizeBytes
-															: 0,
-													attachedAt:
-														typeof item.attachedAt === 'string' && item.attachedAt.trim()
-															? item.attachedAt
-															: new Date().toISOString()
-												};
-											})
-											.filter((attachment) => attachment.path.length > 0)
-									: [],
-								archivedAt:
-									typeof candidate.archivedAt === 'string' && candidate.archivedAt.trim()
-										? candidate.archivedAt
-										: null,
-								createdAt:
-									typeof candidate.createdAt === 'string'
-										? candidate.createdAt
-										: new Date().toISOString(),
-								updatedAt:
-									typeof candidate.updatedAt === 'string'
-										? candidate.updatedAt
-										: new Date().toISOString()
-							};
-						})
-				: [],
-			runs: Array.isArray(parsed.runs) ? parsed.runs : []
-		};
+		return normalizeAgentSessionsDb(JSON.parse(raw) as Partial<AgentSessionsDb>);
 	} catch {
 		return defaultDb();
 	}
 }
 
+async function loadAgentSessionsDbFromJson() {
+	await ensureAgentSessionsDb();
+	return parseAgentSessionsDb(await readFile(AGENT_SESSIONS_DB_FILE, 'utf8'));
+}
+
+async function readAgentSessionsJsonIfPresent() {
+	if (!existsSync(AGENT_SESSIONS_DB_FILE)) {
+		return null;
+	}
+
+	try {
+		return parseAgentSessionsDb(await readFile(AGENT_SESSIONS_DB_FILE, 'utf8'));
+	} catch {
+		return defaultDb();
+	}
+}
+
+async function ensureAgentSessionsSqliteSeeded() {
+	if (!isAgentSessionsSqliteEmpty()) {
+		return;
+	}
+
+	const seed = (await readAgentSessionsJsonIfPresent()) ?? defaultDb();
+	saveAgentSessionsToSqlite(seed);
+}
+
+export async function loadAgentSessionsDb(): Promise<AgentSessionsDb> {
+	if (getAgentSessionsStorageBackend() === 'sqlite') {
+		await ensureAgentSessionsSqliteSeeded();
+		return normalizeAgentSessionsDb(loadAgentSessionsFromSqlite());
+	}
+
+	return loadAgentSessionsDbFromJson();
+}
+
 async function saveAgentSessionsDb(data: AgentSessionsDb) {
+	if (getAgentSessionsStorageBackend() === 'sqlite') {
+		saveAgentSessionsToSqlite(data);
+		return;
+	}
+
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
 	await writeFile(AGENT_SESSIONS_DB_FILE, JSON.stringify(data, null, 2));
 }
@@ -222,18 +270,6 @@ type NativeRolloutRecord = {
 	type?: string;
 	payload?: Record<string, unknown>;
 };
-
-function openCodexStateDb() {
-	if (!existsSync(CODEX_STATE_DB_FILE)) {
-		return null;
-	}
-
-	try {
-		return new DatabaseSync(CODEX_STATE_DB_FILE, { readOnly: true });
-	} catch {
-		return null;
-	}
-}
 
 function epochSecondsToIso(value: number | null | undefined) {
 	if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -383,68 +419,30 @@ function parseNativeRolloutRecord(line: string): NativeRolloutRecord | null {
 }
 
 async function listNativeCodexThreads() {
-	const db = openCodexStateDb();
+	const rows = listCodexStateThreadRows(CODEX_STATE_DB_FILE);
 
-	if (!db) {
-		return [];
-	}
+	return rows
+		.map((row) => {
+			const createdAt = epochSecondsToIso(row.created_at);
+			const updatedAt = epochSecondsToIso(row.updated_at);
 
-	try {
-		const rows = db
-			.prepare(
-				`
-					select
-						id,
-						title,
-						cwd,
-						sandbox_policy,
-						model,
-						first_user_message,
-						rollout_path,
-						created_at,
-						updated_at
-					from threads
-					where archived = 0
-					order by updated_at desc
-				`
-			)
-			.all() as Array<{
-			id: string;
-			title: string;
-			cwd: string;
-			sandbox_policy: string;
-			model: string | null;
-			first_user_message: string | null;
-			rollout_path: string;
-			created_at: number;
-			updated_at: number;
-		}>;
+			if (!createdAt || !updatedAt) {
+				return null;
+			}
 
-		return rows
-			.map((row) => {
-				const createdAt = epochSecondsToIso(row.created_at);
-				const updatedAt = epochSecondsToIso(row.updated_at);
-
-				if (!createdAt || !updatedAt) {
-					return null;
-				}
-
-				return {
-					id: row.id,
-					name: row.title.trim() || `Codex thread ${row.id.slice(0, 8)}`,
-					cwd: row.cwd,
-					sandbox: parseNativeSandboxPolicy(row.sandbox_policy),
-					model: row.model?.trim() || null,
-					createdAt,
-					updatedAt,
-					firstUserMessage: row.first_user_message?.trim() || null,
-					rolloutPath: row.rollout_path
-				} satisfies NativeCodexThread;
-			})
-			.filter((thread): thread is NativeCodexThread => Boolean(thread));
-	} finally {
-		db.close();
-	}
+			return {
+				id: row.id,
+				name: row.title.trim() || `Codex thread ${row.id.slice(0, 8)}`,
+				cwd: row.cwd,
+				sandbox: parseNativeSandboxPolicy(row.sandbox_policy),
+				model: row.model?.trim() || null,
+				createdAt,
+				updatedAt,
+				firstUserMessage: row.first_user_message?.trim() || null,
+				rolloutPath: row.rollout_path
+			} satisfies NativeCodexThread;
+		})
+		.filter((thread): thread is NativeCodexThread => Boolean(thread));
 }
 
 async function getNativeCodexThread(threadId: string) {
@@ -2342,6 +2340,7 @@ export const loadAgentThreadsDb = loadAgentSessionsDb;
 export const listAgentThreads = listAgentSessions;
 export const getAgentThread = getAgentSession;
 export const startAgentThread = startAgentSession;
+export const sendAgentThreadMessage = sendAgentSessionMessage;
 export const updateAgentThreadSandbox = updateAgentSessionSandbox;
 export const setAgentThreadsArchived = setAgentSessionsArchived;
 export const recoverAgentThread = recoverAgentSession;

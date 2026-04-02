@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThreads, updateAgentThreadArchiveState } from '$lib/client/agent-threads';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import DataTableSection from '$lib/components/DataTableSection.svelte';
@@ -14,6 +15,7 @@
 		formatActivityAge,
 		formatThreadStateLabel
 	} from '$lib/thread-activity';
+	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import type { AgentThreadDetail } from '$lib/types/agent-session';
 	import { fade } from 'svelte/transition';
 
@@ -432,7 +434,7 @@
 											Imported from Codex
 										</span>
 									{/if}
-									{#each session.topicLabels ?? [] as topicLabel (topicLabel)}
+									{#each uniqueTopicLabels(session.topicLabels) as topicLabel (topicLabel)}
 										<span
 											class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
 										>
@@ -498,12 +500,9 @@
 							<p class="ui-clamp-5 max-w-80 text-sm text-slate-300">{session.cwd}</p>
 						</td>
 						<td class="px-3 py-3 align-top">
-							<a
-								class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-								href={resolve(`/app/sessions/${session.id}`)}
-							>
+							<AppButton href={resolve(`/app/sessions/${session.id}`)} size="sm" variant="accent">
 								View thread
-							</a>
+							</AppButton>
 						</td>
 					</tr>
 				{/each}
@@ -528,16 +527,18 @@
 					<span>Auto-refresh active runs every 4s</span>
 				</label>
 				<span>Refresh pauses while you are typing or when this tab is in the background.</span>
-				<button
-					class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
+				<AppButton
+					class="w-full sm:w-auto"
 					type="button"
+					variant="neutral"
+					reserveLabel="Refreshing..."
 					onclick={() => {
 						void refreshSessions({ force: true });
 					}}
 					disabled={isRefreshing}
 				>
 					{isRefreshing ? 'Refreshing...' : 'Refresh all'}
-				</button>
+				</AppButton>
 			</div>
 		{/snippet}
 	</PageHeader>
@@ -617,9 +618,10 @@
 				tone="muted"
 			>
 				{#snippet actions()}
-					<button
-						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-2 text-center text-sm leading-none font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+					<AppButton
 						type="button"
+						variant={selectedAction === 'unarchive' ? 'accent' : 'neutral'}
+						reserveLabel="Unarchive selected"
 						onclick={() => {
 							if (selectedAction === 'archive') {
 								void updateArchiveState(true);
@@ -636,14 +638,10 @@
 						{:else}
 							Archive selected
 						{/if}
-					</button>
-					<button
-						class="inline-flex items-center justify-center rounded-full border border-slate-800 px-4 py-2 text-center text-sm leading-none text-slate-400 transition hover:border-slate-700 hover:text-white"
-						type="button"
-						onclick={clearSelection}
-					>
+					</AppButton>
+					<AppButton type="button" variant="ghost" onclick={clearSelection}>
 						Clear selection
-					</button>
+					</AppButton>
 				{/snippet}
 			</SelectionActionBar>
 		{/if}

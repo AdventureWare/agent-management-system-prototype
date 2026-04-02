@@ -4,6 +4,7 @@ import { createTaskFromSelfImprovementOpportunity } from '$lib/server/self-impro
 export const POST = async ({ params, request }) => {
 	const opportunityId = params.opportunityId?.trim() ?? '';
 	const payload = (await request.json().catch(() => ({}))) as {
+		projectId?: string | null;
 		goalId?: string | null;
 	};
 
@@ -12,13 +13,14 @@ export const POST = async ({ params, request }) => {
 	}
 
 	const task = await createTaskFromSelfImprovementOpportunity(opportunityId, {
+		projectId: payload.projectId?.trim() || null,
 		goalId: payload.goalId?.trim() || null
 	});
 
 	if (!task) {
 		error(
 			404,
-			'The opportunity could not be found or does not contain enough project context to create a task.'
+			'The suggestion could not be turned into a follow-up task yet. Narrow to a project scope or choose a suggestion with clear project context.'
 		);
 	}
 

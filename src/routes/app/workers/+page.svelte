@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -153,15 +154,15 @@
 		description="Workers represent the actual local or cloud surfaces that can take work. This page is now collection-first: find the right worker quickly, then drill into its detail page for routing and activity."
 	>
 		{#snippet actions()}
-			<button
-				class="btn preset-filled-primary-500 font-semibold"
+			<AppButton
 				type="button"
+				variant="primary"
 				onclick={() => {
 					isCreateModalOpen = true;
 				}}
 			>
 				Add worker
-			</button>
+			</AppButton>
 		{/snippet}
 	</PageHeader>
 
@@ -374,9 +375,7 @@
 				/>
 			</label>
 
-			<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-				Register worker
-			</button>
+			<AppButton type="submit" variant="primary">Register worker</AppButton>
 		</form>
 	</AppDialog>
 {/if}

@@ -1,6 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import {
+	isControlPlaneSqliteEmpty,
+	loadControlPlaneFromSqlite,
+	saveControlPlaneToSqlite
+} from '$lib/server/db/control-plane-store';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-session';
 import {
@@ -872,63 +878,107 @@ async function ensureDataFile() {
 	}
 }
 
-export async function loadControlPlane(): Promise<ControlPlaneData> {
-	await ensureDataFile();
-	const raw = await readFile(DATA_FILE, 'utf8');
+function getControlPlaneStorageBackend() {
+	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+}
 
+function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPlaneData {
+	const providers = Array.isArray(parsed.providers)
+		? parsed.providers.map((provider) => normalizeProvider(provider as LegacyProvider))
+		: [];
+	const projects = Array.isArray(parsed.projects)
+		? parsed.projects.map((project) => normalizeProject(project as Project))
+		: [];
+	const runs = Array.isArray(parsed.runs)
+		? parsed.runs.map((run) => normalizeRun(run as LegacyRun))
+		: [];
+	const reviews = Array.isArray(parsed.reviews)
+		? parsed.reviews.map((review) => normalizeReview(review as LegacyReview))
+		: [];
+	const planningSessions = Array.isArray(parsed.planningSessions)
+		? parsed.planningSessions.map((session) =>
+				normalizePlanningSession(session as LegacyPlanningSession)
+			)
+		: [];
+	const approvals = Array.isArray(parsed.approvals)
+		? parsed.approvals.map((approval) => normalizeApproval(approval as LegacyApproval))
+		: [];
+	const decisions = Array.isArray(parsed.decisions)
+		? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
+		: [];
+
+	return syncGovernanceQueues(
+		syncTaskExecutionState({
+			providers,
+			roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+			projects,
+			goals: Array.isArray(parsed.goals)
+				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+				: [],
+			workers: Array.isArray(parsed.workers)
+				? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
+				: [],
+			tasks: Array.isArray(parsed.tasks)
+				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
+				: [],
+			runs,
+			reviews,
+			planningSessions,
+			approvals,
+			decisions
+		})
+	);
+}
+
+function parseControlPlaneData(raw: string) {
 	try {
-		const parsed = JSON.parse(raw) as Partial<ControlPlaneData>;
-		const providers = Array.isArray(parsed.providers)
-			? parsed.providers.map((provider) => normalizeProvider(provider as LegacyProvider))
-			: [];
-		const projects = Array.isArray(parsed.projects)
-			? parsed.projects.map((project) => normalizeProject(project as Project))
-			: [];
-		const runs = Array.isArray(parsed.runs)
-			? parsed.runs.map((run) => normalizeRun(run as LegacyRun))
-			: [];
-		const reviews = Array.isArray(parsed.reviews)
-			? parsed.reviews.map((review) => normalizeReview(review as LegacyReview))
-			: [];
-		const planningSessions = Array.isArray(parsed.planningSessions)
-			? parsed.planningSessions.map((session) =>
-					normalizePlanningSession(session as LegacyPlanningSession)
-				)
-			: [];
-		const approvals = Array.isArray(parsed.approvals)
-			? parsed.approvals.map((approval) => normalizeApproval(approval as LegacyApproval))
-			: [];
-		const decisions = Array.isArray(parsed.decisions)
-			? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
-			: [];
-
-		return syncGovernanceQueues(
-			syncTaskExecutionState({
-				providers,
-				roles: Array.isArray(parsed.roles) ? parsed.roles : [],
-				projects,
-				goals: Array.isArray(parsed.goals)
-					? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
-					: [],
-				workers: Array.isArray(parsed.workers)
-					? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
-					: [],
-				tasks: Array.isArray(parsed.tasks)
-					? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
-					: [],
-				runs,
-				reviews,
-				planningSessions,
-				approvals,
-				decisions
-			})
-		);
+		return normalizeControlPlaneData(JSON.parse(raw) as Partial<ControlPlaneData>);
 	} catch {
 		return defaultData();
 	}
 }
 
+async function loadControlPlaneFromJson() {
+	await ensureDataFile();
+	return parseControlPlaneData(await readFile(DATA_FILE, 'utf8'));
+}
+
+async function readControlPlaneJsonIfPresent() {
+	if (!existsSync(DATA_FILE)) {
+		return null;
+	}
+
+	try {
+		return parseControlPlaneData(await readFile(DATA_FILE, 'utf8'));
+	} catch {
+		return defaultData();
+	}
+}
+
+async function ensureControlPlaneSqliteSeeded() {
+	if (!isControlPlaneSqliteEmpty()) {
+		return;
+	}
+
+	const seed = (await readControlPlaneJsonIfPresent()) ?? defaultData();
+	saveControlPlaneToSqlite(seed);
+}
+
+export async function loadControlPlane(): Promise<ControlPlaneData> {
+	if (getControlPlaneStorageBackend() === 'sqlite') {
+		await ensureControlPlaneSqliteSeeded();
+		return normalizeControlPlaneData(loadControlPlaneFromSqlite());
+	}
+
+	return loadControlPlaneFromJson();
+}
+
 async function saveControlPlane(data: ControlPlaneData) {
+	if (getControlPlaneStorageBackend() === 'sqlite') {
+		saveControlPlaneToSqlite(data);
+		return;
+	}
+
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
 	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }

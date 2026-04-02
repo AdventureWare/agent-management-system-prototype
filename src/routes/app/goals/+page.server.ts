@@ -22,6 +22,10 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 
+function isValidDate(value: string) {
+	return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function parseSelectedIds(form: FormData, key: string) {
 	return [
 		...new Set(
@@ -38,6 +42,7 @@ function readGoalForm(form: FormData) {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
 		successSignal: form.get('successSignal')?.toString().trim() ?? '',
+		targetDate: form.get('targetDate')?.toString().trim() ?? '',
 		artifactPath: normalizePathInput(form.get('artifactPath')?.toString()),
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
 		projectIds: parseSelectedIds(form, 'projectIds'),
@@ -170,6 +175,13 @@ export const actions: Actions = {
 			});
 		}
 
+		if (values.targetDate && !isValidDate(values.targetDate)) {
+			return fail(400, {
+				message: 'Target date must use YYYY-MM-DD.',
+				values
+			});
+		}
+
 		const current = await loadControlPlane();
 		const validationError = validateGoalSelections(current, values);
 
@@ -206,6 +218,7 @@ export const actions: Actions = {
 				parentGoalId,
 				projectIds: values.projectIds,
 				taskIds: values.taskIds,
+				targetDate: values.targetDate || null,
 				lane: values.lane,
 				status: values.status
 			});

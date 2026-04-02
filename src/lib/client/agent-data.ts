@@ -1,5 +1,7 @@
 import type { AgentSessionDetail, AgentThreadDetail } from '$lib/types/agent-session';
 import type {
+	SelfImprovementCategory,
+	SelfImprovementSeverity,
 	SelfImprovementKnowledgeStatus,
 	SelfImprovementSnapshot,
 	SelfImprovementStatus
@@ -118,7 +120,7 @@ export function fetchSelfImprovementSnapshot(
 
 	return fetchJson<SelfImprovementSnapshot>(
 		`/api/improvement/opportunities${params.size > 0 ? `?${params.toString()}` : ''}`,
-		'Could not refresh self-improvement opportunities.'
+		'Could not refresh the suggestions queue.'
 	);
 }
 
@@ -140,13 +142,41 @@ export async function updateSelfImprovementOpportunityStatus(
 	const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
 	if (!response.ok) {
-		throw new Error(payload.error ?? 'Could not update the self-improvement opportunity.');
+		throw new Error(payload.error ?? 'Could not update the suggestion.');
 	}
+}
+
+export async function captureSelfImprovementSuggestion(input: {
+	title: string;
+	summary: string;
+	category: SelfImprovementCategory;
+	severity: SelfImprovementSeverity;
+	projectId?: string | null;
+	goalId?: string | null;
+}) {
+	const response = await fetch('/api/improvement/opportunities', {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify(input)
+	});
+	const payload = (await response.json().catch(() => ({}))) as {
+		error?: string;
+		suggestionId?: string;
+	};
+
+	if (!response.ok) {
+		throw new Error(payload.error ?? 'Could not capture the suggestion.');
+	}
+
+	return payload.suggestionId ?? null;
 }
 
 export async function createTaskFromSelfImprovementOpportunity(
 	opportunityId: string,
 	options: {
+		projectId?: string | null;
 		goalId?: string | null;
 	} = {}
 ) {
@@ -156,6 +186,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 			'content-type': 'application/json'
 		},
 		body: JSON.stringify({
+			projectId: options.projectId ?? null,
 			goalId: options.goalId ?? null
 		})
 	});
@@ -165,7 +196,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 	};
 
 	if (!response.ok) {
-		throw new Error(payload.error ?? 'Could not create a draft task from this opportunity.');
+		throw new Error(payload.error ?? 'Could not create a follow-up task from this opportunity.');
 	}
 
 	return payload.taskId ?? null;
@@ -195,7 +226,7 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 	};
 
 	if (!response.ok) {
-		throw new Error(payload.error ?? 'Could not create a knowledge item from this opportunity.');
+		throw new Error(payload.error ?? 'Could not capture a saved lesson from this opportunity.');
 	}
 
 	return payload.knowledgeItemId ?? null;
@@ -217,6 +248,6 @@ export async function updateSelfImprovementKnowledgeItemStatus(
 	const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
 	if (!response.ok) {
-		throw new Error(payload.error ?? 'Could not update the knowledge item.');
+		throw new Error(payload.error ?? 'Could not update the saved lesson.');
 	}
 }

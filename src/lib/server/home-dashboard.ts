@@ -43,6 +43,8 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 		staleTaskSummary: summarizeTaskFreshness(taskWorkItems),
 		staleTasks: selectStaleTaskWorkItems(dashboardTasks),
 		improvementSummary: selfImprovement.summary,
-		improvementOpportunities: selfImprovement.opportunities.slice(0, 5)
+		improvementOpportunities: selfImprovement.opportunities
+			.filter((opportunity) => opportunity.status === 'open')
+			.slice(0, 5)
 	};
 }

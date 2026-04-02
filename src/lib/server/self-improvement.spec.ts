@@ -115,6 +115,18 @@ function createFixture(): ControlPlaneData {
 				parentGoalId: 'goal_product',
 				projectIds: ['project_2'],
 				taskIds: ['task_review']
+			},
+			{
+				id: 'goal_inbox',
+				name: 'Grow project planning backlog',
+				lane: 'product',
+				status: 'running',
+				summary: 'Keep the project stocked with concrete next-step tasks.',
+				artifactPath: '/tmp/project/goals/planning',
+				successSignal: 'There is always a ready next-step task for the project.',
+				parentGoalId: null,
+				projectIds: ['project_1'],
+				taskIds: []
 			}
 		],
 		workers: [
@@ -390,10 +402,11 @@ describe('buildSelfImprovementAnalysis', () => {
 			]
 		});
 
-		expect(report.summary.totalCount).toBe(5);
+		expect(report.summary.totalCount).toBe(6);
 		expect(report.summary.highSeverityCount).toBeGreaterThanOrEqual(2);
 		expect(report.summary.bySource.failed_runs).toBe(1);
 		expect(report.summary.bySource.blocked_tasks).toBe(1);
+		expect(report.summary.bySource.planning_gaps).toBe(1);
 		expect(report.summary.bySource.stale_tasks).toBe(1);
 		expect(report.summary.bySource.review_feedback).toBe(1);
 		expect(report.summary.bySource.thread_reuse_gap).toBe(1);
@@ -414,6 +427,13 @@ describe('buildSelfImprovementAnalysis', () => {
 					relatedSessionIds: expect.arrayContaining(['session_reuse_candidate']),
 					suggestedKnowledgeItem: expect.objectContaining({
 						triggerPattern: expect.stringContaining('Suggested thread')
+					})
+				}),
+				expect.objectContaining({
+					source: 'planning_gaps',
+					category: 'coordination',
+					suggestedTask: expect.objectContaining({
+						title: expect.stringContaining('Plan next step for Grow project planning backlog')
 					})
 				})
 			])

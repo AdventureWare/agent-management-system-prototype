@@ -16,7 +16,7 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 					status: 'running',
 					summary: 'Establish repeatable acquisition and retention loops.',
 					artifactPath: '/tmp/project/agent_output/goals/grow-kwipoo',
-					horizon: 'Later this year',
+					targetDate: '2026-05-20',
 					successSignal: 'Reliable acquisition channel identified.',
 					parentGoalId: '',
 					parentGoalName: '',
@@ -103,10 +103,15 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 
 		expect(document.body.textContent).toContain('Edit goal');
 		expect(document.body.textContent).toContain('Goal coach');
+		expect(document.body.textContent).toContain('Target May 20, 2026');
+		expect(document.body.textContent).toContain('Target date');
 		expect(document.body.textContent).toContain('Parent and subgoal context');
 		expect(document.body.textContent).toContain('Validate creator partnerships');
 		expect(document.body.textContent).toContain('Goal artifact browser');
 		expect(document.body.textContent).toContain('notes.md');
+		expect(
+			(document.querySelector('input[name="targetDate"]') as HTMLInputElement | null)?.value
+		).toBe('2026-05-20');
 
 		await page.getByRole('tab', { name: /Projects 1/i }).click();
 

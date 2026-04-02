@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -122,15 +123,15 @@
 		description="The project page should act like a directory, not a wall of forms. Search for the project you want, then open one detail page to edit defaults, inspect linked work, and see how that project is being used."
 	>
 		{#snippet actions()}
-			<button
-				class="btn preset-filled-primary-500 font-semibold"
+			<AppButton
 				type="button"
+				variant="primary"
 				onclick={() => {
 					isCreateModalOpen = true;
 				}}
 			>
 				Add project
-			</button>
+			</AppButton>
 		{/snippet}
 	</PageHeader>
 
@@ -355,16 +356,8 @@
 			</div>
 
 			<div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-				<button
-					class="btn border border-slate-700 text-slate-200 hover:border-slate-600"
-					type="button"
-					onclick={closeCreateModal}
-				>
-					Cancel
-				</button>
-				<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-					Create project
-				</button>
+				<AppButton type="button" variant="neutral" onclick={closeCreateModal}>Cancel</AppButton>
+				<AppButton type="submit" variant="primary">Create project</AppButton>
 			</div>
 		</form>
 	</AppDialog>

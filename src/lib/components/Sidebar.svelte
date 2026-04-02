@@ -73,10 +73,10 @@
 />
 
 <div
-	class="flex min-h-screen w-full flex-col bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_minmax(0,1fr)]"
+	class="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_minmax(0,1fr)]"
 >
 	<header
-		class="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden"
+		class="z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden"
 	>
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
 			<div class="min-w-0">
@@ -155,7 +155,7 @@
 	<Navigation
 		layout={layoutRail ? 'rail' : 'sidebar'}
 		class={[
-			'hidden md:block',
+			'hidden md:block md:min-h-0 md:overflow-y-auto',
 			layoutRail
 				? 'border-r border-slate-800 bg-slate-950'
 				: 'grid grid-rows-[1fr_auto] gap-4 border-r border-slate-800 bg-slate-950'
@@ -200,7 +200,7 @@
 	</Navigation>
 
 	<div
-		class="min-h-[calc(100vh-65px)] min-w-0 overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))] md:h-screen md:min-h-screen"
+		class="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))]"
 	>
 		{@render children()}
 	</div>

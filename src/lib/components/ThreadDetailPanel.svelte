@@ -5,6 +5,7 @@
 	type TaskResponseAction = {
 		taskId: string;
 		taskTitle: string;
+		taskProjectId: string;
 		taskStatus: string;
 		openReview: { status: string; summary: string } | null;
 		pendingApproval: { mode: string; status: string; summary: string } | null;
@@ -29,6 +30,7 @@
 			successAction?: string;
 			taskId?: string;
 			sessionId?: string;
+			previousSessionId?: string;
 		} | null;
 		backHref?: string;
 	}>();

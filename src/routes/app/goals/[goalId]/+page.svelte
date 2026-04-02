@@ -20,6 +20,7 @@
 		name?: string;
 		summary?: string;
 		successSignal?: string;
+		targetDate?: string;
 		artifactPath?: string;
 		parentGoalId?: string;
 		projectIds?: string[];
@@ -33,6 +34,25 @@
 		(form && 'values' in form ? form.values : undefined) as GoalFormValues | undefined
 	);
 	let selectedGoalPanel = $state<'structure' | 'projects' | 'tasks'>('structure');
+
+	function formatDateLabel(value: string | null | undefined) {
+		if (!value) {
+			return 'Not set';
+		}
+
+		const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
+
+		if (!year || !month || !day) {
+			return value;
+		}
+
+		return new Intl.DateTimeFormat('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		}).format(new Date(Date.UTC(year, month - 1, day)));
+	}
 </script>
 
 <AppPage width="full">
@@ -49,6 +69,11 @@
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(data.goal.status)}`}
 				>
 					{formatGoalStatusLabel(data.goal.status)}
+				</span>
+				<span
+					class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+				>
+					Target {formatDateLabel(data.goal.targetDate)}
 				</span>
 			</div>
 		{/snippet}
@@ -115,6 +140,7 @@
 						name: formValues?.name ?? data.goal.name,
 						summary: formValues?.summary ?? data.goal.summary,
 						successSignal: formValues?.successSignal ?? data.goal.successSignal,
+						targetDate: formValues?.targetDate ?? data.goal.targetDate ?? '',
 						artifactPath: formValues?.artifactPath ?? data.goal.artifactPath,
 						parentGoalId: formValues?.parentGoalId ?? data.goal.parentGoalId ?? '',
 						projectIds: formValues?.projectIds ?? data.linkedProjects.map((project) => project.id),
@@ -173,6 +199,20 @@
 						description="Keep the hierarchy visible while refining the goal wording and linked work."
 					>
 						<div class="space-y-4">
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Target date
+								</p>
+								<p class="mt-2 text-sm font-medium text-white">
+									{formatDateLabel(data.goal.targetDate)}
+								</p>
+								<p class="mt-2 text-sm text-slate-400">
+									{data.goal.targetDate
+										? 'Use this to keep the outcome tied to a concrete delivery window.'
+										: 'No target date is set for this goal yet.'}
+								</p>
+							</div>
+
 							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 									Parent goal

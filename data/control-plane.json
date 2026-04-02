@@ -86,6 +86,83 @@
   ],
   "projects": [
     {
+      "id": "project_447f8f6b-5cbc-40bf-8402-0e63ae30eb51",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_6cfc23d0-42b5-4000-977e-9726bbd3260f",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_30a776ed-a7b0-4377-a141-be40060151eb",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_38020896-6942-43de-8a7b-bf6b678be9ff",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_fa8d17ef-a759-4628-82ab-5366c37d9bdb",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_7fd4a644-d01d-404f-a6a6-cdfc80b95a76",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
+      "id": "project_ac8530fd-dd43-4dd5-a5f0-b44e035f6f17",
+      "name": "Life Project",
+      "summary": "The holistic project for capturing my life",
+      "projectRootFolder": "/Users/colinfreed",
+      "defaultArtifactRoot": "/Users/colinfreed/Inbox",
+      "defaultRepoPath": "",
+      "defaultRepoUrl": "",
+      "defaultBranch": "",
+      "defaultThreadSandbox": null
+    },
+    {
       "id": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
       "name": "Personal Knowledge",
       "summary": "Increasing my own knowledge",
@@ -131,6 +208,25 @@
     }
   ],
   "goals": [
+    {
+      "id": "goal_455c5195-7730-4675-a147-c7c8a071e028",
+      "name": "Have less obviously AI written website content",
+      "summary": "Some of the pages, like the release history page, are pretty obviously written by AI. The wording kinda sounds like it's instructions for the developer, which is not good.",
+      "lane": "product",
+      "status": "ready",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
+      "successSignal": "The website doesn't have any content that was obviously written by AI, or sounds like instructions to the developer or anything like that.",
+      "parentGoalId": "goal_2ee0dc56-c9f2-4559-9dd0-2a5e67e50e5c",
+      "projectIds": [
+        "project_dd367528-853b-4b02-b4dc-db7c8ba9c481"
+      ],
+      "taskIds": [
+        "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219"
+      ],
+      "targetDate": null,
+      "planningPriority": 0,
+      "confidence": "medium"
+    },
     {
       "id": "goal_a363fc76-fdc1-4b79-aed2-39d53ac611c7",
       "name": "Useful mobile version of AMS",
@@ -215,7 +311,14 @@
       "projectIds": [
         "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1"
       ],
-      "taskIds": [],
+      "taskIds": [
+        "task_829c9d06-6e3c-48cb-ac36-da468c1ce348",
+        "task_1948e5b0-4638-45ee-a08b-69dafe8ac364",
+        "task_6562f7b6-3bef-40be-a375-be999c046202",
+        "task_b3d634b6-8e5c-4cd9-b082-809513904c36",
+        "task_3e016e6d-1531-48c1-9a70-9ee1d4703ad9",
+        "task_59f79ab8-5098-45d9-b460-48a61e59760b"
+      ],
       "targetDate": null,
       "planningPriority": 0,
       "confidence": "medium"
@@ -340,12 +443,111 @@
   ],
   "tasks": [
     {
+      "id": "task_ac6d257b-70e2-47c5-a1ce-512bf1bde287",
+      "title": "Recover thread or move to new/working thread",
+      "summary": "Right now, there doesn't appear to be any way to recover a stalled/failed/needs attention Thread. There needs to be a way to attempt to recover the thread, or move the most recent request/message to a new/different thread",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_973ba033-5a50-41fc-983a-2ae464e2881b",
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-02",
+      "runCount": 1,
+      "latestRunId": "run_8402d8ae-f9d0-49fe-95fd-70e2216f3eef",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-02T13:14:55.837Z",
+      "updatedAt": "2026-04-02T13:27:30.928Z"
+    },
+    {
+      "id": "task_4f545c30-5334-4884-ad8d-9de888e34de9",
+      "title": "Fix website text color",
+      "summary": "The text on cards like the one in the attached screenshot is illegible due to lack of contrast between the text and the background. Please use an appropriate lighter color of text on the background. Also, make sure the like tokens/design system is used and updated, not just a like one off adjustment on the specific instance of the component.",
+      "projectId": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_2d1ec3a2-4469-455b-8fe6-66b0231910d9",
+      "requiredCapabilityNames": [
+        "ui",
+        "resonsive-ui"
+      ],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-02",
+      "runCount": 1,
+      "latestRunId": "run_eee629b8-2251-428a-9521-bd076a92595a",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
+      "attachments": [
+        {
+          "id": "attachment_f9dccac3-47ef-426a-beb2-c44829f75d2b",
+          "name": "image.png",
+          "path": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments/task_4f545c30-5334-4884-ad8d-9de888e34de9/attachment_f9dccac3-47ef-426a-beb2-c44829f75d2b-image.png",
+          "contentType": "image/png",
+          "sizeBytes": 688789,
+          "attachedAt": "2026-04-02T13:11:57.805Z"
+        }
+      ],
+      "createdAt": "2026-04-02T13:11:57.801Z",
+      "updatedAt": "2026-04-02T13:22:26.212Z"
+    },
+    {
+      "id": "task_e1423959-78f9-464a-a2b0-534ba08bf302",
+      "title": "Begin figuring out ontology for AWM system",
+      "summary": "Please review the challenge requirements docs, and then start developing a potential ontology for the animal welfare monitoring system prototype",
+      "projectId": "project_1ef6aafb-6d6b-4384-943e-ecc0ea93c4b6",
+      "lane": "product",
+      "goalId": "",
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiresReview": true,
+      "desiredRoleId": "role_coordinator",
+      "assigneeWorkerId": null,
+      "threadSessionId": "session_24d37109-0edf-457a-a541-34576059e219",
+      "requiredCapabilityNames": [
+        "ontology",
+        "categorization"
+      ],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-02",
+      "runCount": 1,
+      "latestRunId": "run_db8dca05-3ad7-4d1d-8c56-8eedb4ca0ee6",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-02T12:46:00.740Z",
+      "updatedAt": "2026-04-02T13:33:57.117Z"
+    },
+    {
       "id": "task_b3d634b6-8e5c-4cd9-b082-809513904c36",
       "title": "Improve UI responsiveness and mobile appearance",
       "summary": "Please begin improving the UI so it can handle better resizing and is more responsive and has a better mobile UX and UI. Start by analyzing the current state and making a plan, based on best practices for responsive design and mobile design.",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "ready",
       "riskLevel": "medium",
@@ -368,7 +570,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-02T03:07:51.645Z",
-      "updatedAt": "2026-04-02T03:07:51.645Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
@@ -376,7 +578,7 @@
       "summary": "Please start reviewing current app features and functionality, and updating the documentation and guides that are hosted on the website. Let's start with reviewing introduction and creating an account, make sure those are up to date. or I guess add them if they don't even exist in the documentation. but then after that I think we make sure documentation on Things is up to date",
       "projectId": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_455c5195-7730-4675-a147-c7c8a071e028",
       "priority": "medium",
       "status": "review",
       "riskLevel": "medium",
@@ -393,12 +595,12 @@
       "dependencyTaskIds": [],
       "estimateHours": null,
       "targetDate": "2026-04-03",
-      "runCount": 1,
-      "latestRunId": "run_9ea0d9e6-8935-4e82-8392-b0a08f397a05",
+      "runCount": 2,
+      "latestRunId": "run_8a5bf9d2-84e7-465c-8f9f-177896ca87dc",
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-04-02T02:51:58.200Z",
-      "updatedAt": "2026-04-02T03:02:02.189Z"
+      "updatedAt": "2026-04-02T13:33:21.826Z"
     },
     {
       "id": "task_498d4251-d7e9-4f9e-88a9-a605673c5b30",
@@ -408,7 +610,7 @@
       "lane": "product",
       "goalId": "",
       "priority": "medium",
-      "status": "review",
+      "status": "in_progress",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiresReview": true,
@@ -433,7 +635,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-02T02:23:57.983Z",
-      "updatedAt": "2026-04-02T02:57:03.748Z"
+      "updatedAt": "2026-04-02T13:34:44.117Z"
     },
     {
       "id": "task_164b8c7b-4fd0-4d05-8e4a-3b3a707691fb",
@@ -472,7 +674,7 @@
       "summary": "Improve Task context awareness in Thread detail UI. As in, make it easier or a bit more prominent in the UI on the Thread detail page to see which Task the thread is currently working on. SO like if you're typing a response or reading the latest response from the thread, it's easier to recognize what you're working on",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "review",
       "riskLevel": "medium",
@@ -492,7 +694,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-02T00:04:13.279Z",
-      "updatedAt": "2026-04-02T00:31:27.911Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_448288d9-b2f7-4c60-8125-2c4c8720d4d0",
@@ -744,7 +946,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-01T02:38:05.681Z",
-      "updatedAt": "2026-04-02T03:05:05.486Z"
+      "updatedAt": "2026-04-02T12:34:57.119Z"
     },
     {
       "id": "task_a6523b70-ee85-4a8b-ae5a-cb61a592c269",
@@ -808,7 +1010,7 @@
       "summary": "The UI is pretty messy and inconsistent. And not optimized, kinda feels mostly thrown together. Please review, analyze, and research then come up with a plan to improve the UI, like figure out how to best layout the different pages based on their contents and purpose, find the right components and layouts and styles to use from the skeleton UI library and all that. Also need to plan out like good patterns, like having lists/table views to view many like entities and preview info about them, then be able to drill into detail pages for single entites/objects/records whatever. So need to like follow better practices and better adapt the UI for the purpose of the pages and content and such",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "review",
       "riskLevel": "medium",
@@ -828,7 +1030,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T23:31:29.697Z",
-      "updatedAt": "2026-04-02T02:23:40.618Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_098054ed-a8ee-4091-b4e7-c4cd89aed8e2",
@@ -1097,7 +1299,7 @@
       "summary": "The Thread name column is like too wide in the Other threads table on the sessions page. It needs to be narrower so the other columns are visible",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "done",
       "riskLevel": "medium",
@@ -1117,7 +1319,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T13:52:01.821Z",
-      "updatedAt": "2026-03-31T14:57:54.819Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_363461c0-da1d-45b9-93e5-8f3c273e882a",
@@ -1629,7 +1831,7 @@
       "summary": "Do a UI pass to address containers that have text which if the text is long then it overflows too much or whatever, so like need to elegantly handle varying lengths of text",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "done",
       "riskLevel": "medium",
@@ -1649,7 +1851,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-31T01:12:56.618Z",
-      "updatedAt": "2026-04-01T14:18:19.112Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_fb13954a-0458-495a-819d-b5e37c364961",
@@ -1769,7 +1971,7 @@
       "summary": "Reduce size of Thread Continuity in Task detail. The Thread preview link cards show too many lines of text if the message is really long. Shouldn't show more than like 5 lines.",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "lane": "product",
-      "goalId": "",
+      "goalId": "goal_02390bc4-fcae-495f-9f32-456e370b7265",
       "priority": "medium",
       "status": "done",
       "riskLevel": "medium",
@@ -1789,7 +1991,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-03-30T23:12:45.007Z",
-      "updatedAt": "2026-03-31T15:26:03.937Z"
+      "updatedAt": "2026-04-02T12:32:24.322Z"
     },
     {
       "id": "task_aec99dca-0630-4b11-b3f3-80722a6b19d6",
@@ -1963,7 +2165,7 @@
       "id": "task_kwipoo_icp_refine",
       "title": "Refine first Kwipoo ICP",
       "summary": "Turn current product language into a tighter B2C ICP with segment fit signals and objections.",
-      "projectId": "",
+      "projectId": "project_ac8530fd-dd43-4dd5-a5f0-b44e035f6f17",
       "lane": "growth",
       "goalId": "goal_kwipoo_market_research",
       "priority": "urgent",
@@ -1990,23 +2192,103 @@
   ],
   "runs": [
     {
+      "id": "run_8a5bf9d2-84e7-465c-8f9f-177896ca87dc",
+      "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-02T13:30:07.476Z",
+      "updatedAt": "2026-04-02T13:33:21.826Z",
+      "startedAt": "2026-04-02T13:30:07.476Z",
+      "endedAt": "2026-04-02T13:33:21.826Z",
+      "threadId": "019d4c1a-cf8e-7fd2-a223-5d9e48e162ed",
+      "sessionId": "session_65e2831e-75f8-41fc-abb5-156749356f48",
+      "promptDigest": "d3840dda933633db",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-02T13:32:44.286Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_8402d8ae-f9d0-49fe-95fd-70e2216f3eef",
+      "taskId": "task_ac6d257b-70e2-47c5-a1ce-512bf1bde287",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-02T13:14:55.859Z",
+      "updatedAt": "2026-04-02T13:27:30.928Z",
+      "startedAt": "2026-04-02T13:14:55.859Z",
+      "endedAt": "2026-04-02T13:27:30.928Z",
+      "threadId": null,
+      "sessionId": "session_973ba033-5a50-41fc-983a-2ae464e2881b",
+      "promptDigest": "2d234e9c76895f49",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-02T13:27:05.233Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_eee629b8-2251-428a-9521-bd076a92595a",
+      "taskId": "task_4f545c30-5334-4884-ad8d-9de888e34de9",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-02T13:11:57.833Z",
+      "updatedAt": "2026-04-02T13:22:26.215Z",
+      "startedAt": "2026-04-02T13:11:57.833Z",
+      "endedAt": "2026-04-02T13:18:52.306Z",
+      "threadId": null,
+      "sessionId": "session_2d1ec3a2-4469-455b-8fe6-66b0231910d9",
+      "promptDigest": "97063a54164708a1",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-02T13:15:42.969Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_db8dca05-3ad7-4d1d-8c56-8eedb4ca0ee6",
+      "taskId": "task_e1423959-78f9-464a-a2b0-534ba08bf302",
+      "workerId": null,
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-02T12:46:00.768Z",
+      "updatedAt": "2026-04-02T13:33:57.117Z",
+      "startedAt": "2026-04-02T12:46:00.767Z",
+      "endedAt": "2026-04-02T13:33:57.117Z",
+      "threadId": null,
+      "sessionId": "session_24d37109-0edf-457a-a541-34576059e219",
+      "promptDigest": "728b2b7a0a7773e4",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-02T13:31:51.816Z",
+      "errorSummary": ""
+    },
+    {
       "id": "run_8bca017f-1a87-4565-b994-94ae29e75ea8",
       "taskId": "task_498d4251-d7e9-4f9e-88a9-a605673c5b30",
       "workerId": null,
       "providerId": "provider_local_codex",
-      "status": "completed",
+      "status": "running",
       "createdAt": "2026-04-02T02:52:37.127Z",
-      "updatedAt": "2026-04-02T02:57:03.748Z",
+      "updatedAt": "2026-04-02T13:34:44.117Z",
       "startedAt": "2026-04-02T02:52:37.127Z",
-      "endedAt": "2026-04-02T02:57:03.748Z",
+      "endedAt": null,
       "threadId": null,
       "sessionId": "session_66a3d7c3-e15d-4faa-9408-8457dbc5a553",
       "promptDigest": "46dec19f146b82f4",
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-02T02:56:45.582Z",
+      "summary": "Linked work thread is actively running.",
+      "lastHeartbeatAt": "2026-04-02T13:34:44.117Z",
       "errorSummary": ""
     },
     {
@@ -2014,20 +2296,20 @@
       "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
       "workerId": null,
       "providerId": "provider_local_codex",
-      "status": "completed",
+      "status": "failed",
       "createdAt": "2026-04-02T02:51:58.227Z",
-      "updatedAt": "2026-04-02T03:02:02.189Z",
+      "updatedAt": "2026-04-02T13:06:27.918Z",
       "startedAt": "2026-04-02T02:51:58.226Z",
-      "endedAt": "2026-04-02T03:02:02.189Z",
+      "endedAt": "2026-04-02T13:06:27.918Z",
       "threadId": null,
       "sessionId": "session_65e2831e-75f8-41fc-abb5-156749356f48",
       "promptDigest": "3b948f9287f58486",
       "artifactPaths": [
         "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-02T03:01:43.091Z",
-      "errorSummary": ""
+      "summary": "Task blocked after the linked work thread failed.",
+      "lastHeartbeatAt": "2026-04-02T13:03:17.728Z",
+      "errorSummary": "{\"type\":\"turn.failed\",\"error\":{\"message\":\"Selected model is at capacity. Please try a different model.\"}}"
     },
     {
       "id": "run_f43ac9a8-af77-45c3-869d-19f1039d2bb6",
@@ -2396,9 +2678,9 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-01T02:38:05.693Z",
-      "updatedAt": "2026-04-02T03:05:05.486Z",
+      "updatedAt": "2026-04-02T12:34:57.119Z",
       "startedAt": "2026-04-01T02:38:05.692Z",
-      "endedAt": "2026-04-02T03:05:05.486Z",
+      "endedAt": "2026-04-02T12:34:57.119Z",
       "threadId": null,
       "sessionId": "session_f7a9da7e-6486-4276-8f2f-6a2aa7ed9cd2",
       "promptDigest": "a7c804c7e06787f3",
@@ -2406,7 +2688,7 @@
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-02T03:03:51.836Z",
+      "lastHeartbeatAt": "2026-04-02T12:34:19.892Z",
       "errorSummary": ""
     },
     {
@@ -3252,28 +3534,76 @@
   ],
   "reviews": [
     {
-      "id": "review_b00edb44-ef4e-4624-a295-ecf827d9522b",
+      "id": "review_3142a89f-c447-4b26-8bfa-53a8947ae707",
       "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
-      "runId": "run_9ea0d9e6-8935-4e82-8392-b0a08f397a05",
+      "runId": "run_8a5bf9d2-84e7-465c-8f9f-177896ca87dc",
       "status": "open",
-      "createdAt": "2026-04-02T03:02:03.698Z",
-      "updatedAt": "2026-04-02T03:02:03.698Z",
+      "createdAt": "2026-04-02T13:34:07.253Z",
+      "updatedAt": "2026-04-02T13:34:07.253Z",
       "resolvedAt": null,
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
       "summary": "Task entered the review queue."
     },
     {
-      "id": "review_cb59f735-14f0-4ac6-99b3-94d236d99229",
-      "taskId": "task_498d4251-d7e9-4f9e-88a9-a605673c5b30",
-      "runId": "run_8bca017f-1a87-4565-b994-94ae29e75ea8",
+      "id": "review_78b6bcea-4ce6-4329-893a-aeaff0512a89",
+      "taskId": "task_ac6d257b-70e2-47c5-a1ce-512bf1bde287",
+      "runId": "run_8402d8ae-f9d0-49fe-95fd-70e2216f3eef",
       "status": "open",
-      "createdAt": "2026-04-02T02:57:14.597Z",
-      "updatedAt": "2026-04-02T02:57:14.597Z",
+      "createdAt": "2026-04-02T13:28:52.436Z",
+      "updatedAt": "2026-04-02T13:28:52.436Z",
       "resolvedAt": null,
       "requestedByWorkerId": null,
       "reviewerWorkerId": null,
       "summary": "Task entered the review queue."
+    },
+    {
+      "id": "review_d4f37f52-c39a-48be-8e47-208d5fa8afb8",
+      "taskId": "task_4f545c30-5334-4884-ad8d-9de888e34de9",
+      "runId": "run_eee629b8-2251-428a-9521-bd076a92595a",
+      "status": "approved",
+      "createdAt": "2026-04-02T13:21:56.750Z",
+      "updatedAt": "2026-04-02T13:22:26.212Z",
+      "resolvedAt": "2026-04-02T13:22:26.212Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_3cdddab7-6162-4c3e-92a7-639fbb438375",
+      "taskId": "task_e1423959-78f9-464a-a2b0-534ba08bf302",
+      "runId": "run_db8dca05-3ad7-4d1d-8c56-8eedb4ca0ee6",
+      "status": "dismissed",
+      "createdAt": "2026-04-02T12:55:29.596Z",
+      "updatedAt": "2026-04-02T12:56:52.551Z",
+      "resolvedAt": "2026-04-02T12:56:52.551Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_b00edb44-ef4e-4624-a295-ecf827d9522b",
+      "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
+      "runId": "run_9ea0d9e6-8935-4e82-8392-b0a08f397a05",
+      "status": "dismissed",
+      "createdAt": "2026-04-02T03:02:03.698Z",
+      "updatedAt": "2026-04-02T12:20:32.168Z",
+      "resolvedAt": "2026-04-02T12:20:32.168Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_cb59f735-14f0-4ac6-99b3-94d236d99229",
+      "taskId": "task_498d4251-d7e9-4f9e-88a9-a605673c5b30",
+      "runId": "run_8bca017f-1a87-4565-b994-94ae29e75ea8",
+      "status": "dismissed",
+      "createdAt": "2026-04-02T02:57:14.597Z",
+      "updatedAt": "2026-04-02T12:39:07.733Z",
+      "resolvedAt": "2026-04-02T12:39:07.733Z",
+      "requestedByWorkerId": null,
+      "reviewerWorkerId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
     },
     {
       "id": "review_24d6da4a-c413-4480-9fb0-8a664d2a8b60",
@@ -3903,6 +4233,45 @@
   "planningSessions": [],
   "approvals": [],
   "decisions": [
+    {
+      "id": "decision_d3d55d50-21d5-4489-97ca-0fb2bdf8d49a",
+      "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
+      "goalId": null,
+      "runId": "run_8a5bf9d2-84e7-465c-8f9f-177896ca87dc",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_recovered",
+      "summary": "Recovered thread session_65e2831e-75f8-41fc-abb5-156749356f48 from the thread detail page and re-queued the latest request for Sync documentation with current app version.",
+      "createdAt": "2026-04-02T13:30:07.476Z",
+      "decidedByWorkerId": null
+    },
+    {
+      "id": "decision_34daedf6-ecc6-47ef-adca-a76ddb7f0b36",
+      "taskId": "task_4f545c30-5334-4884-ad8d-9de888e34de9",
+      "goalId": null,
+      "runId": "run_eee629b8-2251-428a-9521-bd076a92595a",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-02T13:22:26.212Z",
+      "decidedByWorkerId": null
+    },
+    {
+      "id": "decision_8d316530-e5c1-4301-a199-097bc7ce9ffc",
+      "taskId": "task_0269ac07-f8e4-4b09-a6c5-1aeb45ad2219",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: set status to Ready; cleared the task assignee.",
+      "createdAt": "2026-04-02T13:12:37.175Z",
+      "decidedByWorkerId": null
+    },
     {
       "id": "decision_4eaf870d-ca7e-4ab7-98fd-be2ebeaf0513",
       "taskId": "task_965a20f2-2e63-46f4-80c3-6731e452446e",

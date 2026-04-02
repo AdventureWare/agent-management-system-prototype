@@ -7,6 +7,14 @@ const controlPlaneState = vi.hoisted(() => ({
 }));
 
 const getAgentThread = vi.hoisted(() => vi.fn());
+const recoverAgentThread = vi.hoisted(() => vi.fn());
+const sendAgentThreadMessage = vi.hoisted(() => vi.fn());
+const startAgentThread = vi.hoisted(() =>
+	vi.fn(async () => ({
+		sessionId: 'session_replacement',
+		runId: 'run_replacement'
+	}))
+);
 const updateAgentThreadSandbox = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/agent-threads', () => ({
@@ -14,6 +22,9 @@ vi.mock('$lib/server/agent-threads', () => ({
 	parseAgentSandbox: vi.fn(
 		(value: string | null | undefined, fallback: string) => value ?? fallback
 	),
+	recoverAgentThread,
+	sendAgentThreadMessage,
+	startAgentThread,
 	updateAgentThreadSandbox
 }));
 
@@ -58,6 +69,40 @@ vi.mock('$lib/server/control-plane', () => ({
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-03-31T12:00:00.000Z',
 			decidedByWorkerId: null
+		})
+	),
+	createRun: vi.fn(
+		(input: {
+			taskId: string;
+			workerId?: string | null;
+			providerId?: string | null;
+			status?: string;
+			startedAt?: string | null;
+			endedAt?: string | null;
+			threadId?: string | null;
+			sessionId?: string | null;
+			promptDigest?: string;
+			artifactPaths?: string[];
+			summary?: string;
+			lastHeartbeatAt?: string | null;
+			errorSummary?: string;
+		}) => ({
+			id: `run_created_${input.taskId}`,
+			taskId: input.taskId,
+			workerId: input.workerId ?? null,
+			providerId: input.providerId ?? null,
+			status: input.status ?? 'queued',
+			createdAt: '2026-03-31T12:00:00.000Z',
+			updatedAt: '2026-03-31T12:00:00.000Z',
+			startedAt: input.startedAt ?? null,
+			endedAt: input.endedAt ?? null,
+			threadId: input.threadId ?? null,
+			sessionId: input.sessionId ?? null,
+			promptDigest: input.promptDigest ?? '',
+			artifactPaths: input.artifactPaths ?? [],
+			summary: input.summary ?? '',
+			lastHeartbeatAt: input.lastHeartbeatAt ?? null,
+			errorSummary: input.errorSummary ?? ''
 		})
 	),
 	createReview: vi.fn(
@@ -186,7 +231,25 @@ describe('session detail page server actions', () => {
 		};
 		controlPlaneState.saved = null;
 		getAgentThread.mockReset();
+		recoverAgentThread.mockReset();
+		sendAgentThreadMessage.mockReset();
+		startAgentThread.mockReset();
 		updateAgentThreadSandbox.mockReset();
+		recoverAgentThread.mockResolvedValue({
+			sessionId: 'session_1',
+			runId: 'run_agent_1',
+			status: 'canceled',
+			signal: 'SIGTERM',
+			recoveredAt: '2026-03-31T11:36:00.000Z'
+		});
+		sendAgentThreadMessage.mockResolvedValue({
+			sessionId: 'session_1',
+			runId: 'run_agent_retry'
+		});
+		startAgentThread.mockResolvedValue({
+			sessionId: 'session_replacement',
+			runId: 'run_replacement'
+		});
 		getAgentThread.mockResolvedValue({
 			id: 'session_1',
 			name: 'Task thread',
@@ -379,5 +442,300 @@ describe('session detail page server actions', () => {
 			}
 		});
 		expect(controlPlaneState.saved).toBeNull();
+	});
+
+	it('re-queues the latest request in the same thread during recovery', async () => {
+		getAgentThread
+			.mockResolvedValueOnce({
+				id: 'session_1',
+				name: 'Task thread',
+				cwd: '/tmp/project',
+				sandbox: 'workspace-write',
+				model: 'gpt-5.4',
+				origin: 'managed',
+				threadId: 'thread_1',
+				attachments: [],
+				archivedAt: null,
+				createdAt: '2026-03-31T11:00:00.000Z',
+				updatedAt: '2026-03-31T11:35:00.000Z',
+				sessionState: 'attention',
+				latestRunStatus: 'failed',
+				hasActiveRun: false,
+				canResume: true,
+				runCount: 1,
+				lastActivityAt: '2026-03-31T11:35:00.000Z',
+				lastActivityLabel: 'just now',
+				sessionSummary: 'The latest run failed.',
+				lastExitCode: 1,
+				runTimeline: [],
+				relatedTasks: [
+					{
+						id: 'task_1',
+						title: 'Approve thread output',
+						status: 'blocked',
+						isPrimary: true
+					}
+				],
+				latestRun: {
+					id: 'run_agent_1',
+					sessionId: 'session_1',
+					mode: 'message',
+					prompt: 'Retry the implementation.',
+					requestedThreadId: 'thread_1',
+					createdAt: '2026-03-31T11:00:00.000Z',
+					updatedAt: '2026-03-31T11:35:00.000Z',
+					logPath: '/tmp/run.log',
+					statePath: '/tmp/run-state.json',
+					messagePath: '/tmp/run-message.txt',
+					configPath: '/tmp/run-config.json',
+					state: {
+						status: 'failed',
+						pid: null,
+						startedAt: '2026-03-31T11:01:00.000Z',
+						finishedAt: '2026-03-31T11:35:00.000Z',
+						exitCode: 1,
+						signal: null,
+						codexThreadId: 'thread_1'
+					},
+					lastMessage: null,
+					logTail: ['Build failed.'],
+					activityAt: '2026-03-31T11:35:00.000Z'
+				},
+				runs: []
+			})
+			.mockResolvedValueOnce({
+				id: 'session_1',
+				name: 'Task thread',
+				cwd: '/tmp/project',
+				sandbox: 'workspace-write',
+				model: 'gpt-5.4',
+				origin: 'managed',
+				threadId: 'thread_1',
+				attachments: [],
+				archivedAt: null,
+				createdAt: '2026-03-31T11:00:00.000Z',
+				updatedAt: '2026-03-31T11:36:00.000Z',
+				sessionState: 'ready',
+				latestRunStatus: 'failed',
+				hasActiveRun: false,
+				canResume: true,
+				runCount: 1,
+				lastActivityAt: '2026-03-31T11:36:00.000Z',
+				lastActivityLabel: 'just now',
+				sessionSummary: 'Available again.',
+				lastExitCode: 1,
+				runTimeline: [],
+				relatedTasks: [
+					{
+						id: 'task_1',
+						title: 'Approve thread output',
+						status: 'blocked',
+						isPrimary: true
+					}
+				],
+				latestRun: {
+					id: 'run_agent_1',
+					sessionId: 'session_1',
+					mode: 'message',
+					prompt: 'Retry the implementation.',
+					requestedThreadId: 'thread_1',
+					createdAt: '2026-03-31T11:00:00.000Z',
+					updatedAt: '2026-03-31T11:35:00.000Z',
+					logPath: '/tmp/run.log',
+					statePath: '/tmp/run-state.json',
+					messagePath: '/tmp/run-message.txt',
+					configPath: '/tmp/run-config.json',
+					state: {
+						status: 'failed',
+						pid: null,
+						startedAt: '2026-03-31T11:01:00.000Z',
+						finishedAt: '2026-03-31T11:35:00.000Z',
+						exitCode: 1,
+						signal: null,
+						codexThreadId: 'thread_1'
+					},
+					lastMessage: null,
+					logTail: ['Build failed.'],
+					activityAt: '2026-03-31T11:35:00.000Z'
+				},
+				runs: []
+			});
+		controlPlaneState.current = {
+			...controlPlaneState.current!,
+			tasks: [
+				{
+					...controlPlaneState.current!.tasks[0],
+					status: 'blocked',
+					blockedReason: 'Build failed.'
+				}
+			],
+			runs: [
+				{
+					...controlPlaneState.current!.runs[0],
+					status: 'failed',
+					errorSummary: 'Build failed.',
+					endedAt: '2026-03-31T11:35:00.000Z'
+				}
+			]
+		};
+
+		const result = await actions.recoverSessionThread({
+			params: { sessionId: 'session_1' },
+			request: new Request('http://localhost/app/sessions/session_1', { method: 'POST' })
+		} as never);
+
+		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_1', 'Retry the implementation.');
+		expect(recoverAgentThread).not.toHaveBeenCalled();
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'recoverSessionThread',
+				sessionId: 'session_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				id: 'task_1',
+				threadSessionId: 'session_1',
+				status: 'in_progress',
+				blockedReason: ''
+			})
+		);
+		expect(controlPlaneState.saved?.runs[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				sessionId: 'session_1',
+				status: 'running',
+				summary: 'Recovered the work thread and re-queued the latest request.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_recovered'
+			})
+		);
+	});
+
+	it('moves the latest request into a fresh thread and carries the task forward', async () => {
+		getAgentThread.mockResolvedValue({
+			id: 'session_1',
+			name: 'Task thread',
+			cwd: '/tmp/project',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4',
+			origin: 'managed',
+			threadId: 'thread_1',
+			attachments: [],
+			archivedAt: null,
+			createdAt: '2026-03-31T11:00:00.000Z',
+			updatedAt: '2026-03-31T11:35:00.000Z',
+			sessionState: 'attention',
+			latestRunStatus: 'failed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-31T11:35:00.000Z',
+			lastActivityLabel: 'just now',
+			sessionSummary: 'The latest run failed.',
+			lastExitCode: 1,
+			runTimeline: [],
+			relatedTasks: [
+				{
+					id: 'task_1',
+					title: 'Approve thread output',
+					status: 'blocked',
+					isPrimary: true
+				}
+			],
+			latestRun: {
+				id: 'run_agent_1',
+				sessionId: 'session_1',
+				mode: 'message',
+				prompt: 'Retry the implementation in a clean thread.',
+				requestedThreadId: 'thread_1',
+				createdAt: '2026-03-31T11:00:00.000Z',
+				updatedAt: '2026-03-31T11:35:00.000Z',
+				logPath: '/tmp/run.log',
+				statePath: '/tmp/run-state.json',
+				messagePath: '/tmp/run-message.txt',
+				configPath: '/tmp/run-config.json',
+				state: {
+					status: 'failed',
+					pid: null,
+					startedAt: '2026-03-31T11:01:00.000Z',
+					finishedAt: '2026-03-31T11:35:00.000Z',
+					exitCode: 1,
+					signal: null,
+					codexThreadId: 'thread_1'
+				},
+				lastMessage: null,
+				logTail: ['Build failed.'],
+				activityAt: '2026-03-31T11:35:00.000Z'
+			},
+			runs: []
+		});
+		controlPlaneState.current = {
+			...controlPlaneState.current!,
+			tasks: [
+				{
+					...controlPlaneState.current!.tasks[0],
+					status: 'blocked',
+					blockedReason: 'Build failed.'
+				}
+			],
+			runs: [
+				{
+					...controlPlaneState.current!.runs[0],
+					status: 'failed',
+					errorSummary: 'Build failed.',
+					endedAt: '2026-03-31T11:35:00.000Z'
+				}
+			]
+		};
+
+		const result = await actions.moveLatestRequestToNewThread({
+			params: { sessionId: 'session_1' },
+			request: new Request('http://localhost/app/sessions/session_1', { method: 'POST' })
+		} as never);
+
+		expect(startAgentThread).toHaveBeenCalledWith({
+			name: 'Task thread',
+			cwd: '/tmp/project',
+			prompt: 'Retry the implementation in a clean thread.',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4'
+		});
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'moveLatestRequestToNewThread',
+				sessionId: 'session_replacement',
+				previousSessionId: 'session_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				id: 'task_1',
+				threadSessionId: 'session_replacement',
+				status: 'in_progress',
+				blockedReason: ''
+			})
+		);
+		expect(controlPlaneState.saved?.runs[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				sessionId: 'session_replacement',
+				status: 'running',
+				summary: 'Moved the latest request into a new work thread.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_recovered',
+				summary: expect.stringContaining('session_replacement')
+			})
+		);
 	});
 });

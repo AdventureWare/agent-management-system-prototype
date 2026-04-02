@@ -177,6 +177,11 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				button.textContent?.includes('Run task')
 			)
 		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('button')).some((button) =>
+				button.textContent?.includes('Create follow-up task')
+			)
+		).toBe(true);
 		expect(document.body.textContent).toContain('This task is not ready to run yet.');
 		expect(document.body.textContent).toContain(
 			'Set the task status to Ready before running it. Current status: In Progress.'
@@ -287,6 +292,100 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain(
 			'This is the canonical task-to-goal link used by goal detail and hierarchy views.'
 		);
+	});
+
+	it('clamps long title and instructions at the top of the page until expanded', async () => {
+		render(Page, {
+			form: {} as never,
+			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
+				attachmentRoot: '/tmp/project/agent_output',
+				artifactBrowser: {
+					rootPath: '/tmp/project/agent_output',
+					rootKind: 'directory',
+					browsePath: '/tmp/project/agent_output',
+					inspectingParentDirectory: false,
+					directoryEntries: [],
+					directoryEntriesTruncated: false,
+					knownOutputs: [],
+					errorMessage: ''
+				},
+				project: {
+					id: 'project_1',
+					name: 'Agent Management System Prototype',
+					summary: 'Primary app project',
+					projectRootFolder: '/tmp/project',
+					defaultArtifactRoot: '/tmp/project/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
+				},
+				projects: [],
+				goals: [],
+				workers: [],
+				statusOptions: TASK_STATUS_OPTIONS,
+				relatedRuns: [],
+				dependencyTasks: [],
+				task: {
+					id: 'task_1',
+					title:
+						'Implement a task detail header that keeps a very long title readable without letting it dominate the entire page before the operator has chosen to expand it for full review and editing context',
+					summary:
+						'This task intentionally has a long instructions block so the header description needs to stay compact by default. The goal is to preserve scanability for the top of the page while still letting the full brief be expanded on demand when someone actually needs to read every line of the task context before acting. This should be reversible in place with a simple toggle rather than forcing navigation or a separate modal.',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					lane: 'product',
+					goalId: '',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					assigneeName: 'Unassigned',
+					threadSessionId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
+					latestRun: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T11:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z',
+					updatedAtLabel: 'just now',
+					openReview: null,
+					pendingApproval: null,
+					linkThread: null,
+					linkThreadKind: 'assigned',
+					statusThread: null
+				},
+				candidateThreads: [],
+				suggestedThread: null
+			} as never
+		});
+
+		const heading = document.querySelector('h1');
+		const description = document.querySelector('.ui-page-description');
+
+		expect(heading?.className).toContain('ui-clamp-3');
+		expect(description?.className).toContain('ui-clamp-5');
+		await expect.element(page.getByRole('button', { name: 'Expand title' })).toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Expand instructions' })).toBeVisible();
+
+		await page.getByRole('button', { name: 'Expand title' }).click();
+		await page.getByRole('button', { name: 'Expand instructions' }).click();
+
+		expect(heading?.className).not.toContain('ui-clamp-3');
+		expect(description?.className).not.toContain('ui-clamp-5');
+		await expect.element(page.getByRole('button', { name: 'Collapse title' })).toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Collapse instructions' })).toBeVisible();
 	});
 
 	it('shows a suggested available thread while keeping the new-thread option', async () => {

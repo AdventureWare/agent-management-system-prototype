@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -191,15 +192,15 @@
 		description="Review existing providers, add new ones, and open an individual setup when you need to change credentials, defaults, or operational notes."
 	>
 		{#snippet actions()}
-			<button
-				class="btn preset-filled-primary-500 font-semibold"
+			<AppButton
 				type="button"
+				variant="primary"
 				onclick={() => {
 					isCreateModalOpen = true;
 				}}
 			>
 				Add provider
-			</button>
+			</AppButton>
 		{/snippet}
 	</PageHeader>
 
@@ -501,16 +502,8 @@
 			</div>
 
 			<div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-				<button
-					class="btn border border-slate-700 text-slate-200 hover:border-slate-600"
-					type="button"
-					onclick={closeCreateModal}
-				>
-					Cancel
-				</button>
-				<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-					Create provider
-				</button>
+				<AppButton type="button" variant="neutral" onclick={closeCreateModal}>Cancel</AppButton>
+				<AppButton type="submit" variant="primary">Create provider</AppButton>
 			</div>
 		</form>
 	</AppDialog>

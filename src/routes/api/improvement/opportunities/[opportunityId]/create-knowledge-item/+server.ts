@@ -18,7 +18,7 @@ export const POST = async ({ params, request }) => {
 	if (!knowledgeItem) {
 		error(
 			404,
-			'The opportunity could not be found or does not contain enough evidence to create a knowledge item.'
+			'The opportunity could not be found or does not contain enough evidence to capture a saved lesson.'
 		);
 	}
 

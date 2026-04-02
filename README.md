@@ -57,6 +57,22 @@ npm run lint
 npm run test
 ```
 
+Legacy JSON fallback:
+
+```sh
+export APP_STORAGE_BACKEND=json
+```
+
+By default, the prototype now uses `data/app.sqlite` for the control-plane store, app-managed agent sessions, and self-improvement data. Set `APP_STORAGE_BACKEND=json` only if you need to temporarily fall back to the legacy JSON files.
+
+Database helpers:
+
+```sh
+npm run db:migrate
+npm run db:import-json
+npm run db:export-json
+```
+
 ## Codex sessions
 
 The first session layer uses discrete background Codex runs:

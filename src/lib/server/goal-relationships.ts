@@ -1,3 +1,4 @@
+import { projectMatchesPath } from '$lib/server/control-plane';
 import type { ControlPlaneData, Goal, Project, Task } from '$lib/types/control-plane';
 
 function uniqueIds(ids: Iterable<string>) {
@@ -22,7 +23,10 @@ export function getGoalLinkedProjectIds(data: ControlPlaneData, goal: Goal) {
 		...(goal.projectIds ?? []),
 		...getGoalLinkedTasks(data, goal)
 			.map((task) => task.projectId)
-			.filter((projectId) => projectId.length > 0)
+			.filter((projectId) => projectId.length > 0),
+		...data.projects
+			.filter((project) => projectMatchesPath(project, goal.artifactPath))
+			.map((project) => project.id)
 	]);
 }
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	filterSelfImprovementSnapshot,
-	mergeSelfImprovementSnapshot
+	mergeSelfImprovementSnapshot,
+	resolveSelfImprovementOpportunityTaskContext
 } from './self-improvement-store';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import type {
@@ -29,7 +30,9 @@ function createAnalysis(): SelfImprovementAnalysis {
 				blocked_tasks: 0,
 				stale_tasks: 0,
 				review_feedback: 1,
-				thread_reuse_gap: 0
+				thread_reuse_gap: 0,
+				planning_gaps: 0,
+				captured_suggestions: 0
 			}
 		},
 		opportunities: [
@@ -485,5 +488,39 @@ describe('mergeSelfImprovementSnapshot', () => {
 		expect(goalAndProjectScoped.signalSummary.totalCount).toBe(1);
 		expect(goalAndProjectScoped.knowledgeSummary.totalCount).toBe(1);
 		expect(goalAndProjectScoped.opportunities[0]?.projectId).toBe('project_1');
+	});
+});
+
+describe('resolveSelfImprovementOpportunityTaskContext', () => {
+	it('infers project and goal context from related tasks when the opportunity is missing direct project context', () => {
+		const context = resolveSelfImprovementOpportunityTaskContext({
+			data: createControlPlaneData(),
+			opportunity: {
+				projectId: null,
+				relatedTaskIds: ['task_1']
+			}
+		});
+
+		expect(context).toEqual({
+			projectId: 'project_1',
+			goalId: 'goal_parent'
+		});
+	});
+
+	it('prefers explicit scoped context when the operator has narrowed generation to a single project and goal', () => {
+		const context = resolveSelfImprovementOpportunityTaskContext({
+			data: createControlPlaneData(),
+			opportunity: {
+				projectId: null,
+				relatedTaskIds: []
+			},
+			projectId: 'project_2',
+			goalId: 'goal_child'
+		});
+
+		expect(context).toEqual({
+			projectId: 'project_2',
+			goalId: 'goal_child'
+		});
 	});
 });

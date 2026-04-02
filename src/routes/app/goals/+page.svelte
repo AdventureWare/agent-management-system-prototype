@@ -52,6 +52,7 @@
 			goal.summary,
 			goal.parentGoalName,
 			goal.successSignal,
+			goal.targetDate,
 			goal.artifactPath,
 			...goal.linkedProjects.map((project) => project.name),
 			...goal.linkedTasks.map((task) => `${task.title} ${task.projectName}`),
@@ -60,6 +61,25 @@
 			.join(' ')
 			.toLowerCase()
 			.includes(normalizedTerm);
+	}
+
+	function formatDateLabel(value: string | null | undefined) {
+		if (!value) {
+			return 'Unscheduled';
+		}
+
+		const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
+
+		if (!year || !month || !day) {
+			return value;
+		}
+
+		return new Intl.DateTimeFormat('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
 
 	let forceExpandedTree = $derived(query.trim().length > 0 || selectedStatus !== 'all');
@@ -275,6 +295,7 @@
 				<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">
 					<th class="px-4 py-3">Goal tree</th>
 					<th class="px-4 py-3">Status</th>
+					<th class="px-4 py-3">Target</th>
 					<th class="px-4 py-3">Area</th>
 					<th class="px-4 py-3">Parent</th>
 					<th class="px-4 py-3">Links</th>
@@ -343,6 +364,9 @@
 							>
 								{formatGoalStatusLabel(goal.status)}
 							</span>
+						</td>
+						<td class="px-4 py-4 text-sm text-slate-300">
+							{formatDateLabel(goal.targetDate)}
 						</td>
 						<td class="px-4 py-4 text-xs font-semibold tracking-[0.18em] text-sky-300 uppercase">
 							{goal.lane}

@@ -1,8 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createTask, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
 import { listAgentSessions } from '$lib/server/agent-sessions';
+import {
+	isSelfImprovementSqliteEmpty,
+	loadSelfImprovementFromSqlite,
+	saveSelfImprovementToSqlite,
+	type SelfImprovementStoreDb
+} from '$lib/server/db/self-improvement-store-db';
 import { getGoalScopeProjectIds, getGoalScopeTaskIds } from '$lib/server/goal-relationships';
 import {
 	applySelfImprovementGoalContext,
@@ -18,10 +25,12 @@ import {
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import type {
 	SelfImprovementAnalysis,
+	SelfImprovementCapturedSuggestion,
 	SelfImprovementFeedbackSignal,
 	SelfImprovementKnowledgeItem,
 	SelfImprovementKnowledgeStatus,
 	SelfImprovementOpportunityRecord,
+	TrackedSelfImprovementOpportunity,
 	TrackedSelfImprovementFeedbackSignal,
 	SelfImprovementSnapshot,
 	SelfImprovementStatus
@@ -29,17 +38,14 @@ import type {
 
 const DATA_FILE = resolve(process.cwd(), 'data', 'self-improvement.json');
 
-type SelfImprovementDb = {
-	records: SelfImprovementOpportunityRecord[];
-	signals: TrackedSelfImprovementFeedbackSignal[];
-	knowledgeItems: SelfImprovementKnowledgeItem[];
-};
+type SelfImprovementDb = SelfImprovementStoreDb;
 
 function defaultDb(): SelfImprovementDb {
 	return {
 		records: [],
 		signals: [],
-		knowledgeItems: []
+		knowledgeItems: [],
+		capturedSuggestions: []
 	};
 }
 
@@ -63,6 +69,10 @@ function createDefaultRecord(
 	};
 }
 
+function getSelfImprovementStorageBackend() {
+	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+}
+
 async function ensureSelfImprovementDb() {
 	try {
 		await readFile(DATA_FILE, 'utf8');
@@ -72,41 +82,191 @@ async function ensureSelfImprovementDb() {
 	}
 }
 
-export async function loadSelfImprovementDb(): Promise<SelfImprovementDb> {
-	await ensureSelfImprovementDb();
-	const raw = await readFile(DATA_FILE, 'utf8');
+function normalizeSelfImprovementDb(parsed: Partial<SelfImprovementDb>): SelfImprovementDb {
+	return {
+		records: Array.isArray(parsed.records)
+			? parsed.records.filter(
+					(record): record is SelfImprovementOpportunityRecord =>
+						Boolean(record) && typeof record === 'object'
+				)
+			: [],
+		signals: Array.isArray(parsed.signals)
+			? parsed.signals.filter(
+					(signal): signal is TrackedSelfImprovementFeedbackSignal =>
+						Boolean(signal) && typeof signal === 'object'
+				)
+			: [],
+		knowledgeItems: Array.isArray(parsed.knowledgeItems)
+			? parsed.knowledgeItems.filter(
+					(item): item is SelfImprovementKnowledgeItem => Boolean(item) && typeof item === 'object'
+				)
+			: [],
+		capturedSuggestions: Array.isArray(parsed.capturedSuggestions)
+			? parsed.capturedSuggestions.filter(
+					(suggestion): suggestion is SelfImprovementCapturedSuggestion =>
+						Boolean(suggestion) && typeof suggestion === 'object'
+				)
+			: []
+	};
+}
 
+function parseSelfImprovementDb(raw: string) {
 	try {
-		const parsed = JSON.parse(raw) as Partial<SelfImprovementDb>;
-
-		return {
-			records: Array.isArray(parsed.records)
-				? parsed.records.filter(
-						(record): record is SelfImprovementOpportunityRecord =>
-							Boolean(record) && typeof record === 'object'
-					)
-				: [],
-			signals: Array.isArray(parsed.signals)
-				? parsed.signals.filter(
-						(signal): signal is TrackedSelfImprovementFeedbackSignal =>
-							Boolean(signal) && typeof signal === 'object'
-					)
-				: [],
-			knowledgeItems: Array.isArray(parsed.knowledgeItems)
-				? parsed.knowledgeItems.filter(
-						(item): item is SelfImprovementKnowledgeItem =>
-							Boolean(item) && typeof item === 'object'
-					)
-				: []
-		};
+		return normalizeSelfImprovementDb(JSON.parse(raw) as Partial<SelfImprovementDb>);
 	} catch {
 		return defaultDb();
 	}
 }
 
+async function loadSelfImprovementDbFromJson() {
+	await ensureSelfImprovementDb();
+	return parseSelfImprovementDb(await readFile(DATA_FILE, 'utf8'));
+}
+
+async function readSelfImprovementJsonIfPresent() {
+	if (!existsSync(DATA_FILE)) {
+		return null;
+	}
+
+	try {
+		return parseSelfImprovementDb(await readFile(DATA_FILE, 'utf8'));
+	} catch {
+		return defaultDb();
+	}
+}
+
+async function ensureSelfImprovementSqliteSeeded() {
+	if (!isSelfImprovementSqliteEmpty()) {
+		return;
+	}
+
+	const seed = (await readSelfImprovementJsonIfPresent()) ?? defaultDb();
+	saveSelfImprovementToSqlite(seed);
+}
+
+export async function loadSelfImprovementDb(): Promise<SelfImprovementDb> {
+	if (getSelfImprovementStorageBackend() === 'sqlite') {
+		await ensureSelfImprovementSqliteSeeded();
+		return normalizeSelfImprovementDb(loadSelfImprovementFromSqlite());
+	}
+
+	return loadSelfImprovementDbFromJson();
+}
+
 async function saveSelfImprovementDb(data: SelfImprovementDb) {
+	if (getSelfImprovementStorageBackend() === 'sqlite') {
+		saveSelfImprovementToSqlite(data);
+		return;
+	}
+
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
 	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+function deriveCapturedSuggestionPriority(
+	severity: SelfImprovementCapturedSuggestion['severity']
+): 'medium' | 'high' | 'urgent' {
+	switch (severity) {
+		case 'high':
+			return 'high';
+		case 'medium':
+			return 'medium';
+		case 'low':
+		default:
+			return 'medium';
+	}
+}
+
+function buildCapturedSuggestionOpportunities(
+	data: ControlPlaneData,
+	capturedSuggestions: SelfImprovementCapturedSuggestion[]
+) {
+	return capturedSuggestions.map((suggestion) => {
+		const goal =
+			(suggestion.goalId
+				? (data.goals.find((candidate) => candidate.id === suggestion.goalId) ?? null)
+				: null) ?? null;
+		const goalProjectIds = goal?.projectIds ?? [];
+		const project =
+			(suggestion.projectId
+				? (data.projects.find((candidate) => candidate.id === suggestion.projectId) ?? null)
+				: null) ??
+			(goalProjectIds.length === 1
+				? (data.projects.find((candidate) => candidate.id === goalProjectIds[0]) ?? null)
+				: null);
+
+		return {
+			id: `captured_suggestions:${suggestion.id}`,
+			title: suggestion.title,
+			summary: suggestion.summary,
+			category: suggestion.category,
+			source: 'captured_suggestions',
+			severity: suggestion.severity,
+			confidence: 'medium',
+			projectId: project?.id ?? suggestion.projectId ?? null,
+			projectName: project?.name ?? null,
+			signals: [
+				`Captured manually on ${suggestion.createdAt.slice(0, 10)}.`,
+				project ? `Scoped to project ${project.name}.` : 'No project scope attached yet.',
+				goal ? `Goal focus: ${goal.name}.` : ''
+			].filter(Boolean),
+			recommendedActions: [
+				project || goal
+					? 'Turn this suggestion into a concrete follow-up task if it should change the system.'
+					: 'Add project context before turning this into a follow-up task.',
+				'Dismiss it if it is no longer useful, or save a lesson if it is reusable guidance.'
+			],
+			relatedTaskIds: goal?.taskIds ?? [],
+			relatedRunIds: [],
+			relatedSessionIds: [],
+			suggestedTask:
+				project || goal
+					? {
+							title: suggestion.title,
+							summary: suggestion.summary,
+							priority: deriveCapturedSuggestionPriority(suggestion.severity)
+						}
+					: null,
+			suggestedKnowledgeItem: null
+		} satisfies SelfImprovementAnalysis['opportunities'][number];
+	});
+}
+
+function summarizeSelfImprovementAnalysisOpportunities(
+	opportunities: SelfImprovementAnalysis['opportunities']
+) {
+	const byCategory = initializeCountRecord(SELF_IMPROVEMENT_CATEGORY_OPTIONS);
+	const bySource = initializeCountRecord(SELF_IMPROVEMENT_SOURCE_OPTIONS);
+
+	for (const opportunity of opportunities) {
+		byCategory[opportunity.category] += 1;
+		bySource[opportunity.source] += 1;
+	}
+
+	return {
+		totalCount: opportunities.length,
+		highSeverityCount: opportunities.filter((opportunity) => opportunity.severity === 'high')
+			.length,
+		byCategory,
+		bySource
+	};
+}
+
+function applyCapturedSuggestionsToAnalysis(
+	analysis: SelfImprovementAnalysis,
+	data: ControlPlaneData,
+	capturedSuggestions: SelfImprovementCapturedSuggestion[]
+): SelfImprovementAnalysis {
+	const opportunities = [
+		...analysis.opportunities,
+		...buildCapturedSuggestionOpportunities(data, capturedSuggestions)
+	];
+
+	return {
+		generatedAt: analysis.generatedAt,
+		opportunities,
+		summary: summarizeSelfImprovementAnalysisOpportunities(opportunities)
+	};
 }
 
 export function mergeSelfImprovementSnapshot(
@@ -195,7 +355,8 @@ export async function syncSelfImprovementAnalysis(
 	await saveSelfImprovementDb({
 		records: nextRecords,
 		signals: nextSignals,
-		knowledgeItems: current.knowledgeItems
+		knowledgeItems: current.knowledgeItems,
+		capturedSuggestions: current.capturedSuggestions
 	});
 
 	return mergeSelfImprovementSnapshot(analysis, nextRecords, nextSignals, current.knowledgeItems);
@@ -217,6 +378,12 @@ export async function loadSelfImprovementSnapshot(input?: {
 		sessions,
 		now: input?.now
 	});
+	const current = await loadSelfImprovementDb();
+	const analysisWithCapturedSuggestions = applyCapturedSuggestionsToAnalysis(
+		analysis,
+		data,
+		current.capturedSuggestions
+	);
 	const signals = buildSelfImprovementFeedbackSignals({
 		data,
 		sessions,
@@ -224,11 +391,14 @@ export async function loadSelfImprovementSnapshot(input?: {
 	});
 
 	return applySelfImprovementGoalContext(
-		filterSelfImprovementSnapshot(await syncSelfImprovementAnalysis(analysis, signals), {
-			projectId: input?.projectId ?? null,
-			goalId: input?.goalId ?? null,
-			data
-		}),
+		filterSelfImprovementSnapshot(
+			await syncSelfImprovementAnalysis(analysisWithCapturedSuggestions, signals),
+			{
+				projectId: input?.projectId ?? null,
+				goalId: input?.goalId ?? null,
+				data
+			}
+		),
 		{
 			data,
 			goalId: input?.goalId ?? null
@@ -283,10 +453,43 @@ export async function setSelfImprovementOpportunityStatus(input: {
 	await saveSelfImprovementDb({
 		records: nextRecords,
 		signals: current.signals,
-		knowledgeItems: current.knowledgeItems
+		knowledgeItems: current.knowledgeItems,
+		capturedSuggestions: current.capturedSuggestions
 	});
 
 	return nextRecord;
+}
+
+export async function createCapturedSelfImprovementSuggestion(input: {
+	title: string;
+	summary: string;
+	category: SelfImprovementCapturedSuggestion['category'];
+	severity: SelfImprovementCapturedSuggestion['severity'];
+	projectId?: string | null;
+	goalId?: string | null;
+}) {
+	const current = await loadSelfImprovementDb();
+	const now = new Date().toISOString();
+	const nextSuggestion: SelfImprovementCapturedSuggestion = {
+		id: randomUUID(),
+		title: input.title.trim(),
+		summary: input.summary.trim(),
+		category: input.category,
+		severity: input.severity,
+		projectId: input.projectId ?? null,
+		goalId: input.goalId ?? null,
+		createdAt: now,
+		updatedAt: now
+	};
+
+	await saveSelfImprovementDb({
+		records: current.records,
+		signals: current.signals,
+		knowledgeItems: current.knowledgeItems,
+		capturedSuggestions: [nextSuggestion, ...current.capturedSuggestions]
+	});
+
+	return nextSuggestion;
 }
 
 function initializeCountRecord<T extends string>(values: readonly T[]) {
@@ -436,9 +639,50 @@ function getDefaultImprovementRoleId(data: ControlPlaneData) {
 	return data.roles.find((role) => role.id === 'role_coordinator')?.id ?? data.roles[0]?.id ?? '';
 }
 
+function uniqueNonEmptyValues(values: Array<string | null | undefined>) {
+	return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))];
+}
+
+export function resolveSelfImprovementOpportunityTaskContext(input: {
+	data: ControlPlaneData;
+	opportunity: Pick<TrackedSelfImprovementOpportunity, 'projectId' | 'relatedTaskIds'>;
+	projectId?: string | null;
+	goalId?: string | null;
+}) {
+	const projectIds = new Set(input.data.projects.map((project) => project.id));
+	const goalIds = new Set(input.data.goals.map((goal) => goal.id));
+	const taskMap = new Map(input.data.tasks.map((task) => [task.id, task]));
+	const goal = input.goalId
+		? (input.data.goals.find((candidate) => candidate.id === input.goalId) ?? null)
+		: null;
+	const relatedTasks = input.opportunity.relatedTaskIds
+		.map((taskId) => taskMap.get(taskId) ?? null)
+		.filter((task): task is ControlPlaneData['tasks'][number] => Boolean(task));
+	const relatedTaskProjectIds = uniqueNonEmptyValues(relatedTasks.map((task) => task.projectId));
+	const relatedTaskGoalIds = uniqueNonEmptyValues(relatedTasks.map((task) => task.goalId));
+	const scopedGoalProjectIds = uniqueNonEmptyValues(goal?.projectIds ?? []);
+
+	const resolvedProjectId =
+		(input.opportunity.projectId && projectIds.has(input.opportunity.projectId)
+			? input.opportunity.projectId
+			: null) ??
+		(input.projectId && projectIds.has(input.projectId) ? input.projectId : null) ??
+		(scopedGoalProjectIds.length === 1 ? scopedGoalProjectIds[0] : null) ??
+		(relatedTaskProjectIds.length === 1 ? relatedTaskProjectIds[0] : null);
+	const resolvedGoalId =
+		(input.goalId && goalIds.has(input.goalId) ? input.goalId : null) ??
+		(relatedTaskGoalIds.length === 1 ? relatedTaskGoalIds[0] : '');
+
+	return {
+		projectId: resolvedProjectId,
+		goalId: resolvedGoalId
+	};
+}
+
 export async function createTaskFromSelfImprovementOpportunity(
 	opportunityId: string,
 	options: {
+		projectId?: string | null;
 		goalId?: string | null;
 	} = {}
 ) {
@@ -449,7 +693,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 	});
 	const opportunity = snapshot.opportunities.find((candidate) => candidate.id === opportunityId);
 
-	if (!opportunity || !opportunity.projectId || !opportunity.suggestedTask) {
+	if (!opportunity || !opportunity.suggestedTask) {
 		return null;
 	}
 
@@ -462,7 +706,18 @@ export async function createTaskFromSelfImprovementOpportunity(
 		}
 	}
 
-	const project = data.projects.find((candidate) => candidate.id === opportunity.projectId);
+	const taskContext = resolveSelfImprovementOpportunityTaskContext({
+		data,
+		opportunity,
+		projectId: options.projectId ?? null,
+		goalId: options.goalId ?? null
+	});
+
+	if (!taskContext.projectId) {
+		return null;
+	}
+
+	const project = data.projects.find((candidate) => candidate.id === taskContext.projectId);
 
 	if (!project) {
 		return null;
@@ -471,9 +726,9 @@ export async function createTaskFromSelfImprovementOpportunity(
 	const createdTask = createTask({
 		title: opportunity.suggestedTask.title,
 		summary: opportunity.suggestedTask.summary,
-		projectId: opportunity.projectId,
+		projectId: taskContext.projectId,
 		lane: 'ops',
-		goalId: '',
+		goalId: taskContext.goalId,
 		priority: opportunity.suggestedTask.priority,
 		riskLevel: 'medium',
 		approvalMode: 'none',
@@ -491,8 +746,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,
 		status: 'accepted',
-		decisionSummary:
-			opportunity.decisionSummary || 'Accepted and converted into a draft self-improvement task.',
+		decisionSummary: opportunity.decisionSummary || 'Accepted and converted into a follow-up task.',
 		createdTaskId: createdTask.id,
 		createdTaskTitle: createdTask.title
 	});
@@ -535,14 +789,15 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 	await saveSelfImprovementDb({
 		records: db.records,
 		signals: db.signals,
-		knowledgeItems: [knowledgeItem, ...db.knowledgeItems]
+		knowledgeItems: [knowledgeItem, ...db.knowledgeItems],
+		capturedSuggestions: db.capturedSuggestions
 	});
 
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,
 		status: 'accepted',
 		decisionSummary:
-			opportunity.decisionSummary || 'Accepted and converted into a draft knowledge item.',
+			opportunity.decisionSummary || 'Accepted and captured as a reusable saved lesson.',
 		createdKnowledgeItemId: knowledgeItem.id,
 		createdKnowledgeItemTitle: knowledgeItem.title
 	});
@@ -579,7 +834,8 @@ export async function setSelfImprovementKnowledgeItemStatus(input: {
 	await saveSelfImprovementDb({
 		records: current.records,
 		signals: current.signals,
-		knowledgeItems: nextKnowledgeItems
+		knowledgeItems: nextKnowledgeItems,
+		capturedSuggestions: current.capturedSuggestions
 	});
 
 	return nextItem;

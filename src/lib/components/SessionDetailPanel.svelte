@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThread } from '$lib/client/agent-threads';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import PageTabs from '$lib/components/PageTabs.svelte';
 	import {
 		ACTIVE_REFRESH_INTERVAL_MS,
 		ACTIVITY_CLOCK_INTERVAL_MS,
@@ -12,6 +14,7 @@
 		formatThreadStateLabel,
 		getThreadActivityMeta
 	} from '$lib/thread-activity';
+	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import {
 		approvalStatusToneClass,
@@ -27,7 +30,19 @@
 	type TaskResponseAction = {
 		taskId: string;
 		taskTitle: string;
+		taskProjectId: string;
 		taskStatus: string;
+		taskGoalId: string;
+		taskLane: string;
+		taskPriority: string;
+		taskRiskLevel: string;
+		taskApprovalMode: string;
+		taskRequiresReview: boolean;
+		taskDesiredRoleId: string;
+		taskAssigneeWorkerId: string;
+		taskTargetDate: string;
+		taskRequiredCapabilityNames: string[];
+		taskRequiredToolNames: string[];
 		openReview: { status: string; summary: string } | null;
 		pendingApproval: { mode: string; status: string; summary: string } | null;
 		canApproveAndComplete: boolean;
@@ -38,6 +53,7 @@
 	type ThreadFocusTask = {
 		id: string;
 		title: string;
+		projectId: string | null;
 		status: string;
 		isPrimary: boolean;
 		source: 'resolved' | 'linked';
@@ -59,6 +75,7 @@
 			successAction?: string;
 			taskId?: string;
 			sessionId?: string;
+			previousSessionId?: string;
 		} | null;
 		backHref?: string;
 	}>();
@@ -69,7 +86,10 @@
 	let isCanceling = $state(false);
 	let now = $state(Date.now());
 	let selectedRunId = $state('');
+	let selectedSidebarView = $state<'follow_up' | 'details' | 'attachments'>('follow_up');
+	let conversationHistoryExpanded = $state(false);
 	let followUpAttachmentInput = $state<HTMLInputElement | null>(null);
+	let followUpPrompt = $state('');
 	let pendingFollowUpAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
@@ -79,6 +99,14 @@
 		form?.ok &&
 			form?.successAction === 'approveTaskResponse' &&
 			form?.taskId === taskResponseAction?.taskId
+	);
+	let recoverSessionThreadSuccess = $derived(
+		form?.ok && form?.successAction === 'recoverSessionThread' && form?.sessionId === session?.id
+	);
+	let moveLatestRequestToNewThreadSuccess = $derived(
+		form?.ok &&
+			form?.successAction === 'moveLatestRequestToNewThread' &&
+			form?.previousSessionId === session?.id
 	);
 	let updateSessionSandboxSuccess = $derived(
 		form?.ok && form?.successAction === 'updateSessionSandbox' && form?.sessionId === session?.id
@@ -112,6 +140,16 @@
 		);
 	});
 	let chronologicalRuns = $derived.by(() => (session ? [...session.runs].reverse() : []));
+	let recentConversationRuns = $derived.by(() => chronologicalRuns.slice(-2));
+	let hiddenConversationRunCount = $derived(
+		Math.max(chronologicalRuns.length - recentConversationRuns.length, 0)
+	);
+	let visibleConversationRuns = $derived.by(() =>
+		conversationHistoryExpanded ? chronologicalRuns : recentConversationRuns
+	);
+	let runNumberById = $derived.by(
+		() => new Map(chronologicalRuns.map((run, index) => [run.id, index + 1]))
+	);
 	let sessionState = $derived.by(() => (session ? describeSessionState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
 	let latestContextRun = $derived.by(() => session?.latestRun ?? session?.runs[0] ?? null);
@@ -120,6 +158,7 @@
 			return {
 				id: taskResponseAction.taskId,
 				title: taskResponseAction.taskTitle,
+				projectId: taskResponseAction.taskProjectId,
 				status: taskResponseAction.taskStatus,
 				isPrimary: true,
 				source: 'resolved'
@@ -141,6 +180,7 @@
 		return {
 			id: primaryTask.id,
 			title: primaryTask.title,
+			projectId: null,
 			status: primaryTask.status,
 			isPrimary: primaryTask.isPrimary,
 			source: 'linked'
@@ -156,6 +196,36 @@
 		}
 
 		return selectedRun;
+	});
+	let needsRecovery = $derived.by(
+		() =>
+			Boolean(session?.latestRun) &&
+			(session?.hasActiveRun || session?.sessionState === 'attention')
+	);
+	let canRecoverInPlace = $derived.by(() => {
+		if (!session?.latestRun) {
+			return false;
+		}
+
+		if (session.hasActiveRun) {
+			return session.origin === 'managed';
+		}
+
+		return (
+			session.canResume &&
+			(session.latestRunStatus === 'failed' || session.latestRunStatus === 'canceled')
+		);
+	});
+	let canMoveLatestRequestToNewThread = $derived.by(() => {
+		if (!session?.latestRun || !needsRecovery) {
+			return false;
+		}
+
+		if (session.hasActiveRun) {
+			return session.origin === 'managed';
+		}
+
+		return true;
 	});
 
 	$effect(() => {
@@ -177,6 +247,17 @@
 
 		if (!selectedRunId || !session.runs.some((run) => run.id === selectedRunId)) {
 			selectedRunId = fallbackRunId;
+		}
+	});
+
+	let previousConversationSessionId = '';
+
+	$effect(() => {
+		const currentSessionId = session?.id ?? '';
+
+		if (currentSessionId !== previousConversationSessionId) {
+			conversationHistoryExpanded = false;
+			previousConversationSessionId = currentSessionId;
 		}
 	});
 
@@ -427,6 +508,7 @@
 			}
 
 			formElement.reset();
+			followUpPrompt = '';
 			clearPendingFollowUpAttachments();
 			await refreshSession({ force: true });
 			sendState = {
@@ -619,6 +701,89 @@
 
 		return 'Linked task context for this thread.';
 	}
+
+	function recoveryHeadline(detail: AgentThreadDetail) {
+		if (detail.hasActiveRun) {
+			return 'This thread still has an active run that may need intervention.';
+		}
+
+		return 'The latest run needs attention before this thread is healthy again.';
+	}
+
+	function recoveryDetail(detail: AgentThreadDetail) {
+		if (detail.hasActiveRun) {
+			return detail.threadId
+				? 'Recover in place to retire the current run and replay the latest request inside the same thread, or move that request into a fresh thread.'
+				: 'No resumable thread id is available yet. Move the latest request into a fresh thread if this run is truly stuck.';
+		}
+
+		if (detail.canResume) {
+			return 'You can retry the latest request inside this thread, or move it into a fresh thread if the current context looks poisoned.';
+		}
+
+		return 'This thread cannot resume directly. Move the latest request into a fresh thread to keep work moving.';
+	}
+
+	function recoverInPlaceDisabledReason(detail: AgentThreadDetail) {
+		if (!detail.latestRun) {
+			return 'No saved request is available to recover.';
+		}
+
+		if (detail.hasActiveRun && detail.origin !== 'managed') {
+			return 'Imported Codex threads cannot force-recover an active managed run yet.';
+		}
+
+		if (!detail.hasActiveRun && !detail.canResume) {
+			return 'This thread does not currently have a resumable Codex thread id.';
+		}
+
+		return '';
+	}
+
+	function moveLatestRequestDisabledReason(detail: AgentThreadDetail) {
+		if (!detail.latestRun) {
+			return 'No saved request is available to move.';
+		}
+
+		if (detail.hasActiveRun && detail.origin !== 'managed') {
+			return 'Imported Codex threads cannot retire an active run automatically yet.';
+		}
+
+		return '';
+	}
+
+	function createTaskFromThreadName(prompt: string) {
+		const normalizedPrompt = prompt
+			.split('\n')
+			.map((line) => line.trim())
+			.find(Boolean);
+
+		if (normalizedPrompt) {
+			return compactText(normalizedPrompt, 72);
+		}
+
+		if (focusTask) {
+			return `Follow-up: ${focusTask.title}`;
+		}
+
+		return `New task from ${session?.name ?? 'thread'}`;
+	}
+
+	function createTaskFromThreadInstructions(prompt: string) {
+		const trimmedPrompt = prompt.trim();
+		const sections = [
+			trimmedPrompt
+				? `Requested follow-up work:\n${trimmedPrompt}`
+				: 'Create a new task based on this thread.',
+			session ? `Thread: ${session.name}` : '',
+			focusTask ? `Current task context: ${focusTask.title}` : '',
+			latestContextRun
+				? `Latest response summary:\n${compactText(responseText(latestContextRun), 420)}`
+				: (session?.sessionSummary ?? '')
+		].filter(Boolean);
+
+		return sections.join('\n\n');
+	}
 </script>
 
 {#snippet focusTaskCard(
@@ -641,17 +806,17 @@
 					{options.label}
 				</p>
 				<p class="ui-wrap-anywhere mt-2 text-sm font-semibold text-white">{task.title}</p>
-				<p class="mt-1 text-sm text-slate-300">{options.description}</p>
+				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-300">{options.description}</p>
 			</div>
-			<div class="flex flex-wrap items-center gap-2">
+			<div class="flex min-w-0 flex-wrap items-center gap-2">
 				<span
-					class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+					class="inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-slate-300 uppercase"
 				>
 					{formatTaskStatusLabel(task.status)}
 				</span>
 				{#if task.isPrimary}
 					<span
-						class="inline-flex items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+						class="inline-flex max-w-full items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-amber-200 uppercase"
 					>
 						Primary
 					</span>
@@ -660,9 +825,9 @@
 		</div>
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-			<p class="text-xs text-slate-400">{focusTaskDescription(task)}</p>
+			<p class="ui-wrap-anywhere text-xs text-slate-400">{focusTaskDescription(task)}</p>
 			<a
-				class="text-sm font-medium text-amber-200 transition hover:text-amber-100"
+				class="ui-wrap-anywhere text-sm font-medium text-amber-200 transition hover:text-amber-100"
 				href={resolve(`/app/tasks/${task.id}`)}
 			>
 				Open task detail
@@ -690,9 +855,9 @@
 		<p class="ui-wrap-anywhere text-sm text-slate-300">
 			{sessionState?.detail ?? detail.sessionSummary}
 		</p>
-		{#if (detail.topicLabels ?? []).length > 0}
+		{#if uniqueTopicLabels(detail.topicLabels).length > 0}
 			<div class="flex flex-wrap gap-2">
-				{#each detail.topicLabels ?? [] as topicLabel (topicLabel)}
+				{#each uniqueTopicLabels(detail.topicLabels) as topicLabel (topicLabel)}
 					<span
 						class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
 					>
@@ -706,13 +871,13 @@
 				{#each getThreadCategorySections(detail) as section (section.label)}
 					<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
 						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">{section.label}</p>
-						<p class="mt-2 text-sm text-slate-200">{section.values.join(', ')}</p>
+						<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">{section.values.join(', ')}</p>
 					</div>
 				{/each}
 			</div>
 		{/if}
 		<ThreadActivityIndicator thread={detail} {now} />
-		<p class="text-xs text-slate-500">
+		<p class="ui-wrap-anywhere text-xs text-slate-500">
 			A work thread keeps one Codex conversation and all of its runs together. Each run in the
 			history below is one start or follow-up execution inside this thread.
 		</p>
@@ -775,7 +940,7 @@
 				<div class="mt-3 flex flex-wrap gap-2">
 					{#each detail.relatedTasks as task (task.id)}
 						<a
-							class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+							class="ui-wrap-anywhere inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none whitespace-normal text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
 							href={resolve(`/app/tasks/${task.id}`)}
 						>
 							{task.title}
@@ -784,8 +949,9 @@
 					{/each}
 				</div>
 			{:else}
-				<p class="mt-2 text-sm text-slate-400">
-					No tasks are linked to this thread yet. Assign it from a task when you want future work to reuse this context.
+				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+					No tasks are linked to this thread yet. Assign it from a task when you want future work to
+					reuse this context.
 				</p>
 			{/if}
 		</div>
@@ -803,7 +969,7 @@
 				description={session.sessionSummary}
 			>
 				{#snippet actions()}
-					<div class="flex flex-col gap-3 sm:flex-row">
+					<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
 						<button
 							class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-100"
 							type="button"
@@ -863,7 +1029,7 @@
 						</label>
 
 						{#if session!.relatedTasks.length > 0}
-							<p class="ui-clamp-3 max-w-3xl text-xs text-slate-500">
+							<p class="ui-clamp-3 ui-wrap-anywhere max-w-3xl text-xs text-slate-500">
 								Related tasks: {session!.relatedTasks.map((task) => task.title).join(', ')}
 							</p>
 						{/if}
@@ -876,7 +1042,7 @@
 			{#if pageNotice}
 				<p
 					class={[
-						'rounded-xl px-4 py-3 text-sm',
+						'ui-wrap-anywhere rounded-xl px-4 py-3 text-sm',
 						pageNotice.tone === 'success'
 							? 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-200'
 							: 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
@@ -890,9 +1056,33 @@
 
 			{#if updateSessionSandboxSuccess}
 				<p
-					class="rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
 					Thread sandbox updated. Future follow-up runs will use the new access mode.
+				</p>
+			{/if}
+
+			{#if recoverSessionThreadSuccess}
+				<p
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+				>
+					Thread recovery queued. The latest request is running again in this thread.
+				</p>
+			{/if}
+
+			{#if moveLatestRequestToNewThreadSuccess}
+				<p
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+				>
+					Latest request moved into a fresh thread.
+					{#if form?.sessionId}
+						<a
+							class="ui-wrap-anywhere ml-2 font-medium text-emerald-100 underline decoration-emerald-300/60 underline-offset-2"
+							href={resolve(`/app/sessions/${form.sessionId}`)}
+						>
+							Open new thread
+						</a>
+					{/if}
 				</p>
 			{/if}
 
@@ -916,13 +1106,14 @@
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 								<div class="min-w-0">
 									<p class="text-sm font-medium text-white">Most recent response</p>
-									<p class="mt-1 text-sm text-slate-400">
+									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
 										{#if latestContextRun}
 											{runModeLabel(latestContextRun)} queued {formatTimestamp(
 												latestContextRun.createdAt
 											)}
 										{:else}
-											No saved response has been captured in this thread yet. Start the thread or wait for the current run to finish to populate this view.
+											No saved response has been captured in this thread yet. Start the thread or
+											wait for the current run to finish to populate this view.
 										{/if}
 									</p>
 								</div>
@@ -951,7 +1142,7 @@
 										</p>
 									</div>
 
-									<div class="space-y-4">
+									<div class="min-w-0 space-y-4">
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 											<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
 												Latest instruction
@@ -979,7 +1170,7 @@
 								</div>
 							{:else}
 								<p
-									class="mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
+									class="ui-wrap-anywhere mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
 								>
 									Run the thread once or wait for the current run to finish to get a saved response
 									here.
@@ -991,9 +1182,11 @@
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 								<div class="min-w-0">
 									<p class="text-sm font-medium text-white">Relevant context</p>
-									<p class="mt-1 text-sm text-slate-400">{session.sessionSummary}</p>
+									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+										{session.sessionSummary}
+									</p>
 								</div>
-								<div class="flex flex-wrap items-center gap-2">
+								<div class="flex min-w-0 flex-wrap items-center gap-2">
 									<span
 										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
 									>
@@ -1051,13 +1244,13 @@
 								/>
 							</div>
 
-							{#if (session.topicLabels ?? []).length > 0 || session.relatedTasks.length > 0 || taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
+							{#if uniqueTopicLabels(session.topicLabels).length > 0 || session.relatedTasks.length > 0 || taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
 								<div class="mt-4 space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
-									{#if (session.topicLabels ?? []).length > 0}
+									{#if uniqueTopicLabels(session.topicLabels).length > 0}
 										<div class="flex flex-wrap gap-2">
-											{#each session.topicLabels ?? [] as topicLabel (topicLabel)}
+											{#each uniqueTopicLabels(session.topicLabels) as topicLabel (topicLabel)}
 												<span
-													class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+													class="inline-flex max-w-full items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-sky-200 uppercase"
 												>
 													{topicLabel}
 												</span>
@@ -1069,14 +1262,14 @@
 										<div class="flex flex-wrap gap-2">
 											{#if taskResponseAction?.openReview}
 												<span
-													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
+													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
 												>
 													Review {formatReviewStatusLabel(taskResponseAction.openReview.status)}
 												</span>
 											{/if}
 											{#if taskResponseAction?.pendingApproval}
 												<span
-													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
+													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
 												>
 													{formatTaskApprovalModeLabel(taskResponseAction.pendingApproval.mode)}
 													{formatApprovalStatusLabel(taskResponseAction.pendingApproval.status)}
@@ -1089,7 +1282,7 @@
 										<div class="flex flex-wrap gap-2">
 											{#each session.relatedTasks as task (task.id)}
 												<a
-													class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+													class="ui-wrap-anywhere inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none whitespace-normal text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
 													href={resolve(`/app/tasks/${task.id}`)}
 												>
 													{task.title}
@@ -1116,11 +1309,11 @@
 										{runModeLabel(selectedHistoricalRun)} queued
 										{formatTimestamp(selectedHistoricalRun.createdAt)}
 									</p>
-									<p class="mt-1 text-sm text-slate-400">
+									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
 										You are looking at older thread context. The newest response stays pinned above.
 									</p>
 								</div>
-								<div class="flex flex-wrap items-center gap-2">
+								<div class="flex min-w-0 flex-wrap items-center gap-2">
 									<span
 										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(selectedHistoricalRun))}`}
 									>
@@ -1166,7 +1359,7 @@
 							</div>
 
 							<details class="rounded-xl border border-slate-800 bg-black/30 p-4">
-								<summary class="cursor-pointer text-sm font-medium text-slate-200">
+								<summary class="ui-wrap-anywhere cursor-pointer text-sm font-medium text-slate-200">
 									Selected turn log output
 								</summary>
 								{#if selectedHistoricalRun.logTail?.length}
@@ -1175,8 +1368,9 @@
 											'\n'
 										)}</pre>
 								{:else}
-									<p class="mt-3 text-sm text-slate-400">
-										No log lines were saved for this turn. Check the run detail if you expected execution output.
+									<p class="ui-wrap-anywhere mt-3 text-sm text-slate-400">
+										No log lines were saved for this turn. Check the run detail if you expected
+										execution output.
 									</p>
 								{/if}
 							</details>
@@ -1189,14 +1383,41 @@
 						description="Inspect each turn in the thread and open any run to read the full prompt and response."
 						bodyClass="space-y-3"
 					>
+						{#if hiddenConversationRunCount > 0}
+							<div
+								class="flex flex-col gap-3 rounded-lg border border-slate-800 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+							>
+								<p class="ui-wrap-anywhere text-sm text-slate-400">
+									Showing the 2 most recent turns by default so the latest context stays compact.
+								</p>
+								<AppButton
+									size="sm"
+									type="button"
+									variant="ghost"
+									onclick={() => {
+										conversationHistoryExpanded = !conversationHistoryExpanded;
+									}}
+								>
+									{#if conversationHistoryExpanded}
+										Show only 2 recent turns
+									{:else}
+										Show {hiddenConversationRunCount} older turn{hiddenConversationRunCount === 1
+											? ''
+											: 's'}
+									{/if}
+								</AppButton>
+							</div>
+						{/if}
+
 						{#if chronologicalRuns.length === 0}
 							<p
-								class="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
+								class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
 							>
-								No runs have been recorded for this thread yet. Send the first instruction from a linked task or wait for a queued run to start.
+								No runs have been recorded for this thread yet. Send the first instruction from a
+								linked task or wait for a queued run to start.
 							</p>
 						{:else}
-							{#each chronologicalRuns as run, index (run.id)}
+							{#each visibleConversationRuns as run (run.id)}
 								<button
 									class={[
 										'w-full rounded-xl border p-4 text-left transition',
@@ -1213,7 +1434,7 @@
 									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 										<div class="min-w-0">
 											<p class="text-sm font-medium text-white">
-												Turn {index + 1} · {runModeLabel(run)}
+												Turn {runNumberById.get(run.id) ?? 0} · {runModeLabel(run)}
 											</p>
 											<p class="mt-1 text-xs text-slate-500">
 												Queued {formatTimestamp(run.createdAt)}
@@ -1231,13 +1452,13 @@
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 												Instruction
 											</p>
-											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+											<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
 												{compactText(run.prompt, 180)}
 											</p>
 										</div>
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Response</p>
-											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+											<p class="ui-clamp-3 ui-wrap-anywhere mt-2 text-sm text-slate-300">
 												{compactText(responseText(run), 180)}
 											</p>
 										</div>
@@ -1249,281 +1470,491 @@
 				</div>
 
 				<div class="space-y-6">
-					<form class="space-y-3" onsubmit={submitFollowUp} onpaste={handleFollowUpAttachmentPaste}>
-						<DetailSection
-							eyebrow="Action"
-							title="Send follow-up"
-							description="Reply in the same thread once you have enough context. Attached files are saved onto the thread and included for the next run."
-							bodyClass="space-y-3"
-						>
-							{#if focusTask}
-								{@render focusTaskCard(focusTask, {
-									label: 'Working on',
-									description: 'Keep this visible while composing the next instruction.',
-									compact: true
-								})}
-							{/if}
-							<textarea
-								class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
-								name="prompt"
-								placeholder={session.canResume
-									? 'Send the next instruction.'
-									: session.hasActiveRun
-										? 'This thread is busy until the current run finishes.'
-										: 'This thread cannot resume until a Codex thread id is discovered.'}
-								disabled={!session.canResume || sendState?.status === 'sending'}
-							></textarea>
-							<div class="space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
-								<div class="flex flex-col gap-1">
-									<p class="text-sm font-medium text-white">Follow-up attachments</p>
-									<p class="text-sm text-slate-400">
-										Choose files or paste screenshots and copied files anywhere in this form.
-									</p>
-								</div>
-								<label class="block">
-									<span class="sr-only">Attach follow-up files</span>
-									<input
-										bind:this={followUpAttachmentInput}
-										class="file-input w-full border border-slate-700 bg-slate-950 text-slate-100 disabled:opacity-50"
-										name="attachments"
-										type="file"
-										multiple
-										disabled={!session.canResume || sendState?.status === 'sending'}
-										onchange={syncPendingFollowUpAttachments}
-									/>
-								</label>
-								{#if pendingFollowUpAttachments.length > 0}
-									<div class="space-y-3">
-										<div class="flex flex-wrap items-center justify-between gap-3">
-											<p class="text-sm text-slate-200">
-												{pendingFollowUpAttachments.length === 1
-													? '1 attachment ready to send'
-													: `${pendingFollowUpAttachments.length} attachments ready to send`}
-											</p>
-											<button
-												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white disabled:opacity-50"
-												type="button"
-												disabled={sendState?.status === 'sending'}
-												onclick={clearPendingFollowUpAttachments}
-											>
-												Clear
-											</button>
-										</div>
-										<div class="space-y-2">
-											{#each pendingFollowUpAttachments as attachment (attachment.id)}
-												<div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3">
-													<p class="ui-wrap-anywhere text-sm font-medium text-white">
-														{attachment.name}
-													</p>
-													<p class="mt-1 text-xs text-slate-400">
-														{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
-													</p>
-												</div>
-											{/each}
-										</div>
-									</div>
-								{/if}
-							</div>
-							{#if sendState}
-								<p
-									class={[
-										'text-sm',
-										sendState.status === 'error'
-											? 'text-rose-300'
-											: sendState.status === 'success'
-												? 'text-emerald-300'
-												: 'text-sky-300'
-									]}
-								>
-									{sendState.message}
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+							<div class="min-w-0">
+								<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+									Sidebar views
 								</p>
-							{/if}
-							<button
-								class="w-full rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-100 disabled:opacity-50 sm:w-auto"
-								type="submit"
-								disabled={!session.canResume || sendState?.status === 'sending'}
-							>
-								{sendState?.status === 'sending' ? 'Queueing...' : 'Send follow-up instruction'}
-							</button>
-						</DetailSection>
-					</form>
-
-					{#if taskResponseAction}
-						<DetailSection
-							eyebrow="Decision"
-							title="Approve task response"
-							description={taskResponseAction.helperText}
-							bodyClass="space-y-4"
-						>
-							<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
-								<div class="flex flex-wrap items-center justify-between gap-3">
-									<div class="min-w-0">
-										<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Linked task</p>
-										<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
-											{taskResponseAction.taskTitle}
-										</p>
-									</div>
-									<span
-										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
-									>
-										{formatTaskStatusLabel(taskResponseAction.taskStatus)}
-									</span>
-								</div>
-
-								<div class="mt-3 flex flex-wrap gap-2">
-									{#if taskResponseAction.openReview}
-										<span
-											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
-										>
-											Review {formatReviewStatusLabel(taskResponseAction.openReview.status)}
-										</span>
-									{/if}
-									{#if taskResponseAction.pendingApproval}
-										<span
-											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
-										>
-											{formatTaskApprovalModeLabel(taskResponseAction.pendingApproval.mode)}
-											{formatApprovalStatusLabel(taskResponseAction.pendingApproval.status)}
-										</span>
-									{/if}
-								</div>
-
-								<p class="mt-3 text-sm text-slate-400">
-									Review the newest response on the left, then approve it here to close the task
-									without leaving this thread.
+								<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+									Switch between action surfaces, thread controls, and attached files instead of
+									scanning one long rail.
 								</p>
 							</div>
-
-							{#if approveTaskResponseSuccess}
-								<p
-									class="rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-								>
-									Task response approved and task marked complete.
-								</p>
-							{:else if form?.message}
-								<p
-									class="rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
-								>
-									{form.message}
-								</p>
-							{/if}
-
-							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-								<a
-									class="ui-wrap-inline text-sm text-sky-300 transition hover:text-sky-200"
-									href={resolve(`/app/tasks/${taskResponseAction.taskId}`)}
-								>
-									Open task detail
-								</a>
-								<form method="POST" action="?/approveTaskResponse">
-									<button
-										class="w-full rounded-lg border border-emerald-800/70 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-200 disabled:opacity-50 sm:w-auto"
-										type="submit"
-										disabled={!taskResponseAction.canApproveAndComplete}
-										title={taskResponseAction.disabledReason}
-									>
-										Approve response and complete task
-									</button>
-								</form>
-							</div>
-
-							{#if taskResponseAction.disabledReason}
-								<p class="text-sm text-slate-400">{taskResponseAction.disabledReason}</p>
-							{/if}
-						</DetailSection>
-					{/if}
-
-					{@render sessionStatus(session, false)}
-
-					<div class="grid gap-3 sm:grid-cols-2">
-						<DetailFactCard label="Started" value={formatTimestamp(session.createdAt)} />
-						<DetailFactCard
-							label="Last activity"
-							value={formatActivityAge(session.lastActivityAt, now)}
-							detail={formatTimestamp(session.lastActivityAt)}
-						/>
-						<DetailFactCard
-							label="Thread"
-							value={threadLabel(session)}
-							detail={session.threadId || ''}
-							detailClass="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500"
-						/>
-						<DetailFactCard label="Runs" value={session.runCount} />
-						<DetailFactCard label="Resume" value={resumeLabel(session)} />
-						<DetailFactCard label="Sandbox" value={session.sandbox} />
+							<PageTabs
+								ariaLabel="Session sidebar views"
+								bind:value={selectedSidebarView}
+								items={[
+									{ id: 'follow_up', label: 'Follow-up' },
+									{ id: 'details', label: 'Thread details' },
+									{
+										id: 'attachments',
+										label: 'Attachments',
+										badge: threadAttachments.length
+									}
+								]}
+								panelIdPrefix="session-sidebar"
+							/>
+						</div>
 					</div>
 
-					<DetailSection
-						eyebrow="Attachments"
-						title="Thread attachments"
-						description="Files attached during follow-up stay on this thread for later reference."
-						bodyClass="space-y-4"
+					<div
+						id={`session-sidebar-panel-${selectedSidebarView}`}
+						role="tabpanel"
+						aria-labelledby={`session-sidebar-tab-${selectedSidebarView}`}
+						class="space-y-6"
 					>
-						{#if threadAttachments.length === 0}
-							<p
-								class="rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
+						{#if selectedSidebarView === 'follow_up'}
+							<DetailSection
+								eyebrow="Action"
+								title="Send follow-up"
+								description="Reply in the same thread once you have enough context. Attached files are saved onto the thread and included for the next run."
+								bodyClass="space-y-3"
 							>
-								No files are attached to this thread yet. Add one in the follow-up form when the next run needs reference material.
-							</p>
-						{:else}
-							<div class="space-y-3">
-								{#each threadAttachments as attachment (attachment.id)}
-									<article class="rounded-lg border border-slate-800 bg-black/20 p-4">
-										<div class="flex flex-wrap items-start justify-between gap-3">
+								{#if focusTask}
+									{@render focusTaskCard(focusTask, {
+										label: 'Working on',
+										description: 'Keep this visible while composing the next instruction.',
+										compact: true
+									})}
+								{/if}
+
+								<form
+									id="thread-follow-up-form"
+									class="space-y-3"
+									onsubmit={submitFollowUp}
+									onpaste={handleFollowUpAttachmentPaste}
+								>
+									<textarea
+										bind:value={followUpPrompt}
+										class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
+										name="prompt"
+										placeholder={session.canResume
+											? 'Send the next instruction.'
+											: session.hasActiveRun
+												? 'This thread is busy until the current run finishes.'
+												: 'This thread cannot resume until a Codex thread id is discovered.'}
+										disabled={!session.canResume || sendState?.status === 'sending'}
+									></textarea>
+									<div class="space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
+										<div class="flex flex-col gap-1">
+											<p class="text-sm font-medium text-white">Follow-up attachments</p>
+											<p class="ui-wrap-anywhere text-sm text-slate-400">
+												Choose files or paste screenshots and copied files anywhere in this form.
+											</p>
+										</div>
+										<label class="block">
+											<span class="sr-only">Attach follow-up files</span>
+											<input
+												bind:this={followUpAttachmentInput}
+												class="file-input w-full border border-slate-700 bg-slate-950 text-slate-100 disabled:opacity-50"
+												name="attachments"
+												type="file"
+												multiple
+												disabled={!session.canResume || sendState?.status === 'sending'}
+												onchange={syncPendingFollowUpAttachments}
+											/>
+										</label>
+										{#if pendingFollowUpAttachments.length > 0}
+											<div class="space-y-3">
+												<div class="flex flex-wrap items-center justify-between gap-3">
+													<p class="ui-wrap-anywhere text-sm text-slate-200">
+														{pendingFollowUpAttachments.length === 1
+															? '1 attachment ready to send'
+															: `${pendingFollowUpAttachments.length} attachments ready to send`}
+													</p>
+													<AppButton
+														size="sm"
+														type="button"
+														variant="ghost"
+														disabled={sendState?.status === 'sending'}
+														onclick={clearPendingFollowUpAttachments}
+													>
+														Clear
+													</AppButton>
+												</div>
+												<div class="space-y-2">
+													{#each pendingFollowUpAttachments as attachment (attachment.id)}
+														<div
+															class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3"
+														>
+															<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																{attachment.name}
+															</p>
+															<p class="mt-1 text-xs text-slate-400">
+																{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+															</p>
+														</div>
+													{/each}
+												</div>
+											</div>
+										{/if}
+									</div>
+									{#if sendState}
+										<p
+											class={[
+												'ui-wrap-anywhere text-sm',
+												sendState.status === 'error'
+													? 'text-rose-300'
+													: sendState.status === 'success'
+														? 'text-emerald-300'
+														: 'text-sky-300'
+											]}
+										>
+											{sendState.message}
+										</p>
+									{/if}
+								</form>
+
+								<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+									<AppButton
+										class="w-full sm:w-auto"
+										form="thread-follow-up-form"
+										type="submit"
+										variant="primary"
+										disabled={!session.canResume || sendState?.status === 'sending'}
+									>
+										{sendState?.status === 'sending' ? 'Queueing...' : 'Send follow-up instruction'}
+									</AppButton>
+									<form method="GET" action={resolve('/app/tasks')}>
+										<input type="hidden" name="create" value="1" />
+										{#if taskResponseAction?.taskProjectId || focusTask?.projectId}
+											<input
+												type="hidden"
+												name="projectId"
+												value={taskResponseAction?.taskProjectId ?? focusTask?.projectId ?? ''}
+											/>
+										{/if}
+										<input
+											type="hidden"
+											name="name"
+											value={createTaskFromThreadName(followUpPrompt)}
+										/>
+										<input
+											type="hidden"
+											name="instructions"
+											value={createTaskFromThreadInstructions(followUpPrompt)}
+										/>
+										{#if taskResponseAction}
+											<input type="hidden" name="goalId" value={taskResponseAction.taskGoalId} />
+											<input type="hidden" name="lane" value={taskResponseAction.taskLane} />
+											<input
+												type="hidden"
+												name="priority"
+												value={taskResponseAction.taskPriority}
+											/>
+											<input
+												type="hidden"
+												name="riskLevel"
+												value={taskResponseAction.taskRiskLevel}
+											/>
+											<input
+												type="hidden"
+												name="approvalMode"
+												value={taskResponseAction.taskApprovalMode}
+											/>
+											<input
+												type="hidden"
+												name="requiresReview"
+												value={taskResponseAction.taskRequiresReview ? 'true' : 'false'}
+											/>
+											<input
+												type="hidden"
+												name="desiredRoleId"
+												value={taskResponseAction.taskDesiredRoleId}
+											/>
+											{#if taskResponseAction.taskAssigneeWorkerId}
+												<input
+													type="hidden"
+													name="assigneeWorkerId"
+													value={taskResponseAction.taskAssigneeWorkerId}
+												/>
+											{/if}
+											{#if taskResponseAction.taskTargetDate}
+												<input
+													type="hidden"
+													name="targetDate"
+													value={taskResponseAction.taskTargetDate}
+												/>
+											{/if}
+											{#if taskResponseAction.taskRequiredCapabilityNames.length > 0}
+												<input
+													type="hidden"
+													name="requiredCapabilityNames"
+													value={taskResponseAction.taskRequiredCapabilityNames.join(', ')}
+												/>
+											{/if}
+											{#if taskResponseAction.taskRequiredToolNames.length > 0}
+												<input
+													type="hidden"
+													name="requiredToolNames"
+													value={taskResponseAction.taskRequiredToolNames.join(', ')}
+												/>
+											{/if}
+										{/if}
+										<AppButton class="w-full sm:w-auto" type="submit" variant="accent">
+											Create new task
+										</AppButton>
+									</form>
+								</div>
+							</DetailSection>
+
+							{#if taskResponseAction}
+								<DetailSection
+									eyebrow="Decision"
+									title="Approve task response"
+									description={taskResponseAction.helperText}
+									bodyClass="space-y-4"
+								>
+									<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+										<div class="flex flex-wrap items-center justify-between gap-3">
 											<div class="min-w-0">
-												<p class="ui-wrap-anywhere text-sm font-medium text-white">
-													{attachment.name}
+												<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Linked task
 												</p>
-												<p class="mt-1 text-xs text-slate-400">
-													{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
-												</p>
-												<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
-													{attachment.path}
-												</p>
-												<p class="mt-2 text-xs text-slate-500">
-													Attached {formatTimestamp(attachment.attachedAt)}
+												<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+													{taskResponseAction.taskTitle}
 												</p>
 											</div>
-											<a
-												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-												href={resolve(
-													`/api/agents/sessions/${session.id}/attachments/${attachment.id}`
-												)}
+											<span
+												class="inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-slate-300 uppercase"
 											>
-												Download
-											</a>
+												{formatTaskStatusLabel(taskResponseAction.taskStatus)}
+											</span>
 										</div>
-									</article>
-								{/each}
-							</div>
-						{/if}
-					</DetailSection>
 
-					<form method="POST" action="?/updateSessionSandbox">
-						<DetailSection
-							eyebrow="Thread access"
-							title="Sandbox for future follow-up runs"
-							description="Lower-priority thread setting: change what this thread can access the next time you resume it. The current run keeps its existing sandbox."
-						>
-							<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-								<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-									<label class="block min-w-[14rem]">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Sandbox mode</span>
-										<select class="select text-white" name="sandbox">
-											{#each sandboxOptions as sandbox (sandbox)}
-												<option value={sandbox} selected={session.sandbox === sandbox}
-													>{sandbox}</option
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#if taskResponseAction.openReview}
+												<span
+													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
 												>
-											{/each}
-										</select>
-									</label>
-									<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-										Update sandbox
-									</button>
+													Review {formatReviewStatusLabel(taskResponseAction.openReview.status)}
+												</span>
+											{/if}
+											{#if taskResponseAction.pendingApproval}
+												<span
+													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
+												>
+													{formatTaskApprovalModeLabel(taskResponseAction.pendingApproval.mode)}
+													{formatApprovalStatusLabel(taskResponseAction.pendingApproval.status)}
+												</span>
+											{/if}
+										</div>
+
+										<p class="ui-wrap-anywhere mt-3 text-sm text-slate-400">
+											Review the newest response on the left, then approve it here to close the task
+											without leaving this thread.
+										</p>
+									</div>
+
+									{#if approveTaskResponseSuccess}
+										<p
+											class="rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+										>
+											Task response approved and task marked complete.
+										</p>
+									{:else if form?.message}
+										<p
+											class="ui-wrap-anywhere rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+										>
+											{form.message}
+										</p>
+									{/if}
+
+									<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+										<AppButton
+											href={resolve(`/app/tasks/${taskResponseAction.taskId}`)}
+											size="sm"
+											variant="accent"
+										>
+											Open task detail
+										</AppButton>
+										<form method="POST" action="?/approveTaskResponse">
+											<AppButton
+												class="w-full sm:w-auto"
+												type="submit"
+												variant="success"
+												disabled={!taskResponseAction.canApproveAndComplete}
+												title={taskResponseAction.disabledReason}
+											>
+												Approve response and complete task
+											</AppButton>
+										</form>
+									</div>
+
+									{#if taskResponseAction.disabledReason}
+										<p class="ui-wrap-anywhere text-sm text-slate-400">
+											{taskResponseAction.disabledReason}
+										</p>
+									{/if}
+								</DetailSection>
+							{/if}
+						{:else if selectedSidebarView === 'details'}
+							<DetailSection
+								eyebrow="Thread status"
+								title="Current thread state"
+								description="Operational details and quick status facts for this thread."
+								bodyClass="space-y-4"
+							>
+								{@render sessionStatus(session, false)}
+
+								<div class="grid gap-3 sm:grid-cols-2">
+									<DetailFactCard label="Started" value={formatTimestamp(session.createdAt)} />
+									<DetailFactCard
+										label="Last activity"
+										value={formatActivityAge(session.lastActivityAt, now)}
+										detail={formatTimestamp(session.lastActivityAt)}
+									/>
+									<DetailFactCard
+										label="Thread"
+										value={threadLabel(session)}
+										detail={session.threadId || ''}
+										detailClass="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500"
+									/>
+									<DetailFactCard label="Runs" value={session.runCount} />
+									<DetailFactCard label="Resume" value={resumeLabel(session)} />
+									<DetailFactCard label="Sandbox" value={session.sandbox} />
 								</div>
-							</div>
-						</DetailSection>
-					</form>
+							</DetailSection>
+
+							{#if needsRecovery}
+								<DetailSection
+									eyebrow="Recovery"
+									title="Recover or move work"
+									description="Use this when a thread is stalled, failed, canceled, or otherwise needs attention."
+									bodyClass="space-y-4"
+								>
+									<div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-4">
+										<p class="ui-wrap-anywhere text-sm font-medium text-amber-100">
+											{recoveryHeadline(session)}
+										</p>
+										<p class="ui-wrap-anywhere mt-2 text-sm text-amber-200/85">
+											{recoveryDetail(session)}
+										</p>
+									</div>
+
+									<div class="grid gap-3 lg:grid-cols-2">
+										<form method="POST" action="?/recoverSessionThread">
+											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<p class="text-sm font-medium text-white">Retry in this thread</p>
+												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+													Recover the current thread, then replay the latest saved request without
+													losing the existing conversation context.
+												</p>
+												<AppButton
+													class="mt-4 w-full"
+													type="submit"
+													variant="warning"
+													disabled={!canRecoverInPlace}
+													title={recoverInPlaceDisabledReason(session)}
+												>
+													Recover in this thread
+												</AppButton>
+											</div>
+										</form>
+
+										<form method="POST" action="?/moveLatestRequestToNewThread">
+											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<p class="text-sm font-medium text-white">Move latest request</p>
+												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+													Start a fresh thread from the latest saved request and carry linked task
+													work over to that new thread.
+												</p>
+												<AppButton
+													class="mt-4 w-full"
+													type="submit"
+													variant="accent"
+													disabled={!canMoveLatestRequestToNewThread}
+													title={moveLatestRequestDisabledReason(session)}
+												>
+													Move latest request to new thread
+												</AppButton>
+											</div>
+										</form>
+									</div>
+
+									{#if !canRecoverInPlace}
+										<p class="ui-wrap-anywhere text-sm text-slate-400">
+											{recoverInPlaceDisabledReason(session)}
+										</p>
+									{/if}
+								</DetailSection>
+							{/if}
+
+							<form method="POST" action="?/updateSessionSandbox">
+								<DetailSection
+									eyebrow="Thread access"
+									title="Sandbox for future follow-up runs"
+									description="Lower-priority thread setting: change what this thread can access the next time you resume it. The current run keeps its existing sandbox."
+								>
+									<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+										<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+											<label class="block min-w-[14rem]">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Sandbox mode
+												</span>
+												<select class="select text-white" name="sandbox">
+													{#each sandboxOptions as sandbox (sandbox)}
+														<option value={sandbox} selected={session.sandbox === sandbox}
+															>{sandbox}</option
+														>
+													{/each}
+												</select>
+											</label>
+											<AppButton type="submit" variant="primary">Update sandbox</AppButton>
+										</div>
+									</div>
+								</DetailSection>
+							</form>
+						{:else}
+							<DetailSection
+								eyebrow="Attachments"
+								title="Thread attachments"
+								description="Files attached during follow-up stay on this thread for later reference."
+								bodyClass="space-y-4"
+							>
+								{#if threadAttachments.length === 0}
+									<p
+										class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
+									>
+										No files are attached to this thread yet. Add one in the follow-up form when the
+										next run needs reference material.
+									</p>
+								{:else}
+									<div class="space-y-3">
+										{#each threadAttachments as attachment (attachment.id)}
+											<article class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<div class="flex flex-wrap items-start justify-between gap-3">
+													<div class="min-w-0">
+														<p class="ui-wrap-anywhere text-sm font-medium text-white">
+															{attachment.name}
+														</p>
+														<p class="mt-1 text-xs text-slate-400">
+															{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+														</p>
+														<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+															{attachment.path}
+														</p>
+														<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+															Attached {formatTimestamp(attachment.attachedAt)}
+														</p>
+													</div>
+													<a
+														class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+														href={resolve(
+															`/api/agents/sessions/${session.id}/attachments/${attachment.id}`
+														)}
+													>
+														Download
+													</a>
+												</div>
+											</article>
+										{/each}
+									</div>
+								{/if}
+							</DetailSection>
+						{/if}
+					</div>
 				</div>
 			</div>
 		</div>

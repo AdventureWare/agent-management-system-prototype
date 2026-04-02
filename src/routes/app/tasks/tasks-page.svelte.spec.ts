@@ -91,12 +91,24 @@ function createIdeationReview(overrides: Record<string, unknown> = {}) {
 function renderPage(
 	tasks = [] as ReturnType<typeof createTask>[],
 	ideationReviews = [] as ReturnType<typeof createIdeationReview>[],
-	form: Record<string, unknown> = {}
+	form: Record<string, unknown> = {},
+	createTaskPrefill: Record<string, unknown> = {}
 ) {
 	render(Page, {
 		form: form as never,
 		data: {
 			deleted: false,
+			createTaskPrefill: {
+				open: false,
+				projectId: '',
+				name: '',
+				instructions: '',
+				assigneeWorkerId: '',
+				targetDate: '',
+				requiredCapabilityNames: '',
+				requiredToolNames: '',
+				...createTaskPrefill
+			},
 			statusOptions: TASK_STATUS_OPTIONS,
 			defaultDraftRoleName: 'Coordinator',
 			ideationReviews,
@@ -275,6 +287,32 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(instructionsInput?.value).toBe('Persist this between reloads.');
 		expect(requiredCapabilitiesInput?.value).toBe('planning, citations');
 		expect(requiredToolsInput?.value).toBe('codex');
+	});
+
+	it('opens the create dialog from a prefilled deep link', async () => {
+		renderPage(
+			[],
+			[],
+			{},
+			{
+				open: true,
+				projectId: 'project_1',
+				name: 'Follow-up: Default task',
+				instructions: 'Create a new task from detail context.'
+			}
+		);
+
+		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+
+		const nameInput = document.querySelector(
+			'form[action="?/createTask"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const instructionsInput = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(nameInput?.value).toBe('Follow-up: Default task');
+		expect(instructionsInput?.value).toBe('Create a new task from detail context.');
 	});
 
 	it('clears a saved create-task draft after successful creation', () => {

@@ -5,6 +5,7 @@ export {
 	loadAgentThreadsDb,
 	parseAgentSandbox,
 	recoverAgentThread,
+	sendAgentThreadMessage,
 	setAgentThreadsArchived,
 	startAgentThread,
 	updateAgentThreadSandbox

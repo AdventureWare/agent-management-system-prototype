@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -35,7 +36,9 @@
 	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
 
 	function createDialogShouldStartOpen() {
-		return form?.formContext === 'taskCreate' && !form?.ok;
+		return (
+			(form?.formContext === 'taskCreate' && !form?.ok) || data.createTaskPrefill?.open === true
+		);
 	}
 
 	let isCreateModalOpen = $state(createDialogShouldStartOpen());
@@ -139,22 +142,27 @@
 	}
 
 	function mergeCreateAttachmentFiles(files: Iterable<File>) {
-		const nextFiles = new Map(
-			Array.from(createTaskAttachmentInput?.files ?? []).map((file) => [
-				createAttachmentKey(file),
-				file
-			])
-		);
+		const nextFiles = Array.from(createTaskAttachmentInput?.files ?? []);
 
 		for (const file of files) {
 			if (file.size === 0) {
 				continue;
 			}
 
-			nextFiles.set(createAttachmentKey(file), file);
+			const nextFileKey = createAttachmentKey(file);
+			const existingIndex = nextFiles.findIndex(
+				(existingFile) => createAttachmentKey(existingFile) === nextFileKey
+			);
+
+			if (existingIndex >= 0) {
+				nextFiles[existingIndex] = file;
+				continue;
+			}
+
+			nextFiles.push(file);
 		}
 
-		replaceCreateAttachmentFiles([...nextFiles.values()]);
+		replaceCreateAttachmentFiles(nextFiles);
 	}
 
 	function clearPendingCreateAttachments() {
@@ -358,6 +366,13 @@
 					instructions: form.instructions?.toString() ?? '',
 					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
+					goalId: form.goalId?.toString() ?? '',
+					lane: form.lane?.toString() ?? 'product',
+					priority: form.priority?.toString() ?? 'medium',
+					riskLevel: form.riskLevel?.toString() ?? 'medium',
+					approvalMode: form.approvalMode?.toString() ?? 'none',
+					requiresReview: form.requiresReview?.toString() !== 'false',
+					desiredRoleId: form.desiredRoleId?.toString() ?? '',
 					requiredCapabilityNames:
 						Array.isArray(form.requiredCapabilityNames) &&
 						form.requiredCapabilityNames.every((value) => typeof value === 'string')
@@ -376,6 +391,13 @@
 					instructions: '',
 					assigneeWorkerId: '',
 					targetDate: '',
+					goalId: '',
+					lane: 'product',
+					priority: 'medium',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: '',
 					requiredCapabilityNames: '',
 					requiredToolNames: '',
 					submitMode: 'create'
@@ -386,11 +408,47 @@
 	let createTaskInstructions = $state('');
 	let createTaskAssigneeWorkerId = $state('');
 	let createTaskTargetDate = $state('');
+	let createTaskGoalId = $state('');
+	let createTaskLane = $state('product');
+	let createTaskPriority = $state('medium');
+	let createTaskRiskLevel = $state('medium');
+	let createTaskApprovalMode = $state('none');
+	let createTaskRequiresReview = $state(true);
+	let createTaskDesiredRoleId = $state('');
 	let createTaskRequiredCapabilityNames = $state('');
 	let createTaskRequiredToolNames = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
 	);
+
+	function applyCreateTaskPrefill(
+		prefill: NonNullable<typeof data.createTaskPrefill> | null | undefined
+	) {
+		createTaskProjectId = prefill?.projectId ?? '';
+		createTaskName = prefill?.name ?? '';
+		createTaskInstructions = prefill?.instructions ?? '';
+		createTaskAssigneeWorkerId = prefill?.assigneeWorkerId ?? '';
+		createTaskTargetDate = prefill?.targetDate ?? '';
+		createTaskGoalId = prefill?.goalId ?? '';
+		createTaskLane = prefill?.lane ?? 'product';
+		createTaskPriority = prefill?.priority ?? 'medium';
+		createTaskRiskLevel = prefill?.riskLevel ?? 'medium';
+		createTaskApprovalMode = prefill?.approvalMode ?? 'none';
+		createTaskRequiresReview = prefill?.requiresReview ?? true;
+		createTaskDesiredRoleId = prefill?.desiredRoleId ?? '';
+		createTaskRequiredCapabilityNames = prefill?.requiredCapabilityNames ?? '';
+		createTaskRequiredToolNames = prefill?.requiredToolNames ?? '';
+	}
+
+	function resetCreateTaskMetadata() {
+		createTaskGoalId = '';
+		createTaskLane = 'product';
+		createTaskPriority = 'medium';
+		createTaskRiskLevel = 'medium';
+		createTaskApprovalMode = 'none';
+		createTaskRequiresReview = true;
+		createTaskDesiredRoleId = '';
+	}
 
 	$effect(() => {
 		if (form?.formContext === 'taskCreate') {
@@ -399,6 +457,13 @@
 			createTaskInstructions = createTaskFormValues.instructions;
 			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
+			createTaskGoalId = createTaskFormValues.goalId;
+			createTaskLane = createTaskFormValues.lane;
+			createTaskPriority = createTaskFormValues.priority;
+			createTaskRiskLevel = createTaskFormValues.riskLevel;
+			createTaskApprovalMode = createTaskFormValues.approvalMode;
+			createTaskRequiresReview = createTaskFormValues.requiresReview;
+			createTaskDesiredRoleId = createTaskFormValues.desiredRoleId;
 			createTaskRequiredCapabilityNames = createTaskFormValues.requiredCapabilityNames;
 			createTaskRequiredToolNames = createTaskFormValues.requiredToolNames;
 			return;
@@ -421,6 +486,13 @@
 			return;
 		}
 
+		if (data.createTaskPrefill?.open) {
+			applyCreateTaskPrefill(data.createTaskPrefill);
+			createTaskDraftReady = true;
+			isCreateModalOpen = true;
+			return;
+		}
+
 		const savedDraft = readFormDraft<{
 			projectId: string;
 			name: string;
@@ -432,6 +504,7 @@
 		}>(CREATE_TASK_DRAFT_KEY);
 
 		if (savedDraft) {
+			resetCreateTaskMetadata();
 			createTaskProjectId = savedDraft.projectId ?? '';
 			createTaskName = savedDraft.name ?? '';
 			createTaskInstructions = savedDraft.instructions ?? '';
@@ -593,19 +666,18 @@
 						</td>
 						<td class="px-3 py-3 align-top">
 							<div class="flex min-w-40 flex-col items-start gap-2">
-								<a
-									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-									href={resolve(`/app/tasks/${task.id}`)}
-								>
+								<AppButton href={resolve(`/app/tasks/${task.id}`)} size="sm" variant="accent">
 									Open task
-								</a>
+								</AppButton>
 								{#if task.linkThread}
-									<a
-										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+									<AppButton
 										href={resolve(`/app/sessions/${task.linkThread.id}`)}
+										size="sm"
+										variant="accent"
+										reserveLabel="Open assigned thread"
 									>
 										{threadActionLabel(task)}
-									</a>
+									</AppButton>
 								{/if}
 							</div>
 						</td>
@@ -624,15 +696,16 @@
 			description="Tasks should read like an operating queue. Scan by status, search for a specific brief, and use the detail page for editing, launching threads, and deeper execution context."
 		>
 			{#snippet actions()}
-				<button
-					class="btn preset-filled-primary-500 font-semibold"
+				<AppButton
 					type="button"
+					variant="primary"
 					onclick={() => {
+						resetCreateTaskMetadata();
 						isCreateModalOpen = true;
 					}}
 				>
 					Add task
-				</button>
+				</AppButton>
 			{/snippet}
 		</PageHeader>
 
@@ -1144,6 +1217,17 @@
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
+					<input type="hidden" name="goalId" value={createTaskGoalId} />
+					<input type="hidden" name="lane" value={createTaskLane} />
+					<input type="hidden" name="priority" value={createTaskPriority} />
+					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
+					<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />
+					<input
+						type="hidden"
+						name="requiresReview"
+						value={createTaskRequiresReview ? 'true' : 'false'}
+					/>
+					<input type="hidden" name="desiredRoleId" value={createTaskDesiredRoleId} />
 					<div class="min-w-0 space-y-4">
 						<div class="grid gap-4 md:grid-cols-3">
 							<label class="block">

@@ -6,12 +6,16 @@
 		eyebrow,
 		title,
 		description = '',
+		titleClass = '',
+		descriptionClass = '',
 		actions,
 		meta
 	} = $props<{
 		eyebrow?: string;
 		title: string;
 		description?: string;
+		titleClass?: string;
+		descriptionClass?: string;
 		actions?: Snippet;
 		meta?: Snippet;
 	}>();
@@ -23,9 +27,9 @@
 			{#if eyebrow}
 				<p class="ui-eyebrow">{eyebrow}</p>
 			{/if}
-			<h1 class="ui-page-title">{title}</h1>
+			<h1 class={['ui-page-title ui-wrap-anywhere', titleClass]}>{title}</h1>
 			{#if description}
-				<p class="ui-page-description">{description}</p>
+				<p class={['ui-page-description ui-wrap-anywhere', descriptionClass]}>{description}</p>
 			{/if}
 		</AppBar.Headline>
 

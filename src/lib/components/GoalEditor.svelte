@@ -18,6 +18,7 @@
 		name?: string;
 		summary?: string;
 		successSignal?: string;
+		targetDate?: string;
 		artifactPath?: string;
 		parentGoalId?: string;
 		projectIds?: string[];
@@ -110,6 +111,7 @@
 	let lane = $state('product');
 	let status = $state('ready');
 	let successSignal = $state('');
+	let targetDate = $state('');
 	let projectQuery = $state('');
 	let taskQuery = $state('');
 	let selectedProjectIds = $state.raw<string[]>([]);
@@ -137,6 +139,7 @@
 			lane: values.lane ?? 'product',
 			status: values.status ?? 'ready',
 			successSignal: values.successSignal ?? '',
+			targetDate: values.targetDate ?? '',
 			projectIds: values.projectIds ?? [],
 			taskIds: values.taskIds ?? [],
 			parentGoalId: values.parentGoalId ?? '',
@@ -153,6 +156,7 @@
 		lane = values.lane ?? 'product';
 		status = values.status ?? 'ready';
 		successSignal = values.successSignal ?? '';
+		targetDate = values.targetDate ?? '';
 		selectedProjectIds = [...(values.projectIds ?? [])];
 		selectedTaskIds = [...(values.taskIds ?? [])];
 		selectedParentGoalId = values.parentGoalId ?? '';
@@ -178,6 +182,7 @@
 			name: values.name ?? '',
 			summary: values.summary ?? '',
 			successSignal: values.successSignal ?? '',
+			targetDate: values.targetDate ?? '',
 			artifactPath: values.artifactPath ?? '',
 			parentGoalId: values.parentGoalId ?? '',
 			projectIds: values.projectIds ?? [],
@@ -199,6 +204,7 @@
 			lane = savedDraft.lane ?? 'product';
 			status = savedDraft.status ?? 'ready';
 			successSignal = savedDraft.successSignal ?? '';
+			targetDate = savedDraft.targetDate ?? '';
 			artifactPath = savedDraft.artifactPath ?? '';
 			selectedParentGoalId = savedDraft.parentGoalId ?? '';
 			selectedProjectIds = [...(savedDraft.projectIds ?? [])];
@@ -219,6 +225,7 @@
 			lane: lane === 'product' ? '' : lane,
 			status: status === 'ready' ? '' : status,
 			successSignal,
+			targetDate,
 			artifactPath,
 			parentGoalId: selectedParentGoalId,
 			projectIds: selectedProjectIds,
@@ -658,7 +665,7 @@
 					</span>
 				</label>
 
-				<div class="grid gap-4 lg:grid-cols-3">
+				<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Area</span>
 						<select bind:value={lane} class="select text-white" name="lane">
@@ -685,6 +692,14 @@
 								<option value={goal.id}>{goal.name}</option>
 							{/each}
 						</select>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Target date</span>
+						<input bind:value={targetDate} class="input text-white" name="targetDate" type="date" />
+						<span class="mt-2 block text-xs text-slate-500">
+							Optional. Use this when the outcome should land by a specific date.
+						</span>
 					</label>
 				</div>
 			</div>

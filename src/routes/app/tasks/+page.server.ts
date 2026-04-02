@@ -1,6 +1,12 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
+import {
+	LANE_OPTIONS,
+	PRIORITY_OPTIONS,
+	TASK_APPROVAL_MODE_OPTIONS,
+	TASK_RISK_LEVEL_OPTIONS,
+	TASK_STATUS_OPTIONS
+} from '$lib/types/control-plane';
 import {
 	createRun,
 	createTask,
@@ -24,10 +30,7 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
-import {
-	isTaskThreadCompatibleWithProject,
-	selectProjectTaskThreadContext
-} from '$lib/server/task-thread-compatibility';
+import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import {
 	buildProjectTaskIdeationPrompt,
@@ -51,6 +54,27 @@ function readTaskForm(form: FormData) {
 				.filter(Boolean)
 		)
 	];
+	const parseOption = <T extends readonly string[]>(
+		options: T,
+		value: FormDataEntryValue | null,
+		fallback: T[number]
+	): T[number] => {
+		const normalized = value?.toString().trim() ?? '';
+		return options.includes(normalized as T[number]) ? (normalized as T[number]) : fallback;
+	};
+	const parseBoolean = (value: FormDataEntryValue | null, fallback: boolean) => {
+		const normalized = value?.toString().trim().toLowerCase() ?? '';
+
+		if (normalized === 'true') {
+			return true;
+		}
+
+		if (normalized === 'false') {
+			return false;
+		}
+
+		return fallback;
+	};
 
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
@@ -58,6 +82,13 @@ function readTaskForm(form: FormData) {
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
 		targetDate: form.get('targetDate')?.toString().trim() ?? '',
+		goalId: form.get('goalId')?.toString().trim() ?? '',
+		lane: parseOption(LANE_OPTIONS, form.get('lane'), 'product'),
+		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
+		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
+		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
+		requiresReview: parseBoolean(form.get('requiresReview'), true),
+		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
 		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
 		requiredToolNames: parseNameList(form.get('requiredToolNames'))
 	};
@@ -90,6 +121,13 @@ function failTaskCreate(
 		projectId: string;
 		assigneeWorkerId: string;
 		targetDate: string;
+		goalId: string;
+		lane: string;
+		priority: string;
+		riskLevel: string;
+		approvalMode: string;
+		requiresReview: boolean;
+		desiredRoleId: string;
 		requiredCapabilityNames: string[];
 		requiredToolNames: string[];
 		submitMode: 'create' | 'createAndRun';
@@ -118,6 +156,56 @@ function parseSuggestionIndexes(form: FormData) {
 				.filter((value) => Number.isInteger(value) && value >= 0)
 		)
 	];
+}
+
+function readCreateTaskPrefill(url: URL) {
+	const open = url.searchParams.get('create') === '1';
+	const parseOption = <T extends readonly string[]>(
+		options: T,
+		value: string | null,
+		fallback: T[number]
+	): T[number] => {
+		const normalized = value?.trim() ?? '';
+		return options.includes(normalized as T[number]) ? (normalized as T[number]) : fallback;
+	};
+	const parseBoolean = (value: string | null, fallback: boolean) => {
+		const normalized = value?.trim().toLowerCase() ?? '';
+
+		if (normalized === 'true') {
+			return true;
+		}
+
+		if (normalized === 'false') {
+			return false;
+		}
+
+		return fallback;
+	};
+
+	return {
+		open,
+		projectId: url.searchParams.get('projectId')?.trim() ?? '',
+		name: url.searchParams.get('name')?.trim() ?? '',
+		instructions: url.searchParams.get('instructions')?.trim() ?? '',
+		assigneeWorkerId: url.searchParams.get('assigneeWorkerId')?.trim() ?? '',
+		targetDate: (() => {
+			const value = url.searchParams.get('targetDate')?.trim() ?? '';
+			return value && isValidDate(value) ? value : '';
+		})(),
+		goalId: url.searchParams.get('goalId')?.trim() ?? '',
+		lane: parseOption(LANE_OPTIONS, url.searchParams.get('lane'), 'product'),
+		priority: parseOption(PRIORITY_OPTIONS, url.searchParams.get('priority'), 'medium'),
+		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, url.searchParams.get('riskLevel'), 'medium'),
+		approvalMode: parseOption(
+			TASK_APPROVAL_MODE_OPTIONS,
+			url.searchParams.get('approvalMode'),
+			'none'
+		),
+		requiresReview: parseBoolean(url.searchParams.get('requiresReview'), true),
+		desiredRoleId: url.searchParams.get('desiredRoleId')?.trim() ?? '',
+		requiredCapabilityNames: url.searchParams.get('requiredCapabilityNames')?.trim() ?? '',
+		requiredToolNames: url.searchParams.get('requiredToolNames')?.trim() ?? ''
+	};
 }
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -173,6 +261,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		deleted: url.searchParams.get('deleted') === '1',
+		createTaskPrefill: readCreateTaskPrefill(url),
 		statusOptions: TASK_STATUS_OPTIONS,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		projectSkillSummaries,
@@ -286,6 +375,13 @@ export const actions: Actions = {
 			projectId,
 			assigneeWorkerId,
 			targetDate,
+			goalId,
+			lane,
+			priority,
+			riskLevel,
+			approvalMode,
+			requiresReview,
+			desiredRoleId,
 			requiredCapabilityNames,
 			requiredToolNames
 		} = readTaskForm(form);
@@ -300,6 +396,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -314,6 +417,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -334,6 +444,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -348,6 +465,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -362,6 +486,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -384,6 +515,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -394,17 +532,21 @@ export const actions: Actions = {
 			current.roles.find((role) => role.id === 'role_coordinator')?.id ??
 			current.roles[0]?.id ??
 			'';
+		const nextGoalId = current.goals.some((goal) => goal.id === goalId) ? goalId : '';
+		const nextDesiredRoleId = current.roles.some((role) => role.id === desiredRoleId)
+			? desiredRoleId
+			: (assigneeWorker?.roleId ?? coordinatorRoleId);
 		const baseTask = createTask({
 			title: name,
 			summary: instructions,
 			projectId: project.id,
-			lane: 'product',
-			goalId: '',
-			priority: 'medium',
-			riskLevel: 'medium',
-			approvalMode: 'none',
-			requiresReview: true,
-			desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
+			lane,
+			goalId: nextGoalId,
+			priority,
+			riskLevel,
+			approvalMode,
+			requiresReview,
+			desiredRoleId: nextDesiredRoleId,
 			assigneeWorkerId: assigneeWorker?.id ?? null,
 			targetDate: targetDate || null,
 			requiredCapabilityNames,
@@ -462,6 +604,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -490,6 +639,13 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				goalId,
+				lane,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode

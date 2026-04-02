@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -11,7 +12,7 @@
 		class: className = '',
 		labelClass = 'text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase',
 		valueClass = 'ui-wrap-anywhere mt-2 text-sm font-medium text-white',
-		detailClass = 'mt-1 text-xs text-slate-500'
+		detailClass = 'ui-wrap-anywhere mt-1 text-xs text-slate-500'
 	} = $props<{
 		label: string;
 		value?: string | number | null;
@@ -45,7 +46,10 @@
 	{/if}
 
 	{#if href && hrefLabel}
-		<a class="mt-2 inline-flex text-sm text-sky-300 transition hover:text-sky-200" {href}>
+		<a
+			class="mt-2 inline-flex text-sm text-sky-300 transition hover:text-sky-200"
+			href={resolve(href)}
+		>
 			{hrefLabel}
 		</a>
 	{/if}
