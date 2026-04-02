@@ -60,7 +60,7 @@
 								<span
 									class="badge border border-slate-700 bg-slate-900/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
 								>
-									{role.lane}
+									Area · {role.lane}
 								</span>
 							</div>
 							<p class="mt-3 max-w-3xl text-sm text-slate-300">{role.description}</p>

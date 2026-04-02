@@ -50,4 +50,25 @@ describe('task thread naming', () => {
 			})
 		).toContain('Installed skills available: skill-installer, web-design-guidelines');
 	});
+
+	it('includes retrieved published knowledge in the task prompt when available', () => {
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Stabilize execution',
+				taskInstructions: 'Fix the flaky launch path.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				relevantKnowledgeItems: [
+					{
+						title: 'Failure recovery pattern',
+						summary: 'Capture repeated launch failures as a reusable recovery play.',
+						triggerPattern: 'Repeated launch or retry failures for the same task.',
+						recommendedResponse: 'Add a preflight check before retrying the failing step.',
+						matchReasons: ['Matches this project.', 'Shares task language: launch, retry.']
+					}
+				]
+			})
+		).toContain('Apply this published system knowledge when it is relevant to the work:');
+	});
 });

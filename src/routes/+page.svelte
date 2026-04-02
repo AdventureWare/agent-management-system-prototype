@@ -122,7 +122,7 @@
 							<span
 								class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300 uppercase"
 							>
-								{goal.lane}
+								Area · {goal.lane}
 							</span>
 						</div>
 						<p class="mt-2 text-sm text-slate-300">{goal.summary}</p>

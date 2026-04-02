@@ -114,7 +114,7 @@ describe('control-plane project migration', () => {
 		]);
 	});
 
-	it('infers a task thread assignment from its latest run session when missing', async () => {
+	it('infers task execution state from persisted runs when task fields are stale or missing', async () => {
 		readFile.mockResolvedValue(
 			JSON.stringify({
 				providers: [],
@@ -146,8 +146,8 @@ describe('control-plane project migration', () => {
 						assigneeWorkerId: null,
 						blockedReason: '',
 						dependencyTaskIds: [],
-						runCount: 1,
-						latestRunId: 'run_1',
+						runCount: 0,
+						latestRunId: null,
 						artifactPath: '/tmp/project/out',
 						createdAt: '2026-03-26T00:00:00.000Z',
 						updatedAt: '2026-03-26T00:00:00.000Z'
@@ -184,7 +184,9 @@ describe('control-plane project migration', () => {
 			expect.objectContaining({
 				id: 'task_1',
 				status: 'in_progress',
-				threadSessionId: 'session_1',
+				threadSessionId: null,
+				runCount: 1,
+				latestRunId: 'run_1',
 				attachments: []
 			})
 		]);

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
-	import { formatSessionStateLabel } from '$lib/session-activity';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailHeader from '$lib/components/DetailHeader.svelte';
+	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import {
 		formatRunStatusLabel,
 		formatWorkerStatusLabel,
@@ -24,100 +26,81 @@
 	}
 </script>
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="min-w-0 space-y-3">
+<AppPage width="full">
+	<DetailHeader
+		backHref={resolve('/app/runs')}
+		backLabel="Back to runs"
+		eyebrow="Run detail"
+		title={data.run.id}
+		description={data.run.summary || 'No summary recorded for this execution.'}
+	/>
+
+	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Task</p>
 			<a
-				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
-				href={resolve('/app/runs')}
+				class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
+				href={resolve(`/app/tasks/${data.run.taskId}`)}
 			>
-				Runs
+				{data.run.taskTitle}
 			</a>
-			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
-					{data.run.id}
-				</h1>
+			<p class="mt-2 text-sm text-slate-400">{data.run.taskProjectName}</p>
+		</article>
+
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Status</p>
+			<div class="mt-3 flex flex-wrap items-center gap-2">
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(data.run.status)}`}
 				>
 					{formatRunStatusLabel(data.run.status)}
 				</span>
+				{#if data.run.sessionState}
+					<span class="text-sm text-slate-400">{formatThreadStateLabel(data.run.sessionState)}</span
+					>
+				{/if}
 			</div>
-			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
-				{data.run.summary || 'No summary recorded for this execution.'}
-			</p>
-		</div>
+		</article>
 
-		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Task</p>
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Worker</p>
+			{#if data.worker}
 				<a
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-					href={resolve(`/app/tasks/${data.run.taskId}`)}
+					href={resolve(`/app/workers/${data.worker.id}`)}
 				>
-					{data.run.taskTitle}
+					{data.run.workerName}
 				</a>
-				<p class="mt-2 text-sm text-slate-400">{data.run.taskProjectName}</p>
-			</article>
-
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Thread record
+				<p class="mt-2 text-sm text-slate-400">
+					{formatWorkerStatusLabel(data.worker.status)} worker
 				</p>
-				{#if data.run.sessionId}
-					<a
-						class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-						href={resolve(`/app/sessions/${data.run.sessionId}`)}
-					>
-						{data.run.sessionName ?? data.run.sessionId}
-					</a>
-					<p class="mt-2 text-sm text-slate-400">
-						{data.run.sessionState ?? 'Unknown state'}
-						{#if data.run.sessionArchivedAt}
-							• archived{/if}
-					</p>
-				{:else}
-					<p class="mt-3 text-lg font-semibold text-white">No thread record linked</p>
-					<p class="mt-2 text-sm text-slate-400">
-						This run was recorded without a managed thread record.
-					</p>
-				{/if}
-			</article>
+			{:else}
+				<p class="mt-3 text-lg font-semibold text-white">Unassigned</p>
+				<p class="mt-2 text-sm text-slate-400">No worker was captured on this run.</p>
+			{/if}
+		</article>
 
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Worker</p>
-				{#if data.worker}
-					<a
-						class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-						href={resolve(`/app/workers/${data.worker.id}`)}
-					>
-						{data.run.workerName}
-					</a>
-					<p class="mt-2 text-sm text-slate-400">
-						{formatWorkerStatusLabel(data.worker.status)} worker
-					</p>
-				{:else}
-					<p class="mt-3 text-lg font-semibold text-white">Unassigned</p>
-					<p class="mt-2 text-sm text-slate-400">No worker was captured on this run.</p>
-				{/if}
-			</article>
-
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider</p>
-				{#if data.provider}
-					<a
-						class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-						href={resolve(`/app/providers/${data.provider.id}`)}
-					>
-						{data.run.providerName}
-					</a>
-					<p class="mt-2 text-sm text-slate-400">{data.provider.service}</p>
-				{:else}
-					<p class="mt-3 text-lg font-semibold text-white">No provider</p>
-					<p class="mt-2 text-sm text-slate-400">The execution was not tied to a provider.</p>
-				{/if}
-			</article>
-		</div>
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Thread record</p>
+			{#if data.run.sessionId}
+				<a
+					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
+					href={resolve(`/app/sessions/${data.run.sessionId}`)}
+				>
+					{data.run.sessionName ?? data.run.sessionId}
+				</a>
+				<p class="mt-2 text-sm text-slate-400">
+					{data.run.sessionState ? formatThreadStateLabel(data.run.sessionState) : 'Unknown state'}
+					{#if data.run.sessionArchivedAt}
+						• archived{/if}
+				</p>
+			{:else}
+				<p class="mt-3 text-lg font-semibold text-white">No thread record linked</p>
+				<p class="mt-2 text-sm text-slate-400">
+					This run was recorded without a managed thread record.
+				</p>
+			{/if}
+		</article>
 	</div>
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)]">
@@ -218,7 +201,8 @@
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
-							No other runs recorded for this task yet.
+							No other runs are recorded for this task yet. Open the task to start another run or
+							resume its thread.
 						</p>
 					{:else}
 						{#each data.relatedTaskRuns as run (run.id)}
@@ -288,7 +272,7 @@
 								Thread status
 							</p>
 							<p class="mt-2 text-sm text-white">
-								{formatSessionStateLabel(data.session.sessionState)}
+								{formatThreadStateLabel(data.session.sessionState)}
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
 								{data.session.canResume
@@ -328,7 +312,8 @@
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
-							No artifact paths were recorded for this run.
+							No artifact paths were recorded for this run. Check the linked task or thread if
+							outputs may have landed elsewhere.
 						</p>
 					{:else}
 						{#each data.artifactBrowsers as browser, index (`${browser?.rootPath ?? 'artifact'}-${index}`)}
@@ -344,4 +329,4 @@
 			</section>
 		</div>
 	</div>
-</section>
+</AppPage>

@@ -1,4 +1,5 @@
 import type { AgentRunDetail } from '$lib/types/agent-session';
+import type { ThreadCategorization } from '$lib/types/thread-categorization';
 import type { Lane, Task } from '$lib/types/control-plane';
 
 const TOPIC_STOP_WORDS = new Set<string>([
@@ -51,79 +52,26 @@ const TOPIC_STOP_WORDS = new Set<string>([
 	'work'
 ]);
 
-const DOMAIN_PROFILES = [
+const FOCUS_PROFILES = [
 	{
 		label: 'Planning',
-		keywords: [
-			'brief',
-			'goal',
-			'ideation',
-			'plan',
-			'planning',
-			'proposal',
-			'roadmap',
-			'scope',
-			'spec'
-		]
+		keywords: ['brief', 'goal', 'ideation', 'plan', 'planning', 'proposal', 'roadmap', 'scope', 'spec']
 	},
 	{
 		label: 'Coordination',
-		keywords: [
-			'assign',
-			'assignment',
-			'coordination',
-			'manager',
-			'orchestration',
-			'queue',
-			'routing',
-			'worker',
-			'workflow'
-		]
+		keywords: ['assign', 'assignment', 'coordination', 'manager', 'orchestration', 'queue', 'routing', 'worker', 'workflow']
 	},
 	{
 		label: 'UI/UX',
-		keywords: [
-			'component',
-			'css',
-			'design',
-			'frontend',
-			'interface',
-			'layout',
-			'page',
-			'style',
-			'svelte',
-			'ux',
-			'ui'
-		]
+		keywords: ['component', 'css', 'design', 'frontend', 'interface', 'layout', 'page', 'style', 'svelte', 'ux', 'ui']
 	},
 	{
 		label: 'Backend/API',
-		keywords: [
-			'api',
-			'auth',
-			'backend',
-			'endpoint',
-			'handler',
-			'request',
-			'response',
-			'route',
-			'server'
-		]
+		keywords: ['api', 'auth', 'backend', 'endpoint', 'handler', 'request', 'response', 'route', 'server']
 	},
 	{
 		label: 'Data',
-		keywords: [
-			'database',
-			'json',
-			'metadata',
-			'migration',
-			'model',
-			'persist',
-			'persistence',
-			'schema',
-			'state',
-			'storage'
-		]
+		keywords: ['database', 'json', 'metadata', 'migration', 'model', 'persist', 'persistence', 'schema', 'state', 'storage']
 	},
 	{
 		label: 'Testing',
@@ -135,49 +83,67 @@ const DOMAIN_PROFILES = [
 	},
 	{
 		label: 'Operations',
-		keywords: [
-			'build',
-			'ci',
-			'deploy',
-			'environment',
-			'heartbeat',
-			'infra',
-			'log',
-			'monitoring',
-			'runtime'
-		]
+		keywords: ['build', 'ci', 'deploy', 'environment', 'heartbeat', 'infra', 'log', 'monitoring', 'runtime']
 	},
 	{
 		label: 'Research',
-		keywords: [
-			'analyze',
-			'audit',
-			'compare',
-			'discover',
-			'evaluate',
-			'investigate',
-			'research',
-			'review'
-		]
+		keywords: ['analyze', 'audit', 'compare', 'discover', 'evaluate', 'investigate', 'research', 'review']
 	},
 	{
 		label: 'Integrations',
-		keywords: [
-			'connector',
-			'github',
-			'integration',
-			'linear',
-			'mcp',
-			'oauth',
-			'openai',
-			'plugin',
-			'slack',
-			'vercel'
-		]
+		keywords: ['connector', 'github', 'integration', 'linear', 'mcp', 'oauth', 'openai', 'plugin', 'slack', 'vercel']
 	}
 ] as const;
 
-const DOMAIN_KEYWORDS = new Set<string>(DOMAIN_PROFILES.flatMap((profile) => profile.keywords));
+const ENTITY_PROFILES = [
+	{
+		label: 'Attachment',
+		keywords: ['artifact', 'artifacts', 'attachment', 'attachments', 'file', 'files', 'upload']
+	},
+	{
+		label: 'Browser',
+		keywords: ['browser', 'browsers', 'playwright']
+	},
+	{
+		label: 'Thread',
+		keywords: ['conversation', 'resume', 'reuse', 'thread', 'threads']
+	},
+	{
+		label: 'Task',
+		keywords: ['backlog', 'queue', 'task', 'tasks']
+	},
+	{
+		label: 'Goal',
+		keywords: ['goal', 'goals']
+	},
+	{
+		label: 'Project',
+		keywords: ['project', 'projects', 'repo', 'repos', 'repository', 'workspace']
+	},
+	{
+		label: 'Worker',
+		keywords: ['provider', 'providers', 'role', 'roles', 'worker', 'workers']
+	},
+	{
+		label: 'Run',
+		keywords: ['execution', 'executions', 'heartbeat', 'run', 'runs']
+	},
+	{
+		label: 'Review',
+		keywords: ['approval', 'approvals', 'decision', 'decisions', 'review', 'reviews']
+	},
+	{
+		label: 'Knowledge',
+		keywords: ['context', 'knowledge', 'ontology', 'taxonomies', 'taxonomy']
+	},
+	{
+		label: 'Prompt',
+		keywords: ['instruction', 'instructions', 'prompt', 'prompts', 'skill', 'skills']
+	}
+] as const;
+
+const FOCUS_KEYWORDS = new Set<string>(FOCUS_PROFILES.flatMap((profile) => profile.keywords));
+const ENTITY_KEYWORDS = new Set<string>(ENTITY_PROFILES.flatMap((profile) => profile.keywords));
 
 const LANE_TOPIC_LABELS: Record<Lane, string> = {
 	product: 'Product',
@@ -204,6 +170,13 @@ type ThreadTopicInput = {
 	relatedTasks: ThreadTopicTask[];
 };
 
+type CategorizationSignalState = {
+	laneScores: Map<string, number>;
+	focusScores: Map<string, number>;
+	entityScores: Map<string, number>;
+	keywordScores: Map<string, number>;
+};
+
 function tokenizeTopicText(value: string) {
 	return value
 		.toLowerCase()
@@ -212,11 +185,37 @@ function tokenizeTopicText(value: string) {
 		.filter(Boolean);
 }
 
-function accumulateTopicSignals(
+function accumulateProfileScores(
+	profiles: ReadonlyArray<{ label: string; keywords: readonly string[] }>,
+	tokens: Set<string>,
+	weight: number
+) {
+	const scores = new Map<string, number>();
+
+	for (const profile of profiles) {
+		const matches = profile.keywords.filter((keyword) => {
+			if (keyword.endsWith('y')) {
+				return tokens.has(keyword) || tokens.has(`${keyword.slice(0, -1)}ies`);
+			}
+
+			return tokens.has(keyword);
+		}).length;
+
+		if (matches > 0) {
+			scores.set(profile.label, weight * matches);
+		}
+	}
+
+	return scores;
+}
+
+function accumulateCategorizationSignals(
 	sources: WeightedTextSource[],
 	lanes: Array<Lane | null | undefined>
-) {
-	const domainScores = new Map<string, number>();
+): CategorizationSignalState {
+	const laneScores = new Map<string, number>();
+	const focusScores = new Map<string, number>();
+	const entityScores = new Map<string, number>();
 	const keywordScores = new Map<string, number>();
 
 	for (const lane of lanes) {
@@ -225,7 +224,7 @@ function accumulateTopicSignals(
 		}
 
 		const label = LANE_TOPIC_LABELS[lane];
-		domainScores.set(label, (domainScores.get(label) ?? 0) + 6);
+		laneScores.set(label, (laneScores.get(label) ?? 0) + 6);
 	}
 
 	for (const source of sources) {
@@ -240,20 +239,24 @@ function accumulateTopicSignals(
 		}
 
 		const uniqueTokens = new Set(tokens);
+		const focusMatches = accumulateProfileScores(FOCUS_PROFILES, uniqueTokens, source.weight);
+		const entityMatches = accumulateProfileScores(ENTITY_PROFILES, uniqueTokens, source.weight);
 
-		for (const profile of DOMAIN_PROFILES) {
-			const matches = profile.keywords.filter((keyword) => uniqueTokens.has(keyword)).length;
+		for (const [label, score] of focusMatches) {
+			focusScores.set(label, (focusScores.get(label) ?? 0) + score);
+		}
 
-			if (matches > 0) {
-				domainScores.set(
-					profile.label,
-					(domainScores.get(profile.label) ?? 0) + source.weight * matches
-				);
-			}
+		for (const [label, score] of entityMatches) {
+			entityScores.set(label, (entityScores.get(label) ?? 0) + score);
 		}
 
 		for (const token of tokens) {
-			if (token.length < 4 || TOPIC_STOP_WORDS.has(token) || DOMAIN_KEYWORDS.has(token)) {
+			if (
+				token.length < 4 ||
+				TOPIC_STOP_WORDS.has(token) ||
+				FOCUS_KEYWORDS.has(token) ||
+				ENTITY_KEYWORDS.has(token)
+			) {
 				continue;
 			}
 
@@ -261,7 +264,12 @@ function accumulateTopicSignals(
 		}
 	}
 
-	return { domainScores, keywordScores };
+	return {
+		laneScores,
+		focusScores,
+		entityScores,
+		keywordScores
+	};
 }
 
 function compareScoredEntries(left: [string, number], right: [string, number]) {
@@ -270,6 +278,10 @@ function compareScoredEntries(left: [string, number], right: [string, number]) {
 	}
 
 	return left[0].localeCompare(right[0]);
+}
+
+function selectLabels(scores: Map<string, number>, maxCount: number) {
+	return [...scores.entries()].sort(compareScoredEntries).slice(0, maxCount).map(([label]) => label);
 }
 
 function formatKeywordTopicLabel(token: string) {
@@ -283,55 +295,70 @@ function formatKeywordTopicLabel(token: string) {
 	return singular.charAt(0).toUpperCase() + singular.slice(1);
 }
 
-function buildTopicLabelsFromSignals(input: {
-	domainScores: Map<string, number>;
-	keywordScores: Map<string, number>;
-	maxLabels?: number;
-}) {
-	const labels: string[] = [];
+function buildCompactTopicLabels(categorization: ThreadCategorization, maxLabels = 4) {
+	return [
+		...categorization.laneLabels.slice(0, 1),
+		...categorization.focusLabels.slice(0, 2),
+		...categorization.entityLabels.slice(0, 1),
+		...categorization.keywordLabels.slice(0, 2)
+	].slice(0, maxLabels);
+}
 
-	for (const [label] of [...input.domainScores.entries()].sort(compareScoredEntries)) {
-		labels.push(label);
+function buildCategorizationFromSignals(input: CategorizationSignalState): ThreadCategorization {
+	const laneLabels = selectLabels(input.laneScores, 1);
+	const focusLabels = selectLabels(input.focusScores, 3);
+	const entityLabels = selectLabels(input.entityScores, 3);
+	const keywordLabels = selectLabels(input.keywordScores, 4)
+		.map((token) => formatKeywordTopicLabel(token))
+		.filter((label) => {
+			const normalized = normalizeTopicLabel(label);
 
-		if (labels.length >= (input.maxLabels ?? 4)) {
-			return labels;
-		}
-	}
+			return ![...laneLabels, ...focusLabels, ...entityLabels].some(
+				(existing) => normalizeTopicLabel(existing) === normalized
+			);
+		});
 
-	for (const [token] of [...input.keywordScores.entries()].sort(compareScoredEntries)) {
-		const label = formatKeywordTopicLabel(token);
+	const categorization = {
+		laneLabels,
+		focusLabels,
+		entityLabels,
+		keywordLabels,
+		labels: []
+	} satisfies ThreadCategorization;
 
-		if (labels.some((existing) => normalizeTopicLabel(existing) === normalizeTopicLabel(label))) {
-			continue;
-		}
-
-		labels.push(label);
-
-		if (labels.length >= (input.maxLabels ?? 4)) {
-			break;
-		}
-	}
-
-	return labels;
+	return {
+		...categorization,
+		labels: buildCompactTopicLabels(categorization)
+	};
 }
 
 export function normalizeTopicLabel(label: string) {
 	return label.trim().toLowerCase();
 }
 
-export function deriveTaskTopicLabels(task: Pick<Task, 'title' | 'summary' | 'lane'>) {
-	const { domainScores, keywordScores } = accumulateTopicSignals(
+export function deriveTaskCategorization(
+	task: Pick<Task, 'title' | 'summary' | 'lane' | 'requiredCapabilityNames' | 'requiredToolNames'>
+) {
+	const { laneScores, focusScores, entityScores, keywordScores } = accumulateCategorizationSignals(
 		[
 			{ text: task.title, weight: 4 },
-			{ text: task.summary, weight: 3 }
+			{ text: task.summary, weight: 3 },
+			{ text: task.requiredCapabilityNames?.join(' '), weight: 2 },
+			{ text: task.requiredToolNames?.join(' '), weight: 2 }
 		],
 		[task.lane]
 	);
 
-	return buildTopicLabelsFromSignals({ domainScores, keywordScores });
+	return buildCategorizationFromSignals({ laneScores, focusScores, entityScores, keywordScores });
 }
 
-export function deriveThreadTopicLabels(input: ThreadTopicInput) {
+export function deriveTaskTopicLabels(
+	task: Pick<Task, 'title' | 'summary' | 'lane' | 'requiredCapabilityNames' | 'requiredToolNames'>
+) {
+	return deriveTaskCategorization(task).labels;
+}
+
+export function deriveThreadCategorization(input: ThreadTopicInput) {
 	const sources: WeightedTextSource[] = [
 		{ text: input.sessionName, weight: 3 },
 		{ text: input.sessionSummary, weight: 1 }
@@ -352,7 +379,9 @@ export function deriveThreadTopicLabels(input: ThreadTopicInput) {
 		sources.push({ text: runDetail.lastMessage, weight: 2 });
 	}
 
-	const { domainScores, keywordScores } = accumulateTopicSignals(sources, lanes);
+	return buildCategorizationFromSignals(accumulateCategorizationSignals(sources, lanes));
+}
 
-	return buildTopicLabelsFromSignals({ domainScores, keywordScores });
+export function deriveThreadTopicLabels(input: ThreadTopicInput) {
+	return deriveThreadCategorization(input).labels;
 }

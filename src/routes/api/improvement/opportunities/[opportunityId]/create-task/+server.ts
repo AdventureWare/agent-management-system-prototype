@@ -1,14 +1,19 @@
 import { error, json } from '@sveltejs/kit';
 import { createTaskFromSelfImprovementOpportunity } from '$lib/server/self-improvement-store';
 
-export const POST = async ({ params }) => {
+export const POST = async ({ params, request }) => {
 	const opportunityId = params.opportunityId?.trim() ?? '';
+	const payload = (await request.json().catch(() => ({}))) as {
+		goalId?: string | null;
+	};
 
 	if (!opportunityId) {
 		error(400, 'Opportunity ID is required.');
 	}
 
-	const task = await createTaskFromSelfImprovementOpportunity(opportunityId);
+	const task = await createTaskFromSelfImprovementOpportunity(opportunityId, {
+		goalId: payload.goalId?.trim() || null
+	});
 
 	if (!task) {
 		error(

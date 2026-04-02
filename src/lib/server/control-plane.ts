@@ -5,6 +5,7 @@ import { normalizePathInput } from '$lib/server/path-tools';
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-session';
 import {
 	APPROVAL_STATUS_OPTIONS,
+	DECISION_TYPE_OPTIONS,
 	GOAL_STATUS_OPTIONS,
 	LANE_OPTIONS,
 	PROVIDER_AUTH_MODE_OPTIONS,
@@ -22,10 +23,13 @@ import {
 	type Approval,
 	type ApprovalStatus,
 	type ControlPlaneData,
+	type Decision,
+	type DecisionType,
 	type Goal,
 	type GoalStatus,
 	type Lane,
 	type PlanningConfidence,
+	type PlanningSession,
 	type Provider,
 	type ProviderAuthMode,
 	type ProviderKind,
@@ -76,6 +80,10 @@ function isApprovalStatus(value: string): value is ApprovalStatus {
 	return APPROVAL_STATUS_OPTIONS.includes(value as ApprovalStatus);
 }
 
+function isDecisionType(value: string): value is DecisionType {
+	return DECISION_TYPE_OPTIONS.includes(value as DecisionType);
+}
+
 function isGoalStatus(value: string): value is GoalStatus {
 	return GOAL_STATUS_OPTIONS.includes(value as GoalStatus);
 }
@@ -118,7 +126,9 @@ function defaultData(): ControlPlaneData {
 		tasks: [],
 		runs: [],
 		reviews: [],
-		approvals: []
+		planningSessions: [],
+		approvals: [],
+		decisions: []
 	};
 }
 
@@ -173,7 +183,6 @@ type LegacyGoal = Partial<Goal> & {
 type LegacyTask = Partial<Task> & {
 	projectId?: unknown;
 	attachments?: unknown;
-	parentTaskId?: unknown;
 	estimateHours?: unknown;
 	targetDate?: unknown;
 };
@@ -185,6 +194,8 @@ type LegacyRun = Partial<Run> & {
 type LegacyReview = Partial<Review>;
 
 type LegacyApproval = Partial<Approval>;
+type LegacyPlanningSession = Partial<PlanningSession>;
+type LegacyDecision = Partial<Decision>;
 type LegacyTaskAttachment = Partial<TaskAttachment>;
 
 function inferProviderService(provider: LegacyProvider) {
@@ -551,6 +562,75 @@ function normalizeApproval(approval: LegacyApproval): Approval {
 	};
 }
 
+function normalizeDecision(decision: LegacyDecision): Decision {
+	const now = new Date().toISOString();
+	const decisionTypeValue = typeof decision.decisionType === 'string' ? decision.decisionType : '';
+
+	return {
+		id: typeof decision.id === 'string' ? decision.id : createDecisionId(),
+		taskId: typeof decision.taskId === 'string' && decision.taskId.trim() ? decision.taskId : null,
+		goalId: typeof decision.goalId === 'string' && decision.goalId.trim() ? decision.goalId : null,
+		runId: typeof decision.runId === 'string' && decision.runId.trim() ? decision.runId : null,
+		reviewId:
+			typeof decision.reviewId === 'string' && decision.reviewId.trim() ? decision.reviewId : null,
+		approvalId:
+			typeof decision.approvalId === 'string' && decision.approvalId.trim()
+				? decision.approvalId
+				: null,
+		planningSessionId:
+			typeof decision.planningSessionId === 'string' && decision.planningSessionId.trim()
+				? decision.planningSessionId
+				: null,
+		decisionType: isDecisionType(decisionTypeValue) ? decisionTypeValue : 'task_plan_updated',
+		summary: typeof decision.summary === 'string' ? decision.summary : '',
+		createdAt: typeof decision.createdAt === 'string' ? decision.createdAt : now,
+		decidedByWorkerId:
+			typeof decision.decidedByWorkerId === 'string' && decision.decidedByWorkerId.trim()
+				? decision.decidedByWorkerId
+				: null
+	};
+}
+
+function normalizePlanningSession(session: LegacyPlanningSession): PlanningSession {
+	const now = new Date().toISOString();
+
+	return {
+		id: typeof session.id === 'string' ? session.id : `planning_session_${randomUUID()}`,
+		windowStart:
+			typeof session.windowStart === 'string' && session.windowStart.trim()
+				? session.windowStart
+				: now.slice(0, 10),
+		windowEnd:
+			typeof session.windowEnd === 'string' && session.windowEnd.trim()
+				? session.windowEnd
+				: now.slice(0, 10),
+		projectId:
+			typeof session.projectId === 'string' && session.projectId.trim() ? session.projectId : null,
+		goalId: typeof session.goalId === 'string' && session.goalId.trim() ? session.goalId : null,
+		workerId:
+			typeof session.workerId === 'string' && session.workerId.trim() ? session.workerId : null,
+		includeUnscheduled:
+			typeof session.includeUnscheduled === 'boolean' ? session.includeUnscheduled : true,
+		goalIds: Array.isArray(session.goalIds)
+			? session.goalIds.filter(
+					(value): value is string => typeof value === 'string' && value.trim().length > 0
+				)
+			: [],
+		taskIds: Array.isArray(session.taskIds)
+			? session.taskIds.filter(
+					(value): value is string => typeof value === 'string' && value.trim().length > 0
+				)
+			: [],
+		decisionIds: Array.isArray(session.decisionIds)
+			? session.decisionIds.filter(
+					(value): value is string => typeof value === 'string' && value.trim().length > 0
+				)
+			: [],
+		summary: typeof session.summary === 'string' ? session.summary : '',
+		createdAt: typeof session.createdAt === 'string' ? session.createdAt : now
+	};
+}
+
 function normalizeTaskAttachment(attachment: LegacyTaskAttachment): TaskAttachment | null {
 	if (typeof attachment.path !== 'string' || !attachment.path.trim()) {
 		return null;
@@ -607,13 +687,6 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		typeof approvalModeValue === 'string' && isTaskApprovalMode(approvalModeValue)
 			? approvalModeValue
 			: 'none';
-	const latestRunId =
-		typeof task.latestRunId === 'string' && task.latestRunId.trim() ? task.latestRunId : null;
-	const inferredThreadSessionId =
-		(latestRunId ? (taskRuns.find((run) => run.id === latestRunId)?.sessionId ?? null) : null) ??
-		taskRuns.find((run) => run.sessionId)?.sessionId ??
-		null;
-
 	return {
 		id: typeof task.id === 'string' ? task.id : createTaskId(),
 		title: typeof task.title === 'string' ? task.title : '',
@@ -634,22 +707,19 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		threadSessionId:
 			typeof task.threadSessionId === 'string' && task.threadSessionId.trim()
 				? task.threadSessionId
-				: inferredThreadSessionId,
+				: null,
+		requiredCapabilityNames: normalizeStringList(task.requiredCapabilityNames),
+		requiredToolNames: normalizeStringList(task.requiredToolNames),
 		blockedReason: typeof task.blockedReason === 'string' ? task.blockedReason : '',
 		dependencyTaskIds: Array.isArray(task.dependencyTaskIds)
 			? task.dependencyTaskIds.filter(
 					(candidate) => typeof candidate === 'string' && candidate.trim()
 				)
 			: [],
-		parentTaskId:
-			typeof task.parentTaskId === 'string' && task.parentTaskId.trim() ? task.parentTaskId : null,
 		estimateHours: normalizePositiveNumber(task.estimateHours),
 		targetDate: normalizeOptionalDate(task.targetDate),
-		runCount:
-			typeof task.runCount === 'number' && Number.isFinite(task.runCount) && task.runCount >= 0
-				? task.runCount
-				: taskRuns.length,
-		latestRunId: latestRunId ?? taskRuns[0]?.id ?? null,
+		runCount: taskRuns.length,
+		latestRunId: taskRuns[0]?.id ?? null,
 		artifactPath: typeof task.artifactPath === 'string' ? task.artifactPath : '',
 		attachments: Array.isArray(task.attachments)
 			? task.attachments
@@ -659,6 +729,32 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 			: [],
 		createdAt: typeof task.createdAt === 'string' ? task.createdAt : new Date().toISOString(),
 		updatedAt: typeof task.updatedAt === 'string' ? task.updatedAt : new Date().toISOString()
+	};
+}
+
+export function syncTaskExecutionState(data: ControlPlaneData): ControlPlaneData {
+	const runsByTaskId = new Map<string, Run[]>();
+
+	for (const run of data.runs) {
+		const taskRuns = runsByTaskId.get(run.taskId) ?? [];
+		taskRuns.push(run);
+		runsByTaskId.set(run.taskId, taskRuns);
+	}
+
+	return {
+		...data,
+		tasks: data.tasks.map((task) => {
+			const taskRuns = [...(runsByTaskId.get(task.id) ?? [])].sort((left, right) =>
+				right.createdAt.localeCompare(left.createdAt)
+			);
+
+			return {
+				...task,
+				threadSessionId: task.threadSessionId,
+				runCount: taskRuns.length,
+				latestRunId: taskRuns[0]?.id ?? null
+			};
+		})
 	};
 }
 
@@ -794,27 +890,39 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 		const reviews = Array.isArray(parsed.reviews)
 			? parsed.reviews.map((review) => normalizeReview(review as LegacyReview))
 			: [];
+		const planningSessions = Array.isArray(parsed.planningSessions)
+			? parsed.planningSessions.map((session) =>
+					normalizePlanningSession(session as LegacyPlanningSession)
+				)
+			: [];
 		const approvals = Array.isArray(parsed.approvals)
 			? parsed.approvals.map((approval) => normalizeApproval(approval as LegacyApproval))
 			: [];
+		const decisions = Array.isArray(parsed.decisions)
+			? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
+			: [];
 
-		return syncGovernanceQueues({
-			providers,
-			roles: Array.isArray(parsed.roles) ? parsed.roles : [],
-			projects,
-			goals: Array.isArray(parsed.goals)
-				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
-				: [],
-			workers: Array.isArray(parsed.workers)
-				? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
-				: [],
-			tasks: Array.isArray(parsed.tasks)
-				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
-				: [],
-			runs,
-			reviews,
-			approvals
-		});
+		return syncGovernanceQueues(
+			syncTaskExecutionState({
+				providers,
+				roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+				projects,
+				goals: Array.isArray(parsed.goals)
+					? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+					: [],
+				workers: Array.isArray(parsed.workers)
+					? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
+					: [],
+				tasks: Array.isArray(parsed.tasks)
+					? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
+					: [],
+				runs,
+				reviews,
+				planningSessions,
+				approvals,
+				decisions
+			})
+		);
 	} catch {
 		return defaultData();
 	}
@@ -829,7 +937,7 @@ export async function updateControlPlane(
 	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
 ) {
 	const current = await loadControlPlane();
-	const next = syncGovernanceQueues(await updater(current));
+	const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
 	await saveControlPlane(next);
 	return next;
 }
@@ -919,6 +1027,14 @@ export function createReviewId() {
 
 export function createApprovalId() {
 	return `approval_${randomUUID()}`;
+}
+
+export function createPlanningSessionId() {
+	return `planning_session_${randomUUID()}`;
+}
+
+export function createDecisionId() {
+	return `decision_${randomUUID()}`;
 }
 
 export function createWorkerId() {
@@ -1112,9 +1228,10 @@ export function createTask(input: {
 	requiresReview: boolean;
 	desiredRoleId: string;
 	artifactPath: string;
+	requiredCapabilityNames?: string[];
+	requiredToolNames?: string[];
 	blockedReason?: string;
 	dependencyTaskIds?: string[];
-	parentTaskId?: string | null;
 	estimateHours?: number | null;
 	targetDate?: string | null;
 	assigneeWorkerId?: string | null;
@@ -1139,9 +1256,10 @@ export function createTask(input: {
 		desiredRoleId: input.desiredRoleId,
 		assigneeWorkerId: input.assigneeWorkerId ?? null,
 		threadSessionId: input.threadSessionId ?? null,
+		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
+		requiredToolNames: input.requiredToolNames ?? [],
 		blockedReason: input.blockedReason ?? '',
 		dependencyTaskIds: input.dependencyTaskIds ?? [],
-		parentTaskId: input.parentTaskId ?? null,
 		estimateHours: input.estimateHours ?? null,
 		targetDate: input.targetDate ?? null,
 		runCount: 0,
@@ -1242,6 +1360,62 @@ export function createApproval(input: {
 	};
 }
 
+export function createDecision(input: {
+	taskId?: string | null;
+	goalId?: string | null;
+	runId?: string | null;
+	reviewId?: string | null;
+	approvalId?: string | null;
+	planningSessionId?: string | null;
+	decisionType: DecisionType;
+	summary: string;
+	createdAt?: string;
+	decidedByWorkerId?: string | null;
+}): Decision {
+	return {
+		id: createDecisionId(),
+		taskId: input.taskId ?? null,
+		goalId: input.goalId ?? null,
+		runId: input.runId ?? null,
+		reviewId: input.reviewId ?? null,
+		approvalId: input.approvalId ?? null,
+		planningSessionId: input.planningSessionId ?? null,
+		decisionType: input.decisionType,
+		summary: input.summary,
+		createdAt: input.createdAt ?? new Date().toISOString(),
+		decidedByWorkerId: input.decidedByWorkerId ?? null
+	};
+}
+
+export function createPlanningSession(input: {
+	windowStart: string;
+	windowEnd: string;
+	projectId?: string | null;
+	goalId?: string | null;
+	workerId?: string | null;
+	includeUnscheduled: boolean;
+	goalIds?: string[];
+	taskIds?: string[];
+	decisionIds?: string[];
+	summary: string;
+	createdAt?: string;
+}): PlanningSession {
+	return {
+		id: createPlanningSessionId(),
+		windowStart: input.windowStart,
+		windowEnd: input.windowEnd,
+		projectId: input.projectId ?? null,
+		goalId: input.goalId ?? null,
+		workerId: input.workerId ?? null,
+		includeUnscheduled: input.includeUnscheduled,
+		goalIds: input.goalIds ?? [],
+		taskIds: input.taskIds ?? [],
+		decisionIds: input.decisionIds ?? [],
+		summary: input.summary,
+		createdAt: input.createdAt ?? new Date().toISOString()
+	};
+}
+
 export function taskHasUnmetDependencies(data: ControlPlaneData, task: Task) {
 	if (task.dependencyTaskIds.length === 0) {
 		return false;
@@ -1279,9 +1453,25 @@ export function deleteTask(data: ControlPlaneData, taskId: string): ControlPlane
 		reviews: data.reviews.filter(
 			(review) => review.taskId !== taskId && !(review.runId && relatedRunIds.has(review.runId))
 		),
+		planningSessions: (data.planningSessions ?? []).map((session) => ({
+			...session,
+			taskIds: session.taskIds.filter((candidateTaskId) => candidateTaskId !== taskId),
+			decisionIds: session.decisionIds.filter((decisionId) =>
+				(data.decisions ?? []).some(
+					(decision) =>
+						decision.id === decisionId &&
+						decision.taskId !== taskId &&
+						!(decision.runId && relatedRunIds.has(decision.runId))
+				)
+			)
+		})),
 		approvals: data.approvals.filter(
 			(approval) =>
 				approval.taskId !== taskId && !(approval.runId && relatedRunIds.has(approval.runId))
+		),
+		decisions: (data.decisions ?? []).filter(
+			(decision) =>
+				decision.taskId !== taskId && !(decision.runId && relatedRunIds.has(decision.runId))
 		)
 	};
 }

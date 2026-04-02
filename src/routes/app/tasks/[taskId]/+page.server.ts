@@ -1,7 +1,15 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { TASK_STATUS_OPTIONS, type Project, type Run, type Task } from '$lib/types/control-plane';
 import {
+	TASK_STATUS_OPTIONS,
+	formatTaskStatusLabel,
+	type Goal,
+	type Project,
+	type Run,
+	type Task
+} from '$lib/types/control-plane';
+import {
+	createDecision,
 	createRun,
 	deleteTask as removeTaskFromControlPlane,
 	formatRelativeTime,
@@ -26,6 +34,7 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
+import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
 import { buildTaskThreadSuggestions } from '$lib/server/task-thread-suggestions';
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
@@ -36,6 +45,7 @@ import {
 } from '$lib/server/task-thread-compatibility';
 import { buildTaskFreshness } from '$lib/server/task-work-items';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
+import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
 
 const ACTIVE_TASK_RUN_STATUSES = new Set<Run['status']>(['queued', 'starting', 'running']);
 
@@ -53,7 +63,23 @@ function readTaskForm(form: FormData) {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
+		goalId: form.get('goalId')?.toString().trim() ?? '',
+		hasGoalId: form.has('goalId'),
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
+		requiredCapabilityNames:
+			form
+				.get('requiredCapabilityNames')
+				?.toString()
+				.split(',')
+				.map((value) => value.trim())
+				.filter(Boolean) ?? [],
+		requiredToolNames:
+			form
+				.get('requiredToolNames')
+				?.toString()
+				.split(',')
+				.map((value) => value.trim())
+				.filter(Boolean) ?? [],
 		targetDate: form.get('targetDate')?.toString().trim() ?? ''
 	};
 }
@@ -64,6 +90,172 @@ function isValidDate(value: string) {
 
 function getActionErrorMessage(error: unknown, fallback: string) {
 	return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function formatDecisionDate(value: string | null) {
+	return value ? value : 'clear the target date';
+}
+
+function buildTaskPlanDecisionSummary(input: {
+	task: Task;
+	nextTitle: string;
+	nextSummary: string;
+	nextProject: Project;
+	nextGoalId: string;
+	nextGoalName: string | null;
+	currentGoalName: string | null;
+	nextStatus: Task['status'];
+	nextAssigneeWorker: { id: string; name: string } | null;
+	nextRequiredCapabilityNames: string[];
+	nextRequiredToolNames: string[];
+	nextTargetDate: string | null;
+}) {
+	const changes: string[] = [];
+	const currentCapabilityNames = [...(input.task.requiredCapabilityNames ?? [])].sort();
+	const nextCapabilityNames = [...input.nextRequiredCapabilityNames].sort();
+	const currentToolNames = [...(input.task.requiredToolNames ?? [])].sort();
+	const nextToolNames = [...input.nextRequiredToolNames].sort();
+
+	if (input.nextTitle !== input.task.title) {
+		changes.push(`renamed the task to "${input.nextTitle}"`);
+	}
+
+	if (input.nextSummary !== input.task.summary) {
+		changes.push('updated the task brief');
+	}
+
+	if (input.nextProject.id !== input.task.projectId) {
+		changes.push(`moved the task to ${input.nextProject.name}`);
+	}
+
+	if (input.nextGoalId !== input.task.goalId) {
+		changes.push(
+			input.nextGoalId
+				? `linked the task to goal "${input.nextGoalName ?? input.nextGoalId}"`
+				: input.task.goalId
+					? `cleared the goal link from "${input.currentGoalName ?? input.task.goalId}"`
+					: 'cleared the goal link'
+		);
+	}
+
+	if (input.nextStatus !== input.task.status) {
+		changes.push(`set status to ${formatTaskStatusLabel(input.nextStatus)}`);
+	}
+
+	if (input.nextAssigneeWorker?.id !== input.task.assigneeWorkerId) {
+		changes.push(
+			input.nextAssigneeWorker
+				? `assigned the task to ${input.nextAssigneeWorker.name}`
+				: 'cleared the task assignee'
+		);
+	}
+
+	if (currentCapabilityNames.join('|') !== nextCapabilityNames.join('|')) {
+		changes.push(
+			nextCapabilityNames.length > 0
+				? `set required capabilities to ${nextCapabilityNames.join(', ')}`
+				: 'cleared required capabilities'
+		);
+	}
+
+	if (currentToolNames.join('|') !== nextToolNames.join('|')) {
+		changes.push(
+			nextToolNames.length > 0
+				? `set required tools to ${nextToolNames.join(', ')}`
+				: 'cleared required tools'
+		);
+	}
+
+	if ((input.nextTargetDate ?? null) !== (input.task.targetDate ?? null)) {
+		changes.push(
+			input.nextTargetDate
+				? `set the target date to ${formatDecisionDate(input.nextTargetDate)}`
+				: 'cleared the target date'
+		);
+	}
+
+	return changes.length > 0 ? `Updated task plan: ${changes.join('; ')}.` : null;
+}
+
+const ROOT_GOAL_PARENT_KEY = '__root__';
+
+function buildTaskGoalOptions(goals: Goal[]) {
+	const goalIds = new Set(goals.map((goal) => goal.id));
+	const childrenByParent = new Map<string, Goal[]>();
+
+	for (const goal of goals) {
+		const parentKey =
+			goal.parentGoalId && goalIds.has(goal.parentGoalId)
+				? goal.parentGoalId
+				: ROOT_GOAL_PARENT_KEY;
+		const siblings = childrenByParent.get(parentKey) ?? [];
+		siblings.push(goal);
+		childrenByParent.set(parentKey, siblings);
+	}
+
+	for (const siblings of childrenByParent.values()) {
+		siblings.sort((left, right) => left.name.localeCompare(right.name));
+	}
+
+	const orderedGoals: Array<{
+		id: string;
+		name: string;
+		label: string;
+		depth: number;
+		parentGoalId: string | null;
+		status: Goal['status'];
+		lane: Goal['lane'];
+	}> = [];
+	const visitedGoalIds = new Set<string>();
+
+	function visitChildren(parentKey: string, depth: number) {
+		for (const goal of childrenByParent.get(parentKey) ?? []) {
+			if (visitedGoalIds.has(goal.id)) {
+				continue;
+			}
+
+			visitedGoalIds.add(goal.id);
+			orderedGoals.push({
+				id: goal.id,
+				name: goal.name,
+				label: `${depth > 0 ? `${'  '.repeat(depth)}- ` : ''}${goal.name}`,
+				depth,
+				parentGoalId: goal.parentGoalId ?? null,
+				status: goal.status,
+				lane: goal.lane
+			});
+			visitChildren(goal.id, depth + 1);
+		}
+	}
+
+	visitChildren(ROOT_GOAL_PARENT_KEY, 0);
+
+	for (const goal of [...goals].sort((left, right) => left.name.localeCompare(right.name))) {
+		if (visitedGoalIds.has(goal.id)) {
+			continue;
+		}
+
+		orderedGoals.push({
+			id: goal.id,
+			name: goal.name,
+			label: goal.name,
+			depth: 0,
+			parentGoalId: goal.parentGoalId ?? null,
+			status: goal.status,
+			lane: goal.lane
+		});
+		visitChildren(goal.id, 1);
+	}
+
+	return orderedGoals;
+}
+
+async function loadTaskRetrievedKnowledge(task: Task, project: Project | null) {
+	return loadRelevantSelfImprovementKnowledgeItems({
+		task,
+		project,
+		limit: 3
+	});
 }
 
 function updateLatestRunForTask(
@@ -88,7 +280,10 @@ function updateLatestRunForTask(
 }
 
 function getActiveTaskRun(data: { runs: Run[] }, taskId: string) {
-	return data.runs.find((run) => run.taskId === taskId && ACTIVE_TASK_RUN_STATUSES.has(run.status)) ?? null;
+	return (
+		data.runs.find((run) => run.taskId === taskId && ACTIVE_TASK_RUN_STATUSES.has(run.status)) ??
+		null
+	);
 }
 
 function buildStalledRecoveryState(input: {
@@ -134,6 +329,10 @@ async function buildTaskLaunchPlan(
 	const effectiveName = input.name || task.title;
 	const effectiveInstructions = input.instructions || task.summary;
 	const effectiveProjectId = input.projectId || task.projectId;
+	const selectedGoal = input.goalId
+		? (current.goals.find((candidate) => candidate.id === input.goalId) ?? null)
+		: null;
+	const effectiveGoalId = input.hasGoalId ? (selectedGoal?.id ?? '') : task.goalId;
 	const assigneeWorker = input.assigneeWorkerId
 		? current.workers.find((candidate) => candidate.id === input.assigneeWorkerId)
 		: null;
@@ -146,6 +345,10 @@ async function buildTaskLaunchPlan(
 
 	if (!project) {
 		throw new TaskActionError(400, 'Task project not found.');
+	}
+
+	if (input.goalId && !selectedGoal) {
+		throw new TaskActionError(400, 'Goal not found.');
 	}
 
 	if (input.assigneeWorkerId && !assigneeWorker) {
@@ -166,6 +369,16 @@ async function buildTaskLaunchPlan(
 		);
 	}
 
+	const taskKnowledge = await loadTaskRetrievedKnowledge(
+		{
+			...task,
+			title: effectiveName,
+			summary: effectiveInstructions,
+			projectId: effectiveProjectId
+		},
+		project
+	);
+
 	const prompt = buildTaskThreadPrompt({
 		taskName: effectiveName,
 		taskInstructions: effectiveInstructions,
@@ -174,7 +387,8 @@ async function buildTaskLaunchPlan(
 		defaultArtifactRoot: project.defaultArtifactRoot,
 		availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 			.slice(0, 12)
-			.map((skill) => skill.id)
+			.map((skill) => skill.id),
+		relevantKnowledgeItems: taskKnowledge
 	});
 	const provider = selectExecutionProvider(current, effectiveWorker);
 	const sandbox = resolveThreadSandbox({
@@ -183,9 +397,18 @@ async function buildTaskLaunchPlan(
 		provider
 	});
 	const assignedThread = task.threadSessionId ? await getAgentSession(task.threadSessionId) : null;
-	const compatibleAssignedThread = isTaskThreadCompatibleWithProject(project, assignedThread)
-		? assignedThread
+	const latestRun = task.latestRunId
+		? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
 		: null;
+	const latestRunThread =
+		latestRun?.sessionId && latestRun.sessionId !== task.threadSessionId
+			? await getAgentSession(latestRun.sessionId)
+			: null;
+	const threadContext = selectProjectTaskThreadContext(project, {
+		assignedThread,
+		latestRunThread
+	});
+	const compatibleAssignedThread = threadContext.assignedThread;
 
 	if (compatibleAssignedThread?.hasActiveRun) {
 		throw new TaskActionError(
@@ -207,13 +430,16 @@ async function buildTaskLaunchPlan(
 	return {
 		task,
 		project,
+		effectiveGoalId,
 		effectiveName,
 		effectiveInstructions,
 		assigneeWorker,
 		effectiveWorker,
 		provider,
 		prompt,
-		compatibleAssignedThread
+		retrievedKnowledgeItems: taskKnowledge,
+		compatibleAssignedThread,
+		compatibleLatestRunThread: threadContext.latestRunThread
 	};
 }
 
@@ -221,15 +447,21 @@ async function launchTaskFromPlan(
 	taskId: string,
 	plan: Awaited<ReturnType<typeof buildTaskLaunchPlan>>
 ) {
-	let sessionId = plan.task.threadSessionId;
-	let threadId = plan.compatibleAssignedThread?.threadId ?? null;
-	let reusedAssignedThread = false;
+	let sessionId = plan.compatibleAssignedThread?.id ?? plan.compatibleLatestRunThread?.id ?? null;
+	let threadId =
+		(plan.compatibleAssignedThread ?? plan.compatibleLatestRunThread)?.threadId ?? null;
+	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 	if (plan.compatibleAssignedThread?.canResume) {
 		await sendAgentSessionMessage(plan.compatibleAssignedThread.id, plan.prompt);
 		sessionId = plan.compatibleAssignedThread.id;
 		threadId = plan.compatibleAssignedThread.threadId;
-		reusedAssignedThread = true;
+		reusedThreadMode = 'assigned';
+	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
+		await sendAgentSessionMessage(plan.compatibleLatestRunThread.id, plan.prompt);
+		sessionId = plan.compatibleLatestRunThread.id;
+		threadId = plan.compatibleLatestRunThread.threadId;
+		reusedThreadMode = 'latest';
 	} else {
 		const session = await startAgentSession({
 			name: buildTaskThreadName({
@@ -266,9 +498,12 @@ async function launchTaskFromPlan(
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder
 				? [plan.project.defaultArtifactRoot || plan.project.projectRootFolder]
 				: [],
-		summary: reusedAssignedThread
-			? 'Queued in the task’s assigned work thread.'
-			: 'Started a new work thread from the task detail page.',
+		summary:
+			reusedThreadMode === 'assigned'
+				? 'Queued in the task’s assigned work thread.'
+				: reusedThreadMode === 'latest'
+					? 'Queued in the task’s latest compatible work thread.'
+					: 'Started a new work thread from the task detail page.',
 		lastHeartbeatAt: now
 	});
 
@@ -282,6 +517,7 @@ async function launchTaskFromPlan(
 						title: plan.effectiveName,
 						summary: plan.effectiveInstructions,
 						projectId: plan.project.id,
+						goalId: plan.effectiveGoalId,
 						assigneeWorkerId: plan.assigneeWorker?.id ?? candidate.assigneeWorkerId,
 						desiredRoleId: plan.assigneeWorker?.roleId ?? candidate.desiredRoleId,
 						threadSessionId: sessionId,
@@ -290,8 +526,6 @@ async function launchTaskFromPlan(
 							plan.project.defaultArtifactRoot ||
 							plan.project.projectRootFolder ||
 							'',
-						runCount: candidate.runCount + 1,
-						latestRunId: run.id,
 						status: 'in_progress',
 						blockedReason: '',
 						updatedAt: now
@@ -372,11 +606,28 @@ export const load: PageServerLoad = async ({ params }) => {
 		sessions: threadScopedSessions
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
+	const retrievedKnowledgeItems = await loadTaskRetrievedKnowledge(task, project);
 	const stalledRecovery = buildStalledRecoveryState({
 		task,
 		activeRun,
 		statusThread: threadContext.statusThread
 	});
+	const recentDecisions = [...(data.decisions ?? [])]
+		.filter((decision) => decision.taskId === task.id)
+		.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+		.slice(0, 8)
+		.map((decision) => ({
+			...decision,
+			createdAtLabel: formatRelativeTime(decision.createdAt)
+		}));
+	const assignmentSuggestions = getWorkerAssignmentSuggestions(data, task).map((suggestion) => ({
+		...suggestion,
+		roleName: data.roles.find((role) => role.id === suggestion.roleId)?.name ?? suggestion.roleId,
+		providerName:
+			data.providers.find((provider) => provider.id === suggestion.providerId)?.name ??
+			suggestion.providerId,
+		isCurrentAssignee: suggestion.workerId === task.assigneeWorkerId
+	}));
 
 	return {
 		task: {
@@ -412,8 +663,12 @@ export const load: PageServerLoad = async ({ params }) => {
 			}))
 		}),
 		project,
+		retrievedKnowledgeItems,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
+		goals: buildTaskGoalOptions(data.goals),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
+		assignmentSuggestions,
+		recentDecisions,
 		statusOptions: TASK_STATUS_OPTIONS,
 		relatedRuns,
 		dependencyTasks,
@@ -426,7 +681,16 @@ export const actions: Actions = {
 	updateTask: async ({ params, request }) => {
 		const form = await request.formData();
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
-		const { name, instructions, projectId, assigneeWorkerId, targetDate } = readTaskForm(form);
+		const {
+			name,
+			instructions,
+			projectId,
+			goalId,
+			assigneeWorkerId,
+			requiredCapabilityNames,
+			requiredToolNames,
+			targetDate
+		} = readTaskForm(form);
 
 		if (!name || !instructions || !projectId) {
 			return fail(400, {
@@ -440,6 +704,9 @@ export const actions: Actions = {
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === projectId);
+		const goal = goalId
+			? (current.goals.find((candidate) => candidate.id === goalId) ?? null)
+			: null;
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
@@ -448,10 +715,45 @@ export const actions: Actions = {
 			return fail(400, { message: 'Project not found.' });
 		}
 
+		if (goalId && !goal) {
+			return fail(400, { message: 'Goal not found.' });
+		}
+
 		if (assigneeWorkerId && !assigneeWorker) {
 			return fail(400, { message: 'Worker not found.' });
 		}
 
+		const existingTask = current.tasks.find((candidate) => candidate.id === params.taskId);
+
+		if (!existingTask) {
+			return fail(404, { message: 'Task not found.' });
+		}
+
+		const nextTitle = name;
+		const nextInstructions = instructions;
+		const nextGoalId = goal?.id ?? '';
+		const nextStatus = status;
+		const nextAssigneeWorker = assigneeWorker ?? null;
+		const nextRequiredCapabilityNames = requiredCapabilityNames;
+		const nextRequiredToolNames = requiredToolNames;
+		const nextTargetDate = targetDate || null;
+		const decisionSummary = buildTaskPlanDecisionSummary({
+			task: existingTask,
+			nextTitle,
+			nextSummary: nextInstructions,
+			nextProject: project,
+			nextGoalId,
+			nextGoalName: goal?.name ?? null,
+			currentGoalName: existingTask.goalId
+				? (current.goals.find((candidate) => candidate.id === existingTask.goalId)?.name ?? null)
+				: null,
+			nextStatus,
+			nextAssigneeWorker,
+			nextRequiredCapabilityNames,
+			nextRequiredToolNames,
+			nextTargetDate
+		});
+		const now = new Date().toISOString();
 		let taskUpdated = false;
 
 		await updateControlPlane((data) => ({
@@ -465,18 +767,32 @@ export const actions: Actions = {
 
 				return {
 					...task,
-					title: name,
-					summary: instructions,
+					title: nextTitle,
+					summary: nextInstructions,
 					projectId: project.id,
-					status,
-					assigneeWorkerId: assigneeWorker?.id ?? null,
-					desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
-					targetDate: targetDate || null,
+					goalId: nextGoalId,
+					status: nextStatus,
+					assigneeWorkerId: nextAssigneeWorker?.id ?? null,
+					desiredRoleId: nextAssigneeWorker?.roleId ?? task.desiredRoleId,
+					requiredCapabilityNames: nextRequiredCapabilityNames,
+					requiredToolNames: nextRequiredToolNames,
+					targetDate: nextTargetDate,
 					artifactPath:
 						task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
-					updatedAt: new Date().toISOString()
+					updatedAt: now
 				};
-			})
+			}),
+			decisions: decisionSummary
+				? [
+						createDecision({
+							taskId: params.taskId,
+							decisionType: 'task_plan_updated',
+							summary: decisionSummary,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				: (data.decisions ?? [])
 		}));
 
 		if (!taskUpdated) {
@@ -602,6 +918,14 @@ export const actions: Actions = {
 			}
 		}
 
+		const now = new Date().toISOString();
+		const decisionSummary =
+			(threadSessionId || null) === task.threadSessionId
+				? null
+				: threadSessionId
+					? `Updated task thread assignment to ${threadSessionId}.`
+					: 'Cleared the task thread assignment.';
+
 		await updateControlPlane((data) => ({
 			...data,
 			tasks: data.tasks.map((candidate) =>
@@ -609,10 +933,21 @@ export const actions: Actions = {
 					? {
 							...candidate,
 							threadSessionId: threadSessionId || null,
-							updatedAt: new Date().toISOString()
+							updatedAt: now
 						}
 					: candidate
-			)
+			),
+			decisions: decisionSummary
+				? [
+						createDecision({
+							taskId: params.taskId,
+							decisionType: 'task_thread_updated',
+							summary: decisionSummary,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				: (data.decisions ?? [])
 		}));
 
 		return {
@@ -692,7 +1027,9 @@ export const actions: Actions = {
 
 		const project = current.projects.find((candidate) => candidate.id === task.projectId) ?? null;
 		const activeTaskRun = getActiveTaskRun(current, task.id);
-		const assignedThread = task.threadSessionId ? await getAgentSession(task.threadSessionId) : null;
+		const assignedThread = task.threadSessionId
+			? await getAgentSession(task.threadSessionId)
+			: null;
 		const activeRunThread = activeTaskRun?.sessionId
 			? await getAgentSession(activeTaskRun.sessionId)
 			: null;
@@ -765,9 +1102,28 @@ export const actions: Actions = {
 			launchedSessionId = launchResult.sessionId;
 		} catch (error) {
 			return fail(400, {
-				message: getActionErrorMessage(error, 'Recovered the stalled run but could not relaunch the task.')
+				message: getActionErrorMessage(
+					error,
+					'Recovered the stalled run but could not relaunch the task.'
+				)
 			});
 		}
+
+		const recoveryDecisionAt = new Date().toISOString();
+
+		await updateControlPlane((data) => ({
+			...data,
+			decisions: [
+				createDecision({
+					taskId: params.taskId,
+					runId: activeTaskRun.id,
+					decisionType: 'task_recovered',
+					summary: `Recovered stalled work by retiring run ${activeTaskRun.id} and re-queuing the task${launchedSessionId ? ` in thread ${launchedSessionId}` : ''}.`,
+					createdAt: recoveryDecisionAt
+				}),
+				...(data.decisions ?? [])
+			]
+		}));
 
 		return {
 			ok: true,
@@ -817,7 +1173,20 @@ export const actions: Actions = {
 							updatedAt: now
 						}
 					: task
-			)
+			),
+			decisions: [
+				createDecision({
+					taskId: params.taskId,
+					runId: task.latestRunId,
+					reviewId: openReview.id,
+					decisionType: 'review_approved',
+					summary: shouldCloseTask
+						? 'Approved the open review and closed the task.'
+						: 'Approved the open review.',
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
 		}));
 
 		return {
@@ -864,7 +1233,18 @@ export const actions: Actions = {
 							updatedAt: now
 						}
 					: task
-			)
+			),
+			decisions: [
+				createDecision({
+					taskId: params.taskId,
+					runId: task.latestRunId,
+					reviewId: openReview.id,
+					decisionType: 'review_changes_requested',
+					summary: blockedReason,
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
 		}));
 
 		return {
@@ -914,7 +1294,20 @@ export const actions: Actions = {
 							updatedAt: now
 						}
 					: task
-			)
+			),
+			decisions: [
+				createDecision({
+					taskId: params.taskId,
+					runId: task.latestRunId,
+					approvalId: pendingApproval.id,
+					decisionType: 'approval_approved',
+					summary: shouldCloseTask
+						? `Approved the ${pendingApproval.mode} gate and closed the task.`
+						: `Approved the ${pendingApproval.mode} gate.`,
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
 		}));
 
 		return {
@@ -961,7 +1354,18 @@ export const actions: Actions = {
 							updatedAt: now
 						}
 					: task
-			)
+			),
+			decisions: [
+				createDecision({
+					taskId: params.taskId,
+					runId: task.latestRunId,
+					approvalId: pendingApproval.id,
+					decisionType: 'approval_rejected',
+					summary: blockedReason,
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
 		}));
 
 		return {

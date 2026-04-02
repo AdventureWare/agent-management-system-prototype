@@ -148,4 +148,39 @@ describe('buildTaskThreadSuggestions', () => {
 		expect(result.suggestedThread?.id).toBe('testing');
 		expect(result.suggestedThread?.suggestionReason).toContain('Shares topic labels');
 	});
+
+	it('uses structured categorization overlap to explain why a thread matches', () => {
+		const result = buildTaskThreadSuggestions({
+			task: createTask({
+				title: 'Improve thread assignment suggestions',
+				summary: 'Match new tasks to reusable work threads and surface context discovery.'
+			}),
+			assignedThreadId: null,
+			sessions: [
+				createSession('structured', {
+					name: 'Thread assignment follow-up',
+					topicLabels: ['Product', 'Coordination', 'Thread', 'Suggestion'],
+					categorization: {
+						laneLabels: ['Product'],
+						focusLabels: ['Coordination'],
+						entityLabels: ['Thread'],
+						keywordLabels: ['Suggestion'],
+						labels: ['Product', 'Coordination', 'Thread', 'Suggestion']
+					}
+				}),
+				createSession('generic', {
+					name: 'General product follow-up',
+					topicLabels: ['Product']
+				})
+			]
+		});
+
+		expect(result.suggestedThread?.id).toBe('structured');
+		expect(result.suggestedThread?.matchedContext.labels).toEqual(
+			expect.arrayContaining(['Product', 'Coordination', 'Thread'])
+		);
+		expect(result.suggestedThread?.suggestionReason).toContain("Matches this task's");
+		expect(result.suggestedThread?.suggestionReason).toContain('area Product');
+		expect(result.suggestedThread?.suggestionReason).toContain('focus Coordination');
+	});
 });

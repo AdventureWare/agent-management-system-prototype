@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlPlaneData } from '$lib/types/control-plane';
+import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
 
 const existsSync = vi.hoisted(() => vi.fn(() => true));
 
@@ -50,6 +51,9 @@ const getWorkspaceExecutionIssue = vi.hoisted(() =>
 const getAgentSession = vi.hoisted(() => vi.fn());
 const recoverAgentSession = vi.hoisted(() => vi.fn());
 const sendAgentSessionMessage = vi.hoisted(() => vi.fn());
+const loadRelevantSelfImprovementKnowledgeItems = vi.hoisted(() =>
+	vi.fn<() => Promise<RetrievedSelfImprovementKnowledgeItem[]>>(async () => [])
+);
 const startAgentSession = vi.hoisted(() =>
 	vi.fn(async () => ({
 		sessionId: 'session_new',
@@ -67,11 +71,30 @@ const listInstalledCodexSkills = vi.hoisted(() =>
 		}
 	])
 );
+const buildTaskThreadPromptMock = vi.hoisted(() => vi.fn(() => 'run the task'));
 
 const controlPlaneState = vi.hoisted(() => ({
 	current: null as ControlPlaneData | null,
 	saved: null as ControlPlaneData | null
 }));
+
+function syncTaskExecutionStateLike(data: ControlPlaneData) {
+	return {
+		...data,
+		tasks: data.tasks.map((task) => {
+			const taskRuns = data.runs
+				.filter((run) => run.taskId === task.id)
+				.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+			return {
+				...task,
+				threadSessionId: task.threadSessionId,
+				runCount: taskRuns.length,
+				latestRunId: taskRuns[0]?.id ?? null
+			};
+		})
+	};
+}
 
 vi.mock('node:fs', () => ({
 	existsSync
@@ -83,6 +106,26 @@ vi.mock('node:fs/promises', () => ({
 }));
 
 vi.mock('$lib/server/control-plane', () => ({
+	createDecision: vi.fn(
+		(input: {
+			taskId?: string | null;
+			decisionType: string;
+			summary: string;
+			createdAt?: string;
+		}) => ({
+			id: 'decision_test',
+			taskId: input.taskId ?? null,
+			goalId: null,
+			runId: null,
+			reviewId: null,
+			approvalId: null,
+			planningSessionId: null,
+			decisionType: input.decisionType,
+			summary: input.summary,
+			createdAt: input.createdAt ?? '2026-03-30T12:00:00.000Z',
+			decidedByWorkerId: null
+		})
+	),
 	createTaskAttachmentId: vi.fn(() => 'attachment_test'),
 	createRun,
 	deleteTask: vi.fn(),
@@ -113,7 +156,9 @@ vi.mock('$lib/server/control-plane', () => ({
 			null
 	),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
+		controlPlaneState.saved = syncTaskExecutionStateLike(
+			updater(controlPlaneState.current as ControlPlaneData)
+		);
 		controlPlaneState.current = controlPlaneState.saved;
 		return controlPlaneState.saved;
 	})
@@ -134,11 +179,15 @@ vi.mock('$lib/server/task-threads', () => ({
 		(input: { projectName: string; taskName: string; taskId: string }) =>
 			`Task thread · ${input.taskName} · ${input.projectName} · ${input.taskId}`
 	),
-	buildTaskThreadPrompt: vi.fn(() => 'run the task')
+	buildTaskThreadPrompt: buildTaskThreadPromptMock
 }));
 
 vi.mock('$lib/server/codex-skills', () => ({
 	listInstalledCodexSkills
+}));
+
+vi.mock('$lib/server/self-improvement-knowledge', () => ({
+	loadRelevantSelfImprovementKnowledgeItems
 }));
 
 vi.mock('$lib/server/task-execution-workspace', () => ({
@@ -146,15 +195,35 @@ vi.mock('$lib/server/task-execution-workspace', () => ({
 }));
 
 vi.mock('$lib/task-thread-context', () => ({
-	isActiveTaskThread: vi.fn(
-		(thread: { sessionState?: string } | null | undefined) =>
-			Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''))
+	isActiveTaskThread: vi.fn((thread: { sessionState?: string } | null | undefined) =>
+		Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''))
 	),
-	selectTaskThreadContext: vi.fn(() => ({
-		linkThread: null,
-		linkThreadKind: 'assigned',
-		statusThread: null
-	}))
+	selectTaskThreadContext: vi.fn(
+		(input: {
+			assignedThread: { id: string; sessionState?: string } | null;
+			latestRunThread: { id: string; sessionState?: string } | null;
+		}) => {
+			const isActive = (thread: { sessionState?: string } | null | undefined) =>
+				Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''));
+			const statusThread =
+				[input.assignedThread, input.latestRunThread].find((thread) => isActive(thread)) ??
+				input.assignedThread ??
+				input.latestRunThread ??
+				null;
+
+			return {
+				assignedThread: input.assignedThread,
+				latestRunThread: input.latestRunThread,
+				statusThread,
+				linkThread: statusThread,
+				linkThreadKind: statusThread
+					? statusThread.id === input.assignedThread?.id
+						? 'assigned'
+						: 'latest'
+					: null
+			};
+		}
+	)
 }));
 
 import { actions } from './+page.server';
@@ -174,7 +243,10 @@ describe('task detail page server actions', () => {
 		getAgentSession.mockResolvedValue(null);
 		recoverAgentSession.mockReset();
 		sendAgentSessionMessage.mockReset();
+		loadRelevantSelfImprovementKnowledgeItems.mockReset();
+		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([]);
 		startAgentSession.mockReset();
+		buildTaskThreadPromptMock.mockClear();
 		listInstalledCodexSkills.mockClear();
 		startAgentSession.mockResolvedValue({
 			sessionId: 'session_new',
@@ -213,7 +285,20 @@ describe('task detail page server actions', () => {
 					defaultBranch: ''
 				}
 			],
-			goals: [],
+			goals: [
+				{
+					id: 'goal_launch',
+					name: 'Improve goal UX',
+					lane: 'product',
+					status: 'running',
+					summary: 'Make goal creation clearer and more useful.',
+					artifactPath: '/tmp/project/agent_output/goals',
+					parentGoalId: null,
+					projectIds: ['project_1'],
+					taskIds: [],
+					targetDate: null
+				}
+			],
 			workers: [],
 			tasks: [
 				{
@@ -274,6 +359,48 @@ describe('task detail page server actions', () => {
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				targetDate: '2026-04-22'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_plan_updated'
+			})
+		);
+	});
+
+	it('updates the task goal link from the detail form', async () => {
+		const form = new FormData();
+		form.set('name', 'Attach a brief');
+		form.set('instructions', 'Need source documents');
+		form.set('projectId', 'project_1');
+		form.set('goalId', 'goal_launch');
+
+		const result = await actions.updateTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'updateTask',
+				taskId: 'task_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				goalId: 'goal_launch'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_plan_updated',
+				summary: expect.stringContaining('linked the task to goal "Improve goal UX"')
 			})
 		);
 	});
@@ -407,6 +534,137 @@ describe('task detail page server actions', () => {
 				successAction: 'launchTaskSession',
 				taskId: 'task_1',
 				sessionId: 'session_new'
+			})
+		);
+	});
+
+	it('injects retrieved published knowledge into the launch prompt context', async () => {
+		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([
+			{
+				id: 'knowledge_1',
+				status: 'published',
+				title: 'Failure recovery pattern',
+				summary: 'Capture repeated launch failures as a reusable play.',
+				category: 'reliability',
+				projectId: 'project_1',
+				projectName: 'Agent Management System Prototype',
+				sourceOpportunityId: 'failed_runs:task_1',
+				sourceTaskIds: ['task_1'],
+				sourceRunIds: [],
+				sourceSessionIds: [],
+				sourceSignalIds: [],
+				triggerPattern: 'Repeated launch or retry failures for the same task.',
+				recommendedResponse: 'Add a preflight check before retrying the failing step.',
+				applicabilityScope: ['Agent Management System Prototype'],
+				createdAt: '2026-03-30T12:00:00.000Z',
+				updatedAt: '2026-03-31T12:00:00.000Z',
+				publishedAt: '2026-03-31T12:00:00.000Z',
+				archivedAt: null,
+				matchScore: 97,
+				matchReasons: ['Matches this project.']
+			}
+		]);
+
+		await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(buildTaskThreadPromptMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				relevantKnowledgeItems: [
+					expect.objectContaining({
+						id: 'knowledge_1',
+						title: 'Failure recovery pattern'
+					})
+				]
+			})
+		);
+	});
+
+	it('reuses the latest compatible thread when no explicit thread is assigned', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				{
+					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+					threadSessionId: null,
+					latestRunId: 'run_previous'
+				}
+			],
+			runs: [
+				{
+					id: 'run_previous',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: 'provider_local_codex',
+					status: 'completed',
+					createdAt: '2026-03-30T12:10:00.000Z',
+					updatedAt: '2026-03-30T12:15:00.000Z',
+					startedAt: '2026-03-30T12:10:00.000Z',
+					endedAt: '2026-03-30T12:15:00.000Z',
+					threadId: 'thread_previous',
+					sessionId: 'session_previous',
+					promptDigest: 'digest_previous',
+					artifactPaths: ['/tmp/project/agent_output'],
+					summary: 'Completed previous run.',
+					lastHeartbeatAt: '2026-03-30T12:15:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+		getAgentSession.mockResolvedValue({
+			id: 'session_previous',
+			name: 'Work thread: Previous Run',
+			cwd: '/tmp/project',
+			sandbox: 'workspace-write',
+			model: null,
+			threadId: 'thread_previous',
+			archivedAt: null,
+			createdAt: '2026-03-30T12:10:00.000Z',
+			updatedAt: '2026-03-30T12:15:00.000Z',
+			origin: 'managed',
+			sessionState: 'ready',
+			latestRunStatus: 'completed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-30T12:15:00.000Z',
+			lastActivityLabel: 'just now',
+			sessionSummary: 'The thread is idle and available for the next instruction.',
+			lastExitCode: 0,
+			runTimeline: [],
+			relatedTasks: [],
+			latestRun: null,
+			runs: []
+		});
+
+		const result = await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(sendAgentSessionMessage).toHaveBeenCalledWith('session_previous', 'run the task');
+		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				threadSessionId: 'session_previous',
+				status: 'in_progress',
+				latestRunId: 'run_test'
+			})
+		);
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'launchTaskSession',
+				taskId: 'task_1',
+				sessionId: 'session_previous'
 			})
 		);
 	});

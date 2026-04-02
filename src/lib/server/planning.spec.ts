@@ -4,7 +4,42 @@ import type { ControlPlaneData } from '$lib/types/control-plane';
 
 function buildFixture(): ControlPlaneData {
 	return {
-		providers: [],
+		providers: [
+			{
+				id: 'provider_local',
+				name: 'Local Codex',
+				service: 'OpenAI',
+				kind: 'local',
+				description: '',
+				enabled: true,
+				setupStatus: 'connected',
+				authMode: 'local_cli',
+				defaultModel: '',
+				baseUrl: '',
+				launcher: 'codex',
+				envVars: [],
+				capabilities: [],
+				defaultThreadSandbox: 'workspace-write',
+				notes: ''
+			},
+			{
+				id: 'provider_cloud',
+				name: 'Cloud Codex',
+				service: 'OpenAI',
+				kind: 'cloud',
+				description: '',
+				enabled: true,
+				setupStatus: 'connected',
+				authMode: 'custom',
+				defaultModel: '',
+				baseUrl: '',
+				launcher: 'codex',
+				envVars: [],
+				capabilities: ['planning'],
+				defaultThreadSandbox: 'workspace-write',
+				notes: ''
+			}
+		],
 		roles: [],
 		projects: [
 			{
@@ -104,9 +139,10 @@ function buildFixture(): ControlPlaneData {
 				threadSessionId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
-				parentTaskId: null,
 				estimateHours: 12,
 				targetDate: '2026-04-10',
+				requiredCapabilityNames: ['svelte'],
+				requiredToolNames: ['codex'],
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/ams/agent_output',
@@ -131,9 +167,10 @@ function buildFixture(): ControlPlaneData {
 				threadSessionId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
-				parentTaskId: null,
 				estimateHours: null,
 				targetDate: null,
+				requiredCapabilityNames: ['planning'],
+				requiredToolNames: [],
 				runCount: 0,
 				latestRunId: null,
 				artifactPath: '/tmp/ams/agent_output',
@@ -172,8 +209,26 @@ describe('planning helpers', () => {
 				plannedHours: 12
 			})
 		);
-		expect(snapshot.scheduledTasks.map((task) => task.id)).toEqual(['task_1']);
-		expect(snapshot.unscheduledTasks.map((task) => task.id)).toEqual(['task_2']);
+		expect(snapshot.scheduledTasks).toEqual([
+			expect.objectContaining({
+				id: 'task_1',
+				requiredCapabilityNames: ['svelte'],
+				requiredToolNames: ['codex'],
+				eligibleWorkerCount: 1,
+				suggestedWorkerNames: ['Local builder'],
+				assignedWorkerEligible: true
+			})
+		]);
+		expect(snapshot.unscheduledTasks).toEqual([
+			expect.objectContaining({
+				id: 'task_2',
+				requiredCapabilityNames: ['planning'],
+				requiredToolNames: [],
+				eligibleWorkerCount: 1,
+				suggestedWorkerNames: ['Cloud coordinator'],
+				assignedWorkerEligible: null
+			})
+		]);
 		expect(snapshot.workerLoads.find((worker) => worker.id === 'worker_1')).toEqual(
 			expect.objectContaining({
 				plannedHours: 12,

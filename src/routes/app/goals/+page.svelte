@@ -2,14 +2,31 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft } from '$lib/client/form-drafts';
+	import AppDialog from '$lib/components/AppDialog.svelte';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import DataTableSection from '$lib/components/DataTableSection.svelte';
 	import GoalEditor from '$lib/components/GoalEditor.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { formatGoalStatusLabel, goalStatusToneClass } from '$lib/types/control-plane';
 
 	let { data, form } = $props();
 	const CREATE_GOAL_DRAFT_KEY = 'ams:create-goal';
+	const ROOT_GOAL_PARENT_KEY = '__root__';
+
+	type GoalDirectoryGoal = (typeof data.goals)[number];
+	type GoalDirectoryRow = GoalDirectoryGoal & {
+		depth: number;
+		visibleChildCount: number;
+		isExpanded: boolean;
+		isDirectMatch: boolean;
+		isContextRow: boolean;
+	};
 
 	let query = $state('');
 	let selectedStatus = $state('all');
+	let collapsedGoalIds = $state.raw<string[]>([]);
 
 	function modalShouldStartOpen() {
 		return Boolean(form?.message);
@@ -19,11 +36,11 @@
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createGoal');
 
-	function closeCreateModal() {
-		isCreateModalOpen = false;
+	function matchesStatus(goal: GoalDirectoryGoal) {
+		return selectedStatus === 'all' || goal.status === selectedStatus;
 	}
 
-	function matchesGoal(goal: (typeof data.goals)[number], term: string) {
+	function matchesGoal(goal: GoalDirectoryGoal, term: string) {
 		const normalizedTerm = term.trim().toLowerCase();
 
 		if (!normalizedTerm) {
@@ -45,12 +62,110 @@
 			.includes(normalizedTerm);
 	}
 
-	let filteredGoals = $derived(
-		data.goals.filter(
-			(goal) =>
-				(selectedStatus === 'all' || goal.status === selectedStatus) && matchesGoal(goal, query)
-		)
-	);
+	let forceExpandedTree = $derived(query.trim().length > 0 || selectedStatus !== 'all');
+	let totalGoalCount = $derived(data.goals.length);
+	let rootGoalCount = $derived(data.goals.filter((goal) => !goal.parentGoalId).length);
+	let activeGoalCount = $derived(data.goals.filter((goal) => goal.status !== 'done').length);
+	let visibleGoalRows = $derived.by<GoalDirectoryRow[]>(() => {
+		const goalById: Record<string, GoalDirectoryGoal> = {};
+
+		for (const goal of data.goals) {
+			goalById[goal.id] = goal;
+		}
+
+		const childrenByParentId: Record<string, GoalDirectoryGoal[]> = {};
+
+		for (const goal of data.goals) {
+			const parentKey =
+				goal.parentGoalId && goalById[goal.parentGoalId] ? goal.parentGoalId : ROOT_GOAL_PARENT_KEY;
+			const siblings = childrenByParentId[parentKey] ?? [];
+			siblings.push(goal);
+			childrenByParentId[parentKey] = siblings;
+		}
+
+		const directMatchIds: Record<string, boolean> = {};
+		const includedGoalIds: Record<string, boolean> = {};
+
+		function includeGoal(goal: GoalDirectoryGoal): boolean {
+			const children = childrenByParentId[goal.id] ?? [];
+			const hasIncludedDescendant = children.some(includeGoal);
+			const isDirectMatch = matchesStatus(goal) && matchesGoal(goal, query);
+
+			if (isDirectMatch) {
+				directMatchIds[goal.id] = true;
+			}
+
+			if (isDirectMatch || hasIncludedDescendant) {
+				includedGoalIds[goal.id] = true;
+				return true;
+			}
+
+			return false;
+		}
+
+		for (const rootGoal of childrenByParentId[ROOT_GOAL_PARENT_KEY] ?? []) {
+			includeGoal(rootGoal);
+		}
+
+		const rows: GoalDirectoryRow[] = [];
+
+		function visit(goal: GoalDirectoryGoal, depth: number) {
+			if (!includedGoalIds[goal.id]) {
+				return;
+			}
+
+			const visibleChildren = (childrenByParentId[goal.id] ?? []).filter(
+				(childGoal) => includedGoalIds[childGoal.id]
+			);
+			const isExpanded = forceExpandedTree || !collapsedGoalIds.includes(goal.id);
+
+			rows.push({
+				...goal,
+				depth,
+				visibleChildCount: visibleChildren.length,
+				isExpanded,
+				isDirectMatch: Boolean(directMatchIds[goal.id]),
+				isContextRow: Boolean(includedGoalIds[goal.id]) && !directMatchIds[goal.id]
+			});
+
+			if (visibleChildren.length > 0 && isExpanded) {
+				for (const childGoal of visibleChildren) {
+					visit(childGoal, depth + 1);
+				}
+			}
+		}
+
+		for (const rootGoal of childrenByParentId[ROOT_GOAL_PARENT_KEY] ?? []) {
+			visit(rootGoal, 0);
+		}
+
+		return rows;
+	});
+
+	function toggleGoalExpansion(goalId: string) {
+		if (collapsedGoalIds.includes(goalId)) {
+			collapsedGoalIds = collapsedGoalIds.filter((candidate) => candidate !== goalId);
+			return;
+		}
+
+		collapsedGoalIds = [...collapsedGoalIds, goalId];
+	}
+
+	function goalIndentStyle(depth: number) {
+		return `padding-left: ${depth * 1.35}rem;`;
+	}
+
+	function hierarchyLabel(depth: number) {
+		if (depth === 0) {
+			return 'Root';
+		}
+
+		if (depth === 1) {
+			return 'Subgoal';
+		}
+
+		return `Level ${depth + 1}`;
+	}
 
 	onMount(() => {
 		if (createSuccess) {
@@ -64,25 +179,13 @@
 	});
 </script>
 
-<svelte:document
-	onkeydown={(event) => {
-		if (event.key === 'Escape' && isCreateModalOpen) {
-			closeCreateModal();
-		}
-	}}
-/>
-
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Goals</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">
-			Browse outcomes, then manage one
-		</h1>
-		<p class="max-w-3xl text-sm text-slate-300">
-			Goals now work like projects: the collection page helps you find the right outcome, while each
-			goal has its own detail page for editing workspace, parent/subgoal structure, and linked work.
-		</p>
-		<div class="pt-1">
+<AppPage width="full">
+	<PageHeader
+		eyebrow="Goals"
+		title="Browse outcomes, then manage one"
+		description="Goals now work like projects: the collection page helps you find the right outcome, while each goal has its own detail page for editing workspace, parent/subgoal structure, and linked work."
+	>
+		{#snippet actions()}
 			<button
 				class="btn preset-filled-primary-500 font-semibold"
 				type="button"
@@ -92,8 +195,8 @@
 			>
 				Add goal
 			</button>
-		</div>
-	</div>
+		{/snippet}
+	</PageHeader>
 
 	{#if form?.message}
 		<p
@@ -113,15 +216,29 @@
 		</p>
 	{/if}
 
-	<section class="card border border-slate-800 bg-slate-950/70 p-6">
-		<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-			<div>
-				<h2 class="text-xl font-semibold text-white">Goal directory</h2>
-				<p class="mt-1 text-sm text-slate-400">
-					Search by outcome, related project, task, or workspace, then open a goal to manage it.
-				</p>
-			</div>
+	<div class="grid gap-3 md:grid-cols-3">
+		<MetricCard
+			label="Goals tracked"
+			value={totalGoalCount}
+			detail="All goals in the current hierarchy, including subgoals."
+		/>
+		<MetricCard
+			label="Top-level goals"
+			value={rootGoalCount}
+			detail="Root outcomes that organize the rest of the goal tree."
+		/>
+		<MetricCard
+			label="Active goals"
+			value={activeGoalCount}
+			detail="Goals still in ready, running, review, or blocked states."
+		/>
+	</div>
 
+	<CollectionToolbar
+		title="Goal directory"
+		description="Search by outcome, related project, task, or workspace, then open a goal to manage it."
+	>
+		{#snippet controls()}
 			<div class="grid gap-3 sm:grid-cols-2 xl:w-[34rem]">
 				<label class="block">
 					<span class="sr-only">Search goals</span>
@@ -143,140 +260,141 @@
 					</select>
 				</label>
 			</div>
-		</div>
+		{/snippet}
+	</CollectionToolbar>
 
-		{#if filteredGoals.length === 0}
-			<p
-				class="mt-6 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
-			>
-				No goals match the current search or status filter.
-			</p>
-		{:else}
-			<div class="mt-6 overflow-x-auto rounded-2xl border border-slate-800">
-				<table class="min-w-full divide-y divide-slate-800 text-left">
-					<thead class="bg-slate-900/70">
-						<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">
-							<th class="px-4 py-3">Goal</th>
-							<th class="px-4 py-3">Status</th>
-							<th class="px-4 py-3">Lane</th>
-							<th class="px-4 py-3">Parent</th>
-							<th class="px-4 py-3">Links</th>
-							<th class="px-4 py-3">Workspace</th>
-							<th class="px-4 py-3">Open</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-800 bg-slate-950/40">
-						{#each filteredGoals as goal (goal.id)}
-							<tr class="align-top transition hover:bg-slate-900/60">
-								<td class="px-4 py-4">
-									<div class="min-w-[18rem] space-y-2">
+	<DataTableSection
+		title="Goal hierarchy"
+		description="Browse the goal tree with parent context, linked work, and workspace cues in one place."
+		summary={`${visibleGoalRows.length} matching row${visibleGoalRows.length === 1 ? '' : 's'}`}
+		empty={visibleGoalRows.length === 0}
+		emptyMessage="No goals match the current search or status filter."
+	>
+		<table class="min-w-full divide-y divide-slate-800 text-left">
+			<thead class="bg-slate-900/70">
+				<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">
+					<th class="px-4 py-3">Goal tree</th>
+					<th class="px-4 py-3">Status</th>
+					<th class="px-4 py-3">Area</th>
+					<th class="px-4 py-3">Parent</th>
+					<th class="px-4 py-3">Links</th>
+					<th class="px-4 py-3">Workspace</th>
+					<th class="px-4 py-3">Open</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-800 bg-slate-950/40">
+				{#each visibleGoalRows as goal (goal.id)}
+					<tr
+						class={`align-top transition ${goal.isContextRow ? 'bg-slate-950/20 hover:bg-slate-900/40' : 'hover:bg-slate-900/60'}`}
+					>
+						<td class="px-4 py-4">
+							<div class="flex min-w-[18rem] items-start gap-3" style={goalIndentStyle(goal.depth)}>
+								<div class="flex h-7 w-7 items-center justify-center">
+									{#if goal.visibleChildCount > 0}
+										<button
+											aria-label={`${goal.isExpanded ? 'Collapse' : 'Expand'} subgoals for ${goal.name}`}
+											class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-950 text-xs font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
+											type="button"
+											onclick={() => {
+												toggleGoalExpansion(goal.id);
+											}}
+										>
+											{goal.isExpanded ? '-' : '+'}
+										</button>
+									{:else}
+										<span
+											class={`block h-2.5 w-2.5 rounded-full ${goal.depth === 0 ? 'bg-sky-400/70' : 'bg-slate-600'}`}
+										></span>
+									{/if}
+								</div>
+
+								<div class="min-w-0 space-y-2">
+									<div class="flex flex-wrap items-center gap-2">
 										<a
-											class="ui-wrap-anywhere text-sm font-semibold text-white transition hover:text-sky-200"
+											class={`ui-wrap-anywhere text-sm font-semibold transition hover:text-sky-200 ${goal.isContextRow ? 'text-slate-300' : 'text-white'}`}
 											href={resolve(`/app/goals/${goal.id}`)}
 										>
 											{goal.name}
 										</a>
-										<p class="ui-clamp-2 text-sm text-slate-300">{goal.summary}</p>
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[0.65rem] font-medium tracking-[0.14em] text-slate-300 uppercase"
+										>
+											{hierarchyLabel(goal.depth)}
+										</span>
+										{#if goal.isContextRow}
+											<span
+												class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-[0.65rem] font-medium tracking-[0.14em] text-slate-400 uppercase"
+											>
+												Context
+											</span>
+										{/if}
 									</div>
-								</td>
-								<td class="px-4 py-4">
-									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
+									<p
+										class={`ui-clamp-2 text-sm ${goal.isContextRow ? 'text-slate-400' : 'text-slate-300'}`}
 									>
-										{formatGoalStatusLabel(goal.status)}
-									</span>
-								</td>
-								<td
-									class="px-4 py-4 text-xs font-semibold tracking-[0.18em] text-sky-300 uppercase"
-								>
-									{goal.lane}
-								</td>
-								<td class="px-4 py-4 text-sm text-slate-300">
-									{goal.parentGoalName || 'Top level'}
-								</td>
-								<td class="px-4 py-4 text-sm text-slate-300">
-									{goal.linkedProjects.length} project{goal.linkedProjects.length === 1 ? '' : 's'}
-									<br />
-									{goal.relatedTaskCount} task{goal.relatedTaskCount === 1 ? '' : 's'}
-								</td>
-								<td class="px-4 py-4 text-sm text-slate-400">
-									<p class="ui-clamp-2 min-w-[18rem]">{goal.artifactPath || 'Not configured'}</p>
-								</td>
-								<td class="px-4 py-4">
-									<a
-										class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.16em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-										href={resolve(`/app/goals/${goal.id}`)}
-									>
-										Open
-									</a>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
-</section>
+										{goal.summary}
+									</p>
+								</div>
+							</div>
+						</td>
+						<td class="px-4 py-4">
+							<span
+								class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${goalStatusToneClass(goal.status)}`}
+							>
+								{formatGoalStatusLabel(goal.status)}
+							</span>
+						</td>
+						<td class="px-4 py-4 text-xs font-semibold tracking-[0.18em] text-sky-300 uppercase">
+							{goal.lane}
+						</td>
+						<td class="px-4 py-4 text-sm text-slate-300">{goal.parentGoalName || 'Top level'}</td>
+						<td class="px-4 py-4 text-sm text-slate-300">
+							{goal.linkedProjects.length} project{goal.linkedProjects.length === 1 ? '' : 's'}
+							<br />
+							{goal.relatedTaskCount} task{goal.relatedTaskCount === 1 ? '' : 's'}
+						</td>
+						<td class="px-4 py-4 text-sm text-slate-400">
+							<p class="ui-clamp-2 min-w-[18rem]">{goal.artifactPath || 'Not configured'}</p>
+						</td>
+						<td class="px-4 py-4">
+							<a
+								class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.16em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+								href={resolve(`/app/goals/${goal.id}`)}
+							>
+								Open
+							</a>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</DataTableSection>
+</AppPage>
 
 {#if isCreateModalOpen}
-	<div
-		aria-label="Create goal dialog"
-		aria-modal="true"
-		class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm"
-		role="dialog"
-		tabindex="-1"
-		onclick={(event) => {
-			if (event.target === event.currentTarget) {
-				closeCreateModal();
-			}
-		}}
-		onkeydown={(event) => {
-			if (event.key === 'Escape') {
-				closeCreateModal();
-			}
-		}}
+	<AppDialog
+		bind:open={isCreateModalOpen}
+		title="Add goal"
+		description="Capture the outcome in one place, then use the same relationship controls you’ll see on the goal detail page."
+		closeLabel="Close add goal form"
+		bodyClass="p-0"
 	>
-		<div class="mx-auto flex min-h-full max-w-6xl items-center justify-center p-4 sm:p-6">
-			<div
-				class="max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-2xl shadow-black/40 sm:p-8"
-			>
-				<div class="flex items-start justify-between gap-4">
-					<div>
-						<h2 class="text-xl font-semibold text-white sm:text-2xl">Add goal</h2>
-						<p class="mt-2 max-w-2xl text-sm text-slate-400">
-							Capture the outcome in one place, then use the same relationship controls you’ll see
-							on the goal detail page.
-						</p>
-					</div>
-					<button
-						aria-label="Close add goal form"
-						class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-slate-600 hover:text-white"
-						type="button"
-						onclick={closeCreateModal}
-					>
-						×
-					</button>
-				</div>
-
-				<div class="mt-6">
-					<GoalEditor
-						action="?/createGoal"
-						description="Outcome first, relationships second. You can keep the workspace blank if the linked context already tells the system where the goal should live."
-						folderOptions={data.folderOptions}
-						heading="Create goal"
-						laneOptions={data.laneOptions}
-						parentGoalOptions={data.parentGoalOptions}
-						projectOptions={data.projectOptions}
-						statusOptions={data.statusOptions}
-						submitLabel="Create goal"
-						taskOptions={data.taskOptions}
-						draftStorageKey={CREATE_GOAL_DRAFT_KEY}
-						clearDraftOnSuccess={createSuccess}
-						values={form?.values ?? {}}
-					/>
-				</div>
-			</div>
+		<div class="p-6">
+			<GoalEditor
+				action="?/createGoal"
+				description="Outcome first, relationships second. Use the built-in coach if you need help wording the goal, then keep the workspace blank if linked context already tells the system where it should live."
+				folderOptions={data.folderOptions}
+				heading="Create goal"
+				laneOptions={data.laneOptions}
+				parentGoalOptions={data.parentGoalOptions}
+				projectOptions={data.projectOptions}
+				statusOptions={data.statusOptions}
+				submitLabel="Create goal"
+				taskOptions={data.taskOptions}
+				draftStorageKey={CREATE_GOAL_DRAFT_KEY}
+				clearDraftOnSuccess={createSuccess}
+				values={form?.values ?? {}}
+			/>
 		</div>
-	</div>
+	</AppDialog>
 {/if}

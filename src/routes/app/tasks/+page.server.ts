@@ -24,7 +24,10 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
-import { isTaskThreadCompatibleWithProject } from '$lib/server/task-thread-compatibility';
+import {
+	isTaskThreadCompatibleWithProject,
+	selectProjectTaskThreadContext
+} from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import {
 	buildProjectTaskIdeationPrompt,
@@ -40,12 +43,23 @@ import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace
 import type { ControlPlaneData, Project, Role } from '$lib/types/control-plane';
 
 function readTaskForm(form: FormData) {
+	const parseNameList = (value: FormDataEntryValue | null) => [
+		...new Set(
+			(value?.toString() ?? '')
+				.split(',')
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+		)
+	];
+
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
-		targetDate: form.get('targetDate')?.toString().trim() ?? ''
+		targetDate: form.get('targetDate')?.toString().trim() ?? '',
+		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
+		requiredToolNames: parseNameList(form.get('requiredToolNames'))
 	};
 }
 
@@ -76,6 +90,8 @@ function failTaskCreate(
 		projectId: string;
 		assigneeWorkerId: string;
 		targetDate: string;
+		requiredCapabilityNames: string[];
+		requiredToolNames: string[];
 		submitMode: 'create' | 'createAndRun';
 	}
 ) {
@@ -264,7 +280,15 @@ export const actions: Actions = {
 
 	createTask: async ({ request }) => {
 		const form = await request.formData();
-		const { name, instructions, projectId, assigneeWorkerId, targetDate } = readTaskForm(form);
+		const {
+			name,
+			instructions,
+			projectId,
+			assigneeWorkerId,
+			targetDate,
+			requiredCapabilityNames,
+			requiredToolNames
+		} = readTaskForm(form);
 		const submitMode = readCreateTaskSubmitMode(form);
 		const uploads = readTaskAttachments(form);
 
@@ -276,6 +300,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -288,6 +314,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -306,6 +334,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -318,6 +348,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -330,6 +362,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -350,6 +384,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -371,6 +407,8 @@ export const actions: Actions = {
 			desiredRoleId: assigneeWorker?.roleId ?? coordinatorRoleId,
 			assigneeWorkerId: assigneeWorker?.id ?? null,
 			targetDate: targetDate || null,
+			requiredCapabilityNames,
+			requiredToolNames,
 			artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
 		});
 		const attachments =
@@ -424,6 +462,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -450,6 +490,8 @@ export const actions: Actions = {
 				projectId,
 				assigneeWorkerId,
 				targetDate,
+				requiredCapabilityNames,
+				requiredToolNames,
 				submitMode
 			});
 		}
@@ -480,8 +522,6 @@ export const actions: Actions = {
 					{
 						...createdTask,
 						threadSessionId: session.sessionId,
-						runCount: 1,
-						latestRunId: run.id,
 						status: 'in_progress',
 						updatedAt: now
 					},
@@ -731,12 +771,22 @@ export const actions: Actions = {
 		const assignedThread = task.threadSessionId
 			? await getAgentSession(task.threadSessionId)
 			: null;
-		const compatibleAssignedThread = isTaskThreadCompatibleWithProject(project, assignedThread)
-			? assignedThread
+		const latestRun = task.latestRunId
+			? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
 			: null;
-		let sessionId = task.threadSessionId;
-		let threadId = compatibleAssignedThread?.threadId ?? null;
-		let reusedAssignedThread = false;
+		const latestRunThread =
+			latestRun?.sessionId && latestRun.sessionId !== task.threadSessionId
+				? await getAgentSession(latestRun.sessionId)
+				: null;
+		const threadContext = selectProjectTaskThreadContext(project, {
+			assignedThread,
+			latestRunThread
+		});
+		const compatibleAssignedThread = threadContext.assignedThread;
+		const compatibleLatestRunThread = threadContext.latestRunThread;
+		let sessionId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
+		let threadId = (compatibleAssignedThread ?? compatibleLatestRunThread)?.threadId ?? null;
+		let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
@@ -766,7 +816,19 @@ export const actions: Actions = {
 
 			sessionId = compatibleAssignedThread.id;
 			threadId = compatibleAssignedThread.threadId;
-			reusedAssignedThread = true;
+			reusedThreadMode = 'assigned';
+		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
+			try {
+				await sendAgentSessionMessage(compatibleLatestRunThread.id, prompt);
+			} catch (error) {
+				return fail(400, {
+					message: getActionErrorMessage(error, 'Could not queue work in the latest thread.')
+				});
+			}
+
+			sessionId = compatibleLatestRunThread.id;
+			threadId = compatibleLatestRunThread.threadId;
+			reusedThreadMode = 'latest';
 		} else {
 			let session;
 
@@ -806,9 +868,12 @@ export const actions: Actions = {
 				project.defaultArtifactRoot || project.projectRootFolder
 					? [project.defaultArtifactRoot || project.projectRootFolder]
 					: [],
-			summary: reusedAssignedThread
-				? 'Queued in the task’s assigned work thread.'
-				: 'Started a new work thread from the task board.',
+			summary:
+				reusedThreadMode === 'assigned'
+					? 'Queued in the task’s assigned work thread.'
+					: reusedThreadMode === 'latest'
+						? 'Queued in the task’s latest compatible work thread.'
+						: 'Started a new work thread from the task board.',
 			lastHeartbeatAt: new Date().toISOString()
 		});
 
@@ -830,8 +895,6 @@ export const actions: Actions = {
 								project.defaultArtifactRoot ||
 								project.projectRootFolder ||
 								'',
-							runCount: candidate.runCount + 1,
-							latestRunId: run.id,
 							status: 'in_progress',
 							updatedAt: new Date().toISOString()
 						}

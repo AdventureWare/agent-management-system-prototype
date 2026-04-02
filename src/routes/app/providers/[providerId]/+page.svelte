@@ -1,5 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
+	import DetailHeader from '$lib/components/DetailHeader.svelte';
+	import DetailSection from '$lib/components/DetailSection.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
 	import {
 		formatRunStatusLabel,
 		formatProviderSetupStatusLabel,
@@ -20,19 +25,16 @@
 	}
 </script>
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="min-w-0 space-y-3">
-			<a
-				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
-				href={resolve('/app/providers')}
-			>
-				Providers
-			</a>
-			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
-					{data.provider.name}
-				</h1>
+<AppPage width="full">
+	<DetailHeader
+		backHref={resolve('/app/providers')}
+		backLabel="Back to providers"
+		eyebrow="Provider detail"
+		title={data.provider.name}
+		description={data.provider.description || 'No description saved for this provider yet.'}
+	>
+		{#snippet meta()}
+			<div class="flex flex-wrap gap-2">
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${enabledClass(data.provider.enabled)}`}
 				>
@@ -44,44 +46,30 @@
 					{formatProviderSetupStatusLabel(data.provider.setupStatus)}
 				</span>
 			</div>
-			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
-				{data.provider.description || 'No description saved for this provider yet.'}
-			</p>
-		</div>
+		{/snippet}
+	</DetailHeader>
 
-		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Service</p>
-				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
-					{data.provider.service}
-				</p>
-				<p class="mt-2 text-sm text-slate-400">{data.provider.kind} surface</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Auth mode</p>
-				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
-					{data.provider.authMode}
-				</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-					Launcher: {data.provider.launcher || 'Not set'}
-				</p>
-				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-					Thread sandbox: {data.provider.defaultThreadSandbox}
-				</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Workers</p>
-				<p class="mt-3 text-3xl font-semibold text-white">{data.attachedWorkers.length}</p>
-				<p class="mt-2 text-sm text-slate-400">
-					Workers currently configured against this provider.
-				</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
-				<p class="mt-3 text-3xl font-semibold text-white">{data.recentRuns.length}</p>
-				<p class="mt-2 text-sm text-slate-400">Most recent runs routed through this provider.</p>
-			</article>
-		</div>
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+		<MetricCard
+			label="Service"
+			value={data.provider.service}
+			detail={`${data.provider.kind} surface`}
+		/>
+		<MetricCard
+			label="Auth mode"
+			value={data.provider.authMode}
+			detail={`Launcher: ${data.provider.launcher || 'Not set'} | Thread sandbox: ${data.provider.defaultThreadSandbox}`}
+		/>
+		<MetricCard
+			label="Workers"
+			value={data.attachedWorkers.length}
+			detail="Workers currently configured against this provider."
+		/>
+		<MetricCard
+			label="Recent runs"
+			value={data.recentRuns.length}
+			detail="Most recent runs routed through this provider."
+		/>
 	</div>
 
 	{#if form?.message}
@@ -99,198 +87,182 @@
 	{/if}
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-		<form
-			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
-			method="POST"
-			action="?/updateProvider"
+		<DetailSection
+			eyebrow="Provider details"
+			title="Edit provider readiness and defaults"
+			bodyClass="space-y-4"
 		>
-			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Provider details
-				</p>
-				<h2 class="text-xl font-semibold text-white">Edit provider readiness and defaults</h2>
-			</div>
+			<form class="space-y-4" method="POST" action="?/updateProvider">
+				<div class="grid gap-4 sm:grid-cols-2">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+						<input class="input text-white" name="name" required value={data.provider.name} />
+					</label>
 
-			<div class="grid gap-4 sm:grid-cols-2">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Service</span>
+						<input class="input text-white" name="service" required value={data.provider.service} />
+					</label>
+				</div>
+
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-					<input class="input text-white" name="name" required value={data.provider.name} />
+					<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
+					<textarea class="textarea min-h-24 text-white" name="description"
+						>{data.provider.description}</textarea
+					>
 				</label>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Service</span>
-					<input class="input text-white" name="service" required value={data.provider.service} />
-				</label>
-			</div>
+				<div class="grid gap-4 md:grid-cols-3">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Access surface</span>
+						<select class="select text-white" name="kind">
+							{#each data.kindOptions as kind (kind)}
+								<option value={kind} selected={data.provider.kind === kind}>{kind}</option>
+							{/each}
+						</select>
+					</label>
 
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
-				<textarea class="textarea min-h-24 text-white" name="description"
-					>{data.provider.description}</textarea
-				>
-			</label>
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Auth mode</span>
+						<select class="select text-white" name="authMode">
+							{#each data.authModeOptions as authMode (authMode)}
+								<option value={authMode} selected={data.provider.authMode === authMode}>
+									{authMode}
+								</option>
+							{/each}
+						</select>
+					</label>
 
-			<div class="grid gap-4 md:grid-cols-3">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Access surface</span>
-					<select class="select text-white" name="kind">
-						{#each data.kindOptions as kind (kind)}
-							<option value={kind} selected={data.provider.kind === kind}>{kind}</option>
-						{/each}
-					</select>
-				</label>
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Setup status</span>
+						<select class="select text-white" name="setupStatus">
+							{#each data.setupStatusOptions as setupStatus (setupStatus)}
+								<option value={setupStatus} selected={data.provider.setupStatus === setupStatus}>
+									{formatProviderSetupStatusLabel(setupStatus)}
+								</option>
+							{/each}
+						</select>
+					</label>
+				</div>
+
+				<div class="grid gap-4 sm:grid-cols-2">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Default model</span>
+						<input
+							class="input text-white"
+							name="defaultModel"
+							value={data.provider.defaultModel}
+						/>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Launcher or command</span>
+						<input class="input text-white" name="launcher" value={data.provider.launcher} />
+					</label>
+				</div>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Auth mode</span>
-					<select class="select text-white" name="authMode">
-						{#each data.authModeOptions as authMode (authMode)}
-							<option value={authMode} selected={data.provider.authMode === authMode}>
-								{authMode}
+					<span class="mb-2 block text-sm font-medium text-slate-200">Default thread sandbox</span>
+					<select class="select text-white" name="defaultThreadSandbox">
+						{#each data.sandboxOptions as sandbox (sandbox)}
+							<option value={sandbox} selected={data.provider.defaultThreadSandbox === sandbox}>
+								{sandbox}
 							</option>
 						{/each}
 					</select>
 				</label>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Setup status</span>
-					<select class="select text-white" name="setupStatus">
-						{#each data.setupStatusOptions as setupStatus (setupStatus)}
-							<option value={setupStatus} selected={data.provider.setupStatus === setupStatus}>
-								{formatProviderSetupStatusLabel(setupStatus)}
-							</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-
-			<div class="grid gap-4 sm:grid-cols-2">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Default model</span>
-					<input class="input text-white" name="defaultModel" value={data.provider.defaultModel} />
+					<span class="mb-2 block text-sm font-medium text-slate-200">Base URL</span>
+					<input class="input text-white" name="baseUrl" value={data.provider.baseUrl} />
 				</label>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Launcher or command</span>
-					<input class="input text-white" name="launcher" value={data.provider.launcher} />
-				</label>
-			</div>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Environment variables</span>
+						<input
+							class="input text-white"
+							name="envVars"
+							value={data.provider.envVars.join(', ')}
+						/>
+					</label>
 
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Default thread sandbox</span>
-				<select class="select text-white" name="defaultThreadSandbox">
-					{#each data.sandboxOptions as sandbox (sandbox)}
-						<option value={sandbox} selected={data.provider.defaultThreadSandbox === sandbox}>
-							{sandbox}
-						</option>
-					{/each}
-				</select>
-			</label>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Base URL</span>
-				<input class="input text-white" name="baseUrl" value={data.provider.baseUrl} />
-			</label>
-
-			<div class="grid gap-4 sm:grid-cols-2">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Environment variables</span>
-					<input class="input text-white" name="envVars" value={data.provider.envVars.join(', ')} />
-				</label>
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Capabilities</span>
+						<input
+							class="input text-white"
+							name="capabilities"
+							value={data.provider.capabilities.join(', ')}
+						/>
+					</label>
+				</div>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Capabilities</span>
-					<input
-						class="input text-white"
-						name="capabilities"
-						value={data.provider.capabilities.join(', ')}
-					/>
+					<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>
+					<textarea class="textarea min-h-28 text-white" name="notes"
+						>{data.provider.notes}</textarea
+					>
 				</label>
-			</div>
 
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>
-				<textarea class="textarea min-h-28 text-white" name="notes">{data.provider.notes}</textarea>
-			</label>
-
-			<div
-				class="flex flex-col gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between"
-			>
-				<label
-					class="inline-flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"
+				<div
+					class="flex flex-col gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between"
 				>
-					<input checked={data.provider.enabled} class="checkbox" name="enabled" type="checkbox" />
-					<span>Keep enabled</span>
-				</label>
+					<label
+						class="inline-flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"
+					>
+						<input
+							checked={data.provider.enabled}
+							class="checkbox"
+							name="enabled"
+							type="checkbox"
+						/>
+						<span>Keep enabled</span>
+					</label>
 
-				<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-					Save provider
-				</button>
-			</div>
-		</form>
+					<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+						Save provider
+					</button>
+				</div>
+			</form>
+		</DetailSection>
 
 		<div class="space-y-6">
-			<section class="card border border-slate-800 bg-slate-950/70 p-6">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Configuration summary
-				</p>
-				<h2 class="mt-2 text-xl font-semibold text-white">Current capabilities and requirements</h2>
+			<DetailSection
+				eyebrow="Configuration summary"
+				title="Current capabilities and requirements"
+				bodyClass="grid gap-4 md:grid-cols-2"
+			>
+				<DetailFactCard
+					label="Environment variables"
+					value={data.provider.envVars.length > 0
+						? data.provider.envVars.join(', ')
+						: 'None listed'}
+				/>
+				<DetailFactCard
+					label="Capabilities"
+					value={data.provider.capabilities.length > 0
+						? data.provider.capabilities.join(', ')
+						: 'None listed'}
+				/>
+				<DetailFactCard label="Default thread sandbox" value={data.provider.defaultThreadSandbox} />
+				<DetailFactCard label="Notes" value={data.provider.notes || 'No notes saved.'} />
+			</DetailSection>
 
-				<div class="mt-5 space-y-4">
-					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-							Environment variables
-						</p>
-						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-							{data.provider.envVars.length > 0 ? data.provider.envVars.join(', ') : 'None listed'}
-						</p>
-					</div>
-
-					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-							Capabilities
-						</p>
-						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-							{data.provider.capabilities.length > 0
-								? data.provider.capabilities.join(', ')
-								: 'None listed'}
-						</p>
-					</div>
-
-					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-							Default thread sandbox
-						</p>
-						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-							{data.provider.defaultThreadSandbox}
-						</p>
-					</div>
-
-					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Notes</p>
-						<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-							{data.provider.notes || 'No notes saved.'}
-						</p>
-					</div>
-				</div>
-			</section>
-
-			<section class="card border border-slate-800 bg-slate-950/70 p-6">
-				<div class="flex items-start justify-between gap-3">
-					<div>
-						<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-							Attached workers
-						</p>
-						<h2 class="mt-2 text-xl font-semibold text-white">Workers using this provider</h2>
-					</div>
+			<DetailSection
+				eyebrow="Attached workers"
+				title="Workers using this provider"
+				bodyClass="space-y-4"
+			>
+				{#snippet actions()}
 					<a
 						class="rounded-full border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
 						href={resolve('/app/workers')}
 					>
 						Open workers
 					</a>
-				</div>
+				{/snippet}
 
-				<div class="mt-5 space-y-4">
+				<div class="space-y-4">
 					{#if data.attachedWorkers.length === 0}
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
@@ -321,13 +293,14 @@
 						{/each}
 					{/if}
 				</div>
-			</section>
+			</DetailSection>
 
-			<section class="card border border-slate-800 bg-slate-950/70 p-6">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
-				<h2 class="mt-2 text-xl font-semibold text-white">Latest activity through this provider</h2>
-
-				<div class="mt-5 space-y-4">
+			<DetailSection
+				eyebrow="Recent runs"
+				title="Latest activity through this provider"
+				bodyClass="space-y-4"
+			>
+				<div class="space-y-4">
 					{#if data.recentRuns.length === 0}
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
@@ -352,7 +325,9 @@
 									>
 										{formatRunStatusLabel(run.status)}
 									</span>
-									<span class="ui-wrap-anywhere">{run.sessionId || 'No thread'}</span>
+									<span class="ui-wrap-anywhere"
+										>{run.threadId || run.sessionId || 'No thread'}</span
+									>
 									<a
 										class="text-sky-300 transition hover:text-sky-200"
 										href={resolve(`/app/runs/${run.id}`)}
@@ -370,7 +345,7 @@
 						{/each}
 					{/if}
 				</div>
-			</section>
+			</DetailSection>
 		</div>
 	</div>
-</section>
+</AppPage>

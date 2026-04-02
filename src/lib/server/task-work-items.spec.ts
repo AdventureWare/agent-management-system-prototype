@@ -11,7 +11,7 @@ function createSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessio
 	return {
 		id: 'session_1',
 		name: 'Task thread',
-		cwd: '/tmp/project',
+		cwd: '/tmp',
 		sandbox: 'workspace-write',
 		model: null,
 		threadId: 'thread_1',
@@ -70,8 +70,8 @@ function createControlPlane(): ControlPlaneData {
 				id: 'project_1',
 				name: 'Agent Management System Prototype',
 				summary: 'Primary app project',
-				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/out',
+				projectRootFolder: '/tmp',
+				defaultArtifactRoot: '/tmp/out',
 				defaultRepoPath: '',
 				defaultRepoUrl: '',
 				defaultBranch: ''
@@ -115,7 +115,7 @@ function createControlPlane(): ControlPlaneData {
 				dependencyTaskIds: [],
 				runCount: 1,
 				latestRunId: 'run_stale_wip',
-				artifactPath: '/tmp/project/out',
+				artifactPath: '/tmp/out',
 				attachments: [],
 				createdAt: '2026-03-31T07:00:00.000Z',
 				updatedAt: '2026-03-31T04:00:00.000Z'
@@ -139,7 +139,7 @@ function createControlPlane(): ControlPlaneData {
 				dependencyTaskIds: [],
 				runCount: 1,
 				latestRunId: 'run_quiet_thread',
-				artifactPath: '/tmp/project/out',
+				artifactPath: '/tmp/out',
 				attachments: [],
 				createdAt: '2026-03-31T08:00:00.000Z',
 				updatedAt: '2026-03-31T11:50:00.000Z'
@@ -163,7 +163,7 @@ function createControlPlane(): ControlPlaneData {
 				dependencyTaskIds: [],
 				runCount: 0,
 				latestRunId: null,
-				artifactPath: '/tmp/project/out',
+				artifactPath: '/tmp/out',
 				attachments: [],
 				createdAt: '2026-03-31T11:40:00.000Z',
 				updatedAt: '2026-03-31T11:55:00.000Z'

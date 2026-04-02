@@ -39,8 +39,8 @@ a {
 	min-width: 0;
 	width: 100%;
 	flex-direction: column;
-	gap: 1.5rem;
-	padding: 2rem 1.5rem;
+	gap: 1.25rem;
+	padding: 1.25rem 1rem 1.75rem;
 }
 
 :global(.ui-page-header) {
@@ -257,8 +257,23 @@ a {
 
 @media (min-width: 640px) {
 	:global(.ui-page) {
-		gap: 1.75rem;
+		gap: 1.5rem;
 		padding-inline: 1.5rem;
 		padding-block: 2rem;
+	}
+}
+
+@media (min-width: 1280px) {
+	:global(.ui-page) {
+		gap: 1.75rem;
+		padding-inline: 2rem;
+		padding-block: 2rem;
+	}
+}
+
+@media (min-width: 1536px) {
+	:global(.ui-page) {
+		padding-inline: 2.5rem;
+		padding-block: 2.25rem;
 	}
 }

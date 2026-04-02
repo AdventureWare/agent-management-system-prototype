@@ -103,9 +103,10 @@ function buildFixture(): {
 					desiredRoleId: 'role_app_worker',
 					assigneeWorkerId: 'worker_local',
 					threadSessionId: 'session_1',
+					requiredCapabilityNames: ['planning', 'svelte'],
+					requiredToolNames: ['codex'],
 					blockedReason: '',
 					dependencyTaskIds: [],
-					parentTaskId: null,
 					estimateHours: 6,
 					targetDate: '2026-04-10',
 					runCount: 1,
@@ -242,6 +243,8 @@ describe('ontology v1 snapshot', () => {
 		expect(snapshot.tools.map((tool) => tool.name)).toEqual(['codex']);
 		expect(snapshot.tasks[0]?.assignedActorId).toBe('actor_worker_local');
 		expect(snapshot.tasks[0]?.primaryThreadId).toBe('session_1');
+		expect(snapshot.tasks[0]?.requiredCapabilityNames).toEqual(['planning', 'svelte']);
+		expect(snapshot.tasks[0]?.requiredToolNames).toEqual(['codex']);
 		expect(snapshot.tasks[0]?.contextResourceIds).toHaveLength(1);
 		expect(snapshot.tasks[0]?.artifactIds).toHaveLength(1);
 		expect(snapshot.workAttempts[0]?.threadId).toBe('session_1');
@@ -256,9 +259,9 @@ describe('ontology v1 snapshot', () => {
 		expect(snapshot.gaps.planningSessionCount).toBe(0);
 		expect(snapshot.gaps.decisionCount).toBe(0);
 		expect(snapshot.gaps.humanActorCount).toBe(0);
-		expect(snapshot.gaps.tasksWithoutCapabilityRequirementsCount).toBe(1);
+		expect(snapshot.gaps.tasksWithoutCapabilityRequirementsCount).toBe(0);
 		expect(snapshot.limitations).toContain(
-			'Planning sessions are not yet captured as first-class records in the current schema.'
+			'Current workers act mostly as execution surfaces; the broader Actor concept is still only approximated.'
 		);
 	});
 });

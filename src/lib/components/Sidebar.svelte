@@ -9,6 +9,7 @@
 		CpuIcon,
 		FolderOpenIcon,
 		LayoutDashboardIcon,
+		LightbulbIcon,
 		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
@@ -22,6 +23,7 @@
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
 		home: LayoutDashboardIcon,
+		improvements: LightbulbIcon,
 		tasks: ListTodoIcon,
 		sessions: MessagesSquareIcon,
 		runs: ActivityIcon,
@@ -78,9 +80,7 @@
 	>
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
 			<div class="min-w-0">
-				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">
-					Agent Ops
-				</p>
+				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">Agent Ops</p>
 				<p class="truncate text-sm text-slate-300">Overview, work, context, and capacity</p>
 			</div>
 			<button

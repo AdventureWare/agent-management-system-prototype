@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { formatRunStatusLabel, runStatusToneClass } from '$lib/types/control-plane';
 
 	let { data } = $props();
@@ -115,38 +118,34 @@
 	let completedRunCount = $derived(filteredRuns.filter((run) => run.status === 'completed').length);
 </script>
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-3">
-		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Runs</p>
-		<h1 class="text-3xl font-semibold tracking-tight text-white">Inspect execution outcomes</h1>
-		<p class="max-w-3xl text-sm text-slate-300">
-			Runs are the execution ledger for the control plane. Use this surface to filter by routing,
-			check recent heartbeats, inspect prompt digests, and jump into the exact task or session tied
-			to an execution record.
-		</p>
-	</div>
+<AppPage width="full">
+	<PageHeader
+		eyebrow="Runs"
+		title="Inspect execution outcomes"
+		description="Runs are the execution ledger for the control plane. Use this surface to filter by routing, check recent heartbeats, inspect prompt digests, and jump into the exact task or thread tied to an execution record."
+	/>
 
 	<div class="grid gap-4 md:grid-cols-4">
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Visible runs</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{filteredRuns.length}</p>
-			<p class="mt-2 text-sm text-slate-400">Filtered execution records in scope.</p>
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Active</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{activeRunCount}</p>
-			<p class="mt-2 text-sm text-slate-400">Queued, starting, running, or awaiting approval.</p>
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Attention</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{attentionRunCount}</p>
-			<p class="mt-2 text-sm text-slate-400">Blocked, failed, or canceled outcomes.</p>
-		</article>
-		<article class="card border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Completed</p>
-			<p class="mt-3 text-3xl font-semibold text-white">{completedRunCount}</p>
-			<p class="mt-2 text-sm text-slate-400">Runs with a finished happy-path result.</p>
-		</article>
+		<MetricCard
+			label="Visible runs"
+			value={filteredRuns.length}
+			detail="Filtered execution records in scope."
+		/>
+		<MetricCard
+			label="Active"
+			value={activeRunCount}
+			detail="Queued, starting, running, or awaiting approval."
+		/>
+		<MetricCard
+			label="Attention"
+			value={attentionRunCount}
+			detail="Blocked, failed, or canceled outcomes."
+		/>
+		<MetricCard
+			label="Completed"
+			value={completedRunCount}
+			detail="Runs with a finished happy-path result."
+		/>
 	</div>
 
 	<section class="card border border-slate-800 bg-slate-950/70 p-6">
@@ -237,7 +236,7 @@
 			<p
 				class="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
 			>
-				No runs match the current filters.
+				No runs match the current filters. Broaden the time window or clear one of the filters.
 			</p>
 		{:else}
 			<div class="mt-4 overflow-x-auto">
@@ -258,129 +257,75 @@
 						{#each filteredRuns as run (run.id)}
 							<tr class="bg-slate-950/30 align-top transition hover:bg-slate-900/60">
 								<td class="px-3 py-3">
-									<div class="max-w-xs min-w-0 space-y-2">
+									<div class="min-w-[16rem] space-y-2">
 										<div class="flex flex-wrap items-center gap-2">
 											<a
-												class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
+												class="font-medium text-white transition hover:text-sky-200"
 												href={resolve(`/app/runs/${run.id}`)}
 											>
 												{run.id}
 											</a>
 											<span
-												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusToneClass(run.status)}`}
+												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${runStatusToneClass(run.status)}`}
 											>
 												{formatRunStatusLabel(run.status)}
 											</span>
 										</div>
-										<p class="ui-clamp-5 text-sm text-slate-300">
-											{compactText(run.summary || 'No summary recorded.', 180)}
-										</p>
+										<p class="text-sm text-slate-300">{compactText(run.summary || 'No summary')}</p>
 									</div>
 								</td>
 								<td class="px-3 py-3">
-									<div class="max-w-xs min-w-0 space-y-1">
+									<div class="min-w-[16rem] space-y-2">
 										<a
-											class="ui-clamp-5 font-medium text-white transition hover:text-sky-200"
+											class="font-medium text-sky-300 transition hover:text-sky-200"
 											href={resolve(`/app/tasks/${run.taskId}`)}
 										>
 											{run.taskTitle}
 										</a>
-										<p class="ui-clamp-5 text-sm text-slate-400">{run.taskProjectName}</p>
+										<p class="text-sm text-slate-400">{run.taskProjectName}</p>
 									</div>
 								</td>
+								<td class="px-3 py-3 text-sm text-slate-300">{run.workerName}</td>
+								<td class="px-3 py-3 text-sm text-slate-300">{run.providerName}</td>
 								<td class="px-3 py-3">
-									<div class="max-w-xs min-w-0 space-y-1">
-										{#if run.workerId}
-											<a
-												class="ui-clamp-5 text-sm font-medium text-sky-300 transition hover:text-sky-200"
-												href={resolve(`/app/workers/${run.workerId}`)}
-											>
-												{run.workerName}
-											</a>
-										{:else}
-											<p class="text-sm text-slate-400">Unassigned</p>
-										{/if}
-									</div>
-								</td>
-								<td class="px-3 py-3">
-									<div class="max-w-xs min-w-0 space-y-1">
-										{#if run.providerId}
-											<a
-												class="ui-clamp-5 text-sm font-medium text-sky-300 transition hover:text-sky-200"
-												href={resolve(`/app/providers/${run.providerId}`)}
-											>
-												{run.providerName}
-											</a>
-										{:else}
-											<p class="text-sm text-slate-400">No provider</p>
-										{/if}
-									</div>
-								</td>
-								<td class="px-3 py-3">
-									<div class="max-w-sm min-w-0 space-y-2">
-										<div>
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Prompt digest
-											</p>
-											<p class="ui-clamp-5 mt-1 font-mono text-xs text-slate-200">
-												{run.promptDigest || 'Not captured'}
-											</p>
-										</div>
-										<div>
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Session / thread
-											</p>
-											<div class="mt-1 space-y-1 text-xs text-slate-300">
-												{#if run.sessionId}
-													<a
-														class="ui-clamp-5 text-sky-300 transition hover:text-sky-200"
-														href={resolve(`/app/sessions/${run.sessionId}`)}
-													>
-														{run.sessionName ?? run.sessionId}
-													</a>
-												{:else}
-													<p>No session linked</p>
-												{/if}
-												<p class="ui-clamp-5 text-slate-500">
-													{run.threadId || 'No thread id recorded'}
-												</p>
-											</div>
-										</div>
-									</div>
-								</td>
-								<td class="px-3 py-3">
-									<div class="max-w-sm min-w-0 space-y-2 text-sm">
-										<p
-											class={run.isHeartbeatStale ? 'font-medium text-amber-300' : 'text-slate-300'}
-										>
-											Heartbeat {run.heartbeatAgeLabel}
-										</p>
-										<p class="ui-clamp-5 text-slate-400">
-											{compactText(run.errorSummary || 'No error summary.', 160)}
-										</p>
-									</div>
-								</td>
-								<td class="px-3 py-3">
-									<div class="max-w-sm min-w-0 space-y-2">
-										{#if run.artifactPaths.length === 0}
-											<p class="text-sm text-slate-400">No artifact paths</p>
-										{:else}
-											{#each run.artifactPaths.slice(0, 2) as path (path)}
-												<p class="ui-clamp-5 text-xs text-slate-300">{path}</p>
-											{/each}
-											{#if run.artifactPaths.length > 2}
-												<p class="text-xs text-slate-500">
-													+{run.artifactPaths.length - 2} more paths
-												</p>
+									<div class="min-w-[18rem] space-y-2 text-sm text-slate-300">
+										<p>{compactText(run.promptDigest || 'No prompt digest')}</p>
+										<div class="space-y-1 text-xs text-slate-500">
+											<p>Thread record</p>
+											{#if run.sessionId}
+												<a
+													class="ui-wrap-inline text-sky-300 transition hover:text-sky-200"
+													href={resolve(`/app/sessions/${run.sessionId}`)}
+												>
+													{run.sessionName || run.sessionId}
+												</a>
+											{:else}
+												<p>No managed thread record</p>
 											{/if}
-										{/if}
+											<p class="ui-wrap-anywhere">{run.threadId || 'No thread id recorded'}</p>
+										</div>
 									</div>
 								</td>
 								<td class="px-3 py-3">
-									<div class="space-y-1 text-sm text-slate-300">
-										<p>Updated {run.updatedAtLabel}</p>
-										<p class="text-slate-500">Created {run.createdAtLabel}</p>
+									<div class="min-w-[14rem] space-y-2 text-sm text-slate-300">
+										<p>{run.heartbeatAgeLabel}</p>
+										<p class="text-rose-300">{compactText(run.errorSummary || 'No errors')}</p>
 									</div>
+								</td>
+								<td class="px-3 py-3">
+									<div class="min-w-[16rem] space-y-2 text-sm text-slate-300">
+										{#if run.artifactPaths.length === 0}
+											<p>No artifacts</p>
+										{:else}
+											{#each run.artifactPaths as path (path)}
+												<p class="ui-wrap-anywhere">{path}</p>
+											{/each}
+										{/if}
+									</div>
+								</td>
+								<td class="px-3 py-3 text-sm text-slate-300">
+									<p>{run.updatedAtLabel}</p>
+									<p class="mt-1 text-xs text-slate-500">{run.updatedAt}</p>
 								</td>
 							</tr>
 						{/each}
@@ -389,4 +334,4 @@
 			</div>
 		{/if}
 	</section>
-</section>
+</AppPage>

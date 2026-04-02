@@ -1,7 +1,13 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { buildPlanningPageData } from '$lib/server/planning';
-import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import {
+	createDecision,
+	createPlanningSession,
+	formatRelativeTime,
+	loadControlPlane,
+	updateControlPlane
+} from '$lib/server/control-plane';
 import { PLANNING_CONFIDENCE_OPTIONS } from '$lib/types/control-plane';
 
 function isValidDate(value: string) {
@@ -23,6 +29,42 @@ function readFilterValue(value: string | null) {
 	return trimmed.length > 0 ? trimmed : '';
 }
 
+function normalizeWindowDates(startDate: string, endDate: string) {
+	return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
+}
+
+function buildGoalPlanDecisionSummary(input: {
+	goal: {
+		name: string;
+		targetDate?: string | null;
+		planningPriority?: number;
+		confidence?: string | null;
+	};
+	targetDate: string | null;
+	planningPriority: number;
+	confidence: string;
+}) {
+	const changes: string[] = [];
+
+	if ((input.targetDate ?? null) !== (input.goal.targetDate ?? null)) {
+		changes.push(
+			input.targetDate ? `set target date to ${input.targetDate}` : 'cleared target date'
+		);
+	}
+
+	if (input.planningPriority !== (input.goal.planningPriority ?? 0)) {
+		changes.push(`set planning priority to ${input.planningPriority}`);
+	}
+
+	if (input.confidence !== (input.goal.confidence ?? 'medium')) {
+		changes.push(`set confidence to ${input.confidence}`);
+	}
+
+	return changes.length > 0
+		? `Updated goal plan for ${input.goal.name}: ${changes.join('; ')}.`
+		: null;
+}
+
 export const load: PageServerLoad = async ({ url }) => {
 	const data = await loadControlPlane();
 	const includeUnscheduledValues = url.searchParams.getAll('includeUnscheduled');
@@ -33,20 +75,31 @@ export const load: PageServerLoad = async ({ url }) => {
 	const rawEndDate = readFilterValue(url.searchParams.get('endDate'));
 	const startDate = (isValidDate(rawStartDate) && rawStartDate) || defaultStartDate;
 	const endDate = (isValidDate(rawEndDate) && rawEndDate) || defaultEndDate;
-	const normalizedStartDate = startDate <= endDate ? startDate : endDate;
-	const normalizedEndDate = startDate <= endDate ? endDate : startDate;
+	const { startDate: normalizedStartDate, endDate: normalizedEndDate } = normalizeWindowDates(
+		startDate,
+		endDate
+	);
+	const planningData = buildPlanningPageData(data, {
+		startDate: normalizedStartDate,
+		endDate: normalizedEndDate,
+		projectId: readFilterValue(url.searchParams.get('projectId')),
+		goalId: readFilterValue(url.searchParams.get('goalId')),
+		workerId: readFilterValue(url.searchParams.get('workerId')),
+		includeUnscheduled:
+			includeUnscheduledValues.length === 0 || includeUnscheduledValues.includes('true')
+	});
+	const recentPlanningSessions = [...(data.planningSessions ?? [])]
+		.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+		.slice(0, 8)
+		.map((session) => ({
+			...session,
+			createdAtLabel: formatRelativeTime(session.createdAt)
+		}));
 
 	return {
-		...buildPlanningPageData(data, {
-			startDate: normalizedStartDate,
-			endDate: normalizedEndDate,
-			projectId: readFilterValue(url.searchParams.get('projectId')),
-			goalId: readFilterValue(url.searchParams.get('goalId')),
-			workerId: readFilterValue(url.searchParams.get('workerId')),
-			includeUnscheduled:
-				includeUnscheduledValues.length === 0 || includeUnscheduledValues.includes('true')
-		}),
-		confidenceOptions: PLANNING_CONFIDENCE_OPTIONS
+		...planningData,
+		confidenceOptions: PLANNING_CONFIDENCE_OPTIONS,
+		recentPlanningSessions
 	};
 };
 
@@ -71,6 +124,28 @@ export const actions: Actions = {
 			});
 		}
 
+		const current = await loadControlPlane();
+		const goal = current.goals.find((candidate) => candidate.id === goalId);
+
+		if (!goal) {
+			return fail(404, { message: 'Goal not found.' });
+		}
+
+		const nextPlanningPriority =
+			Number.isFinite(planningPriority) && planningPriority >= 0 ? planningPriority : 0;
+		const nextConfidence = PLANNING_CONFIDENCE_OPTIONS.includes(
+			confidence as (typeof PLANNING_CONFIDENCE_OPTIONS)[number]
+		)
+			? (confidence as (typeof PLANNING_CONFIDENCE_OPTIONS)[number])
+			: 'medium';
+		const nextTargetDate = targetDate || null;
+		const now = new Date().toISOString();
+		const decisionSummary = buildGoalPlanDecisionSummary({
+			goal,
+			targetDate: nextTargetDate,
+			planningPriority: nextPlanningPriority,
+			confidence: nextConfidence
+		});
 		let goalUpdated = false;
 
 		await updateControlPlane((data) => ({
@@ -83,16 +158,22 @@ export const actions: Actions = {
 				goalUpdated = true;
 				return {
 					...goal,
-					targetDate: targetDate || null,
-					planningPriority:
-						Number.isFinite(planningPriority) && planningPriority >= 0 ? planningPriority : 0,
-					confidence: PLANNING_CONFIDENCE_OPTIONS.includes(
-						confidence as (typeof PLANNING_CONFIDENCE_OPTIONS)[number]
-					)
-						? (confidence as (typeof PLANNING_CONFIDENCE_OPTIONS)[number])
-						: 'medium'
+					targetDate: nextTargetDate,
+					planningPriority: nextPlanningPriority,
+					confidence: nextConfidence
 				};
-			})
+			}),
+			decisions: decisionSummary
+				? [
+						createDecision({
+							goalId,
+							decisionType: 'goal_plan_updated',
+							summary: decisionSummary,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				: (data.decisions ?? [])
 		}));
 
 		if (!goalUpdated) {
@@ -102,6 +183,73 @@ export const actions: Actions = {
 		return {
 			ok: true,
 			successAction: 'updateGoalPlan'
+		};
+	},
+
+	capturePlanningSession: async ({ request }) => {
+		const form = await request.formData();
+		const rawStartDate = readFilterValue(form.get('startDate')?.toString() ?? '');
+		const rawEndDate = readFilterValue(form.get('endDate')?.toString() ?? '');
+		const projectId = readFilterValue(form.get('projectId')?.toString() ?? '');
+		const goalId = readFilterValue(form.get('goalId')?.toString() ?? '');
+		const workerId = readFilterValue(form.get('workerId')?.toString() ?? '');
+		const includeUnscheduledValues = form
+			.getAll('includeUnscheduled')
+			.map((value) => value.toString());
+
+		if (!isValidDate(rawStartDate) || !isValidDate(rawEndDate)) {
+			return fail(400, { message: 'Start and end dates must use YYYY-MM-DD format.' });
+		}
+
+		const { startDate, endDate } = normalizeWindowDates(rawStartDate, rawEndDate);
+		const includeUnscheduled =
+			includeUnscheduledValues.length === 0 || includeUnscheduledValues.includes('true');
+		const current = await loadControlPlane();
+		const planningData = buildPlanningPageData(current, {
+			startDate,
+			endDate,
+			projectId,
+			goalId,
+			workerId,
+			includeUnscheduled
+		});
+		const goalIds = planningData.goalsInScope.map((goal) => goal.id);
+		const taskIds = planningData.scheduledTasks
+			.concat(planningData.unscheduledTasks)
+			.map((task) => task.id);
+		const taskIdSet = new Set(taskIds);
+		const goalIdSet = new Set(goalIds);
+		const decisionIds = (current.decisions ?? [])
+			.filter(
+				(decision) =>
+					(decision.taskId && taskIdSet.has(decision.taskId)) ||
+					(decision.goalId && goalIdSet.has(decision.goalId))
+			)
+			.map((decision) => decision.id);
+		const createdAt = new Date().toISOString();
+		const session = createPlanningSession({
+			windowStart: startDate,
+			windowEnd: endDate,
+			projectId: projectId || null,
+			goalId: goalId || null,
+			workerId: workerId || null,
+			includeUnscheduled,
+			goalIds,
+			taskIds,
+			decisionIds,
+			summary: `Reviewed ${goalIds.length} goal(s), ${taskIds.length} task(s), and ${decisionIds.length} linked decision(s) for ${startDate} to ${endDate}.`,
+			createdAt
+		});
+
+		await updateControlPlane((data) => ({
+			...data,
+			planningSessions: [session, ...(data.planningSessions ?? [])]
+		}));
+
+		return {
+			ok: true,
+			successAction: 'capturePlanningSession',
+			planningSessionId: session.id
 		};
 	}
 };

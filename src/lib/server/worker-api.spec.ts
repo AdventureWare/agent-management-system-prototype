@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	claimTaskForWorker,
+	describeWorkerTaskFit,
+	getWorkerAssignmentSuggestions,
 	getWorkerTaskView,
 	hashWorkerToken,
 	isWorkerEligibleForTask,
@@ -24,6 +26,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 		lastSeenAt: '2026-03-26T00:00:00.000Z',
 		note: 'fixture worker',
 		tags: ['research'],
+		skills: ['research'],
 		threadSandboxOverride: null,
 		authTokenHash: workerTokenHash
 	};
@@ -31,7 +34,25 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 	return {
 		worker,
 		data: {
-			providers: [],
+			providers: [
+				{
+					id: 'provider_cloud_codex',
+					name: 'Cloud Codex',
+					service: 'OpenAI',
+					kind: 'cloud',
+					description: '',
+					enabled: true,
+					setupStatus: 'connected',
+					authMode: 'custom',
+					defaultModel: '',
+					baseUrl: '',
+					launcher: 'codex',
+					envVars: [],
+					capabilities: ['citations'],
+					defaultThreadSandbox: 'workspace-write',
+					notes: ''
+				}
+			],
 			roles: [],
 			projects: [],
 			goals: [],
@@ -221,8 +242,76 @@ describe('worker-api helpers', () => {
 	it('checks worker role eligibility correctly', () => {
 		const { data, worker } = buildFixture();
 
-		expect(isWorkerEligibleForTask(worker, data.tasks[0]!)).toBe(true);
-		expect(isWorkerEligibleForTask(worker, data.tasks[2]!)).toBe(false);
+		expect(isWorkerEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
+		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
+	});
+
+	it('requires capability and tool matches when task requirements are set', () => {
+		const { data, worker } = buildFixture();
+		data.tasks[0] = {
+			...data.tasks[0]!,
+			requiredCapabilityNames: ['research', 'citations'],
+			requiredToolNames: ['codex']
+		};
+		data.tasks[2] = {
+			...data.tasks[2]!,
+			requiredCapabilityNames: ['ios'],
+			requiredToolNames: ['xcodebuild']
+		};
+
+		expect(isWorkerEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
+		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
+	});
+
+	it('describes worker fit and sorts assignment suggestions by eligibility and load', () => {
+		const { data, worker } = buildFixture();
+		data.tasks[0] = {
+			...data.tasks[0]!,
+			requiredCapabilityNames: ['research', 'citations'],
+			requiredToolNames: ['codex']
+		};
+		data.workers.push({
+			...worker,
+			id: 'worker_two',
+			name: 'Worker Two',
+			status: 'busy',
+			roleId: 'role_coordinator',
+			skills: ['research']
+		});
+		data.workers.push({
+			...worker,
+			id: 'worker_three',
+			name: 'Worker Three',
+			status: 'idle',
+			skills: ['research'],
+			providerId: 'provider_other'
+		});
+		data.providers.push({
+			...data.providers[0]!,
+			id: 'provider_other',
+			name: 'Other Provider',
+			launcher: 'playwright',
+			capabilities: []
+		});
+
+		const fit = describeWorkerTaskFit(data, data.workers[2]!, data.tasks[0]!);
+		const suggestions = getWorkerAssignmentSuggestions(data, data.tasks[0]!);
+
+		expect(fit.eligible).toBe(false);
+		expect(fit.missingCapabilityNames).toEqual(['citations']);
+		expect(fit.missingToolNames).toEqual(['codex']);
+		expect(suggestions.slice(0, 2).map((candidate) => candidate.workerId)).toEqual([
+			'worker_one',
+			'worker_two'
+		]);
+		expect(suggestions[2]).toEqual(
+			expect.objectContaining({
+				workerId: 'worker_three',
+				eligible: false,
+				missingCapabilityNames: ['citations'],
+				missingToolNames: ['codex']
+			})
+		);
 	});
 
 	it('does not expose ready tasks with unmet dependencies', () => {

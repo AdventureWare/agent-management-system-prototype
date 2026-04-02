@@ -1,15 +1,27 @@
 import { buildTaskThreadSuggestions } from '$lib/server/task-thread-suggestions';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import { projectMatchesPath, taskHasUnmetDependencies } from '$lib/server/control-plane';
+import {
+	getGoalDescendantGoalIds,
+	getGoalLinkedProjectIds,
+	getGoalLinkedTaskIds,
+	getGoalScopeProjectIds,
+	getGoalScopeTaskIds
+} from '$lib/server/goal-relationships';
 import type { AgentSessionDetail } from '$lib/types/agent-session';
-import type { ControlPlaneData, Project, Review, Run, Task } from '$lib/types/control-plane';
+import type { ControlPlaneData, Goal, Project, Review, Run, Task } from '$lib/types/control-plane';
 import {
 	SELF_IMPROVEMENT_CATEGORY_OPTIONS,
+	SELF_IMPROVEMENT_SIGNAL_TYPE_OPTIONS,
 	SELF_IMPROVEMENT_SOURCE_OPTIONS,
 	type SelfImprovementAnalysis,
 	type SelfImprovementConfidence,
+	type SelfImprovementFeedbackSignal,
+	type SelfImprovementKnowledgeDraft,
 	type SelfImprovementOpportunity,
+	type SelfImprovementSignalSummary,
 	type SelfImprovementSeverity,
+	type SelfImprovementSignalType,
 	type SelfImprovementSource,
 	type SelfImprovementTaskDraft
 } from '$lib/types/self-improvement';
@@ -31,12 +43,20 @@ function compactText(value: string | null | undefined, fallback: string) {
 	return normalized || fallback;
 }
 
+function uniqueStrings(values: Iterable<string>) {
+	return [...new Set([...values].filter((value) => value.trim().length > 0))];
+}
+
 function initializeCountRecord<T extends string>(values: readonly T[]) {
 	return Object.fromEntries(values.map((value) => [value, 0])) as Record<T, number>;
 }
 
 function createOpportunityId(source: SelfImprovementSource, subjectId: string) {
 	return `${source}:${subjectId}`;
+}
+
+function createFeedbackSignalId(signalType: SelfImprovementSignalType, subjectId: string) {
+	return `${signalType}:${subjectId}`;
 }
 
 function deriveSuggestedTaskPriority(task: Task): SelfImprovementTaskDraft['priority'] {
@@ -52,6 +72,22 @@ function createSuggestedTask(task: Task, title: string, summary: string): SelfIm
 		title,
 		summary,
 		priority: deriveSuggestedTaskPriority(task)
+	};
+}
+
+function createSuggestedKnowledgeItem(
+	title: string,
+	summary: string,
+	triggerPattern: string,
+	recommendedResponse: string,
+	applicabilityScope: string[]
+): SelfImprovementKnowledgeDraft {
+	return {
+		title,
+		summary,
+		triggerPattern,
+		recommendedResponse,
+		applicabilityScope
 	};
 }
 
@@ -75,8 +111,13 @@ function createOpportunity(
 		relatedTaskIds: input.relatedTaskIds,
 		relatedRunIds: input.relatedRunIds,
 		relatedSessionIds: input.relatedSessionIds,
-		suggestedTask: input.suggestedTask
+		suggestedTask: input.suggestedTask,
+		suggestedKnowledgeItem: input.suggestedKnowledgeItem
 	};
+}
+
+function createFeedbackSignal(input: SelfImprovementFeedbackSignal): SelfImprovementFeedbackSignal {
+	return input;
 }
 
 function buildProjectContext(task: Task, data: ControlPlaneData) {
@@ -85,6 +126,110 @@ function buildProjectContext(task: Task, data: ControlPlaneData) {
 	return {
 		projectId: project?.id ?? null,
 		projectName: project?.name ?? null
+	};
+}
+
+function intersectsRecordScope(recordIds: string[], scopedIds: Set<string>) {
+	return recordIds.some((recordId) => scopedIds.has(recordId));
+}
+
+function buildGoalContext(data: ControlPlaneData, goalId: string) {
+	const goal = data.goals.find((candidate) => candidate.id === goalId) ?? null;
+
+	if (!goal) {
+		return null;
+	}
+
+	const scopedGoalIds = new Set([goalId, ...getGoalDescendantGoalIds(data, goalId)]);
+
+	return {
+		goal,
+		scopedGoals: data.goals.filter((candidate) => scopedGoalIds.has(candidate.id)),
+		scopedTaskIds: new Set(getGoalScopeTaskIds(data, goalId)),
+		scopedProjectIds: new Set(getGoalScopeProjectIds(data, goalId))
+	};
+}
+
+function buildGoalAlignmentAction(goal: Goal) {
+	const successSignal = compactText(goal.successSignal, '');
+
+	if (successSignal) {
+		return `Keep the follow-up aligned with goal "${goal.name}" and its success signal: ${successSignal}.`;
+	}
+
+	return `Keep the follow-up aligned with goal "${goal.name}" and record how the work advances that goal.`;
+}
+
+function getOpportunityMatchedGoalNames(
+	opportunity: SelfImprovementOpportunity,
+	data: ControlPlaneData,
+	scopedGoals: Goal[]
+) {
+	return uniqueStrings(
+		scopedGoals
+			.filter((goal) => {
+				const linkedTaskIds = new Set(getGoalLinkedTaskIds(data, goal));
+				const linkedProjectIds = new Set(getGoalLinkedProjectIds(data, goal));
+
+				return (
+					linkedProjectIds.has(opportunity.projectId ?? '') ||
+					intersectsRecordScope(opportunity.relatedTaskIds, linkedTaskIds)
+				);
+			})
+			.map((goal) => goal.name)
+	);
+}
+
+function applyGoalContextToOpportunity<T extends SelfImprovementOpportunity>(
+	opportunity: T,
+	data: ControlPlaneData,
+	goalContext: NonNullable<ReturnType<typeof buildGoalContext>>
+): T {
+	const matchesGoalScope =
+		goalContext.scopedProjectIds.has(opportunity.projectId ?? '') ||
+		intersectsRecordScope(opportunity.relatedTaskIds, goalContext.scopedTaskIds);
+
+	if (!matchesGoalScope) {
+		return opportunity;
+	}
+
+	const matchedGoalNames = getOpportunityMatchedGoalNames(
+		opportunity,
+		data,
+		goalContext.scopedGoals
+	);
+	const relatedGoalNames = matchedGoalNames.filter((name) => name !== goalContext.goal.name);
+	const goalAlignmentAction = buildGoalAlignmentAction(goalContext.goal);
+	const summaryNotes = uniqueStrings([
+		`Goal focus: ${goalContext.goal.name}.`,
+		relatedGoalNames.length > 0
+			? `Matched goal context in this subtree: ${relatedGoalNames.join(', ')}.`
+			: ''
+	]);
+
+	return {
+		...opportunity,
+		summary: [opportunity.summary, ...summaryNotes].join(' '),
+		recommendedActions: uniqueStrings([goalAlignmentAction, ...opportunity.recommendedActions]),
+		suggestedTask: opportunity.suggestedTask
+			? {
+					...opportunity.suggestedTask,
+					title: `Advance ${goalContext.goal.name}: ${opportunity.suggestedTask.title}`,
+					summary: [opportunity.suggestedTask.summary, goalAlignmentAction].join(' ')
+				}
+			: null,
+		suggestedKnowledgeItem: opportunity.suggestedKnowledgeItem
+			? {
+					...opportunity.suggestedKnowledgeItem,
+					title: `${opportunity.suggestedKnowledgeItem.title} for ${goalContext.goal.name}`,
+					summary: [opportunity.suggestedKnowledgeItem.summary, goalAlignmentAction].join(' '),
+					applicabilityScope: uniqueStrings([
+						`Goal: ${goalContext.goal.name}`,
+						...relatedGoalNames.map((name) => `Related goal: ${name}`),
+						...opportunity.suggestedKnowledgeItem.applicabilityScope
+					])
+				}
+			: null
 	};
 }
 
@@ -165,6 +310,23 @@ function buildExecutionOpportunities(data: ControlPlaneData) {
 						`Latest failure detail: ${latestDetail}`,
 						'Document the root cause and add a concrete safeguard so future runs do not hit the same failure mode.'
 					].join(' ')
+				),
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Failure recovery pattern for ${task.title}`,
+					'Capture the repeated failure mode as durable guidance so future runs can detect or avoid it earlier.',
+					[
+						`${unsuccessfulRuns.length} failed or blocked run(s) were recorded for this task.`,
+						`Latest failure detail: ${latestDetail}`
+					].join(' '),
+					[
+						'Run a preflight check before retrying the same path.',
+						'Document the root cause and the concrete safeguard or recovery path.',
+						'Route repeated failures into a focused repair task instead of continuing blind retries.'
+					].join(' '),
+					[
+						projectContext.projectName ?? 'Cross-project reliability work',
+						'Tasks with repeated failed or blocked runs'
+					]
 				)
 			})
 		];
@@ -243,6 +405,27 @@ function buildBlockedTaskOpportunities(data: ControlPlaneData) {
 					]
 						.filter(Boolean)
 						.join(' ')
+				),
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Blocker handling for ${task.title}`,
+					'Capture how this blocker should be identified and decomposed so future tasks are prepared earlier.',
+					[
+						blockedReason ? `Recorded blocker reason: ${blockedReason}` : '',
+						dependencyTitles.length > 0
+							? `Outstanding dependencies: ${dependencyTitles.join(', ')}.`
+							: ''
+					]
+						.filter(Boolean)
+						.join(' '),
+					[
+						'Convert the blocker into a concrete prerequisite or remediation task.',
+						'Record the blocker reason early in task setup.',
+						'Escalate only after normal decomposition and routing options are exhausted.'
+					].join(' '),
+					[
+						projectContext.projectName ?? 'Cross-project coordination work',
+						'Tasks with explicit blockers or unmet dependencies'
+					]
 				)
 			})
 		];
@@ -305,6 +488,20 @@ function buildStaleTaskOpportunities(
 						`Observed stale signals: ${task.freshness.staleSignals.join(', ') || 'general inactivity'}.`,
 						'Implement or refine watchdog behavior so similar tasks recover faster next time.'
 					].join(' ')
+				),
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Stale-work recovery for ${task.title}`,
+					'Turn this stale-work pattern into a documented recovery play so the system can intervene sooner next time.',
+					`Observed stale signals: ${task.freshness.staleSignals.join(', ') || 'general inactivity'}.`,
+					[
+						'Define the first automated recovery action such as nudge, retry, reassignment, or timeout handling.',
+						'Record which recovery action worked so future stale tasks can follow the same path.',
+						'Escalate to a human only after the defined recovery policy is exhausted.'
+					].join(' '),
+					[
+						task.projectName === 'No project' ? 'Cross-project automation work' : task.projectName,
+						'Tasks that have gone stale based on task, run, or thread activity'
+					]
 				)
 			});
 		});
@@ -374,6 +571,20 @@ function buildReviewFeedbackOpportunities(data: ControlPlaneData) {
 						'Review the requested changes on this task and distill them into reusable guidance.',
 						'If the issue is recurring, convert the guidance into a skill, checklist, or validation step.'
 					].join(' ')
+				),
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Review checklist for ${task.title}`,
+					'Capture the requested review changes as reusable quality guidance for similar work.',
+					`Most recent review note: ${compactText(changeRequests[0]?.summary, 'No review summary recorded.')}`,
+					[
+						'Turn the review feedback into a checklist or heuristic that can be applied before review.',
+						'Add validation or tests when the review pattern points to a repeated correctness gap.',
+						'Attach the checklist to similar future tasks before implementation starts.'
+					].join(' '),
+					[
+						projectContext.projectName ?? 'Cross-project quality work',
+						'Tasks that received changes-requested review feedback'
+					]
 				)
 			})
 		];
@@ -459,10 +670,271 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 						`Suggested thread: ${suggestion.name}.`,
 						'Refine the thread-assignment rules so similar tasks inherit stronger context automatically.'
 					].join(' ')
+				),
+				suggestedKnowledgeItem: createSuggestedKnowledgeItem(
+					`Thread reuse heuristic for ${task.title}`,
+					'Capture why a better thread was suggested so future routing can reuse context more reliably.',
+					[
+						task.threadSessionId
+							? `Current thread was unavailable or weakly matched: ${task.threadSessionId}.`
+							: 'The task did not have an assigned thread.',
+						`Suggested thread: ${suggestion.name}.`,
+						`Suggestion reason: ${suggestion.suggestionReason ?? 'Relevant prior context exists.'}`
+					].join(' '),
+					[
+						'Offer the better thread directly in the task workflow.',
+						'Record accepted matches and use them to improve routing heuristics.',
+						'Only auto-link when confidence is high and adaptive routing is enabled.'
+					].join(' '),
+					[
+						projectMap.get(task.projectId)?.name ?? 'Cross-project knowledge routing',
+						'Tasks where a better reusable thread is available'
+					]
 				)
 			})
 		];
 	});
+}
+
+function buildExecutionFeedbackSignals(data: ControlPlaneData): SelfImprovementFeedbackSignal[] {
+	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
+
+	return data.runs
+		.filter((run) => run.status === 'failed' || run.status === 'blocked')
+		.map((run) => {
+			const task = taskMap.get(run.taskId) ?? null;
+			const projectContext = task
+				? buildProjectContext(task, data)
+				: { projectId: null, projectName: null };
+
+			return createFeedbackSignal({
+				id: createFeedbackSignalId('run_failure', run.id),
+				signalType: 'run_failure',
+				opportunityId: createOpportunityId('failed_runs', run.taskId),
+				category: 'reliability',
+				severity: task ? getExecutionSeverity(task, 1) : 'medium',
+				confidence: 'high',
+				projectId: projectContext.projectId,
+				projectName: projectContext.projectName,
+				taskId: run.taskId,
+				runId: run.id,
+				reviewId: null,
+				sessionId: run.sessionId,
+				title: task ? `Run failure for ${task.title}` : `Run failure for ${run.taskId}`,
+				summary: compactText(
+					run.errorSummary || run.summary,
+					'The run failed or blocked without a detailed summary.'
+				)
+			});
+		});
+}
+
+function buildBlockedTaskFeedbackSignals(data: ControlPlaneData): SelfImprovementFeedbackSignal[] {
+	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
+
+	return data.tasks.flatMap((task) => {
+		if (task.status === 'done') {
+			return [];
+		}
+
+		const dependencyIds = task.dependencyTaskIds.filter((dependencyId) => {
+			const dependency = taskMap.get(dependencyId);
+			return dependency?.status !== 'done';
+		});
+		const blockedReason = compactText(task.blockedReason, '');
+		const isBlocked =
+			task.status === 'blocked' || blockedReason.length > 0 || dependencyIds.length > 0;
+
+		if (!isBlocked) {
+			return [];
+		}
+
+		const projectContext = buildProjectContext(task, data);
+
+		return [
+			createFeedbackSignal({
+				id: createFeedbackSignalId('task_blocked', task.id),
+				signalType: 'task_blocked',
+				opportunityId: createOpportunityId('blocked_tasks', task.id),
+				category: 'coordination',
+				severity:
+					task.priority === 'urgent' || task.priority === 'high' || dependencyIds.length > 0
+						? 'high'
+						: 'medium',
+				confidence: blockedReason ? 'high' : 'medium',
+				projectId: projectContext.projectId,
+				projectName: projectContext.projectName,
+				taskId: task.id,
+				runId: null,
+				reviewId: null,
+				sessionId: task.threadSessionId,
+				title: `Task blocked: ${task.title}`,
+				summary:
+					blockedReason ||
+					(dependencyIds.length > 0
+						? `Waiting on dependencies: ${dependencyIds.join(', ')}.`
+						: 'Task is blocked without a recorded blocker reason.')
+			})
+		];
+	});
+}
+
+function buildStaleFeedbackSignals(
+	data: ControlPlaneData,
+	sessions: AgentSessionDetail[],
+	now?: number
+): SelfImprovementFeedbackSignal[] {
+	return buildTaskWorkItems(data, sessions, { now })
+		.filter((task) => task.status !== 'done' && task.freshness.isStale)
+		.map((task) =>
+			createFeedbackSignal({
+				id: createFeedbackSignalId('task_stale', task.id),
+				signalType: 'task_stale',
+				opportunityId: createOpportunityId('stale_tasks', task.id),
+				category: 'automation',
+				severity:
+					task.priority === 'urgent' || task.freshness.staleSignals.length >= 2 ? 'high' : 'medium',
+				confidence: 'high',
+				projectId: task.projectId,
+				projectName: task.projectName === 'No project' ? null : task.projectName,
+				taskId: task.id,
+				runId: task.latestRun?.id ?? null,
+				reviewId: null,
+				sessionId: task.statusThread?.id ?? null,
+				title: `Stale work on ${task.title}`,
+				summary:
+					task.freshness.staleSignals.length > 0
+						? `Observed stale signals: ${task.freshness.staleSignals.join(', ')}.`
+						: 'Task is stale without a classified stale signal.'
+			})
+		);
+}
+
+function buildReviewFeedbackSignals(data: ControlPlaneData): SelfImprovementFeedbackSignal[] {
+	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
+
+	return data.reviews
+		.filter((review) => review.status === 'changes_requested')
+		.map((review) => {
+			const task = taskMap.get(review.taskId) ?? null;
+			const projectContext = task
+				? buildProjectContext(task, data)
+				: { projectId: null, projectName: null };
+
+			return createFeedbackSignal({
+				id: createFeedbackSignalId('review_feedback', review.id),
+				signalType: 'review_feedback',
+				opportunityId: createOpportunityId('review_feedback', review.taskId),
+				category: 'quality',
+				severity: task && (task.runCount >= 2 || task.priority !== 'medium') ? 'high' : 'medium',
+				confidence: 'medium',
+				projectId: projectContext.projectId,
+				projectName: projectContext.projectName,
+				taskId: review.taskId,
+				runId: review.runId,
+				reviewId: review.id,
+				sessionId: task?.threadSessionId ?? null,
+				title: task ? `Review feedback for ${task.title}` : `Review feedback for ${review.taskId}`,
+				summary: compactText(review.summary, 'Changes were requested without a detailed summary.')
+			});
+		});
+}
+
+function buildThreadReuseFeedbackSignals(
+	data: ControlPlaneData,
+	sessions: AgentSessionDetail[]
+): SelfImprovementFeedbackSignal[] {
+	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
+	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+
+	return data.tasks.flatMap((task) => {
+		if (!ACTIVE_TASK_STATUSES.has(task.status) || task.status === 'blocked') {
+			return [];
+		}
+
+		const projectSessions = selectProjectSessions(projectMap.get(task.projectId), sessions);
+
+		if (projectSessions.length === 0) {
+			return [];
+		}
+
+		const suggestion = buildTaskThreadSuggestions({
+			task,
+			assignedThreadId: task.threadSessionId,
+			sessions: projectSessions
+		}).suggestedThread;
+
+		if (!suggestion || suggestion.id === task.threadSessionId) {
+			return [];
+		}
+
+		const assignedThread = task.threadSessionId
+			? (sessionMap.get(task.threadSessionId) ?? null)
+			: null;
+		const assignedThreadIsUnavailable = assignedThread
+			? !assignedThread.canResume || assignedThread.hasActiveRun
+			: false;
+
+		if (assignedThread && !assignedThreadIsUnavailable) {
+			return [];
+		}
+
+		return [
+			createFeedbackSignal({
+				id: createFeedbackSignalId('thread_reuse_gap', task.id),
+				signalType: 'thread_reuse_gap',
+				opportunityId: createOpportunityId('thread_reuse_gap', task.id),
+				category: 'knowledge',
+				severity: task.priority === 'high' || task.priority === 'urgent' ? 'medium' : 'low',
+				confidence: task.threadSessionId ? 'medium' : 'high',
+				projectId: task.projectId,
+				projectName: projectMap.get(task.projectId)?.name ?? null,
+				taskId: task.id,
+				runId: null,
+				reviewId: null,
+				sessionId: suggestion.id,
+				title: `Thread reuse gap for ${task.title}`,
+				summary:
+					suggestion.suggestionReason ?? 'A better reusable thread is available for this task.'
+			})
+		];
+	});
+}
+
+export function buildSelfImprovementFeedbackSignals(input: {
+	data: ControlPlaneData;
+	sessions: AgentSessionDetail[];
+	now?: number;
+}): SelfImprovementFeedbackSignal[] {
+	return [
+		...buildExecutionFeedbackSignals(input.data),
+		...buildBlockedTaskFeedbackSignals(input.data),
+		...buildStaleFeedbackSignals(input.data, input.sessions, input.now),
+		...buildReviewFeedbackSignals(input.data),
+		...buildThreadReuseFeedbackSignals(input.data, input.sessions)
+	].sort((left, right) => {
+		if (SEVERITY_RANK[left.severity] !== SEVERITY_RANK[right.severity]) {
+			return SEVERITY_RANK[right.severity] - SEVERITY_RANK[left.severity];
+		}
+
+		return left.title.localeCompare(right.title);
+	});
+}
+
+export function summarizeSelfImprovementFeedbackSignals(
+	signals: SelfImprovementFeedbackSignal[]
+): SelfImprovementSignalSummary {
+	const byType = initializeCountRecord(SELF_IMPROVEMENT_SIGNAL_TYPE_OPTIONS);
+
+	for (const signal of signals) {
+		byType[signal.signalType] += 1;
+	}
+
+	return {
+		totalCount: signals.length,
+		highSeverityCount: signals.filter((signal) => signal.severity === 'high').length,
+		byType
+	};
 }
 
 function compareOpportunities(left: SelfImprovementOpportunity, right: SelfImprovementOpportunity) {
@@ -475,6 +947,37 @@ function compareOpportunities(left: SelfImprovementOpportunity, right: SelfImpro
 	}
 
 	return left.title.localeCompare(right.title);
+}
+
+export function applySelfImprovementGoalContext<
+	T extends {
+		opportunities: SelfImprovementOpportunity[];
+	}
+>(
+	snapshot: T,
+	input: {
+		data: ControlPlaneData;
+		goalId?: string | null;
+	}
+): T {
+	const goalId = input.goalId?.trim() ?? '';
+
+	if (!goalId) {
+		return snapshot;
+	}
+
+	const goalContext = buildGoalContext(input.data, goalId);
+
+	if (!goalContext) {
+		return snapshot;
+	}
+
+	return {
+		...snapshot,
+		opportunities: snapshot.opportunities.map((opportunity) =>
+			applyGoalContextToOpportunity(opportunity, input.data, goalContext)
+		)
+	};
 }
 
 export function buildSelfImprovementAnalysis(input: {

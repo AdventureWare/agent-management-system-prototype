@@ -1,0 +1,383 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - button [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+    - link "Home" [ref=e12] [cursor=pointer]:
+      - /url: /app/home
+      - img [ref=e13]
+      - generic [ref=e18]: Home
+    - generic [ref=e19]:
+      - link "Tasks" [ref=e20] [cursor=pointer]:
+        - /url: /app/tasks
+        - img [ref=e21]
+        - generic [ref=e24]: Tasks
+      - link "Threads" [ref=e25] [cursor=pointer]:
+        - /url: /app/sessions
+        - img [ref=e26]
+        - generic [ref=e29]: Threads
+      - link "Runs" [ref=e30] [cursor=pointer]:
+        - /url: /app/runs
+        - img [ref=e31]
+        - generic [ref=e33]: Runs
+    - generic [ref=e34]:
+      - link "Projects" [ref=e35] [cursor=pointer]:
+        - /url: /app/projects
+        - img [ref=e36]
+        - generic [ref=e38]: Projects
+      - link "Goals" [ref=e39] [cursor=pointer]:
+        - /url: /app/goals
+        - img [ref=e40]
+        - generic [ref=e44]: Goals
+      - link "Planning" [ref=e45] [cursor=pointer]:
+        - /url: /app/planning
+        - img [ref=e46]
+        - generic [ref=e48]: Planning
+    - generic [ref=e49]:
+      - link "Workers" [ref=e50] [cursor=pointer]:
+        - /url: /app/workers
+        - img [ref=e51]
+        - generic [ref=e56]: Workers
+      - link "Roles" [ref=e57] [cursor=pointer]:
+        - /url: /app/roles
+        - img [ref=e58]
+        - generic [ref=e62]: Roles
+      - link "Providers" [ref=e63] [cursor=pointer]:
+        - /url: /app/providers
+        - img [ref=e64]
+        - generic [ref=e67]: Providers
+  - generic [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e72]:
+        - generic [ref=e73]:
+          - paragraph [ref=e74]: Goals
+          - heading "Browse outcomes, then manage one" [level=1] [ref=e75]
+          - paragraph [ref=e76]: "Goals now work like projects: the collection page helps you find the right outcome, while each goal has its own detail page for editing workspace, parent/subgoal structure, and linked work."
+        - navigation [ref=e77]:
+          - button "Add goal" [ref=e78] [cursor=pointer]
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - heading "Goal directory" [level=2] [ref=e82]
+            - paragraph [ref=e83]: Search by outcome, related project, task, or workspace, then open a goal to manage it.
+          - generic [ref=e84]:
+            - generic [ref=e85]:
+              - generic [ref=e86]: Search goals
+              - textbox "Search goals" [ref=e87]:
+                - /placeholder: Search goals…
+            - generic [ref=e88]:
+              - generic [ref=e89]: Filter goals by status
+              - combobox "Filter goals by status" [ref=e90]:
+                - option "All statuses" [selected]
+                - option "Ready"
+                - option "Running"
+                - option "Review"
+                - option "Blocked"
+                - option "Done"
+        - table [ref=e92]:
+          - rowgroup [ref=e93]:
+            - row "Goal Status Lane Parent Links Workspace Open" [ref=e94]:
+              - columnheader "Goal" [ref=e95]
+              - columnheader "Status" [ref=e96]
+              - columnheader "Lane" [ref=e97]
+              - columnheader "Parent" [ref=e98]
+              - columnheader "Links" [ref=e99]
+              - columnheader "Workspace" [ref=e100]
+              - columnheader "Open" [ref=e101]
+          - rowgroup [ref=e102]:
+            - row "Agent Management System prototype milestone Build the Agent Management System to the point of a useful prototype and 10x my productivity. Ready product Top level 1 project 0 tasks /Users/colinfreed/Projects/Experiments/agent-management-system-prototype Open" [ref=e103]:
+              - cell "Agent Management System prototype milestone Build the Agent Management System to the point of a useful prototype and 10x my productivity." [ref=e104]:
+                - generic [ref=e105]:
+                  - link "Agent Management System prototype milestone" [ref=e106] [cursor=pointer]:
+                    - /url: /app/goals/goal_26a850e3-5eac-4150-a96f-0574cd483595
+                  - paragraph [ref=e107]: Build the Agent Management System to the point of a useful prototype and 10x my productivity.
+              - cell "Ready" [ref=e108]:
+                - generic [ref=e109]: Ready
+              - cell "product" [ref=e110]
+              - cell "Top level" [ref=e111]
+              - cell "1 project 0 tasks" [ref=e112]:
+                - text: 1 project
+                - text: 0 tasks
+              - cell "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype" [ref=e113]:
+                - paragraph [ref=e114]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype
+              - cell "Open" [ref=e115]:
+                - link "Open" [ref=e116] [cursor=pointer]:
+                  - /url: /app/goals/goal_26a850e3-5eac-4150-a96f-0574cd483595
+            - row "Have a consistent, stable UI The app needs to have a stable, comprehensible UI that has no glaring problems Ready product Agent Management System prototype milestone 1 project 0 tasks /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output Open" [ref=e117]:
+              - cell "Have a consistent, stable UI The app needs to have a stable, comprehensible UI that has no glaring problems" [ref=e118]:
+                - generic [ref=e119]:
+                  - link "Have a consistent, stable UI" [ref=e120] [cursor=pointer]:
+                    - /url: /app/goals/goal_02390bc4-fcae-495f-9f32-456e370b7265
+                  - paragraph [ref=e121]: The app needs to have a stable, comprehensible UI that has no glaring problems
+              - cell "Ready" [ref=e122]:
+                - generic [ref=e123]: Ready
+              - cell "product" [ref=e124]
+              - cell "Agent Management System prototype milestone" [ref=e125]
+              - cell "1 project 0 tasks" [ref=e126]:
+                - text: 1 project
+                - text: 0 tasks
+              - cell "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output" [ref=e127]:
+                - paragraph [ref=e128]: /Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output
+              - cell "Open" [ref=e129]:
+                - link "Open" [ref=e130] [cursor=pointer]:
+                  - /url: /app/goals/goal_02390bc4-fcae-495f-9f32-456e370b7265
+            - row "Kwipoo app + website release sync Coordinate release-facing content and cross-repo app and website alignment. Running product Top level 0 projects 0 tasks /Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync Open" [ref=e131]:
+              - cell "Kwipoo app + website release sync Coordinate release-facing content and cross-repo app and website alignment." [ref=e132]:
+                - generic [ref=e133]:
+                  - link "Kwipoo app + website release sync" [ref=e134] [cursor=pointer]:
+                    - /url: /app/goals/goal_kwipoo_release_sync
+                  - paragraph [ref=e135]: Coordinate release-facing content and cross-repo app and website alignment.
+              - cell "Running" [ref=e136]:
+                - generic [ref=e137]: Running
+              - cell "product" [ref=e138]
+              - cell "Top level" [ref=e139]
+              - cell "0 projects 0 tasks" [ref=e140]:
+                - text: 0 projects
+                - text: 0 tasks
+              - cell "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync" [ref=e141]:
+                - paragraph [ref=e142]: /Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/coordination/active/2026-03-26-app-website-release-sync
+              - cell "Open" [ref=e143]:
+                - link "Open" [ref=e144] [cursor=pointer]:
+                  - /url: /app/goals/goal_kwipoo_release_sync
+            - row "Kwipoo B2C market research Define the first ICP and source reachable public communities and creators. Running growth Top level 0 projects 1 task /Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research Open" [ref=e145]:
+              - cell "Kwipoo B2C market research Define the first ICP and source reachable public communities and creators." [ref=e146]:
+                - generic [ref=e147]:
+                  - link "Kwipoo B2C market research" [ref=e148] [cursor=pointer]:
+                    - /url: /app/goals/goal_kwipoo_market_research
+                  - paragraph [ref=e149]: Define the first ICP and source reachable public communities and creators.
+              - cell "Running" [ref=e150]:
+                - generic [ref=e151]: Running
+              - cell "growth" [ref=e152]
+              - cell "Top level" [ref=e153]
+              - cell "0 projects 1 task" [ref=e154]:
+                - text: 0 projects
+                - text: 1 task
+              - cell "/Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research" [ref=e155]:
+                - paragraph [ref=e156]: /Users/colinfreed/Library/CloudStorage/GoogleDrive-colin.freed@adventureware.com/My Drive/AdventureWare/[08] Growth Ops/active/2026-03-26-kwipoo-b2c-market-research
+              - cell "Open" [ref=e157]:
+                - link "Open" [ref=e158] [cursor=pointer]:
+                  - /url: /app/goals/goal_kwipoo_market_research
+            - row "Win the Inocrowd Animal Welfare Monitoring System contest and the prize I want to win the contest this Innocrowd organization is having to submit proposals for a system that helps the Seeker improve the overall results of their cattle operations, I believe dairy in particular, by enhancing the capabilities of systemically monitoring the health and behavior of their cattle to maximize welfare and business outcomes. Ready product Top level 1 project 0 tasks /Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system Open" [ref=e159]:
+              - cell "Win the Inocrowd Animal Welfare Monitoring System contest and the prize I want to win the contest this Innocrowd organization is having to submit proposals for a system that helps the Seeker improve the overall results of their cattle operations, I believe dairy in particular, by enhancing the capabilities of systemically monitoring the health and behavior of their cattle to maximize welfare and business outcomes." [ref=e160]:
+                - generic [ref=e161]:
+                  - link "Win the Inocrowd Animal Welfare Monitoring System contest and the prize" [ref=e162] [cursor=pointer]:
+                    - /url: /app/goals/goal_7cdcba64-bb48-455b-8fe1-b3c7b1b55c27
+                  - paragraph [ref=e163]: I want to win the contest this Innocrowd organization is having to submit proposals for a system that helps the Seeker improve the overall results of their cattle operations, I believe dairy in particular, by enhancing the capabilities of systemically monitoring the health and behavior of their cattle to maximize welfare and business outcomes.
+              - cell "Ready" [ref=e164]:
+                - generic [ref=e165]: Ready
+              - cell "product" [ref=e166]
+              - cell "Top level" [ref=e167]
+              - cell "1 project 0 tasks" [ref=e168]:
+                - text: 1 project
+                - text: 0 tasks
+              - cell "/Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system" [ref=e169]:
+                - paragraph [ref=e170]: /Users/colinfreed/Projects/Experiments/animal-welfare-monitoring-system
+              - cell "Open" [ref=e171]:
+                - link "Open" [ref=e172] [cursor=pointer]:
+                  - /url: /app/goals/goal_7cdcba64-bb48-455b-8fe1-b3c7b1b55c27
+    - dialog "Create goal dialog" [ref=e173]:
+      - generic [ref=e175]:
+        - generic [ref=e176]:
+          - generic [ref=e177]:
+            - heading "Add goal" [level=2] [ref=e178]
+            - paragraph [ref=e179]: Capture the outcome in one place, then use the same relationship controls you’ll see on the goal detail page.
+          - button "Close add goal form" [ref=e180] [cursor=pointer]: ×
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - heading "Create goal" [level=2] [ref=e184]
+            - paragraph [ref=e185]: Outcome first, relationships second. Use the built-in coach if you need help wording the goal, then keep the workspace blank if linked context already tells the system where it should live.
+          - generic [ref=e186]:
+            - generic [ref=e187]:
+              - heading "Outcome" [level=3] [ref=e188]
+              - paragraph [ref=e189]: State the outcome first. The coach helps you describe a useful goal before you worry about relationships.
+            - generic [ref=e190]:
+              - generic [ref=e191]:
+                - generic [ref=e192]:
+                  - generic [ref=e193]: Name
+                  - textbox "Name Start with the change you want, not the task you plan to do." [ref=e194]:
+                    - /placeholder: Reduce goal-linking confusion for operators…
+                  - generic [ref=e195]: Start with the change you want, not the task you plan to do.
+                - generic [ref=e196]:
+                  - generic [ref=e197]: Summary
+                  - textbox "Summary Write 2-4 plain sentences. Good goals explain the change, the audience, and the reason." [active] [ref=e198]:
+                    - /placeholder: Describe what should be different if this goal succeeds, who it helps, and why it matters…
+                    - text: This goal improves [experience, system, or process] for [who]. It matters because [impact, blocker, or opportunity]. If it works, [what changes].
+                  - generic [ref=e199]: Write 2-4 plain sentences. Good goals explain the change, the audience, and the reason.
+                - generic [ref=e200]:
+                  - generic [ref=e201]: Success signal
+                  - textbox "Success signal This can be a metric, a visible behavior change, or a review condition." [ref=e202]:
+                    - /placeholder: What evidence will show this goal is actually working…
+                  - generic [ref=e203]: This can be a metric, a visible behavior change, or a review condition.
+                - generic [ref=e204]:
+                  - generic [ref=e205]:
+                    - generic [ref=e206]: Lane
+                    - combobox "Lane" [ref=e207]:
+                      - option "product" [selected]
+                      - option "growth"
+                      - option "ops"
+                  - generic [ref=e208]:
+                    - generic [ref=e209]: Status
+                    - combobox "Status" [ref=e210]:
+                      - option "Ready" [selected]
+                      - option "Running"
+                      - option "Review"
+                      - option "Blocked"
+                      - option "Done"
+                  - generic [ref=e211]:
+                    - generic [ref=e212]: Parent goal
+                    - combobox "Parent goal" [ref=e213]:
+                      - option "No parent goal" [selected]
+                      - option "Agent Management System prototype milestone"
+                      - option "Have a consistent, stable UI"
+                      - option "Kwipoo app + website release sync"
+                      - option "Kwipoo B2C market research"
+                      - option "Win the Inocrowd Animal Welfare Monitoring System contest and the prize"
+              - complementary [ref=e214]:
+                - generic [ref=e215]:
+                  - generic [ref=e216]:
+                    - paragraph [ref=e217]: Goal coach
+                    - heading "Needs framing" [level=4] [ref=e218]
+                  - generic [ref=e219]: 1/4 checks
+                - paragraph [ref=e220]: "Name the change you want, not the work to do. Example: \"Reduce goal-linking confusion for operators.\""
+                - generic [ref=e221]:
+                  - generic [ref=e222]:
+                    - paragraph [ref=e223]: Outcome title is specific
+                    - paragraph [ref=e224]: "Name the change you want, not the work to do. Example: \"Reduce goal-linking confusion for operators.\""
+                  - generic [ref=e225]:
+                    - paragraph [ref=e226]: Summary explains what changes and why
+                    - paragraph [ref=e227]: The summary gives enough context to understand the point of the goal.
+                  - generic [ref=e228]:
+                    - paragraph [ref=e229]: Success signal is observable
+                    - paragraph [ref=e230]: "Write what evidence would convince you this goal is working: a metric, behavior change, or review outcome."
+                  - generic [ref=e231]:
+                    - paragraph [ref=e232]: Scope is anchored in context
+                    - paragraph [ref=e233]: Link a parent goal, project, task, or workspace so the goal has clear placement in the system.
+                - generic [ref=e234]:
+                  - generic [ref=e235]:
+                    - paragraph [ref=e236]: If you're stuck
+                    - paragraph [ref=e237]: Use one of these starters, then rewrite it in your own words.
+                  - generic [ref=e238]:
+                    - button "Start the summary Describe the change, who it helps, and why it matters." [ref=e239] [cursor=pointer]:
+                      - generic [ref=e240]: Start the summary
+                      - generic [ref=e241]: Describe the change, who it helps, and why it matters.
+                    - button "Add the why-now Explain the urgency, pain, or opportunity behind the goal." [ref=e242] [cursor=pointer]:
+                      - generic [ref=e243]: Add the why-now
+                      - generic [ref=e244]: Explain the urgency, pain, or opportunity behind the goal.
+                    - button "Start the success signal Define what evidence would make this feel real." [ref=e245] [cursor=pointer]:
+                      - generic [ref=e246]: Start the success signal
+                      - generic [ref=e247]: Define what evidence would make this feel real.
+                    - button "Add a review check Give the goal a cadence or decision point." [ref=e248] [cursor=pointer]:
+                      - generic [ref=e249]: Add a review check
+                      - generic [ref=e250]: Give the goal a cadence or decision point.
+                  - button "Fill empty fields from example" [ref=e251] [cursor=pointer]
+                - generic [ref=e252]:
+                  - paragraph [ref=e253]: Example for product
+                  - paragraph [ref=e254]: Name
+                  - paragraph [ref=e255]: Help operators describe goals clearly before linking execution work
+                  - paragraph [ref=e256]: Summary
+                  - paragraph [ref=e257]: This goal improves the goal-writing flow so users can describe the outcome in natural language before dealing with structure. It matters because weak goal definitions make the rest of the planning model harder to trust.
+          - generic [ref=e258]:
+            - generic [ref=e259]:
+              - heading "Relationships" [level=3] [ref=e260]
+              - paragraph [ref=e261]: "Use the same pattern for every relationship: pick the parent, link projects, and assign the tasks that should roll up into this goal."
+            - generic [ref=e262]:
+              - generic [ref=e263]:
+                - generic [ref=e264]:
+                  - generic [ref=e265]:
+                    - paragraph [ref=e266]: Projects
+                    - paragraph [ref=e267]: Linked projects help scope the goal and recommend a workspace.
+                  - generic [ref=e268]:
+                    - generic [ref=e269]: 0 selected
+                    - button "Browse 4 projects" [ref=e270] [cursor=pointer]
+                - paragraph [ref=e271]: No projects linked yet. Add one if you want stronger context or a recommended workspace.
+              - generic [ref=e272]:
+                - generic [ref=e273]:
+                  - generic [ref=e274]:
+                    - paragraph [ref=e275]: Tasks
+                    - paragraph [ref=e276]: Saving will assign selected tasks to this goal.
+                  - generic [ref=e277]:
+                    - generic [ref=e278]: 0 selected
+                    - button "Browse 53 tasks" [ref=e279] [cursor=pointer]
+                - paragraph [ref=e280]: No tasks assigned yet. Add tasks only when the goal already has execution work under it.
+          - generic [ref=e281]:
+            - generic [ref=e282]:
+              - heading "Workspace" [level=3] [ref=e283]
+              - paragraph [ref=e284]: Leave the path blank to keep the form light. If the linked context has a good workspace, use the recommendation below or let the server infer it.
+            - generic [ref=e285]:
+              - generic [ref=e286]: Artifact path
+              - combobox "Artifact path" [ref=e287]:
+                - option "Choose a known path" [selected]
+                - option "Products · ."
+                - option "Products · Kwipoo"
+                - option "Products · Kwipoo/agent_output"
+                - option "Products · Kwipoo/android"
+                - option "Products · Kwipoo/android/source"
+                - option "Products · Kwipoo/app"
+                - option "Products · Kwipoo/app/config"
+                - option "Products · Kwipoo/app/docs"
+                - option "Products · Kwipoo/app/node_modules"
+                - option "Products · Kwipoo/app/output"
+                - option "Products · Kwipoo/app/playwright"
+                - option "Products · Kwipoo/app/releases"
+                - option "Products · Kwipoo/app/scripts"
+                - option "Products · Kwipoo/app/src"
+                - option "Products · Kwipoo/app/static"
+                - option "Products · Kwipoo/app/supabase"
+                - option "Products · Kwipoo/app/test-results"
+                - option "Products · Kwipoo/app/tests"
+                - option "Products · Kwipoo/cleanup-inbox"
+                - option "Products · Kwipoo/cleanup-inbox/downloaded-project-files"
+                - option "Products · Kwipoo/coordination"
+                - option "Products · Kwipoo/coordination/active"
+                - option "Products · Kwipoo/coordination/completed"
+                - option "Products · Kwipoo/coordination/contracts"
+                - option "Products · Kwipoo/coordination/decisions"
+                - option "Products · Kwipoo/infra"
+                - option "Products · Kwipoo/infra/supabase-local"
+                - option "Products · Kwipoo/ios-wrapper"
+                - option "Products · Kwipoo/ios-wrapper/src"
+                - option "Products · Kwipoo/website"
+                - option "Products · Kwipoo/website/build"
+                - option "Products · Kwipoo/website/docs"
+                - option "Products · Kwipoo/website/node_modules"
+                - option "Products · Kwipoo/website/output"
+                - option "Products · Kwipoo/website/scripts"
+                - option "Products · Kwipoo/website/src"
+                - option "Products · Kwipoo/website/static"
+                - option "Products · Kwipoo/website/test-results"
+                - option "Products · Kwipoo/website/tests"
+                - option "Experiments · ."
+                - option "Experiments · agent-management-system-prototype"
+                - option "Experiments · agent-management-system-prototype/agent_output"
+                - option "Experiments · agent-management-system-prototype/data"
+                - option "Experiments · agent-management-system-prototype/docs"
+                - option "Experiments · agent-management-system-prototype/e2e"
+                - option "Experiments · agent-management-system-prototype/node_modules"
+                - option "Experiments · agent-management-system-prototype/output"
+                - option "Experiments · agent-management-system-prototype/screenshots"
+                - option "Experiments · agent-management-system-prototype/scripts"
+                - option "Experiments · agent-management-system-prototype/src"
+                - option "Experiments · agent-management-system-prototype/static"
+                - option "Experiments · agent-management-system-prototype/test-results"
+                - option "Experiments · animal-welfare-monitoring-system"
+                - option "Experiments · animal-welfare-monitoring-system/Advanced_and_Predictive_Monitoring_of_Animal_Welfare_in_a_Dairy_Cattle_Production_Unit"
+                - option "Experiments · animal-welfare-monitoring-system/agent_output"
+                - option "Experiments · animal-welfare-monitoring-system/animal-welfare-monitoring-system-prototype"
+                - option "Experiments · practice-app"
+                - option "Experiments · practice-app/e2e"
+                - option "Experiments · practice-app/node_modules"
+                - option "Experiments · practice-app/src"
+                - option "Experiments · practice-app/static"
+                - option "Shared · ."
+                - option "Shared · agent-ops"
+                - option "Shared · agent-ops/templates"
+                - option "Shared · growth-ops"
+                - option "Shared · growth-ops/templates"
+                - option "Shared · home-organizer"
+              - combobox "/absolute/path/to/goal/workspace" [ref=e288]
+            - generic [ref=e289]:
+              - button "Create folder if missing" [ref=e290] [cursor=pointer]
+              - paragraph [ref=e291]: If left blank, a linked project or parent goal can provide the default workspace.
+          - generic [ref=e292]:
+            - paragraph [ref=e293]: This goal will be created as a top-level outcome.
+            - button "Create goal" [ref=e294] [cursor=pointer]

@@ -36,6 +36,48 @@ export function getGoalChildGoals(data: ControlPlaneData, goalId: string) {
 	return data.goals.filter((goal) => goal.parentGoalId === goalId);
 }
 
+export function getGoalDescendantGoalIds(data: ControlPlaneData, goalId: string) {
+	const descendantGoalIds: string[] = [];
+	const queue = getGoalChildGoals(data, goalId).map((goal) => goal.id);
+	const visitedGoalIds = new Set<string>();
+
+	while (queue.length > 0) {
+		const nextGoalId = queue.shift();
+
+		if (!nextGoalId || visitedGoalIds.has(nextGoalId)) {
+			continue;
+		}
+
+		visitedGoalIds.add(nextGoalId);
+		descendantGoalIds.push(nextGoalId);
+
+		for (const childGoal of getGoalChildGoals(data, nextGoalId)) {
+			queue.push(childGoal.id);
+		}
+	}
+
+	return descendantGoalIds;
+}
+
+function getGoalScopeGoals(data: ControlPlaneData, goalId: string) {
+	const scopedGoalIds = [goalId, ...getGoalDescendantGoalIds(data, goalId)];
+	const scopedGoalIdSet = new Set(scopedGoalIds);
+
+	return data.goals.filter((goal) => scopedGoalIdSet.has(goal.id));
+}
+
+export function getGoalScopeTaskIds(data: ControlPlaneData, goalId: string) {
+	return uniqueIds(
+		getGoalScopeGoals(data, goalId).flatMap((goal) => getGoalLinkedTaskIds(data, goal))
+	);
+}
+
+export function getGoalScopeProjectIds(data: ControlPlaneData, goalId: string) {
+	return uniqueIds(
+		getGoalScopeGoals(data, goalId).flatMap((goal) => getGoalLinkedProjectIds(data, goal))
+	);
+}
+
 export function wouldCreateGoalCycle(
 	data: ControlPlaneData,
 	goalId: string,
@@ -87,9 +129,7 @@ export function suggestGoalArtifactPath(args: {
 	}
 
 	if (args.parentGoalId) {
-		return (
-			args.data.goals.find((goal) => goal.id === args.parentGoalId)?.artifactPath.trim() ?? ''
-		);
+		return args.data.goals.find((goal) => goal.id === args.parentGoalId)?.artifactPath.trim() ?? '';
 	}
 
 	return '';

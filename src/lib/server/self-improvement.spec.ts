@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSessionDetail } from '$lib/types/agent-session';
 import type { ControlPlaneData } from '$lib/types/control-plane';
-import { buildSelfImprovementAnalysis } from './self-improvement';
+import {
+	applySelfImprovementGoalContext,
+	buildSelfImprovementAnalysis,
+	buildSelfImprovementFeedbackSignals
+} from './self-improvement';
 
 function createSession(
 	id: string,
@@ -87,7 +91,32 @@ function createFixture(): ControlPlaneData {
 				defaultBranch: ''
 			}
 		],
-		goals: [],
+		goals: [
+			{
+				id: 'goal_product',
+				name: 'Improve system reliability',
+				lane: 'product',
+				status: 'running',
+				summary: 'Reduce repeated failures and unblock delivery.',
+				artifactPath: '/tmp/project/goals/reliability',
+				successSignal: 'Repeated execution failures fall below one per task.',
+				parentGoalId: null,
+				projectIds: ['project_2'],
+				taskIds: ['task_failure', 'task_blocked']
+			},
+			{
+				id: 'goal_quality',
+				name: 'Tighten review quality',
+				lane: 'product',
+				status: 'running',
+				summary: 'Reduce repeated review churn.',
+				artifactPath: '/tmp/project/goals/quality',
+				successSignal: 'Changes-requested reviews become uncommon.',
+				parentGoalId: 'goal_product',
+				projectIds: ['project_2'],
+				taskIds: ['task_review']
+			}
+		],
 		workers: [
 			{
 				id: 'worker_1',
@@ -112,7 +141,7 @@ function createFixture(): ControlPlaneData {
 				summary: 'Investigate why repeated runs fail.',
 				projectId: 'project_2',
 				lane: 'product',
-				goalId: '',
+				goalId: 'goal_product',
 				priority: 'high',
 				status: 'in_progress',
 				riskLevel: 'high',
@@ -136,7 +165,7 @@ function createFixture(): ControlPlaneData {
 				summary: 'Waiting on prerequisite work.',
 				projectId: 'project_2',
 				lane: 'product',
-				goalId: '',
+				goalId: 'goal_product',
 				priority: 'urgent',
 				status: 'blocked',
 				riskLevel: 'medium',
@@ -184,7 +213,7 @@ function createFixture(): ControlPlaneData {
 				summary: 'Incorporate requested changes from review.',
 				projectId: 'project_2',
 				lane: 'product',
-				goalId: '',
+				goalId: 'goal_quality',
 				priority: 'medium',
 				status: 'review',
 				riskLevel: 'medium',
@@ -374,12 +403,130 @@ describe('buildSelfImprovementAnalysis', () => {
 				expect.objectContaining({
 					source: 'failed_runs',
 					category: 'reliability',
-					relatedTaskIds: ['task_failure']
+					relatedTaskIds: ['task_failure'],
+					suggestedKnowledgeItem: expect.objectContaining({
+						title: expect.stringContaining('Failure recovery pattern')
+					})
 				}),
 				expect.objectContaining({
 					source: 'thread_reuse_gap',
 					category: 'knowledge',
-					relatedSessionIds: expect.arrayContaining(['session_reuse_candidate'])
+					relatedSessionIds: expect.arrayContaining(['session_reuse_candidate']),
+					suggestedKnowledgeItem: expect.objectContaining({
+						triggerPattern: expect.stringContaining('Suggested thread')
+					})
+				})
+			])
+		);
+	});
+
+	it('can enrich scoped opportunities with explicit goal context', () => {
+		const fixture = createFixture();
+		const report = buildSelfImprovementAnalysis({
+			data: fixture,
+			sessions: [
+				createSession('session_busy', {
+					name: 'Busy failure thread',
+					cwd: '/tmp/other-project',
+					sessionState: 'working',
+					hasActiveRun: true,
+					canResume: false
+				}),
+				createSession('session_dependency', {
+					name: 'Long running dependency thread',
+					cwd: '/tmp/other-project',
+					sessionState: 'working',
+					hasActiveRun: true,
+					canResume: false,
+					lastActivityAt: '2026-03-31T02:10:00.000Z',
+					lastActivityLabel: '10h ago'
+				}),
+				createSession('session_review', {
+					cwd: '/tmp/other-project',
+					canResume: false,
+					name: 'Review handoff thread'
+				}),
+				createSession('session_reuse_candidate', {
+					name: 'Task thread suggestion follow-up',
+					sessionSummary: 'Continue the assignment suggestion flow',
+					topicLabels: ['Product', 'Coordination', 'Suggestion']
+				})
+			]
+		});
+		const goalAwareReport = applySelfImprovementGoalContext(report, {
+			data: fixture,
+			goalId: 'goal_product'
+		});
+		const failureOpportunity = goalAwareReport.opportunities.find(
+			(opportunity) => opportunity.id === 'failed_runs:task_failure'
+		);
+		const reviewOpportunity = goalAwareReport.opportunities.find(
+			(opportunity) => opportunity.id === 'review_feedback:task_review'
+		);
+
+		expect(failureOpportunity?.summary).toContain('Goal focus: Improve system reliability.');
+		expect(failureOpportunity?.recommendedActions[0]).toContain('Improve system reliability');
+		expect(failureOpportunity?.suggestedTask?.title).toContain(
+			'Advance Improve system reliability:'
+		);
+		expect(failureOpportunity?.suggestedKnowledgeItem?.applicabilityScope).toContain(
+			'Goal: Improve system reliability'
+		);
+		expect(reviewOpportunity?.summary).toContain(
+			'Matched goal context in this subtree: Tighten review quality.'
+		);
+	});
+
+	it('emits structured feedback signals from the same operational context', () => {
+		const signals = buildSelfImprovementFeedbackSignals({
+			data: createFixture(),
+			sessions: [
+				createSession('session_busy', {
+					name: 'Busy failure thread',
+					cwd: '/tmp/other-project',
+					sessionState: 'working',
+					hasActiveRun: true,
+					canResume: false
+				}),
+				createSession('session_dependency', {
+					name: 'Long running dependency thread',
+					cwd: '/tmp/other-project',
+					sessionState: 'working',
+					hasActiveRun: true,
+					canResume: false,
+					lastActivityAt: '2026-03-31T02:10:00.000Z',
+					lastActivityLabel: '10h ago'
+				}),
+				createSession('session_review', {
+					cwd: '/tmp/other-project',
+					canResume: false,
+					name: 'Review handoff thread'
+				}),
+				createSession('session_reuse_candidate', {
+					name: 'Task thread suggestion follow-up',
+					sessionSummary: 'Continue the assignment suggestion flow',
+					topicLabels: ['Product', 'Coordination', 'Suggestion']
+				})
+			]
+		});
+
+		expect(signals).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					signalType: 'run_failure',
+					taskId: 'task_failure'
+				}),
+				expect.objectContaining({
+					signalType: 'task_blocked',
+					taskId: 'task_blocked'
+				}),
+				expect.objectContaining({
+					signalType: 'review_feedback',
+					reviewId: 'review_1'
+				}),
+				expect.objectContaining({
+					signalType: 'thread_reuse_gap',
+					taskId: 'task_reuse'
 				})
 			])
 		);

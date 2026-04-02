@@ -71,6 +71,26 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					defaultBranch: ''
 				},
 				projects: [],
+				goals: [
+					{
+						id: 'goal_launch',
+						name: 'Improve goal UX',
+						label: 'Improve goal UX',
+						depth: 0,
+						parentGoalId: null,
+						status: 'active',
+						lane: 'product'
+					},
+					{
+						id: 'goal_linking',
+						name: 'Improve task linking',
+						label: '  - Improve task linking',
+						depth: 1,
+						parentGoalId: 'goal_launch',
+						status: 'planned',
+						lane: 'product'
+					}
+				],
 				workers: [],
 				statusOptions: TASK_STATUS_OPTIONS,
 				relatedRuns: [],
@@ -163,6 +183,112 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		);
 	});
 
+	it('renders a goal selector with hierarchical options on the task detail form', async () => {
+		render(Page, {
+			form: {} as never,
+			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
+				attachmentRoot: '/tmp/project/agent_output',
+				artifactBrowser: {
+					rootPath: '/tmp/project/agent_output',
+					rootKind: 'directory',
+					browsePath: '/tmp/project/agent_output',
+					inspectingParentDirectory: false,
+					directoryEntries: [],
+					directoryEntriesTruncated: false,
+					knownOutputs: [],
+					errorMessage: ''
+				},
+				project: {
+					id: 'project_1',
+					name: 'Agent Management System Prototype',
+					summary: 'Primary app project',
+					projectRootFolder: '/tmp/project',
+					defaultArtifactRoot: '/tmp/project/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
+				},
+				projects: [],
+				goals: [
+					{
+						id: 'goal_launch',
+						name: 'Improve goal UX',
+						label: 'Improve goal UX',
+						depth: 0,
+						parentGoalId: null,
+						status: 'active',
+						lane: 'product'
+					},
+					{
+						id: 'goal_linking',
+						name: 'Improve task linking',
+						label: '  - Improve task linking',
+						depth: 1,
+						parentGoalId: 'goal_launch',
+						status: 'planned',
+						lane: 'product'
+					}
+				],
+				workers: [],
+				statusOptions: TASK_STATUS_OPTIONS,
+				relatedRuns: [],
+				dependencyTasks: [],
+				task: {
+					id: 'task_1',
+					title: 'Attach a brief',
+					summary: 'Need source documents',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					lane: 'product',
+					goalId: 'goal_linking',
+					goalName: 'Improve task linking',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					assigneeName: 'Unassigned',
+					threadSessionId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
+					latestRun: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T11:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z',
+					updatedAtLabel: 'just now',
+					openReview: null,
+					pendingApproval: null,
+					linkThread: null,
+					linkThreadKind: 'assigned',
+					statusThread: null
+				},
+				candidateThreads: [],
+				suggestedThread: null
+			} as never
+		});
+
+		const goalSelect = document.querySelector('select[name="goalId"]') as HTMLSelectElement | null;
+
+		expect(goalSelect?.value).toBe('goal_linking');
+		expect(goalSelect?.textContent).toContain('No goal linked');
+		expect(goalSelect?.textContent).toContain('Improve goal UX');
+		expect(goalSelect?.textContent).toContain('Improve task linking');
+		expect(document.body.textContent).toContain(
+			'This is the canonical task-to-goal link used by goal detail and hierarchy views.'
+		);
+	});
+
 	it('shows a suggested available thread while keeping the new-thread option', async () => {
 		render(Page, {
 			form: {} as never,
@@ -195,6 +321,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					defaultBranch: ''
 				},
 				projects: [],
+				goals: [],
 				workers: [],
 				statusOptions: TASK_STATUS_OPTIONS,
 				relatedRuns: [],
@@ -302,6 +429,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					defaultBranch: ''
 				},
 				projects: [],
+				goals: [],
 				workers: [],
 				statusOptions: TASK_STATUS_OPTIONS,
 				relatedRuns: [],
@@ -430,6 +558,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					defaultBranch: ''
 				},
 				projects: [],
+				goals: [],
 				workers: [],
 				statusOptions: TASK_STATUS_OPTIONS,
 				relatedRuns: [],

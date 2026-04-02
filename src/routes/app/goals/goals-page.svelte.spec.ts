@@ -4,7 +4,7 @@ import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
 
 describe('/app/goals/+page.svelte', () => {
-	it('renders the goal directory with relationship counts and detail links', async () => {
+	it('renders the goal directory table with relationship counts and open links', async () => {
 		render(Page, {
 			form: {} as never,
 			data: {
@@ -38,6 +38,23 @@ describe('/app/goals/+page.svelte', () => {
 							}
 						],
 						relatedTaskCount: 1
+					},
+					{
+						id: 'goal_child',
+						name: 'Validate creator partnerships',
+						lane: 'growth',
+						status: 'ready',
+						summary: 'Prove whether creator partnerships can become a repeatable channel.',
+						artifactPath: '/tmp/project/agent_output/goals/creator-partnerships',
+						horizon: 'This quarter',
+						successSignal: 'At least one creator channel shows repeatable traction.',
+						parentGoalId: 'goal_parent',
+						parentGoalName: 'Grow Kwipoo into a repeatable business',
+						childGoals: [],
+						childGoalCount: 0,
+						linkedProjects: [{ id: 'project_1', name: 'Kwipoo website' }],
+						linkedTasks: [],
+						relatedTaskCount: 0
 					}
 				],
 				laneOptions: LANE_OPTIONS,
@@ -70,8 +87,10 @@ describe('/app/goals/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Goal directory');
 		expect(document.body.textContent).toContain('Add goal');
 		expect(document.body.textContent).toContain('Grow Kwipoo into a repeatable business');
-		expect(document.body.textContent).toContain('Kwipoo website');
-		expect(document.body.textContent).toContain('Open details');
-		expect(document.body.textContent).toContain('Fully scoped');
+		expect(document.body.textContent).toContain('Validate creator partnerships');
+		expect(document.body.textContent).toContain('Subgoal');
+		expect(document.body.textContent).toContain('1 project');
+		expect(document.body.textContent).toContain('1 task');
+		expect(document.body.textContent).toContain('Open');
 	});
 });

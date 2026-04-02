@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { mergeSelfImprovementSnapshot } from './self-improvement-store';
+import {
+	filterSelfImprovementSnapshot,
+	mergeSelfImprovementSnapshot
+} from './self-improvement-store';
+import type { ControlPlaneData } from '$lib/types/control-plane';
 import type {
 	SelfImprovementAnalysis,
+	SelfImprovementKnowledgeItem,
+	TrackedSelfImprovementFeedbackSignal,
 	SelfImprovementOpportunityRecord
 } from '$lib/types/self-improvement';
 
@@ -46,6 +52,13 @@ function createAnalysis(): SelfImprovementAnalysis {
 					title: 'Stabilize execution',
 					summary: 'Fix the failure path.',
 					priority: 'high'
+				},
+				suggestedKnowledgeItem: {
+					title: 'Failure recovery pattern',
+					summary: 'Capture the failure pattern.',
+					triggerPattern: 'Repeated failures for the same task.',
+					recommendedResponse: 'Add a guard and document the recovery path.',
+					applicabilityScope: ['Project One']
 				}
 			},
 			{
@@ -63,9 +76,125 @@ function createAnalysis(): SelfImprovementAnalysis {
 				relatedTaskIds: ['task_2'],
 				relatedRunIds: [],
 				relatedSessionIds: [],
-				suggestedTask: null
+				suggestedTask: null,
+				suggestedKnowledgeItem: {
+					title: 'Review checklist',
+					summary: 'Capture review lessons.',
+					triggerPattern: 'Changes requested during review.',
+					recommendedResponse: 'Create a checklist.',
+					applicabilityScope: ['Project Two']
+				}
 			}
 		]
+	};
+}
+
+function createControlPlaneData(): ControlPlaneData {
+	return {
+		providers: [],
+		roles: [],
+		projects: [
+			{
+				id: 'project_1',
+				name: 'Project One',
+				summary: 'Primary project',
+				projectRootFolder: '/tmp/project-one',
+				defaultArtifactRoot: '/tmp/project-one/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			},
+			{
+				id: 'project_2',
+				name: 'Project Two',
+				summary: 'Secondary project',
+				projectRootFolder: '/tmp/project-two',
+				defaultArtifactRoot: '/tmp/project-two/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			}
+		],
+		goals: [
+			{
+				id: 'goal_parent',
+				name: 'Parent goal',
+				lane: 'product',
+				status: 'running',
+				summary: 'Parent summary',
+				artifactPath: '/tmp/goals/parent',
+				successSignal: '',
+				parentGoalId: null,
+				projectIds: ['project_1'],
+				taskIds: ['task_1']
+			},
+			{
+				id: 'goal_child',
+				name: 'Child goal',
+				lane: 'product',
+				status: 'ready',
+				summary: 'Child summary',
+				artifactPath: '/tmp/goals/child',
+				successSignal: '',
+				parentGoalId: 'goal_parent',
+				projectIds: ['project_2'],
+				taskIds: ['task_2']
+			}
+		],
+		workers: [],
+		tasks: [
+			{
+				id: 'task_1',
+				title: 'Primary task',
+				summary: 'Primary task summary',
+				projectId: 'project_1',
+				lane: 'product',
+				goalId: 'goal_parent',
+				priority: 'medium',
+				status: 'ready',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_coordinator',
+				assigneeWorkerId: null,
+				threadSessionId: null,
+				blockedReason: '',
+				dependencyTaskIds: [],
+				runCount: 0,
+				latestRunId: null,
+				artifactPath: '/tmp/project-one/agent_output',
+				attachments: [],
+				createdAt: '2026-03-31T00:00:00.000Z',
+				updatedAt: '2026-03-31T00:00:00.000Z'
+			},
+			{
+				id: 'task_2',
+				title: 'Child task',
+				summary: 'Child task summary',
+				projectId: 'project_2',
+				lane: 'product',
+				goalId: 'goal_child',
+				priority: 'medium',
+				status: 'ready',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_coordinator',
+				assigneeWorkerId: null,
+				threadSessionId: null,
+				blockedReason: '',
+				dependencyTaskIds: [],
+				runCount: 0,
+				latestRunId: null,
+				artifactPath: '/tmp/project-two/agent_output',
+				attachments: [],
+				createdAt: '2026-03-31T00:00:00.000Z',
+				updatedAt: '2026-03-31T00:00:00.000Z'
+			}
+		],
+		runs: [],
+		reviews: [],
+		approvals: []
 	};
 }
 
@@ -82,7 +211,9 @@ describe('mergeSelfImprovementSnapshot', () => {
 				dismissedAt: null,
 				decisionSummary: 'Already accepted.',
 				createdTaskId: 'task_fix',
-				createdTaskTitle: 'Stabilize execution'
+				createdTaskTitle: 'Stabilize execution',
+				createdKnowledgeItemId: 'knowledge_1',
+				createdKnowledgeItemTitle: 'Failure recovery pattern'
 			},
 			{
 				id: 'stale_tasks:task_3',
@@ -94,22 +225,77 @@ describe('mergeSelfImprovementSnapshot', () => {
 				dismissedAt: '2026-03-30T10:00:00.000Z',
 				decisionSummary: 'Outdated.',
 				createdTaskId: null,
-				createdTaskTitle: null
+				createdTaskTitle: null,
+				createdKnowledgeItemId: null,
+				createdKnowledgeItemTitle: null
+			}
+		];
+		const signals: TrackedSelfImprovementFeedbackSignal[] = [
+			{
+				id: 'run_failure:run_1',
+				signalType: 'run_failure',
+				opportunityId: 'failed_runs:task_1',
+				category: 'reliability',
+				severity: 'high',
+				confidence: 'high',
+				projectId: 'project_1',
+				projectName: 'Project One',
+				taskId: 'task_1',
+				runId: 'run_1',
+				reviewId: null,
+				sessionId: 'session_1',
+				title: 'Run failure for task',
+				summary: 'Run failed.',
+				firstSeenAt: '2026-03-30T10:00:00.000Z',
+				lastSeenAt: '2026-03-31T12:00:00.000Z'
+			}
+		];
+		const knowledgeItems: SelfImprovementKnowledgeItem[] = [
+			{
+				id: 'knowledge_1',
+				status: 'published',
+				title: 'Failure recovery pattern',
+				summary: 'Capture the repeated failure path.',
+				category: 'reliability',
+				projectId: 'project_1',
+				projectName: 'Project One',
+				sourceOpportunityId: 'failed_runs:task_1',
+				sourceTaskIds: ['task_1'],
+				sourceRunIds: ['run_1'],
+				sourceSessionIds: ['session_1'],
+				sourceSignalIds: ['run_failure:run_1'],
+				triggerPattern: 'Repeated failures for the same task.',
+				recommendedResponse: 'Add a guard and document the recovery path.',
+				applicabilityScope: ['Project One'],
+				createdAt: '2026-03-30T10:00:00.000Z',
+				updatedAt: '2026-03-31T12:00:00.000Z',
+				publishedAt: '2026-03-31T11:00:00.000Z',
+				archivedAt: null
 			}
 		];
 
-		const snapshot = mergeSelfImprovementSnapshot(createAnalysis(), records);
+		const snapshot = mergeSelfImprovementSnapshot(
+			createAnalysis(),
+			records,
+			signals,
+			knowledgeItems
+		);
 
 		expect(snapshot.summary.totalCount).toBe(2);
 		expect(snapshot.summary.openCount).toBe(1);
 		expect(snapshot.summary.acceptedCount).toBe(1);
 		expect(snapshot.summary.dismissedCount).toBe(0);
+		expect(snapshot.signalSummary.totalCount).toBe(1);
+		expect(snapshot.signalSummary.byType.run_failure).toBe(1);
+		expect(snapshot.knowledgeSummary.totalCount).toBe(1);
+		expect(snapshot.knowledgeSummary.publishedCount).toBe(1);
 		expect(snapshot.opportunities).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
 					id: 'failed_runs:task_1',
 					status: 'accepted',
-					createdTaskId: 'task_fix'
+					createdTaskId: 'task_fix',
+					createdKnowledgeItemId: 'knowledge_1'
 				}),
 				expect.objectContaining({
 					id: 'review_feedback:task_2',
@@ -117,5 +303,187 @@ describe('mergeSelfImprovementSnapshot', () => {
 				})
 			])
 		);
+		expect(snapshot.knowledgeItems[0]?.id).toBe('knowledge_1');
+	});
+
+	it('can scope a snapshot to a single project without mutating durable records', () => {
+		const snapshot = mergeSelfImprovementSnapshot(
+			createAnalysis(),
+			[
+				{
+					id: 'failed_runs:task_1',
+					status: 'accepted',
+					firstSeenAt: '2026-03-30T10:00:00.000Z',
+					lastSeenAt: '2026-03-31T12:00:00.000Z',
+					updatedAt: '2026-03-31T11:00:00.000Z',
+					acceptedAt: '2026-03-31T11:00:00.000Z',
+					dismissedAt: null,
+					decisionSummary: 'Already accepted.',
+					createdTaskId: 'task_fix',
+					createdTaskTitle: 'Stabilize execution',
+					createdKnowledgeItemId: 'knowledge_1',
+					createdKnowledgeItemTitle: 'Failure recovery pattern'
+				}
+			],
+			[
+				{
+					id: 'run_failure:run_1',
+					signalType: 'run_failure',
+					opportunityId: 'failed_runs:task_1',
+					category: 'reliability',
+					severity: 'high',
+					confidence: 'high',
+					projectId: 'project_1',
+					projectName: 'Project One',
+					taskId: 'task_1',
+					runId: 'run_1',
+					reviewId: null,
+					sessionId: 'session_1',
+					title: 'Run failure for task',
+					summary: 'Run failed.',
+					firstSeenAt: '2026-03-30T10:00:00.000Z',
+					lastSeenAt: '2026-03-31T12:00:00.000Z'
+				}
+			],
+			[
+				{
+					id: 'knowledge_1',
+					status: 'published',
+					title: 'Failure recovery pattern',
+					summary: 'Capture the repeated failure path.',
+					category: 'reliability',
+					projectId: 'project_1',
+					projectName: 'Project One',
+					sourceOpportunityId: 'failed_runs:task_1',
+					sourceTaskIds: ['task_1'],
+					sourceRunIds: ['run_1'],
+					sourceSessionIds: ['session_1'],
+					sourceSignalIds: ['run_failure:run_1'],
+					triggerPattern: 'Repeated failures for the same task.',
+					recommendedResponse: 'Add a guard and document the recovery path.',
+					applicabilityScope: ['Project One'],
+					createdAt: '2026-03-30T10:00:00.000Z',
+					updatedAt: '2026-03-31T12:00:00.000Z',
+					publishedAt: '2026-03-31T11:00:00.000Z',
+					archivedAt: null
+				}
+			]
+		);
+
+		const filtered = filterSelfImprovementSnapshot(snapshot, {
+			projectId: 'project_1'
+		});
+
+		expect(filtered.summary.totalCount).toBe(1);
+		expect(filtered.signalSummary.totalCount).toBe(1);
+		expect(filtered.knowledgeSummary.totalCount).toBe(1);
+		expect(filtered.opportunities[0]?.projectId).toBe('project_1');
+	});
+
+	it('can scope a snapshot to a goal subtree and intersect that with project scope', () => {
+		const snapshot = mergeSelfImprovementSnapshot(
+			createAnalysis(),
+			[],
+			[
+				{
+					id: 'run_failure:run_1',
+					signalType: 'run_failure',
+					opportunityId: 'failed_runs:task_1',
+					category: 'reliability',
+					severity: 'high',
+					confidence: 'high',
+					projectId: 'project_1',
+					projectName: 'Project One',
+					taskId: 'task_1',
+					runId: 'run_1',
+					reviewId: null,
+					sessionId: 'session_1',
+					title: 'Run failure for task',
+					summary: 'Run failed.',
+					firstSeenAt: '2026-03-30T10:00:00.000Z',
+					lastSeenAt: '2026-03-31T12:00:00.000Z'
+				},
+				{
+					id: 'review_feedback:task_2',
+					signalType: 'review_feedback',
+					opportunityId: 'review_feedback:task_2',
+					category: 'quality',
+					severity: 'medium',
+					confidence: 'medium',
+					projectId: 'project_2',
+					projectName: 'Project Two',
+					taskId: 'task_2',
+					runId: null,
+					reviewId: 'review_1',
+					sessionId: null,
+					title: 'Review feedback for task',
+					summary: 'Changes requested.',
+					firstSeenAt: '2026-03-30T11:00:00.000Z',
+					lastSeenAt: '2026-03-31T12:00:00.000Z'
+				}
+			],
+			[
+				{
+					id: 'knowledge_1',
+					status: 'published',
+					title: 'Failure recovery pattern',
+					summary: 'Capture the repeated failure path.',
+					category: 'reliability',
+					projectId: 'project_1',
+					projectName: 'Project One',
+					sourceOpportunityId: 'failed_runs:task_1',
+					sourceTaskIds: ['task_1'],
+					sourceRunIds: ['run_1'],
+					sourceSessionIds: ['session_1'],
+					sourceSignalIds: ['run_failure:run_1'],
+					triggerPattern: 'Repeated failures for the same task.',
+					recommendedResponse: 'Add a guard and document the recovery path.',
+					applicabilityScope: ['Project One'],
+					createdAt: '2026-03-30T10:00:00.000Z',
+					updatedAt: '2026-03-31T12:00:00.000Z',
+					publishedAt: '2026-03-31T11:00:00.000Z',
+					archivedAt: null
+				},
+				{
+					id: 'knowledge_2',
+					status: 'draft',
+					title: 'Review checklist',
+					summary: 'Capture review lessons.',
+					category: 'quality',
+					projectId: 'project_2',
+					projectName: 'Project Two',
+					sourceOpportunityId: 'review_feedback:task_2',
+					sourceTaskIds: ['task_2'],
+					sourceRunIds: [],
+					sourceSessionIds: [],
+					sourceSignalIds: ['review_feedback:task_2'],
+					triggerPattern: 'Changes requested during review.',
+					recommendedResponse: 'Create a checklist.',
+					applicabilityScope: ['Project Two'],
+					createdAt: '2026-03-30T11:00:00.000Z',
+					updatedAt: '2026-03-31T12:00:00.000Z',
+					publishedAt: null,
+					archivedAt: null
+				}
+			]
+		);
+
+		const goalScoped = filterSelfImprovementSnapshot(snapshot, {
+			goalId: 'goal_parent',
+			data: createControlPlaneData()
+		});
+		const goalAndProjectScoped = filterSelfImprovementSnapshot(snapshot, {
+			projectId: 'project_1',
+			goalId: 'goal_parent',
+			data: createControlPlaneData()
+		});
+
+		expect(goalScoped.summary.totalCount).toBe(2);
+		expect(goalScoped.signalSummary.totalCount).toBe(2);
+		expect(goalScoped.knowledgeSummary.totalCount).toBe(2);
+		expect(goalAndProjectScoped.summary.totalCount).toBe(1);
+		expect(goalAndProjectScoped.signalSummary.totalCount).toBe(1);
+		expect(goalAndProjectScoped.knowledgeSummary.totalCount).toBe(1);
+		expect(goalAndProjectScoped.opportunities[0]?.projectId).toBe('project_1');
 	});
 });

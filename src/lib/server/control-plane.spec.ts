@@ -173,7 +173,6 @@ describe('control-plane helpers', () => {
 		expect(task.runCount).toBe(0);
 		expect(task.latestRunId).toBeNull();
 		expect(task.threadSessionId).toBeNull();
-		expect(task.parentTaskId).toBeNull();
 		expect(task.estimateHours).toBeNull();
 		expect(task.targetDate).toBeNull();
 		expect(task.attachments).toEqual([]);

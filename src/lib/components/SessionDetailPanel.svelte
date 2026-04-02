@@ -35,6 +35,14 @@
 		disabledReason: string;
 	};
 
+	type ThreadFocusTask = {
+		id: string;
+		title: string;
+		status: string;
+		isPrimary: boolean;
+		source: 'resolved' | 'linked';
+	};
+
 	let {
 		session: sessionProp,
 		sandboxOptions,
@@ -86,6 +94,11 @@
 		className: string;
 	};
 
+	type ThreadCategorySection = {
+		label: string;
+		values: string[];
+	};
+
 	let selectedRun = $derived.by(() => {
 		if (!session) {
 			return null;
@@ -101,6 +114,49 @@
 	let chronologicalRuns = $derived.by(() => (session ? [...session.runs].reverse() : []));
 	let sessionState = $derived.by(() => (session ? describeSessionState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
+	let latestContextRun = $derived.by(() => session?.latestRun ?? session?.runs[0] ?? null);
+	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
+		if (taskResponseAction) {
+			return {
+				id: taskResponseAction.taskId,
+				title: taskResponseAction.taskTitle,
+				status: taskResponseAction.taskStatus,
+				isPrimary: true,
+				source: 'resolved'
+			};
+		}
+
+		if (!session) {
+			return null;
+		}
+
+		const primaryTask =
+			session.relatedTasks.find((task) => task.isPrimary) ??
+			(session.relatedTasks.length === 1 ? session.relatedTasks[0] : null);
+
+		if (!primaryTask) {
+			return null;
+		}
+
+		return {
+			id: primaryTask.id,
+			title: primaryTask.title,
+			status: primaryTask.status,
+			isPrimary: primaryTask.isPrimary,
+			source: 'linked'
+		};
+	});
+	let selectedHistoricalRun = $derived.by(() => {
+		if (!selectedRun) {
+			return null;
+		}
+
+		if (latestContextRun && selectedRun.id === latestContextRun.id) {
+			return null;
+		}
+
+		return selectedRun;
+	});
 
 	$effect(() => {
 		session = sessionProp;
@@ -174,6 +230,19 @@
 		return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
+	function getThreadCategorySections(detail: AgentThreadDetail): ThreadCategorySection[] {
+		if (!detail.categorization) {
+			return [];
+		}
+
+		return [
+			{ label: 'Area', values: detail.categorization.laneLabels },
+			{ label: 'Focus', values: detail.categorization.focusLabels },
+			{ label: 'Context', values: detail.categorization.entityLabels },
+			{ label: 'Terms', values: detail.categorization.keywordLabels }
+		].filter((section) => section.values.length > 0);
+	}
+
 	function createAttachmentKey(file: File) {
 		return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
 	}
@@ -203,22 +272,27 @@
 	}
 
 	function mergeFollowUpAttachmentFiles(files: Iterable<File>) {
-		const nextFiles = new Map(
-			Array.from(followUpAttachmentInput?.files ?? []).map((file) => [
-				createAttachmentKey(file),
-				file
-			])
-		);
+		const nextFiles = Array.from(followUpAttachmentInput?.files ?? []);
 
 		for (const file of files) {
 			if (file.size === 0) {
 				continue;
 			}
 
-			nextFiles.set(createAttachmentKey(file), file);
+			const nextFileKey = createAttachmentKey(file);
+			const existingIndex = nextFiles.findIndex(
+				(existingFile) => createAttachmentKey(existingFile) === nextFileKey
+			);
+
+			if (existingIndex >= 0) {
+				nextFiles[existingIndex] = file;
+				continue;
+			}
+
+			nextFiles.push(file);
 		}
 
-		replaceFollowUpAttachmentFiles([...nextFiles.values()]);
+		replaceFollowUpAttachmentFiles(nextFiles);
 	}
 
 	function clearPendingFollowUpAttachments() {
@@ -349,7 +423,7 @@
 			const payload = (await response.json()) as { error?: string };
 
 			if (!response.ok) {
-				throw new Error(payload.error ?? 'Could not queue session message.');
+				throw new Error(payload.error ?? 'Could not queue thread follow-up.');
 			}
 
 			formElement.reset();
@@ -372,7 +446,7 @@
 						: `Follow-up queued for ${session.name}.`
 			};
 		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Could not queue session message.';
+			const message = err instanceof Error ? err.message : 'Could not queue thread follow-up.';
 			sendState = {
 				status: 'error',
 				message
@@ -533,9 +607,71 @@
 	function executionMeta(detail: AgentThreadDetail) {
 		return getThreadActivityMeta(detail, now);
 	}
+
+	function focusTaskDescription(task: ThreadFocusTask) {
+		if (task.source === 'resolved') {
+			return 'This thread response is tied to the current task.';
+		}
+
+		if (task.isPrimary) {
+			return 'Primary task linked to this thread.';
+		}
+
+		return 'Linked task context for this thread.';
+	}
 </script>
 
-{#snippet sessionStatus(detail: AgentThreadDetail)}
+{#snippet focusTaskCard(
+	task: ThreadFocusTask,
+	options: {
+		label: string;
+		description: string;
+		compact?: boolean;
+	}
+)}
+	<div
+		class={[
+			'rounded-xl border border-amber-800/40 bg-gradient-to-br from-amber-950/25 via-slate-950/90 to-slate-950',
+			options.compact ? 'p-3' : 'p-4'
+		]}
+	>
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+			<div class="min-w-0">
+				<p class="text-[11px] font-semibold tracking-[0.18em] text-amber-200 uppercase">
+					{options.label}
+				</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-semibold text-white">{task.title}</p>
+				<p class="mt-1 text-sm text-slate-300">{options.description}</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				<span
+					class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+				>
+					{formatTaskStatusLabel(task.status)}
+				</span>
+				{#if task.isPrimary}
+					<span
+						class="inline-flex items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+					>
+						Primary
+					</span>
+				{/if}
+			</div>
+		</div>
+
+		<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+			<p class="text-xs text-slate-400">{focusTaskDescription(task)}</p>
+			<a
+				class="text-sm font-medium text-amber-200 transition hover:text-amber-100"
+				href={resolve(`/app/tasks/${task.id}`)}
+			>
+				Open task detail
+			</a>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet sessionStatus(detail: AgentThreadDetail, showFocusTask: boolean)}
 	<div class="space-y-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 			<div>
@@ -562,6 +698,16 @@
 					>
 						{topicLabel}
 					</span>
+				{/each}
+			</div>
+		{/if}
+		{#if getThreadCategorySections(detail).length > 0}
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+				{#each getThreadCategorySections(detail) as section (section.label)}
+					<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">{section.label}</p>
+						<p class="mt-2 text-sm text-slate-200">{section.values.join(', ')}</p>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -598,7 +744,7 @@
 				value={threadLabel(detail)}
 				detail={detail.threadId
 					? 'A Codex thread id is available for follow-up work.'
-					: 'No thread id yet.'}
+					: 'No Codex thread id yet. Start the first run and the manager will attach one when it becomes available.'}
 				class="rounded-lg border-transparent bg-black/20"
 				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
 			/>
@@ -615,6 +761,14 @@
 			/>
 		</div>
 
+		{#if showFocusTask && focusTask}
+			{@render focusTaskCard(focusTask, {
+				label: 'Current task',
+				description:
+					'Keep this task in view while reviewing the latest thread output or sending the next follow-up.'
+			})}
+		{/if}
+
 		<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
 			<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Related tasks</p>
 			{#if detail.relatedTasks.length > 0}
@@ -630,14 +784,16 @@
 					{/each}
 				</div>
 			{:else}
-				<p class="mt-2 text-sm text-slate-400">No tasks are linked to this thread yet.</p>
+				<p class="mt-2 text-sm text-slate-400">
+					No tasks are linked to this thread yet. Assign it from a task when you want future work to reuse this context.
+				</p>
 			{/if}
 		</div>
 	</div>
 {/snippet}
 
 {#if session}
-	<AppPage class="gap-5 sm:gap-6">
+	<AppPage width="full" class="gap-5 sm:gap-6">
 		<div class="space-y-5 sm:space-y-6" data-testid="session-detail-panel">
 			<DetailHeader
 				backHref={resolve(backHref)}
@@ -740,84 +896,256 @@
 				</p>
 			{/if}
 
-			<form method="POST" action="?/updateSessionSandbox">
-				<DetailSection
-					eyebrow="Thread access"
-					title="Sandbox for future follow-up runs"
-					description="Change what this thread can access the next time you resume it. The current run, if any, keeps its existing sandbox."
-				>
-					<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-						<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-							<label class="block min-w-[14rem]">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Sandbox mode</span>
-								<select class="select text-white" name="sandbox">
-									{#each sandboxOptions as sandbox (sandbox)}
-										<option value={sandbox} selected={session.sandbox === sandbox}>{sandbox}</option
-										>
-									{/each}
-								</select>
-							</label>
-							<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-								Update sandbox
-							</button>
-						</div>
-					</div>
-				</DetailSection>
-			</form>
+			<div class="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(22rem,0.92fr)]">
+				<div class="space-y-6">
+					<DetailSection
+						eyebrow="Priority"
+						title="Decision context"
+						description="Start here: confirm the task, read the newest agent response, and scan the signals that affect the next decision."
+						bodyClass="space-y-4"
+					>
+						{#if focusTask}
+							{@render focusTaskCard(focusTask, {
+								label: 'Current task',
+								description:
+									'This is the task the thread is currently anchored to while you review or reply.'
+							})}
+						{/if}
 
-			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-				<DetailFactCard label="Started" value={formatTimestamp(session.createdAt)} />
-				<DetailFactCard
-					label="Last activity"
-					value={formatActivityAge(session.lastActivityAt, now)}
-					detail={formatTimestamp(session.lastActivityAt)}
-				/>
-				<DetailFactCard
-					label="Thread"
-					value={threadLabel(session)}
-					detail={session.threadId || ''}
-					detailClass="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500"
-				/>
-				<DetailFactCard label="Runs" value={session.runCount} />
-				<DetailFactCard label="Resume" value={resumeLabel(session)} />
-			</div>
-
-			<div class="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-				<div class="space-y-4">
-					{@render sessionStatus(session)}
-
-					{#if selectedRun}
-						<div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+						<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 								<div class="min-w-0">
-									<p class="text-sm font-medium text-white">Selected run</p>
-									<p class="mt-1 text-xs text-slate-500">
-										{runModeLabel(selectedRun)} queued {formatTimestamp(selectedRun.createdAt)}
+									<p class="text-sm font-medium text-white">Most recent response</p>
+									<p class="mt-1 text-sm text-slate-400">
+										{#if latestContextRun}
+											{runModeLabel(latestContextRun)} queued {formatTimestamp(
+												latestContextRun.createdAt
+											)}
+										{:else}
+											No saved response has been captured in this thread yet. Start the thread or wait for the current run to finish to populate this view.
+										{/if}
+									</p>
+								</div>
+								{#if latestContextRun}
+									<div class="flex flex-wrap items-center gap-2">
+										<span
+											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(latestContextRun))}`}
+										>
+											{latestRunStatus(latestContextRun)}
+										</span>
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+										>
+											{latestContextRun.mode}
+										</span>
+									</div>
+								{/if}
+							</div>
+
+							{#if latestContextRun}
+								<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.48fr)]">
+									<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+										<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Agent response</p>
+										<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-200">
+											{responseText(latestContextRun)}
+										</p>
+									</div>
+
+									<div class="space-y-4">
+										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+											<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+												Latest instruction
+											</p>
+											<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-300">
+												{latestContextRun.prompt}
+											</p>
+										</div>
+
+										<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+											<DetailFactCard
+												label="Queued"
+												value={formatTimestamp(latestContextRun.createdAt)}
+												class="rounded-lg border-transparent bg-black/20"
+												labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+											/>
+											<DetailFactCard
+												label="Finished"
+												value={formatTimestamp(latestContextRun.state?.finishedAt ?? null)}
+												class="rounded-lg border-transparent bg-black/20"
+												labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+											/>
+										</div>
+									</div>
+								</div>
+							{:else}
+								<p
+									class="mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
+								>
+									Run the thread once or wait for the current run to finish to get a saved response
+									here.
+								</p>
+							{/if}
+						</div>
+
+						<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+								<div class="min-w-0">
+									<p class="text-sm font-medium text-white">Relevant context</p>
+									<p class="mt-1 text-sm text-slate-400">{session.sessionSummary}</p>
+								</div>
+								<div class="flex flex-wrap items-center gap-2">
+									<span
+										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+									>
+										{formatThreadStateLabel(session.sessionState)}
+									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session.latestRunStatus)}`}
+									>
+										latest run {session.latestRunStatus}
+									</span>
+								</div>
+							</div>
+
+							<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+								<DetailFactCard
+									label="Execution"
+									value={executionMeta(session).label}
+									detail={executionMeta(session).detail}
+									class="rounded-lg border-transparent bg-black/20"
+									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+								/>
+								<DetailFactCard
+									label="Reply state"
+									value={replyStateLabel(session)}
+									detail={replyStateDetail(session)}
+									class="rounded-lg border-transparent bg-black/20"
+									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+								/>
+								<DetailFactCard
+									label="Follow-up"
+									value={resumeLabel(session)}
+									detail={session.canResume
+										? 'You can respond in this thread now.'
+										: session.hasActiveRun
+											? 'Wait for the current run to finish first.'
+											: 'This thread cannot accept a follow-up yet.'}
+									class="rounded-lg border-transparent bg-black/20"
+									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+								/>
+								<DetailFactCard
+									label="Last activity"
+									value={formatActivityAge(session.lastActivityAt, now)}
+									detail={formatTimestamp(session.lastActivityAt)}
+									class="rounded-lg border-transparent bg-black/20"
+									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+								/>
+								<DetailFactCard
+									label="Attachments"
+									value={threadAttachments.length}
+									detail={threadAttachments.length > 0
+										? 'Files stay with the thread.'
+										: 'No thread files yet. Add one in the follow-up form when the next run needs extra context.'}
+									class="rounded-lg border-transparent bg-black/20"
+									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+								/>
+							</div>
+
+							{#if (session.topicLabels ?? []).length > 0 || session.relatedTasks.length > 0 || taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
+								<div class="mt-4 space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
+									{#if (session.topicLabels ?? []).length > 0}
+										<div class="flex flex-wrap gap-2">
+											{#each session.topicLabels ?? [] as topicLabel (topicLabel)}
+												<span
+													class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+												>
+													{topicLabel}
+												</span>
+											{/each}
+										</div>
+									{/if}
+
+									{#if taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
+										<div class="flex flex-wrap gap-2">
+											{#if taskResponseAction?.openReview}
+												<span
+													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
+												>
+													Review {formatReviewStatusLabel(taskResponseAction.openReview.status)}
+												</span>
+											{/if}
+											{#if taskResponseAction?.pendingApproval}
+												<span
+													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
+												>
+													{formatTaskApprovalModeLabel(taskResponseAction.pendingApproval.mode)}
+													{formatApprovalStatusLabel(taskResponseAction.pendingApproval.status)}
+												</span>
+											{/if}
+										</div>
+									{/if}
+
+									{#if session.relatedTasks.length > 0}
+										<div class="flex flex-wrap gap-2">
+											{#each session.relatedTasks as task (task.id)}
+												<a
+													class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
+													href={resolve(`/app/tasks/${task.id}`)}
+												>
+													{task.title}
+													{task.isPrimary ? ' · primary' : ''}
+												</a>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					</DetailSection>
+
+					{#if selectedHistoricalRun}
+						<DetailSection
+							eyebrow="Selected turn"
+							title="Inspect earlier context"
+							description="Use this when you need to review an older turn without losing the newest response above."
+							bodyClass="space-y-4"
+						>
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+								<div class="min-w-0">
+									<p class="text-sm font-medium text-white">
+										{runModeLabel(selectedHistoricalRun)} queued
+										{formatTimestamp(selectedHistoricalRun.createdAt)}
+									</p>
+									<p class="mt-1 text-sm text-slate-400">
+										You are looking at older thread context. The newest response stays pinned above.
 									</p>
 								</div>
 								<div class="flex flex-wrap items-center gap-2">
 									<span
-										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(selectedRun))}`}
+										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(selectedHistoricalRun))}`}
 									>
-										{latestRunStatus(selectedRun)}
+										{latestRunStatus(selectedHistoricalRun)}
 									</span>
 									<span
 										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 									>
-										{selectedRun.mode}
+										{selectedHistoricalRun.mode}
 									</span>
 								</div>
 							</div>
 
 							<div class="grid gap-3 sm:grid-cols-3">
-								<DetailFactCard label="Queued" value={formatTimestamp(selectedRun.createdAt)} />
+								<DetailFactCard
+									label="Queued"
+									value={formatTimestamp(selectedHistoricalRun.createdAt)}
+								/>
 								<DetailFactCard
 									label="Finished"
-									value={formatTimestamp(selectedRun.state?.finishedAt ?? null)}
+									value={formatTimestamp(selectedHistoricalRun.state?.finishedAt ?? null)}
 								/>
 								<DetailFactCard
 									label="Thread target"
-									value={selectedRun.requestedThreadId ?? 'Start a new thread'}
+									value={selectedHistoricalRun.requestedThreadId ?? 'Start a new thread'}
 								/>
 							</div>
 
@@ -825,45 +1153,118 @@
 								<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 									<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Instruction</p>
 									<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-200">
-										{selectedRun.prompt}
+										{selectedHistoricalRun.prompt}
 									</p>
 								</div>
 
 								<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 									<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Agent response</p>
 									<p class="ui-wrap-anywhere mt-2 text-sm whitespace-pre-wrap text-slate-200">
-										{responseText(selectedRun)}
+										{responseText(selectedHistoricalRun)}
 									</p>
 								</div>
 							</div>
-						</div>
+
+							<details class="rounded-xl border border-slate-800 bg-black/30 p-4">
+								<summary class="cursor-pointer text-sm font-medium text-slate-200">
+									Selected turn log output
+								</summary>
+								{#if selectedHistoricalRun.logTail?.length}
+									<pre
+										class="ui-wrap-anywhere mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-slate-300">{selectedHistoricalRun.logTail.join(
+											'\n'
+										)}</pre>
+								{:else}
+									<p class="mt-3 text-sm text-slate-400">
+										No log lines were saved for this turn. Check the run detail if you expected execution output.
+									</p>
+								{/if}
+							</details>
+						</DetailSection>
 					{/if}
 
-					<details class="rounded-xl border border-slate-800 bg-black/30 p-4">
-						<summary class="cursor-pointer text-sm font-medium text-slate-200">
-							Selected run log output
-						</summary>
-						{#if selectedRun?.logTail?.length}
-							<pre
-								class="ui-wrap-anywhere mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-slate-300">{selectedRun.logTail.join(
-									'\n'
-								)}</pre>
+					<DetailSection
+						eyebrow="Conversation"
+						title="Conversation history"
+						description="Inspect each turn in the thread and open any run to read the full prompt and response."
+						bodyClass="space-y-3"
+					>
+						{#if chronologicalRuns.length === 0}
+							<p
+								class="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
+							>
+								No runs have been recorded for this thread yet. Send the first instruction from a linked task or wait for a queued run to start.
+							</p>
 						{:else}
-							<p class="mt-3 text-sm text-slate-400">No log lines yet.</p>
+							{#each chronologicalRuns as run, index (run.id)}
+								<button
+									class={[
+										'w-full rounded-xl border p-4 text-left transition',
+										selectedRun?.id === run.id
+											? 'border-sky-800/70 bg-sky-950/20'
+											: 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+									]}
+									type="button"
+									aria-pressed={selectedRun?.id === run.id}
+									onclick={() => {
+										selectRun(run.id);
+									}}
+								>
+									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+										<div class="min-w-0">
+											<p class="text-sm font-medium text-white">
+												Turn {index + 1} · {runModeLabel(run)}
+											</p>
+											<p class="mt-1 text-xs text-slate-500">
+												Queued {formatTimestamp(run.createdAt)}
+											</p>
+										</div>
+										<span
+											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(run))}`}
+										>
+											{latestRunStatus(run)}
+										</span>
+									</div>
+
+									<div class="mt-3 grid gap-3 lg:grid-cols-2">
+										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+												Instruction
+											</p>
+											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+												{compactText(run.prompt, 180)}
+											</p>
+										</div>
+										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
+											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Response</p>
+											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+												{compactText(responseText(run), 180)}
+											</p>
+										</div>
+									</div>
+								</button>
+							{/each}
 						{/if}
-					</details>
+					</DetailSection>
 				</div>
 
-				<div class="space-y-4">
+				<div class="space-y-6">
 					<form class="space-y-3" onsubmit={submitFollowUp} onpaste={handleFollowUpAttachmentPaste}>
 						<DetailSection
-							eyebrow="Follow-up"
+							eyebrow="Action"
 							title="Send follow-up"
-							description="Queue the next instruction into the same work thread when it is ready. Attached files are saved onto the thread and included as immediate context for the next run."
+							description="Reply in the same thread once you have enough context. Attached files are saved onto the thread and included for the next run."
 							bodyClass="space-y-3"
 						>
+							{#if focusTask}
+								{@render focusTaskCard(focusTask, {
+									label: 'Working on',
+									description: 'Keep this visible while composing the next instruction.',
+									compact: true
+								})}
+							{/if}
 							<textarea
-								class="min-h-32 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
+								class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
 								name="prompt"
 								placeholder={session.canResume
 									? 'Send the next instruction.'
@@ -947,55 +1348,9 @@
 						</DetailSection>
 					</form>
 
-					<DetailSection
-						eyebrow="Attachments"
-						title="Thread attachments"
-						description="Files attached during follow-up stay on this thread for later reference."
-						bodyClass="space-y-4"
-					>
-						{#if threadAttachments.length === 0}
-							<p
-								class="rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
-							>
-								No files attached to this thread yet.
-							</p>
-						{:else}
-							<div class="space-y-3">
-								{#each threadAttachments as attachment (attachment.id)}
-									<article class="rounded-lg border border-slate-800 bg-black/20 p-4">
-										<div class="flex flex-wrap items-start justify-between gap-3">
-											<div class="min-w-0">
-												<p class="ui-wrap-anywhere text-sm font-medium text-white">
-													{attachment.name}
-												</p>
-												<p class="mt-1 text-xs text-slate-400">
-													{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
-												</p>
-												<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
-													{attachment.path}
-												</p>
-												<p class="mt-2 text-xs text-slate-500">
-													Attached {formatTimestamp(attachment.attachedAt)}
-												</p>
-											</div>
-											<a
-												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-												href={resolve(
-													`/api/agents/sessions/${session.id}/attachments/${attachment.id}`
-												)}
-											>
-												Download
-											</a>
-										</div>
-									</article>
-								{/each}
-							</div>
-						{/if}
-					</DetailSection>
-
 					{#if taskResponseAction}
 						<DetailSection
-							eyebrow="Task response"
+							eyebrow="Decision"
 							title="Approve task response"
 							description={taskResponseAction.helperText}
 							bodyClass="space-y-4"
@@ -1034,8 +1389,8 @@
 								</div>
 
 								<p class="mt-3 text-sm text-slate-400">
-									Review the thread output above, then approve it here to close the task without
-									leaving this thread.
+									Review the newest response on the left, then approve it here to close the task
+									without leaving this thread.
 								</p>
 							</div>
 
@@ -1078,69 +1433,97 @@
 						</DetailSection>
 					{/if}
 
+					{@render sessionStatus(session, false)}
+
+					<div class="grid gap-3 sm:grid-cols-2">
+						<DetailFactCard label="Started" value={formatTimestamp(session.createdAt)} />
+						<DetailFactCard
+							label="Last activity"
+							value={formatActivityAge(session.lastActivityAt, now)}
+							detail={formatTimestamp(session.lastActivityAt)}
+						/>
+						<DetailFactCard
+							label="Thread"
+							value={threadLabel(session)}
+							detail={session.threadId || ''}
+							detailClass="ui-wrap-anywhere mt-1 max-w-full text-xs text-slate-500"
+						/>
+						<DetailFactCard label="Runs" value={session.runCount} />
+						<DetailFactCard label="Resume" value={resumeLabel(session)} />
+						<DetailFactCard label="Sandbox" value={session.sandbox} />
+					</div>
+
 					<DetailSection
-						eyebrow="Conversation"
-						title="Conversation history"
-						description="Inspect each turn in the thread and open any run to read the full prompt and response."
-						bodyClass="space-y-3"
+						eyebrow="Attachments"
+						title="Thread attachments"
+						description="Files attached during follow-up stay on this thread for later reference."
+						bodyClass="space-y-4"
 					>
-						{#if chronologicalRuns.length === 0}
+						{#if threadAttachments.length === 0}
 							<p
-								class="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400"
+								class="rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500"
 							>
-								No runs have been recorded for this thread yet.
+								No files are attached to this thread yet. Add one in the follow-up form when the next run needs reference material.
 							</p>
 						{:else}
-							{#each chronologicalRuns as run, index (run.id)}
-								<button
-									class={[
-										'w-full rounded-xl border p-4 text-left transition',
-										selectedRun?.id === run.id
-											? 'border-sky-800/70 bg-sky-950/20'
-											: 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
-									]}
-									type="button"
-									aria-pressed={selectedRun?.id === run.id}
-									onclick={() => {
-										selectRun(run.id);
-									}}
-								>
-									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-										<div class="min-w-0">
-											<p class="text-sm font-medium text-white">
-												Turn {index + 1} · {runModeLabel(run)}
-											</p>
-											<p class="mt-1 text-xs text-slate-500">
-												Queued {formatTimestamp(run.createdAt)}
-											</p>
+							<div class="space-y-3">
+								{#each threadAttachments as attachment (attachment.id)}
+									<article class="rounded-lg border border-slate-800 bg-black/20 p-4">
+										<div class="flex flex-wrap items-start justify-between gap-3">
+											<div class="min-w-0">
+												<p class="ui-wrap-anywhere text-sm font-medium text-white">
+													{attachment.name}
+												</p>
+												<p class="mt-1 text-xs text-slate-400">
+													{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+												</p>
+												<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+													{attachment.path}
+												</p>
+												<p class="mt-2 text-xs text-slate-500">
+													Attached {formatTimestamp(attachment.attachedAt)}
+												</p>
+											</div>
+											<a
+												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+												href={resolve(
+													`/api/agents/sessions/${session.id}/attachments/${attachment.id}`
+												)}
+											>
+												Download
+											</a>
 										</div>
-										<span
-											class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(run))}`}
-										>
-											{latestRunStatus(run)}
-										</span>
-									</div>
-
-									<div class="mt-3 grid gap-3 lg:grid-cols-2">
-										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Instruction
-											</p>
-											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
-												{compactText(run.prompt, 180)}
-											</p>
-										</div>
-										<div class="rounded-lg border border-slate-800 bg-black/20 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Response</p>
-											<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
-												{compactText(responseText(run), 180)}
-											</p>
-										</div>
-									</div>
-								</button>
-							{/each}
+									</article>
+								{/each}
+							</div>
 						{/if}
 					</DetailSection>
+
+					<form method="POST" action="?/updateSessionSandbox">
+						<DetailSection
+							eyebrow="Thread access"
+							title="Sandbox for future follow-up runs"
+							description="Lower-priority thread setting: change what this thread can access the next time you resume it. The current run keeps its existing sandbox."
+						>
+							<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+									<label class="block min-w-[14rem]">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Sandbox mode</span>
+										<select class="select text-white" name="sandbox">
+											{#each sandboxOptions as sandbox (sandbox)}
+												<option value={sandbox} selected={session.sandbox === sandbox}
+													>{sandbox}</option
+												>
+											{/each}
+										</select>
+									</label>
+									<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+										Update sandbox
+									</button>
+								</div>
+							</div>
+						</DetailSection>
+					</form>
 				</div>
 			</div>
 		</div>

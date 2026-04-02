@@ -40,6 +40,26 @@ vi.mock('$lib/server/control-plane', () => ({
 			summary: input.summary ?? ''
 		})
 	),
+	createDecision: vi.fn(
+		(input: {
+			taskId?: string | null;
+			decisionType: string;
+			summary: string;
+			createdAt?: string;
+		}) => ({
+			id: 'decision_created',
+			taskId: input.taskId ?? null,
+			goalId: null,
+			runId: null,
+			reviewId: null,
+			approvalId: null,
+			planningSessionId: null,
+			decisionType: input.decisionType,
+			summary: input.summary,
+			createdAt: input.createdAt ?? '2026-03-31T12:00:00.000Z',
+			decidedByWorkerId: null
+		})
+	),
 	createReview: vi.fn(
 		(input: {
 			taskId: string;
@@ -263,6 +283,12 @@ describe('session detail page server actions', () => {
 			expect.objectContaining({
 				id: 'approval_1',
 				status: 'approved'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_completed'
 			})
 		);
 	});

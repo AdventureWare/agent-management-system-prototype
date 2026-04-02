@@ -6,10 +6,11 @@
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
-	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
-	import { formatSessionStateLabel } from '$lib/session-activity';
+	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
+	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import {
 		approvalStatusToneClass,
+		formatDecisionTypeLabel,
 		formatReviewStatusLabel,
 		formatRunStatusLabel,
 		formatTaskApprovalModeLabel,
@@ -33,6 +34,7 @@
 	let visibleCandidateThreads = $derived(
 		showAllCandidateThreads ? data.candidateThreads : data.candidateThreads.slice(0, 3)
 	);
+	let visibleAssignmentSuggestions = $derived(data.assignmentSuggestions.slice(0, 4));
 	let governanceSuccessMessage = $derived.by(() => {
 		switch (form?.successAction) {
 			case 'approveReview':
@@ -117,6 +119,32 @@
 		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
 
+	function matchedContextSummary(thread: {
+		matchedContext?: {
+			laneLabels?: string[];
+			focusLabels?: string[];
+			entityLabels?: string[];
+			keywordLabels?: string[];
+			labels?: string[];
+		};
+	}) {
+		const match = thread.matchedContext;
+
+		if (!match) {
+			return [];
+		}
+
+		return [
+			...(match.laneLabels ?? []),
+			...(match.focusLabels ?? []),
+			...(match.entityLabels ?? []),
+			...(match.keywordLabels ?? [])
+		].filter(
+			(label, index, labels) =>
+				labels.findIndex((candidate) => candidate.toLowerCase() === label.toLowerCase()) === index
+		);
+	}
+
 	function formatAttachmentSize(sizeBytes: number) {
 		if (sizeBytes < 1024) {
 			return `${sizeBytes} B`;
@@ -140,6 +168,12 @@
 			default:
 				return 'Run task';
 		}
+	}
+
+	function assignmentSuggestionClass(eligible: boolean) {
+		return eligible
+			? 'border-emerald-900/70 bg-emerald-950/30'
+			: 'border-slate-800 bg-slate-950/70';
 	}
 
 	let taskHasActiveRun = $derived(Boolean(data.task.hasActiveRun));
@@ -181,7 +215,7 @@
 	});
 </script>
 
-<AppPage>
+<AppPage width="full">
 	<DetailHeader
 		backHref={resolve('/app/tasks')}
 		backLabel="Back to tasks"
@@ -235,7 +269,7 @@
 		{/snippet}
 	</DetailHeader>
 
-	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 		<DetailFactCard
 			label="Project"
 			value={data.task.projectName}
@@ -279,36 +313,34 @@
 			class="card border border-slate-800 bg-slate-950/70 p-4"
 			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
 		>
-			{#snippet children()}
-				{#if data.task.linkThread}
-					<div class="mt-1 flex flex-wrap items-center gap-3">
-						<a
-							class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-							href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
-						>
-							{threadActionLabel()}
-						</a>
-						<p class="ui-wrap-anywhere text-sm font-medium text-white">
-							{data.task.linkThread.name}
-						</p>
+			{#if data.task.linkThread}
+				<div class="mt-1 flex flex-wrap items-center gap-3">
+					<a
+						class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+					>
+						{threadActionLabel()}
+					</a>
+					<p class="ui-wrap-anywhere text-sm font-medium text-white">
+						{data.task.linkThread.name}
+					</p>
+				</div>
+				{#if data.task.statusThread}
+					<div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+						<ThreadActivityIndicator compact thread={data.task.statusThread} />
 					</div>
-					{#if data.task.statusThread}
-						<div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
-							<SessionActivityIndicator compact session={data.task.statusThread} />
-						</div>
-					{/if}
-					{#if data.task.linkThread.id !== data.task.statusThread?.id}
-						<p class="mt-2 text-xs text-slate-500">
-							{formatSessionStateLabel(data.task.linkThread.sessionState)}
-						</p>
-					{/if}
-				{:else}
-					<p class="mt-1 text-lg font-semibold text-white">None yet</p>
-					<p class="mt-2 text-sm text-slate-400">
-						Launch the task to create a thread, or assign an existing thread below.
+				{/if}
+				{#if data.task.linkThread.id !== data.task.statusThread?.id}
+					<p class="mt-2 text-xs text-slate-500">
+						{formatThreadStateLabel(data.task.linkThread.sessionState)}
 					</p>
 				{/if}
-			{/snippet}
+			{:else}
+				<p class="mt-1 text-lg font-semibold text-white">None yet</p>
+				<p class="mt-2 text-sm text-slate-400">
+					Launch the task to create a thread, or assign an existing thread below.
+				</p>
+			{/if}
 		</DetailFactCard>
 	</div>
 
@@ -390,7 +422,7 @@
 				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
 					Open thread details
 				</a>
-				for `{form.sessionId}`.
+				to review the queued work.
 			{/if}
 		</p>
 	{:else if recoverSuccess}
@@ -403,7 +435,7 @@
 				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
 					Open thread details
 				</a>
-				for `{form.sessionId}`.
+				to review the recovered work.
 			{/if}
 		</p>
 	{:else if governanceSuccessMessage}
@@ -506,7 +538,9 @@
 						</p>
 					</div>
 
-					<div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
+					<div
+						class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px_220px]"
+					>
 						<label class="block">
 							<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
 							<select class="select text-white" name="projectId" required>
@@ -516,6 +550,25 @@
 									</option>
 								{/each}
 							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Goal</span>
+							<select class="select text-white" name="goalId">
+								<option value="" selected={!data.task.goalId}>No goal linked</option>
+								{#each data.goals as goal (goal.id)}
+									<option value={goal.id} selected={data.task.goalId === goal.id}>
+										{goal.label}
+									</option>
+								{/each}
+							</select>
+							<p class="mt-2 text-xs text-slate-500">
+								{#if data.goals.length === 0}
+									Create a goal first if this task should roll up to a broader outcome.
+								{:else}
+									This is the canonical task-to-goal link used by goal detail and hierarchy views.
+								{/if}
+							</p>
 						</label>
 
 						<label class="block">
@@ -551,6 +604,109 @@
 							{/each}
 						</select>
 					</label>
+
+					<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-3">
+							<div>
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Assignment suggestions
+								</p>
+								<p class="mt-2 text-sm text-slate-400">
+									Workers are ranked by requirement fit, role match, current status, and open
+									assigned load.
+								</p>
+							</div>
+							<p class="text-xs text-slate-500">
+								{data.assignmentSuggestions.filter((suggestion) => suggestion.eligible).length} fit current
+								requirements
+							</p>
+						</div>
+
+						<div class="mt-4 space-y-3">
+							{#each visibleAssignmentSuggestions as suggestion (suggestion.workerId)}
+								<div
+									class={`rounded-2xl border p-3 ${assignmentSuggestionClass(suggestion.eligible)}`}
+								>
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div class="min-w-0">
+											<div class="flex flex-wrap items-center gap-2">
+												<p class="font-medium text-white">{suggestion.workerName}</p>
+												{#if suggestion.eligible}
+													<span
+														class="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-2 py-1 text-[0.7rem] text-emerald-200"
+													>
+														Matches requirements
+													</span>
+												{:else}
+													<span
+														class="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[0.7rem] text-slate-300"
+													>
+														Needs adjustment
+													</span>
+												{/if}
+												{#if suggestion.isCurrentAssignee}
+													<span
+														class="rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-[0.7rem] text-sky-200"
+													>
+														Current assignee
+													</span>
+												{/if}
+											</div>
+											<p class="mt-1 text-xs text-slate-400">
+												{suggestion.roleName} · {suggestion.providerName} · {suggestion.status}
+											</p>
+										</div>
+										<p class="text-xs text-slate-500">
+											{suggestion.assignedOpenTaskCount} open assigned task(s)
+										</p>
+									</div>
+
+									{#if suggestion.missingCapabilityNames.length > 0 || suggestion.missingToolNames.length > 0}
+										<div class="mt-3 space-y-2 text-xs text-slate-300">
+											{#if suggestion.missingCapabilityNames.length > 0}
+												<p>
+													Missing capabilities: {suggestion.missingCapabilityNames.join(', ')}
+												</p>
+											{/if}
+											{#if suggestion.missingToolNames.length > 0}
+												<p>Missing tools: {suggestion.missingToolNames.join(', ')}</p>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-2">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">
+								Required capabilities
+							</span>
+							<input
+								class="input text-white"
+								name="requiredCapabilityNames"
+								placeholder="research, svelte, ios"
+								value={(data.task.requiredCapabilityNames ?? []).join(', ')}
+							/>
+							<p class="mt-2 text-xs text-slate-500">
+								Use a comma-separated list for capabilities or skills the task needs.
+							</p>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
+							<input
+								class="input text-white"
+								name="requiredToolNames"
+								placeholder="codex, xcodebuild"
+								value={(data.task.requiredToolNames ?? []).join(', ')}
+							/>
+							<p class="mt-2 text-xs text-slate-500">
+								Use a comma-separated list for tools or runtimes the task must use.
+							</p>
+						</label>
+					</div>
 				</section>
 
 				<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
@@ -577,6 +733,46 @@
 							class="rounded-2xl p-4 text-sm text-slate-300"
 							valueClass="ui-wrap-anywhere mt-2 text-sm text-slate-300"
 						/>
+					</div>
+
+					<div class="mt-4 grid gap-4 sm:grid-cols-2">
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Required capabilities
+							</p>
+							{#if (data.task.requiredCapabilityNames ?? []).length === 0}
+								<p class="mt-2 text-sm text-slate-400">No capability requirements recorded.</p>
+							{:else}
+								<div class="mt-3 flex flex-wrap gap-2">
+									{#each data.task.requiredCapabilityNames ?? [] as capability (capability)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{capability}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Required tools
+							</p>
+							{#if (data.task.requiredToolNames ?? []).length === 0}
+								<p class="mt-2 text-sm text-slate-400">No tool requirements recorded.</p>
+							{:else}
+								<div class="mt-3 flex flex-wrap gap-2">
+									{#each data.task.requiredToolNames ?? [] as tool (tool)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{tool}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
 					</div>
 				</section>
 
@@ -682,7 +878,8 @@
 									<p
 										class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 									>
-										No files attached to this task yet.
+										No files are attached to this task yet. Upload one above when the worker or
+										reviewer needs shared source material.
 									</p>
 								{:else}
 									{#each data.task.attachments as attachment (attachment.id)}
@@ -740,7 +937,7 @@
 							<div class="mt-5">
 								<ArtifactBrowser
 									browser={data.artifactBrowser}
-									emptyLabel="No files or folders are present under this task root yet."
+									emptyLabel="No files or folders are present under this task root yet. Run the task or attach a file if you expected outputs here."
 								/>
 							</div>
 						</div>
@@ -760,6 +957,67 @@
 						tone="sky"
 						bodyClass="divide-y divide-slate-800/90 p-0"
 					>
+						<div class="px-6 py-6">
+							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+								Published knowledge
+							</p>
+							<h3 class="mt-2 text-xl font-semibold text-white">
+								Guidance retrieved for the next launch
+							</h3>
+							<p class="mt-2 max-w-2xl text-sm text-slate-400">
+								These published lessons are matched against the current task and injected into new
+								launch prompts from this page.
+							</p>
+
+							{#if (data.retrievedKnowledgeItems ?? []).length === 0}
+								<p class="mt-5 text-sm text-slate-500">
+									No published knowledge currently matches this task. Publish a knowledge item from
+									the improvements queue when you identify a reusable lesson.
+								</p>
+							{:else}
+								<div class="mt-5 space-y-3">
+									{#each data.retrievedKnowledgeItems ?? [] as knowledgeItem (knowledgeItem.id)}
+										<article class="rounded-2xl border border-sky-900/40 bg-sky-950/15 p-4">
+											<div class="flex flex-wrap items-center gap-2">
+												<p class="text-sm font-medium text-white">{knowledgeItem.title}</p>
+												<span
+													class="badge border border-sky-800/60 bg-sky-950/40 text-[0.65rem] tracking-[0.16em] text-sky-200 uppercase"
+												>
+													Score {knowledgeItem.matchScore}
+												</span>
+											</div>
+											<p class="mt-2 text-sm text-slate-300">{knowledgeItem.summary}</p>
+											<div class="mt-4 grid gap-4 lg:grid-cols-2">
+												<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+													<p
+														class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
+													>
+														Trigger pattern
+													</p>
+													<p class="mt-2 text-sm text-slate-300">{knowledgeItem.triggerPattern}</p>
+												</div>
+												<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+													<p
+														class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
+													>
+														Recommended response
+													</p>
+													<p class="mt-2 text-sm text-slate-300">
+														{knowledgeItem.recommendedResponse}
+													</p>
+												</div>
+											</div>
+											{#if knowledgeItem.matchReasons.length > 0}
+												<p class="mt-3 text-xs text-sky-200">
+													{knowledgeItem.matchReasons.join(' ')}
+												</p>
+											{/if}
+										</article>
+									{/each}
+								</div>
+							{/if}
+						</div>
+
 						<div class="px-6 py-6">
 							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
 								Thread continuity
@@ -794,11 +1052,27 @@
 													{/each}
 												</div>
 											{/if}
+											{#if matchedContextSummary(data.suggestedThread).length > 0}
+												<div class="mt-3">
+													<p class="text-[11px] tracking-[0.16em] text-emerald-300 uppercase">
+														Shared context
+													</p>
+													<div class="mt-2 flex flex-wrap gap-2">
+														{#each matchedContextSummary(data.suggestedThread) as label (label)}
+															<span
+																class="badge border border-emerald-900/60 bg-emerald-950/20 text-[0.65rem] tracking-[0.16em] text-emerald-100 uppercase"
+															>
+																{label}
+															</span>
+														{/each}
+													</div>
+												</div>
+											{/if}
 											<p class="mt-2 text-sm text-emerald-100/90">
 												{data.suggestedThread.suggestionReason}
 											</p>
 											<p class="mt-2 text-xs text-slate-400">
-												{formatSessionStateLabel(data.suggestedThread.sessionState)} · Available to resume
+												{formatThreadStateLabel(data.suggestedThread.sessionState)} · Available to resume
 											</p>
 										</div>
 
@@ -837,7 +1111,7 @@
 										{#each data.candidateThreads as thread (thread.id)}
 											<option value={thread.id} selected={data.task.threadSessionId === thread.id}>
 												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
-												{formatSessionStateLabel(thread.sessionState)} ·
+												{formatThreadStateLabel(thread.sessionState)} ·
 												{thread.canResume
 													? 'ready'
 													: thread.hasActiveRun
@@ -895,7 +1169,7 @@
 													{/if}
 												</div>
 												<p class="mt-1 text-xs text-slate-500">
-													{formatSessionStateLabel(thread.sessionState)} ·
+													{formatThreadStateLabel(thread.sessionState)} ·
 													{thread.canResume
 														? 'Can resume'
 														: thread.hasActiveRun
@@ -912,6 +1186,22 @@
 															{topicLabel}
 														</span>
 													{/each}
+												</div>
+											{/if}
+											{#if matchedContextSummary(thread).length > 0}
+												<div class="mt-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Shared context
+													</p>
+													<div class="mt-2 flex flex-wrap gap-2">
+														{#each matchedContextSummary(thread) as label (label)}
+															<span
+																class="badge border border-emerald-900/40 bg-emerald-950/10 text-[0.65rem] tracking-[0.16em] text-emerald-200 uppercase"
+															>
+																{label}
+															</span>
+														{/each}
+													</div>
 												</div>
 											{/if}
 											{#if thread.previewText}
@@ -947,7 +1237,8 @@
 								{/if}
 							{:else}
 								<p class="mt-5 text-sm text-slate-500">
-									No reusable threads match this project context yet.
+									No reusable threads match this project context yet. Start the task once to create
+									a fresh thread, or revisit this panel after related work has accumulated.
 								</p>
 							{/if}
 						</div>
@@ -973,7 +1264,8 @@
 									<p
 										class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 									>
-										No runs recorded yet.
+										No runs are recorded for this task yet. Launch the task to create the first run,
+										then return here to compare later attempts.
 									</p>
 								{:else}
 									{#each data.relatedRuns as run (run.id)}
@@ -1015,14 +1307,14 @@
 												</div>
 												<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-														Session
+														Thread record
 													</p>
 													{#if run.sessionId}
 														<a
 															class="ui-wrap-inline mt-2 text-sm text-sky-300 transition hover:text-sky-200"
 															href={resolve(`/app/sessions/${run.sessionId}`)}
 														>
-															{run.sessionId}
+															{run.threadId || run.sessionId}
 														</a>
 													{:else}
 														<p class="mt-2 text-sm text-white">No thread</p>
@@ -1189,11 +1481,55 @@
 								</div>
 
 								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Recent decisions
+											</p>
+											<p class="mt-2 text-sm text-white">
+												Planning, review, approval, and recovery decisions recorded for this task.
+											</p>
+										</div>
+										<span
+											class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+										>
+											{data.recentDecisions.length}
+										</span>
+									</div>
+
+									{#if data.recentDecisions.length === 0}
+										<p class="mt-4 text-sm text-slate-400">
+											No decisions are recorded for this task yet. Reviews, approvals, and recovery
+											actions will appear here after work starts moving.
+										</p>
+									{:else}
+										<div class="mt-4 space-y-3">
+											{#each data.recentDecisions as decision (decision.id)}
+												<article class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+													<div class="flex flex-wrap items-center justify-between gap-3">
+														<span
+															class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-300 uppercase"
+														>
+															{formatDecisionTypeLabel(decision.decisionType)}
+														</span>
+														<p class="text-xs text-slate-500">{decision.createdAtLabel}</p>
+													</div>
+													<p class="mt-3 text-sm leading-6 text-white">{decision.summary}</p>
+												</article>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 										Dependencies
 									</p>
 									{#if data.dependencyTasks.length === 0}
-										<p class="mt-2 text-sm text-slate-400">No dependencies recorded.</p>
+										<p class="mt-2 text-sm text-slate-400">
+											No dependencies are recorded. This task can proceed independently unless you
+											add a blocker or upstream task.
+										</p>
 									{:else}
 										<div class="mt-3 space-y-3">
 											{#each data.dependencyTasks as dependency (dependency.id)}

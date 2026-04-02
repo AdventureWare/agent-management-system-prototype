@@ -1,3 +1,4 @@
+import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
@@ -101,11 +102,20 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 		});
 
 		expect(document.body.textContent).toContain('Edit goal');
+		expect(document.body.textContent).toContain('Goal coach');
 		expect(document.body.textContent).toContain('Parent and subgoal context');
 		expect(document.body.textContent).toContain('Validate creator partnerships');
-		expect(document.body.textContent).toContain('Kwipoo website');
-		expect(document.body.textContent).toContain('Draft creator outreach plan');
 		expect(document.body.textContent).toContain('Goal artifact browser');
 		expect(document.body.textContent).toContain('notes.md');
+
+		await page.getByRole('tab', { name: /Projects 1/i }).click();
+
+		expect(document.body.textContent).toContain('Project context');
+		expect(document.body.textContent).toContain('Kwipoo website');
+
+		await page.getByRole('tab', { name: /Tasks 1/i }).click();
+
+		expect(document.body.textContent).toContain('Execution under this goal');
+		expect(document.body.textContent).toContain('Draft creator outreach plan');
 	});
 });

@@ -2,7 +2,9 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { formatWorkerStatusLabel, workerStatusToneClass } from '$lib/types/control-plane';
@@ -20,6 +22,12 @@
 	let workerNote = $state('');
 	let workerTags = $state('');
 	let query = $state('');
+
+	function modalShouldStartOpen() {
+		return Boolean(form?.message);
+	}
+
+	let isCreateModalOpen = $state(modalShouldStartOpen());
 
 	let localWorkerCount = $derived(
 		data.workers.filter((worker) => worker.location === 'local').length
@@ -109,6 +117,7 @@
 			workerCapacity = savedDraft.capacity ?? '1';
 			workerNote = savedDraft.note ?? '';
 			workerTags = savedDraft.tags ?? '';
+			isCreateModalOpen = true;
 		}
 
 		workerProviderId = workerProviderId || defaultWorkerProviderId();
@@ -142,9 +151,21 @@
 		eyebrow="Workers"
 		title="Browse execution surfaces"
 		description="Workers represent the actual local or cloud surfaces that can take work. This page is now collection-first: find the right worker quickly, then drill into its detail page for routing and activity."
-	/>
+	>
+		{#snippet actions()}
+			<button
+				class="btn preset-filled-primary-500 font-semibold"
+				type="button"
+				onclick={() => {
+					isCreateModalOpen = true;
+				}}
+			>
+				Add worker
+			</button>
+		{/snippet}
+	</PageHeader>
 
-	<div class="grid gap-4 md:grid-cols-3">
+	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 		<MetricCard
 			label="Workers"
 			value={data.workers.length}
@@ -168,119 +189,109 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-		<div class="space-y-6">
-			<section class="ui-toolbar">
-				<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-					<div>
-						<h2 class="text-xl font-semibold text-white">Worker directory</h2>
-						<p class="mt-1 text-sm text-slate-400">
-							Search by worker name, role, provider, note, or tags, then open one worker for full
-							routing and execution detail.
-						</p>
-					</div>
-					<div class="w-full xl:w-80">
-						<label class="sr-only" for="worker-search">Search workers</label>
-						<input
-							id="worker-search"
-							bind:value={query}
-							class="input text-white placeholder:text-slate-500"
-							placeholder="Search workers"
-						/>
-					</div>
-				</div>
-			</section>
+	{#if createSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			Worker created and saved into the control plane.
+		</p>
+	{/if}
 
-			<section class="ui-panel">
-				{#if filteredWorkers.length === 0}
-					<p class="ui-empty-state">No workers match the current search.</p>
-				{:else}
-					<div class="space-y-4">
-						{#each filteredWorkers as worker (worker.id)}
-							<a
-								class="group block rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-sky-400/40 hover:bg-slate-900"
-								href={resolve(`/app/workers/${worker.id}`)}
-							>
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div class="min-w-0 flex-1">
-										<div class="flex flex-wrap items-center gap-2">
-											<h3
-												class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
-											>
-												{worker.name}
-											</h3>
-											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
-											>
-												{formatWorkerStatusLabel(worker.status)}
-											</span>
-											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${locationClass(worker.location)}`}
-											>
-												{worker.location}
-											</span>
-										</div>
-										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
-											{worker.note || 'No note saved.'}
-										</p>
-									</div>
-									<div class="min-w-0 text-left text-xs text-slate-500 sm:max-w-56 sm:text-right">
-										<p class="ui-wrap-anywhere">{worker.providerName}</p>
-										<p class="ui-wrap-anywhere mt-1">{worker.roleName}</p>
-									</div>
-								</div>
-
-								<div class="mt-4 grid gap-3 sm:grid-cols-3">
-									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Capacity</p>
-										<p class="mt-2 text-lg font-semibold text-white">{worker.capacity}</p>
-									</div>
-									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-											Assigned tasks
-										</p>
-										<p class="mt-2 text-lg font-semibold text-white">{worker.assignedTaskCount}</p>
-									</div>
-									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last run</p>
-										<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-											{worker.latestRunAt ? new Date(worker.latestRunAt).toLocaleString() : 'None'}
-										</p>
-									</div>
-								</div>
-
-								{#if worker.tags.length > 0}
-									<div class="mt-4 flex flex-wrap gap-2">
-										{#each worker.tags as tag (tag)}
-											<span
-												class="ui-wrap-anywhere rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
-											>
-												{tag}
-											</span>
-										{/each}
-									</div>
-								{/if}
-							</a>
-						{/each}
-					</div>
-				{/if}
-			</section>
-		</div>
-
-		<form
-			class="ui-panel space-y-4"
-			method="POST"
-			action="?/createWorker"
-			data-persist-scope="manual"
-		>
-			<div class="space-y-2">
-				<h2 class="text-xl font-semibold text-white">Register worker</h2>
-				<p class="text-sm text-slate-400">
-					Create the worker here after you confirm the current directory does not already cover the
-					capacity you need.
-				</p>
+	<CollectionToolbar
+		title="Worker directory"
+		description="Search by worker name, role, provider, note, or tags, then open one worker for full routing and execution detail."
+	>
+		{#snippet controls()}
+			<div class="w-full xl:w-80">
+				<label class="sr-only" for="worker-search">Search workers</label>
+				<input
+					id="worker-search"
+					bind:value={query}
+					class="input text-white placeholder:text-slate-500"
+					placeholder="Search workers"
+				/>
 			</div>
+		{/snippet}
 
+		{#if filteredWorkers.length === 0}
+			<p class="ui-empty-state mt-6">No workers match the current search.</p>
+		{:else}
+			<div class="mt-6 space-y-4">
+				{#each filteredWorkers as worker (worker.id)}
+					<a
+						class="group block rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-sky-400/40 hover:bg-slate-900"
+						href={resolve(`/app/workers/${worker.id}`)}
+					>
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div class="min-w-0 flex-1">
+								<div class="flex flex-wrap items-center gap-2">
+									<h3
+										class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
+									>
+										{worker.name}
+									</h3>
+									<span
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
+									>
+										{formatWorkerStatusLabel(worker.status)}
+									</span>
+									<span
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${locationClass(worker.location)}`}
+									>
+										{worker.location}
+									</span>
+								</div>
+								<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
+									{worker.note || 'No note saved.'}
+								</p>
+							</div>
+							<div class="min-w-0 text-left text-xs text-slate-500 sm:max-w-56 sm:text-right">
+								<p class="ui-wrap-anywhere">{worker.providerName}</p>
+								<p class="ui-wrap-anywhere mt-1">{worker.roleName}</p>
+							</div>
+						</div>
+
+						<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Capacity</p>
+								<p class="mt-2 text-lg font-semibold text-white">{worker.capacity}</p>
+							</div>
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Assigned tasks</p>
+								<p class="mt-2 text-lg font-semibold text-white">{worker.assignedTaskCount}</p>
+							</div>
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last run</p>
+								<p class="ui-wrap-anywhere mt-2 text-sm text-white">
+									{worker.latestRunAt ? new Date(worker.latestRunAt).toLocaleString() : 'None'}
+								</p>
+							</div>
+						</div>
+
+						{#if worker.tags.length > 0}
+							<div class="mt-4 flex flex-wrap gap-2">
+								{#each worker.tags as tag (tag)}
+									<span
+										class="ui-wrap-anywhere rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
+									>
+										{tag}
+									</span>
+								{/each}
+							</div>
+						{/if}
+					</a>
+				{/each}
+			</div>
+		{/if}
+	</CollectionToolbar>
+</AppPage>
+
+{#if isCreateModalOpen}
+	<AppDialog
+		bind:open={isCreateModalOpen}
+		title="Register worker"
+		description="Add a new execution surface after you confirm the current directory does not already cover the capacity you need."
+		closeLabel="Close register worker form"
+	>
+		<form class="space-y-6" method="POST" action="?/createWorker" data-persist-scope="manual">
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 				<input
@@ -367,5 +378,5 @@
 				Register worker
 			</button>
 		</form>
-	</div>
-</AppPage>
+	</AppDialog>
+{/if}

@@ -8,6 +8,7 @@ import {
 } from '$lib/server/agent-threads';
 import {
 	createApproval,
+	createDecision,
 	createReview,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
@@ -141,7 +142,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const [session, data] = await Promise.all([getAgentThread(params.sessionId), loadControlPlane()]);
 
 	if (!session) {
-		throw error(404, 'Session not found.');
+		throw error(404, 'Thread not found.');
 	}
 
 	return {
@@ -162,7 +163,7 @@ export const actions: Actions = {
 		const session = await getAgentThread(params.sessionId);
 
 		if (!session) {
-			return fail(404, { message: 'Session not found.' });
+			return fail(404, { message: 'Thread not found.' });
 		}
 
 		await updateAgentThreadSandbox(params.sessionId, nextSandbox);
@@ -181,7 +182,7 @@ export const actions: Actions = {
 		]);
 
 		if (!session) {
-			return fail(404, { message: 'Session not found.' });
+			return fail(404, { message: 'Thread not found.' });
 		}
 
 		const task = resolveSessionTask(current, params.sessionId);
@@ -296,7 +297,18 @@ export const actions: Actions = {
 							updatedAt: now
 						}
 					: candidate
-			)
+			),
+			decisions: [
+				createDecision({
+					taskId: task.id,
+					runId: task.latestRunId,
+					decisionType: 'task_completed',
+					summary:
+						'Approved the thread response and completed the task from the thread detail page.',
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
 		}));
 
 		return {

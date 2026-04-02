@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import {
 		formatRunStatusLabel,
 		formatTaskStatusLabel,
@@ -14,63 +16,53 @@
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateWorker');
 </script>
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="min-w-0 space-y-3">
-			<a
-				class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase transition hover:text-sky-200"
-				href={resolve('/app/workers')}
-			>
-				Workers
-			</a>
-			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="ui-wrap-anywhere text-3xl font-semibold tracking-tight text-white">
-					{data.worker.name}
-				</h1>
+<AppPage width="full">
+	<DetailHeader
+		backHref={resolve('/app/workers')}
+		backLabel="Back to workers"
+		eyebrow="Worker detail"
+		title={data.worker.name}
+		description={data.worker.note || 'No note saved for this worker yet.'}
+	>
+		{#snippet meta()}
+			<div class="flex flex-wrap gap-2">
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.worker.status)}`}
 				>
 					{formatWorkerStatusLabel(data.worker.status)}
 				</span>
 			</div>
-			<p class="ui-wrap-anywhere max-w-3xl text-sm text-slate-300">
-				{data.worker.note || 'No note saved for this worker yet.'}
-			</p>
-		</div>
+		{/snippet}
+	</DetailHeader>
 
-		<div class="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider</p>
-				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
-					{data.worker.providerName}
-				</p>
-				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-					{data.worker.location} execution surface
-				</p>
-				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-					Provider default sandbox: {data.worker.providerDefaultThreadSandbox}
-				</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Role</p>
-				<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
-					{data.worker.roleName}
-				</p>
-				<p class="mt-2 text-sm text-slate-400">Capacity {data.worker.capacity}</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Assigned tasks
-				</p>
-				<p class="mt-3 text-3xl font-semibold text-white">{data.assignedTasks.length}</p>
-				<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to this worker.</p>
-			</article>
-			<article class="card border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
-				<p class="mt-3 text-3xl font-semibold text-white">{data.recentRuns.length}</p>
-				<p class="mt-2 text-sm text-slate-400">Latest recorded runs on this worker.</p>
-			</article>
-		</div>
+	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider</p>
+			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+				{data.worker.providerName}
+			</p>
+			<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+				{data.worker.location} execution surface
+			</p>
+			<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+				Provider default sandbox: {data.worker.providerDefaultThreadSandbox}
+			</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Role</p>
+			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">{data.worker.roleName}</p>
+			<p class="mt-2 text-sm text-slate-400">Capacity {data.worker.capacity}</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Assigned tasks</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{data.assignedTasks.length}</p>
+			<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to this worker.</p>
+		</article>
+		<article class="card border border-slate-800 bg-slate-950/70 p-4">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
+			<p class="mt-3 text-3xl font-semibold text-white">{data.recentRuns.length}</p>
+			<p class="mt-2 text-sm text-slate-400">Latest recorded runs on this worker.</p>
+		</article>
 	</div>
 
 	{#if form?.message}
@@ -310,4 +302,4 @@
 			</section>
 		</div>
 	</div>
-</section>
+</AppPage>

@@ -50,6 +50,10 @@
 				formatThreadStateLabel(session.sessionState),
 				session.latestRunStatus,
 				(session.topicLabels ?? []).join(' '),
+				(session.categorization?.laneLabels ?? []).join(' '),
+				(session.categorization?.focusLabels ?? []).join(' '),
+				(session.categorization?.entityLabels ?? []).join(' '),
+				(session.categorization?.keywordLabels ?? []).join(' '),
 				session.threadId ?? '',
 				session.relatedTasks.map((task) => task.title).join(' '),
 				session.latestRun?.prompt ?? '',
@@ -507,7 +511,7 @@
 		</table>
 	</DataTableSection>
 {/snippet}
-<AppPage class="gap-6 px-4 py-5 sm:px-6 sm:py-8">
+<AppPage width="full" class="gap-6 px-4 py-5 sm:px-6 sm:py-8">
 	<PageHeader
 		eyebrow="Threads"
 		title="Browse active and historical background threads"
@@ -553,7 +557,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 		<MetricCard label="Active" value={activeCount} />
 		<MetricCard label="Available" value={availableCount} />
 		<MetricCard label="Closed / idle" value={inactiveCount} />
@@ -648,14 +652,14 @@
 			'Active threads',
 			'Threads that currently have a queued or in-progress run.',
 			activeSessions,
-			'No active threads match the current search.'
+			'No active threads match the current search. Clear the search or open tasks to start new work.'
 		)}
 
 		{@render sessionTable(
 			'Other threads',
 			'Available, not-resumable, idle, and attention-needed threads kept for reference and follow-up.',
 			historicalSessions,
-			'No other threads match the current search.',
+			'No other threads match the current search. Clear the search or review archived threads if you expect older context.',
 			true
 		)}
 
@@ -664,7 +668,7 @@
 				'Archived threads',
 				'Threads hidden from the default registry view. Select them here to restore them.',
 				archivedSessions,
-				'No archived threads match the current search.'
+				'No archived threads match the current search. Clear the search or turn off archived mode when you are done reviewing history.'
 			)}
 		{/if}
 	</div>

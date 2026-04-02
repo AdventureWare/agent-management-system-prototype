@@ -34,6 +34,17 @@ export const REVIEW_STATUS_OPTIONS = [
 	'dismissed'
 ] as const;
 export const APPROVAL_STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'canceled'] as const;
+export const DECISION_TYPE_OPTIONS = [
+	'goal_plan_updated',
+	'task_plan_updated',
+	'task_thread_updated',
+	'task_recovered',
+	'review_approved',
+	'review_changes_requested',
+	'approval_approved',
+	'approval_rejected',
+	'task_completed'
+] as const;
 export const GOAL_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
 export const WORKER_STATUS_OPTIONS = ['idle', 'busy', 'offline'] as const;
 export const WORKER_LOCATION_OPTIONS = ['local', 'cloud'] as const;
@@ -50,6 +61,7 @@ export type TaskApprovalMode = (typeof TASK_APPROVAL_MODE_OPTIONS)[number];
 export type RunStatus = (typeof RUN_STATUS_OPTIONS)[number];
 export type ReviewStatus = (typeof REVIEW_STATUS_OPTIONS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUS_OPTIONS)[number];
+export type DecisionType = (typeof DECISION_TYPE_OPTIONS)[number];
 export type GoalStatus = (typeof GOAL_STATUS_OPTIONS)[number];
 export type WorkerStatus = (typeof WORKER_STATUS_OPTIONS)[number];
 export type WorkerLocation = (typeof WORKER_LOCATION_OPTIONS)[number];
@@ -212,6 +224,31 @@ export function approvalStatusToneClass(status: string): string {
 	}
 }
 
+export function formatDecisionTypeLabel(type: string): string {
+	switch (type) {
+		case 'goal_plan_updated':
+			return 'Goal Plan Updated';
+		case 'task_plan_updated':
+			return 'Plan Updated';
+		case 'task_thread_updated':
+			return 'Thread Updated';
+		case 'task_recovered':
+			return 'Task Recovered';
+		case 'review_approved':
+			return 'Review Approved';
+		case 'review_changes_requested':
+			return 'Changes Requested';
+		case 'approval_approved':
+			return 'Approval Granted';
+		case 'approval_rejected':
+			return 'Approval Rejected';
+		case 'task_completed':
+			return 'Task Completed';
+		default:
+			return formatEnumLabel(type);
+	}
+}
+
 export function formatGoalStatusLabel(status: string): string {
 	return formatEnumLabel(status);
 }
@@ -354,9 +391,10 @@ export type Task = {
 	desiredRoleId: string;
 	assigneeWorkerId: string | null;
 	threadSessionId: string | null;
+	requiredCapabilityNames?: string[];
+	requiredToolNames?: string[];
 	blockedReason: string;
 	dependencyTaskIds: string[];
-	parentTaskId?: string | null;
 	estimateHours?: number | null;
 	targetDate?: string | null;
 	runCount: number;
@@ -413,6 +451,35 @@ export type Approval = {
 	summary: string;
 };
 
+export type Decision = {
+	id: string;
+	taskId: string | null;
+	goalId: string | null;
+	runId: string | null;
+	reviewId: string | null;
+	approvalId: string | null;
+	planningSessionId: string | null;
+	decisionType: DecisionType;
+	summary: string;
+	createdAt: string;
+	decidedByWorkerId: string | null;
+};
+
+export type PlanningSession = {
+	id: string;
+	windowStart: string;
+	windowEnd: string;
+	projectId: string | null;
+	goalId: string | null;
+	workerId: string | null;
+	includeUnscheduled: boolean;
+	goalIds: string[];
+	taskIds: string[];
+	decisionIds: string[];
+	summary: string;
+	createdAt: string;
+};
+
 export type ControlPlaneData = {
 	providers: Provider[];
 	roles: Role[];
@@ -423,4 +490,6 @@ export type ControlPlaneData = {
 	runs: Run[];
 	reviews: Review[];
 	approvals: Approval[];
+	planningSessions?: PlanningSession[];
+	decisions?: Decision[];
 };

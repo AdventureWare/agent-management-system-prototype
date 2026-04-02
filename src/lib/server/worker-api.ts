@@ -4,6 +4,7 @@ import { error } from '@sveltejs/kit';
 import {
 	createRun,
 	getPendingApprovalForTask,
+	syncTaskExecutionState,
 	syncGovernanceQueues,
 	taskHasUnmetDependencies
 } from '$lib/server/control-plane';
@@ -17,6 +18,18 @@ import type {
 } from '$lib/types/control-plane';
 
 export type PublicWorker = Omit<Worker, 'authTokenHash'>;
+export type WorkerTaskFit = {
+	workerId: string;
+	workerName: string;
+	roleId: string;
+	providerId: string;
+	status: WorkerStatus;
+	eligible: boolean;
+	exactRoleMatch: boolean;
+	assignedOpenTaskCount: number;
+	missingCapabilityNames: string[];
+	missingToolNames: string[];
+};
 
 export function createWorkerAuthToken() {
 	return randomBytes(24).toString('hex');
@@ -70,8 +83,105 @@ export function authenticateWorker(data: ControlPlaneData, workerId: string, wor
 	return worker;
 }
 
-export function isWorkerEligibleForTask(worker: Worker, task: Task) {
-	return worker.roleId === 'role_coordinator' || worker.roleId === task.desiredRoleId;
+function normalizeMatchKey(value: string) {
+	return value.trim().toLowerCase();
+}
+
+function getWorkerCapabilityKeys(data: ControlPlaneData, worker: Worker) {
+	const provider = data.providers.find((candidate) => candidate.id === worker.providerId) ?? null;
+
+	return new Set(
+		[...(worker.skills ?? []), ...(provider?.capabilities ?? [])]
+			.map(normalizeMatchKey)
+			.filter(Boolean)
+	);
+}
+
+function getWorkerToolKeys(data: ControlPlaneData, worker: Worker) {
+	const provider = data.providers.find((candidate) => candidate.id === worker.providerId) ?? null;
+
+	return new Set([provider?.launcher ?? ''].map(normalizeMatchKey).filter(Boolean));
+}
+
+function getWorkerAssignedOpenTaskCount(data: ControlPlaneData, worker: Worker) {
+	return data.tasks.filter((task) => task.assigneeWorkerId === worker.id && task.status !== 'done')
+		.length;
+}
+
+function getWorkerStatusRank(status: WorkerStatus) {
+	switch (status) {
+		case 'idle':
+			return 0;
+		case 'busy':
+			return 1;
+		case 'offline':
+		default:
+			return 2;
+	}
+}
+
+export function describeWorkerTaskFit(
+	data: ControlPlaneData,
+	worker: Worker,
+	task: Task
+): WorkerTaskFit {
+	const roleEligible = worker.roleId === 'role_coordinator' || worker.roleId === task.desiredRoleId;
+	const capabilityKeys = getWorkerCapabilityKeys(data, worker);
+	const toolKeys = getWorkerToolKeys(data, worker);
+	const missingCapabilityNames = (task.requiredCapabilityNames ?? []).filter(
+		(name) => !capabilityKeys.has(normalizeMatchKey(name))
+	);
+	const missingToolNames = (task.requiredToolNames ?? []).filter(
+		(name) => !toolKeys.has(normalizeMatchKey(name))
+	);
+
+	return {
+		workerId: worker.id,
+		workerName: worker.name,
+		roleId: worker.roleId,
+		providerId: worker.providerId,
+		status: worker.status,
+		eligible: roleEligible && missingCapabilityNames.length === 0 && missingToolNames.length === 0,
+		exactRoleMatch: worker.roleId === task.desiredRoleId,
+		assignedOpenTaskCount: getWorkerAssignedOpenTaskCount(data, worker),
+		missingCapabilityNames,
+		missingToolNames
+	};
+}
+
+export function isWorkerEligibleForTask(data: ControlPlaneData, worker: Worker, task: Task) {
+	return describeWorkerTaskFit(data, worker, task).eligible;
+}
+
+export function getWorkerAssignmentSuggestions(data: ControlPlaneData, task: Task) {
+	return data.workers
+		.map((worker) => describeWorkerTaskFit(data, worker, task))
+		.sort((left, right) => {
+			if (left.eligible !== right.eligible) {
+				return left.eligible ? -1 : 1;
+			}
+
+			if (left.exactRoleMatch !== right.exactRoleMatch) {
+				return left.exactRoleMatch ? -1 : 1;
+			}
+
+			if (getWorkerStatusRank(left.status) !== getWorkerStatusRank(right.status)) {
+				return getWorkerStatusRank(left.status) - getWorkerStatusRank(right.status);
+			}
+
+			if (left.assignedOpenTaskCount !== right.assignedOpenTaskCount) {
+				return left.assignedOpenTaskCount - right.assignedOpenTaskCount;
+			}
+
+			const leftMissingCount = left.missingCapabilityNames.length + left.missingToolNames.length;
+			const rightMissingCount = right.missingCapabilityNames.length + right.missingToolNames.length;
+
+			if (leftMissingCount !== rightMissingCount) {
+				return leftMissingCount - rightMissingCount;
+			}
+
+			return left.workerName.localeCompare(right.workerName);
+		});
 }
 
 export function getWorkerTaskView(data: ControlPlaneData, worker: Worker) {
@@ -83,7 +193,7 @@ export function getWorkerTaskView(data: ControlPlaneData, worker: Worker) {
 		(task) =>
 			task.assigneeWorkerId === null &&
 			task.status === 'ready' &&
-			isWorkerEligibleForTask(worker, task) &&
+			isWorkerEligibleForTask(data, worker, task) &&
 			getPendingApprovalForTask(data, task.id)?.mode !== 'before_run' &&
 			!taskHasUnmetDependencies(data, task)
 	);
@@ -143,7 +253,7 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 		throw error(404, 'Task not found.');
 	}
 
-	if (!isWorkerEligibleForTask(worker, task)) {
+	if (!isWorkerEligibleForTask(data, worker, task)) {
 		throw error(403, 'Worker is not eligible for this task.');
 	}
 
@@ -180,22 +290,22 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 		lastHeartbeatAt: new Date().toISOString()
 	});
 
-	return syncGovernanceQueues({
-		...data,
-		runs: [run, ...data.runs],
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						assigneeWorkerId: worker.id,
-						runCount: candidate.runCount + 1,
-						latestRunId: run.id,
-						status: 'in_progress' as const,
-						updatedAt: new Date().toISOString()
-					}
-				: candidate
-		)
-	});
+	return syncGovernanceQueues(
+		syncTaskExecutionState({
+			...data,
+			runs: [run, ...data.runs],
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === taskId
+					? {
+							...candidate,
+							assigneeWorkerId: worker.id,
+							status: 'in_progress' as const,
+							updatedAt: new Date().toISOString()
+						}
+					: candidate
+			)
+		})
+	);
 }
 
 function taskStatusToRunStatus(status: TaskStatus): RunStatus {
@@ -233,31 +343,33 @@ export function updateTaskFromWorker(
 		throw error(403, 'Task is not assigned to this worker.');
 	}
 
-	return syncGovernanceQueues({
-		...data,
-		runs: data.runs.map((candidate) =>
-			candidate.id === task.latestRunId && candidate.workerId === worker.id
-				? {
-						...candidate,
-						status: taskStatusToRunStatus(input.status),
-						updatedAt: new Date().toISOString(),
-						lastHeartbeatAt: new Date().toISOString(),
-						endedAt:
-							input.status === 'in_progress'
-								? null
-								: (candidate.endedAt ?? new Date().toISOString()),
-						summary: `Worker updated task to ${input.status}.`
-					}
-				: candidate
-		),
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === input.taskId
-				? {
-						...candidate,
-						status: input.status,
-						updatedAt: new Date().toISOString()
-					}
-				: candidate
-		)
-	});
+	return syncGovernanceQueues(
+		syncTaskExecutionState({
+			...data,
+			runs: data.runs.map((candidate) =>
+				candidate.id === task.latestRunId && candidate.workerId === worker.id
+					? {
+							...candidate,
+							status: taskStatusToRunStatus(input.status),
+							updatedAt: new Date().toISOString(),
+							lastHeartbeatAt: new Date().toISOString(),
+							endedAt:
+								input.status === 'in_progress'
+									? null
+									: (candidate.endedAt ?? new Date().toISOString()),
+							summary: `Worker updated task to ${input.status}.`
+						}
+					: candidate
+			),
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === input.taskId
+					? {
+							...candidate,
+							status: input.status,
+							updatedAt: new Date().toISOString()
+						}
+					: candidate
+			)
+		})
+	);
 }

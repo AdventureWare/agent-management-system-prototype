@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { resolveTaskThreadName } from '$lib/server/task-threads';
-import { deriveThreadTopicLabels } from '$lib/server/task-thread-topics';
+import { deriveThreadCategorization } from '$lib/server/task-thread-topics';
 import {
 	getCodexSkillExecutionIssue,
 	getWorkspaceExecutionIssue
@@ -1309,7 +1309,7 @@ function finalizeSessionDetail(input: {
 			lastMessage: latestRun?.lastMessage ?? null,
 			threadId
 		});
-	const topicLabels = deriveThreadTopicLabels({
+	const categorization = deriveThreadCategorization({
 		sessionName: name,
 		sessionSummary,
 		runDetails: input.runDetails.map((run) => ({
@@ -1325,7 +1325,8 @@ function finalizeSessionDetail(input: {
 		attachments: input.session.attachments ?? [],
 		origin: input.origin,
 		threadId,
-		topicLabels,
+		topicLabels: categorization.labels,
+		categorization,
 		sessionState,
 		latestRunStatus,
 		hasActiveRun: hasActive,

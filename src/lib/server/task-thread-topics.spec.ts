@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deriveTaskTopicLabels, deriveThreadTopicLabels } from './task-thread-topics';
+import {
+	deriveTaskCategorization,
+	deriveTaskTopicLabels,
+	deriveThreadCategorization,
+	deriveThreadTopicLabels
+} from './task-thread-topics';
 
 describe('task thread topics', () => {
 	it('derives stable topic labels from task content', () => {
@@ -10,6 +15,23 @@ describe('task thread topics', () => {
 				lane: 'product'
 			})
 		).toEqual(expect.arrayContaining(['Product', 'Testing', 'Attachment']));
+	});
+
+	it('derives structured task categories for matching and discovery', () => {
+		expect(
+			deriveTaskCategorization({
+				title: 'Improve thread assignment suggestions',
+				summary: 'Match new tasks to reusable work threads and surface better context.',
+				lane: 'product',
+				requiredCapabilityNames: ['assignment'],
+				requiredToolNames: ['context']
+			})
+		).toMatchObject({
+			laneLabels: ['Product'],
+			focusLabels: expect.arrayContaining(['Coordination']),
+			entityLabels: expect.arrayContaining(['Thread']),
+			keywordLabels: expect.arrayContaining(['Suggestion'])
+		});
 	});
 
 	it('derives thread topic labels from related tasks and recent thread content', () => {
@@ -33,5 +55,33 @@ describe('task thread topics', () => {
 				]
 			})
 		).toEqual(expect.arrayContaining(['Product', 'Testing', 'Attachment']));
+	});
+
+	it('derives structured thread categories from task and run context', () => {
+		expect(
+			deriveThreadCategorization({
+				sessionName: 'Thread assignment follow-up',
+				sessionSummary: 'Continue matching tasks to reusable threads.',
+				runDetails: [
+					{
+						prompt: 'Review the thread reuse rules and improve context discovery.',
+						lastMessage: 'Categorized the thread by lane, focus, and context.'
+					}
+				],
+				relatedTasks: [
+					{
+						title: 'Improve thread assignment suggestions',
+						summary: 'Match new tasks to reusable work threads.',
+						lane: 'product',
+						isPrimary: true
+					}
+				]
+			})
+		).toMatchObject({
+			laneLabels: ['Product'],
+			focusLabels: expect.arrayContaining(['Coordination']),
+			entityLabels: expect.arrayContaining(['Thread']),
+			keywordLabels: expect.arrayContaining(['Suggestion'])
+		});
 	});
 });

@@ -1,3 +1,5 @@
+import type { ThreadCategorization } from '$lib/types/thread-categorization';
+
 export const AGENT_SANDBOX_OPTIONS = [
 	'read-only',
 	'workspace-write',
@@ -104,6 +106,7 @@ export type AgentSessionDetail = AgentSession & {
 	origin: AgentSessionOrigin;
 	threadId: string | null;
 	topicLabels?: string[];
+	categorization?: ThreadCategorization;
 	sessionState: AgentSessionState;
 	latestRunStatus: AgentRunStatus | 'idle';
 	hasActiveRun: boolean;

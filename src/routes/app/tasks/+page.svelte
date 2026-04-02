@@ -10,8 +10,8 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
 	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
-	import SessionActivityIndicator from '$lib/components/SessionActivityIndicator.svelte';
-	import { formatSessionStateLabel } from '$lib/session-activity';
+	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
+	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import {
 		formatTaskApprovalModeLabel,
 		formatTaskStatusLabel,
@@ -205,10 +205,12 @@
 			task.targetDate ?? '',
 			formatDateLabel(task.targetDate),
 			task.artifactPath,
+			...(task.requiredCapabilityNames ?? []),
+			...(task.requiredToolNames ?? []),
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
 			task.statusThread?.name ?? '',
 			task.statusThread?.sessionState ?? '',
-			task.statusThread ? formatSessionStateLabel(task.statusThread.sessionState) : '',
+			task.statusThread ? formatThreadStateLabel(task.statusThread.sessionState) : '',
 			...task.freshness.staleSignals
 		]
 			.join(' ')
@@ -356,6 +358,16 @@
 					instructions: form.instructions?.toString() ?? '',
 					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
+					requiredCapabilityNames:
+						Array.isArray(form.requiredCapabilityNames) &&
+						form.requiredCapabilityNames.every((value) => typeof value === 'string')
+							? form.requiredCapabilityNames.join(', ')
+							: '',
+					requiredToolNames:
+						Array.isArray(form.requiredToolNames) &&
+						form.requiredToolNames.every((value) => typeof value === 'string')
+							? form.requiredToolNames.join(', ')
+							: '',
 					submitMode: form.submitMode?.toString() === 'createAndRun' ? 'createAndRun' : 'create'
 				}
 			: {
@@ -364,6 +376,8 @@
 					instructions: '',
 					assigneeWorkerId: '',
 					targetDate: '',
+					requiredCapabilityNames: '',
+					requiredToolNames: '',
 					submitMode: 'create'
 				}
 	);
@@ -372,6 +386,8 @@
 	let createTaskInstructions = $state('');
 	let createTaskAssigneeWorkerId = $state('');
 	let createTaskTargetDate = $state('');
+	let createTaskRequiredCapabilityNames = $state('');
+	let createTaskRequiredToolNames = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
 	);
@@ -383,6 +399,8 @@
 			createTaskInstructions = createTaskFormValues.instructions;
 			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
+			createTaskRequiredCapabilityNames = createTaskFormValues.requiredCapabilityNames;
+			createTaskRequiredToolNames = createTaskFormValues.requiredToolNames;
 			return;
 		}
 
@@ -409,6 +427,8 @@
 			instructions: string;
 			assigneeWorkerId: string;
 			targetDate: string;
+			requiredCapabilityNames: string;
+			requiredToolNames: string;
 		}>(CREATE_TASK_DRAFT_KEY);
 
 		if (savedDraft) {
@@ -417,6 +437,8 @@
 			createTaskInstructions = savedDraft.instructions ?? '';
 			createTaskAssigneeWorkerId = savedDraft.assigneeWorkerId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
+			createTaskRequiredCapabilityNames = savedDraft.requiredCapabilityNames ?? '';
+			createTaskRequiredToolNames = savedDraft.requiredToolNames ?? '';
 			isCreateModalOpen = true;
 		}
 
@@ -435,7 +457,9 @@
 			name: createTaskName,
 			instructions: createTaskInstructions,
 			assigneeWorkerId: createTaskAssigneeWorkerId,
-			targetDate: createTaskTargetDate
+			targetDate: createTaskTargetDate,
+			requiredCapabilityNames: createTaskRequiredCapabilityNames,
+			requiredToolNames: createTaskRequiredToolNames
 		});
 	});
 </script>
@@ -545,7 +569,7 @@
 								</span>
 								{#if task.statusThread}
 									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
-										<SessionActivityIndicator compact session={task.statusThread} />
+										<ThreadActivityIndicator compact thread={task.statusThread} />
 									</div>
 								{/if}
 							</div>
@@ -861,7 +885,7 @@
 					{@render taskTable(
 						selectedTaskView === 'completed' ? 'Completed work' : 'Active queue',
 						selectedTaskView === 'completed'
-							? 'Finished tasks kept here for reference and session follow-up.'
+							? 'Finished tasks kept here for reference and thread follow-up.'
 							: 'Draft, ready, in-progress, review, and blocked work that still needs attention.',
 						visibleTaskRows,
 						selectedTaskView === 'completed'
@@ -1206,6 +1230,36 @@
 										<option value={worker.id}>{worker.name}</option>
 									{/each}
 								</select>
+							</label>
+						</div>
+
+						<div class="grid gap-4 md:grid-cols-2">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Required capabilities
+								</span>
+								<input
+									bind:value={createTaskRequiredCapabilityNames}
+									class="input text-white placeholder:text-slate-500"
+									name="requiredCapabilityNames"
+									placeholder="planning, citations, svelte"
+								/>
+								<span class="mt-2 block text-xs text-slate-500">
+									Comma-separated abilities the task needs, regardless of who does it.
+								</span>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
+								<input
+									bind:value={createTaskRequiredToolNames}
+									class="input text-white placeholder:text-slate-500"
+									name="requiredToolNames"
+									placeholder="codex, playwright"
+								/>
+								<span class="mt-2 block text-xs text-slate-500">
+									Comma-separated tools or execution surfaces needed for this work.
+								</span>
 							</label>
 						</div>
 

@@ -46,6 +46,8 @@ const createTaskMock = vi.hoisted(() =>
 			desiredRoleId: string;
 			artifactPath: string;
 			targetDate?: string | null;
+			requiredCapabilityNames?: string[];
+			requiredToolNames?: string[];
 			status?: string;
 		}) => ({
 			id: `task_${input.title.toLowerCase().replace(/\s+/g, '_')}`,
@@ -65,6 +67,8 @@ const createTaskMock = vi.hoisted(() =>
 			blockedReason: '',
 			dependencyTaskIds: [],
 			targetDate: input.targetDate ?? null,
+			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
+			requiredToolNames: input.requiredToolNames ?? [],
 			runCount: 0,
 			latestRunId: null,
 			artifactPath: input.artifactPath,
@@ -133,6 +137,24 @@ const parseIdeationTaskSuggestionsMock = vi.hoisted(() =>
 	])
 );
 
+function syncTaskExecutionStateLike(data: ControlPlaneData) {
+	return {
+		...data,
+		tasks: data.tasks.map((task) => {
+			const taskRuns = data.runs
+				.filter((run) => run.taskId === task.id)
+				.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+			return {
+				...task,
+				threadSessionId: task.threadSessionId,
+				runCount: taskRuns.length,
+				latestRunId: taskRuns[0]?.id ?? null
+			};
+		})
+	};
+}
+
 vi.mock('$lib/server/control-plane', () => ({
 	createTaskAttachmentId: vi.fn(() => 'attachment_created'),
 	createRun: createRunMock,
@@ -165,7 +187,9 @@ vi.mock('$lib/server/control-plane', () => ({
 	),
 	taskHasUnmetDependencies: vi.fn(() => false),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
+		controlPlaneState.saved = syncTaskExecutionStateLike(
+			updater(controlPlaneState.current as ControlPlaneData)
+		);
 		controlPlaneState.current = controlPlaneState.saved;
 		return controlPlaneState.saved;
 	})
@@ -382,6 +406,8 @@ describe('tasks page server actions', () => {
 		form.set('name', 'Add create and run button');
 		form.set('instructions', 'Add a second action in the create task form.');
 		form.set('targetDate', '2026-04-18');
+		form.set('requiredCapabilityNames', 'planning, citations');
+		form.set('requiredToolNames', 'codex, playwright');
 
 		const result = await actions.createTask({
 			request: new Request('http://localhost/app/tasks', {
@@ -398,11 +424,19 @@ describe('tasks page server actions', () => {
 		);
 		expect(startAgentSessionMock).not.toHaveBeenCalled();
 		expect(createRunMock).not.toHaveBeenCalled();
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requiredCapabilityNames: ['planning', 'citations'],
+				requiredToolNames: ['codex', 'playwright']
+			})
+		);
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				title: 'Add create and run button',
 				status: 'ready',
 				targetDate: '2026-04-18',
+				requiredCapabilityNames: ['planning', 'citations'],
+				requiredToolNames: ['codex', 'playwright'],
 				threadSessionId: null,
 				runCount: 0
 			})

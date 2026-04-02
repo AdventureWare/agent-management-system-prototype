@@ -20,7 +20,7 @@ This ontology is for the core work system, not yet for account administration.
 In scope:
 
 - goals and subgoals
-- tasks and subtasks
+- tasks and task decomposition via linked tasks
 - work attempts
 - human and AI participation
 - execution surfaces
@@ -130,7 +130,8 @@ Key properties:
 Notes:
 
 - Tasks are the primary operational work object.
-- Subtasks are tasks; they are not a different ontological kind.
+- If task decomposition is needed, the current prototype should prefer linked tasks and dependencies over a special subtask lifecycle.
+- Subtasks, if introduced later, should still be treated as tasks rather than a separate ontological kind.
 
 ### 4.3 WorkAttempt
 

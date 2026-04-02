@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { appNavigationSections } from '$lib/app-navigation';
 	import {
 		createTaskFromSelfImprovementOpportunity,
 		fetchHomeDashboard,
@@ -260,7 +261,9 @@
 	</article>
 {/snippet}
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
+<section
+	class="mx-auto flex w-full max-w-[90rem] flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8 xl:px-8 2xl:px-10"
+>
 	<div class="flex flex-col gap-3">
 		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Home</p>
 		<h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
@@ -304,6 +307,44 @@
 			</p>
 		{/if}
 	</div>
+
+	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
+		<div class="flex flex-col gap-2">
+			<h2 class="text-lg font-semibold text-white sm:text-xl">Browse by area</h2>
+			<p class="max-w-3xl text-sm text-slate-400">
+				Use this page for cross-cutting status, then move into the work, context, or capacity
+				surface that matches the decision you need to make next.
+			</p>
+		</div>
+
+		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			{#each appNavigationSections as section (section.id)}
+				<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+					<p class="text-[11px] font-semibold tracking-[0.18em] text-sky-300 uppercase">
+						{section.title}
+					</p>
+					<p class="mt-2 text-sm text-slate-400">{section.description}</p>
+					<div class="mt-4 flex flex-wrap gap-2">
+						{#each section.links as link (link.href)}
+							{@const isCurrent = link.href === '/app/home'}
+							<a
+								class={[
+									'rounded-full border px-3 py-2 text-xs font-medium tracking-[0.14em] uppercase transition',
+									isCurrent
+										? 'border-sky-700/70 bg-sky-950/50 text-sky-200'
+										: 'border-slate-700 text-slate-200 hover:border-slate-600 hover:text-white'
+								]}
+								href={resolve(link.href)}
+								aria-current={isCurrent ? 'page' : undefined}
+							>
+								{link.label}
+							</a>
+						{/each}
+					</div>
+				</article>
+			{/each}
+		</div>
+	</section>
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
@@ -381,8 +422,8 @@
 							Aging tasks, quiet runs, and active threads that have stopped producing fresh output.
 						</p>
 					</div>
-					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
-						>Open task board</a
+					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/improvements')}
+						>Open improvements</a
 					>
 				</div>
 
@@ -482,7 +523,7 @@
 				<div>
 					<h2 class="text-xl font-semibold text-white">Needs attention</h2>
 					<p class="text-sm text-slate-400">
-						Stopped runs and sessions that likely need a decision.
+						Stopped runs and threads that likely need a decision.
 					</p>
 				</div>
 

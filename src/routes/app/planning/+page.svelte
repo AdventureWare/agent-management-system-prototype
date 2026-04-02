@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailSection from '$lib/components/DetailSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageTabs from '$lib/components/PageTabs.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
 		formatGoalStatusLabel,
@@ -13,6 +15,16 @@
 	let { data, form } = $props();
 
 	let updateGoalPlanSuccess = $derived(form?.ok && form?.successAction === 'updateGoalPlan');
+	let capturePlanningSessionSuccess = $derived(
+		form?.ok && form?.successAction === 'capturePlanningSession'
+	);
+	let selectedPlanningTaskView = $state<'scheduled' | 'undated'>('scheduled');
+
+	$effect(() => {
+		if (data.scheduledTasks.length === 0 && data.unscheduledTasks.length > 0) {
+			selectedPlanningTaskView = 'undated';
+		}
+	});
 
 	function formatDate(value: string | null) {
 		if (!value) {
@@ -47,7 +59,7 @@
 	}
 </script>
 
-<AppPage>
+<AppPage width="full">
 	<PageHeader
 		eyebrow="Planning"
 		title="Review and revise the current plan"
@@ -80,7 +92,13 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+	{#if capturePlanningSessionSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			Planning session captured.
+		</p>
+	{/if}
+
+	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
 		<MetricCard
 			label="Goals in scope"
 			value={data.metrics.goalCount}
@@ -108,17 +126,14 @@
 		/>
 	</div>
 
-	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(24rem,0.9fr)]">
 		<div class="space-y-6">
-			<section class="ui-panel space-y-4">
-				<div>
-					<h2 class="text-xl font-semibold text-white">Planning window</h2>
-					<p class="mt-1 text-sm text-slate-400">
-						Planning here works over the current plan. Choose the date range and scope you want to
-						inspect, then review what is scheduled, what remains undated, and what needs to change.
-					</p>
-				</div>
-
+			<DetailSection
+				eyebrow="Planning window"
+				title="Choose the review frame"
+				description="Planning here works over the current plan. Choose the date range and scope you want to inspect, then review what is scheduled, what remains undated, and what needs to change."
+				bodyClass="space-y-6"
+			>
 				<form class="grid gap-4 lg:grid-cols-2" method="GET">
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Start date</span>
@@ -210,7 +225,30 @@
 						</a>
 					</div>
 				</form>
-			</section>
+
+				<form class="flex flex-wrap gap-3" method="POST" action="?/capturePlanningSession">
+					<input name="startDate" type="hidden" value={data.filters.startDate} />
+					<input name="endDate" type="hidden" value={data.filters.endDate} />
+					<input name="projectId" type="hidden" value={data.filters.projectId} />
+					<input name="goalId" type="hidden" value={data.filters.goalId} />
+					<input name="workerId" type="hidden" value={data.filters.workerId} />
+					<input
+						name="includeUnscheduled"
+						type="hidden"
+						value={data.filters.includeUnscheduled ? 'true' : 'false'}
+					/>
+					<button
+						class="btn border border-amber-800/70 bg-amber-950/40 font-semibold text-amber-200"
+						type="submit"
+					>
+						Capture planning session
+					</button>
+					<p class="self-center text-xs text-slate-400">
+						Save this planning window as a session record with the goals, tasks, and linked
+						decisions currently in scope.
+					</p>
+				</form>
+			</DetailSection>
 
 			<section class="ui-panel space-y-4">
 				<div>
@@ -331,106 +369,265 @@
 				{/if}
 			</section>
 
-			<section class="ui-panel space-y-4">
-				<div>
-					<h2 class="text-xl font-semibold text-white">Scheduled work in window</h2>
-					<p class="mt-1 text-sm text-slate-400">
-						These tasks already carry a target date inside the selected window. This is the part of
-						the current plan that is most concretely committed.
-					</p>
+			<DetailSection
+				eyebrow="Task queues"
+				title="Work under planning review"
+				description="Switch between already scheduled commitments and undated work that has been pulled into this review frame."
+				bodyClass="space-y-4"
+			>
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+					<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+						<div>
+							<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+								Queue views
+							</p>
+							<p class="mt-2 text-sm text-slate-400">
+								Review one planning queue at a time instead of scanning two long lists in sequence.
+							</p>
+						</div>
+						<PageTabs
+							ariaLabel="Planning task queue views"
+							bind:value={selectedPlanningTaskView}
+							items={[
+								{ id: 'scheduled', label: 'Scheduled work', badge: data.scheduledTasks.length },
+								{
+									id: 'undated',
+									label: 'Undated work',
+									badge: data.unscheduledTasks.length
+								}
+							]}
+							panelIdPrefix="planning-task-queues"
+						/>
+					</div>
 				</div>
 
-				{#if data.scheduledTasks.length === 0}
-					<p class="ui-empty-state">No tasks are currently scheduled in this window.</p>
-				{:else}
-					<div class="space-y-3">
-						{#each data.scheduledTasks as task (task.id)}
-							<a
-								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
-								href={resolve(`/app/tasks/${task.id}`)}
-							>
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div class="min-w-0 space-y-2">
-										<div class="flex flex-wrap items-center gap-2">
-											<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
-											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
-											>
-												{formatTaskStatusLabel(task.status)}
-											</span>
-										</div>
-										<p class="text-xs text-slate-400">{task.goalName} · {task.projectName}</p>
-										{#if task.blockedReason}
-											<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
-										{/if}
-									</div>
-									<div class="text-right text-xs text-slate-400">
-										<p>{task.assigneeName}</p>
-										<p class="mt-1">{task.estimateHours ?? 'No estimate'} hrs</p>
-										<p class="mt-1">{formatDate(task.targetDate)}</p>
-									</div>
-								</div>
-							</a>
-						{/each}
-					</div>
-				{/if}
-			</section>
+				<div
+					id={`planning-task-queues-panel-${selectedPlanningTaskView}`}
+					role="tabpanel"
+					aria-labelledby={`planning-task-queues-tab-${selectedPlanningTaskView}`}
+				>
+					{#if selectedPlanningTaskView === 'scheduled'}
+						<div class="space-y-4">
+							<div>
+								<h3 class="text-xl font-semibold text-white">Scheduled work in window</h3>
+								<p class="mt-1 text-sm text-slate-400">
+									These tasks already carry a target date inside the selected window. This is the
+									part of the current plan that is most concretely committed.
+								</p>
+							</div>
 
-			<section class="ui-panel space-y-4">
-				<div>
-					<h2 class="text-xl font-semibold text-white">Undated work pulled into scope</h2>
-					<p class="mt-1 text-sm text-slate-400">
-						These tasks do not yet have a target date, but they are still relevant to the current
-						planning session because of the selected goals, projects, workers, or due outcomes in
-						this window.
-					</p>
+							{#if data.scheduledTasks.length === 0}
+								<p class="ui-empty-state">No tasks are currently scheduled in this window.</p>
+							{:else}
+								<div class="space-y-3">
+									{#each data.scheduledTasks as task (task.id)}
+										<a
+											class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
+											href={resolve(`/app/tasks/${task.id}`)}
+										>
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0 space-y-2">
+													<div class="flex flex-wrap items-center gap-2">
+														<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
+														<span
+															class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
+														>
+															{formatTaskStatusLabel(task.status)}
+														</span>
+													</div>
+													<p class="text-xs text-slate-400">
+														{task.goalName} · {task.projectName}
+													</p>
+													{#if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
+														<div class="flex flex-wrap gap-2">
+															{#each task.requiredCapabilityNames as capability (capability)}
+																<span
+																	class="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-2 py-1 text-[0.7rem] text-emerald-200"
+																>
+																	Capability: {capability}
+																</span>
+															{/each}
+															{#each task.requiredToolNames as tool (tool)}
+																<span
+																	class="rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-[0.7rem] text-sky-200"
+																>
+																	Tool: {tool}
+																</span>
+															{/each}
+														</div>
+													{/if}
+													{#if task.eligibleWorkerCount > 0}
+														<p class="text-xs text-slate-400">
+															{task.eligibleWorkerCount} matching worker(s)
+															{#if task.suggestedWorkerNames.length > 0}
+																: {task.suggestedWorkerNames.join(', ')}
+															{/if}
+														</p>
+													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
+														<p class="text-xs text-rose-300">
+															No workers currently match this task’s recorded requirements.
+														</p>
+													{/if}
+													{#if task.assignedWorkerEligible === false}
+														<p class="text-xs text-amber-300">
+															The current assignee does not match the recorded requirements.
+														</p>
+													{/if}
+													{#if task.blockedReason}
+														<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
+													{/if}
+												</div>
+												<div class="text-right text-xs text-slate-400">
+													<p>{task.assigneeName}</p>
+													<p class="mt-1">{task.estimateHours ?? 'No estimate'} hrs</p>
+													<p class="mt-1">{formatDate(task.targetDate)}</p>
+												</div>
+											</div>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{:else}
+						<div class="space-y-4">
+							<div>
+								<h3 class="text-xl font-semibold text-white">Undated work pulled into scope</h3>
+								<p class="mt-1 text-sm text-slate-400">
+									These tasks do not yet have a target date, but they are still relevant to the
+									current planning session because of the selected goals, projects, workers, or due
+									outcomes in this window.
+								</p>
+							</div>
+
+							{#if data.unscheduledTasks.length === 0}
+								<p class="ui-empty-state">
+									No undated tasks were pulled into this session. Either the current scope is
+									already dated or the filter excludes undated work.
+								</p>
+							{:else}
+								<div class="space-y-3">
+									{#each data.unscheduledTasks as task (task.id)}
+										<a
+											class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
+											href={resolve(`/app/tasks/${task.id}`)}
+										>
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0 space-y-2">
+													<div class="flex flex-wrap items-center gap-2">
+														<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
+														<span
+															class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
+														>
+															{formatTaskStatusLabel(task.status)}
+														</span>
+														<span
+															class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] text-amber-200"
+														>
+															Undated
+														</span>
+													</div>
+													<p class="text-xs text-slate-400">
+														{task.goalName} · {task.projectName}
+													</p>
+													{#if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
+														<div class="flex flex-wrap gap-2">
+															{#each task.requiredCapabilityNames as capability (capability)}
+																<span
+																	class="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-2 py-1 text-[0.7rem] text-emerald-200"
+																>
+																	Capability: {capability}
+																</span>
+															{/each}
+															{#each task.requiredToolNames as tool (tool)}
+																<span
+																	class="rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-[0.7rem] text-sky-200"
+																>
+																	Tool: {tool}
+																</span>
+															{/each}
+														</div>
+													{/if}
+													{#if task.eligibleWorkerCount > 0}
+														<p class="text-xs text-slate-400">
+															{task.eligibleWorkerCount} matching worker(s)
+															{#if task.suggestedWorkerNames.length > 0}
+																: {task.suggestedWorkerNames.join(', ')}
+															{/if}
+														</p>
+													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
+														<p class="text-xs text-rose-300">
+															No workers currently match this task’s recorded requirements.
+														</p>
+													{/if}
+													{#if task.assignedWorkerEligible === false}
+														<p class="text-xs text-amber-300">
+															The current assignee does not match the recorded requirements.
+														</p>
+													{/if}
+													{#if task.blockedReason}
+														<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
+													{/if}
+												</div>
+												<div class="text-right text-xs text-slate-400">
+													<p>{task.assigneeName}</p>
+													<p class="mt-1">{task.estimateHours ?? 'No estimate'} hrs</p>
+												</div>
+											</div>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
 				</div>
-
-				{#if data.unscheduledTasks.length === 0}
-					<p class="ui-empty-state">
-						No undated tasks were pulled into this session. Either the current scope is already
-						dated or the filter excludes undated work.
-					</p>
-				{:else}
-					<div class="space-y-3">
-						{#each data.unscheduledTasks as task (task.id)}
-							<a
-								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
-								href={resolve(`/app/tasks/${task.id}`)}
-							>
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div class="min-w-0 space-y-2">
-										<div class="flex flex-wrap items-center gap-2">
-											<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
-											<span
-												class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
-											>
-												{formatTaskStatusLabel(task.status)}
-											</span>
-											<span
-												class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] text-amber-200"
-											>
-												Undated
-											</span>
-										</div>
-										<p class="text-xs text-slate-400">{task.goalName} · {task.projectName}</p>
-										{#if task.blockedReason}
-											<p class="text-xs text-rose-300">Blocked: {task.blockedReason}</p>
-										{/if}
-									</div>
-									<div class="text-right text-xs text-slate-400">
-										<p>{task.assigneeName}</p>
-										<p class="mt-1">{task.estimateHours ?? 'No estimate'} hrs</p>
-									</div>
-								</div>
-							</a>
-						{/each}
-					</div>
-				{/if}
-			</section>
+			</DetailSection>
 		</div>
 
 		<div class="space-y-6">
+			<section class="ui-panel space-y-4">
+				<div>
+					<h2 class="text-xl font-semibold text-white">Recent planning sessions</h2>
+					<p class="mt-1 text-sm text-slate-400">
+						Captured planning windows show what scope was reviewed and how many linked decisions
+						came out of that review.
+					</p>
+				</div>
+
+				{#if data.recentPlanningSessions.length === 0}
+					<p class="ui-empty-state">
+						No planning sessions have been captured yet for this prototype.
+					</p>
+				{:else}
+					<div class="space-y-3">
+						{#each data.recentPlanningSessions as session (session.id)}
+							<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div class="min-w-0 space-y-2">
+										<p class="font-medium text-white">{session.summary}</p>
+										<p class="text-xs text-slate-400">
+											Window {formatDate(session.windowStart)} to {formatDate(session.windowEnd)}
+										</p>
+									</div>
+									<p class="text-xs text-slate-500">{session.createdAtLabel}</p>
+								</div>
+
+								<div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-300">
+									<span class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1">
+										{session.goalIds.length} goal(s)
+									</span>
+									<span class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1">
+										{session.taskIds.length} task(s)
+									</span>
+									<span class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1">
+										{session.decisionIds.length} decision(s)
+									</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section class="ui-panel space-y-4">
 				<div>
 					<h2 class="text-xl font-semibold text-white">Capacity view</h2>

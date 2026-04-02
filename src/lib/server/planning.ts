@@ -1,4 +1,5 @@
 import type { ControlPlaneData, Goal, Task, Worker } from '$lib/types/control-plane';
+import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
 
 const FALLBACK_CAPACITY_HOURS_PER_SLOT = 20;
 
@@ -39,6 +40,11 @@ type PlanningTaskSummary = {
 	estimateHours: number | null;
 	targetDate: string | null;
 	blockedReason: string;
+	requiredCapabilityNames: string[];
+	requiredToolNames: string[];
+	eligibleWorkerCount: number;
+	suggestedWorkerNames: string[];
+	assignedWorkerEligible: boolean | null;
 };
 
 type PlanningWorkerLoad = {
@@ -282,8 +288,15 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				).length
 			};
 		}),
-		scheduledTasks: scheduledTasks.map(
-			(task): PlanningTaskSummary => ({
+		scheduledTasks: scheduledTasks.map((task): PlanningTaskSummary => {
+			const workerSuggestions = getWorkerAssignmentSuggestions(data, task);
+			const eligibleSuggestions = workerSuggestions.filter((suggestion) => suggestion.eligible);
+			const assignedWorkerSuggestion = task.assigneeWorkerId
+				? (workerSuggestions.find((suggestion) => suggestion.workerId === task.assigneeWorkerId) ??
+					null)
+				: null;
+
+			return {
 				id: task.id,
 				title: task.title,
 				status: task.status,
@@ -295,11 +308,25 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 					: 'Unassigned',
 				estimateHours: task.estimateHours ?? null,
 				targetDate: task.targetDate ?? null,
-				blockedReason: task.blockedReason
-			})
-		),
-		unscheduledTasks: unscheduledTasks.map(
-			(task): PlanningTaskSummary => ({
+				blockedReason: task.blockedReason,
+				requiredCapabilityNames: task.requiredCapabilityNames ?? [],
+				requiredToolNames: task.requiredToolNames ?? [],
+				eligibleWorkerCount: eligibleSuggestions.length,
+				suggestedWorkerNames: eligibleSuggestions
+					.slice(0, 3)
+					.map((suggestion) => suggestion.workerName),
+				assignedWorkerEligible: assignedWorkerSuggestion ? assignedWorkerSuggestion.eligible : null
+			};
+		}),
+		unscheduledTasks: unscheduledTasks.map((task): PlanningTaskSummary => {
+			const workerSuggestions = getWorkerAssignmentSuggestions(data, task);
+			const eligibleSuggestions = workerSuggestions.filter((suggestion) => suggestion.eligible);
+			const assignedWorkerSuggestion = task.assigneeWorkerId
+				? (workerSuggestions.find((suggestion) => suggestion.workerId === task.assigneeWorkerId) ??
+					null)
+				: null;
+
+			return {
 				id: task.id,
 				title: task.title,
 				status: task.status,
@@ -311,9 +338,16 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 					: 'Unassigned',
 				estimateHours: task.estimateHours ?? null,
 				targetDate: null,
-				blockedReason: task.blockedReason
-			})
-		),
+				blockedReason: task.blockedReason,
+				requiredCapabilityNames: task.requiredCapabilityNames ?? [],
+				requiredToolNames: task.requiredToolNames ?? [],
+				eligibleWorkerCount: eligibleSuggestions.length,
+				suggestedWorkerNames: eligibleSuggestions
+					.slice(0, 3)
+					.map((suggestion) => suggestion.workerName),
+				assignedWorkerEligible: assignedWorkerSuggestion ? assignedWorkerSuggestion.eligible : null
+			};
+		}),
 		workerLoads,
 		projectOptions: [...data.projects]
 			.sort((left, right) => left.name.localeCompare(right.name))

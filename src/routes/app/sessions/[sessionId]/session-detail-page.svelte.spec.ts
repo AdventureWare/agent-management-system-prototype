@@ -180,6 +180,17 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByText(/Related tasks: Session detail inspector task/i))
 			.toBeVisible();
+		await expect.element(page.getByText('Current task')).toBeVisible();
+		await expect.element(page.getByRole('heading', { name: 'Decision context' })).toBeVisible();
+		await expect.element(page.getByText('Most recent response')).toBeVisible();
+		await expect.element(page.getByText('Relevant context')).toBeVisible();
+		await expect.element(page.getByText('Working on')).toBeVisible();
+		await expect
+			.element(page.getByText('Keep this visible while composing the next instruction.'))
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: 'Open task detail' }).first())
+			.toHaveAttribute('href', '/app/tasks/task-1');
 		await expect
 			.element(page.getByRole('link', { name: /Back to threads/i }))
 			.toHaveAttribute('href', '/app/sessions');
@@ -205,6 +216,9 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 
 		await page.getByRole('button', { name: /Turn 1/i }).click();
 
+		await expect
+			.element(page.getByRole('heading', { name: 'Inspect earlier context' }))
+			.toBeVisible();
 		await expect
 			.element(page.getByText(/without hiding the final clue for older turns\./i))
 			.toBeVisible();

@@ -1,5 +1,9 @@
 import type { AgentSessionDetail, AgentThreadDetail } from '$lib/types/agent-session';
-import type { SelfImprovementStatus } from '$lib/types/self-improvement';
+import type {
+	SelfImprovementKnowledgeStatus,
+	SelfImprovementSnapshot,
+	SelfImprovementStatus
+} from '$lib/types/self-improvement';
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
@@ -18,7 +22,7 @@ export async function fetchAgentSessions(options: { includeArchived?: boolean } 
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
 	const payload = await fetchJson<{ sessions: AgentSessionDetail[] }>(
 		`/api/agents/sessions${includeArchived}`,
-		'Could not refresh sessions.'
+		'Could not refresh threads.'
 	);
 
 	return payload.sessions;
@@ -64,7 +68,7 @@ export async function fetchAgentSession(sessionId: string) {
 	});
 
 	if (response.status === 404) {
-		throw new Error('Session not found.');
+		throw new Error('Thread not found.');
 	}
 
 	if (!response.ok) {
@@ -96,6 +100,28 @@ export function fetchHomeDashboard() {
 	return fetchJson<HomeDashboardData>('/api/dashboard/home', 'Could not refresh dashboard.');
 }
 
+export function fetchSelfImprovementSnapshot(
+	options: {
+		projectId?: string | null;
+		goalId?: string | null;
+	} = {}
+) {
+	const params = new URLSearchParams();
+
+	if (options.projectId?.trim()) {
+		params.set('projectId', options.projectId.trim());
+	}
+
+	if (options.goalId?.trim()) {
+		params.set('goalId', options.goalId.trim());
+	}
+
+	return fetchJson<SelfImprovementSnapshot>(
+		`/api/improvement/opportunities${params.size > 0 ? `?${params.toString()}` : ''}`,
+		'Could not refresh self-improvement opportunities.'
+	);
+}
+
 export async function updateSelfImprovementOpportunityStatus(
 	opportunityId: string,
 	status: SelfImprovementStatus,
@@ -118,9 +144,20 @@ export async function updateSelfImprovementOpportunityStatus(
 	}
 }
 
-export async function createTaskFromSelfImprovementOpportunity(opportunityId: string) {
+export async function createTaskFromSelfImprovementOpportunity(
+	opportunityId: string,
+	options: {
+		goalId?: string | null;
+	} = {}
+) {
 	const response = await fetch(`/api/improvement/opportunities/${opportunityId}/create-task`, {
-		method: 'POST'
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			goalId: options.goalId ?? null
+		})
 	});
 	const payload = (await response.json().catch(() => ({}))) as {
 		error?: string;
@@ -132,4 +169,54 @@ export async function createTaskFromSelfImprovementOpportunity(opportunityId: st
 	}
 
 	return payload.taskId ?? null;
+}
+
+export async function createKnowledgeItemFromSelfImprovementOpportunity(
+	opportunityId: string,
+	options: {
+		goalId?: string | null;
+	} = {}
+) {
+	const response = await fetch(
+		`/api/improvement/opportunities/${opportunityId}/create-knowledge-item`,
+		{
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				goalId: options.goalId ?? null
+			})
+		}
+	);
+	const payload = (await response.json().catch(() => ({}))) as {
+		error?: string;
+		knowledgeItemId?: string;
+	};
+
+	if (!response.ok) {
+		throw new Error(payload.error ?? 'Could not create a knowledge item from this opportunity.');
+	}
+
+	return payload.knowledgeItemId ?? null;
+}
+
+export async function updateSelfImprovementKnowledgeItemStatus(
+	knowledgeItemId: string,
+	status: SelfImprovementKnowledgeStatus
+) {
+	const response = await fetch(`/api/improvement/knowledge-items/${knowledgeItemId}/status`, {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			status
+		})
+	});
+	const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+	if (!response.ok) {
+		throw new Error(payload.error ?? 'Could not update the knowledge item.');
+	}
 }

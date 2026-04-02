@@ -244,7 +244,9 @@ describe('/app/tasks/+page.svelte', () => {
 				name: 'Keep my draft',
 				instructions: 'Persist this between reloads.',
 				assigneeWorkerId: '',
-				targetDate: '2026-04-10'
+				targetDate: '2026-04-10',
+				requiredCapabilityNames: 'planning, citations',
+				requiredToolNames: 'codex'
 			})
 		);
 
@@ -261,10 +263,18 @@ describe('/app/tasks/+page.svelte', () => {
 		const instructionsInput = document.querySelector(
 			'form[action="?/createTask"] textarea[name="instructions"]'
 		) as HTMLTextAreaElement | null;
+		const requiredCapabilitiesInput = document.querySelector(
+			'form[action="?/createTask"] input[name="requiredCapabilityNames"]'
+		) as HTMLInputElement | null;
+		const requiredToolsInput = document.querySelector(
+			'form[action="?/createTask"] input[name="requiredToolNames"]'
+		) as HTMLInputElement | null;
 
 		expect(nameInput?.value).toBe('Keep my draft');
 		expect(targetDateInput?.value).toBe('2026-04-10');
 		expect(instructionsInput?.value).toBe('Persist this between reloads.');
+		expect(requiredCapabilitiesInput?.value).toBe('planning, citations');
+		expect(requiredToolsInput?.value).toBe('codex');
 	});
 
 	it('clears a saved create-task draft after successful creation', () => {

@@ -1,0 +1,107 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - button [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+    - generic [ref=e11]:
+      - link "Home" [ref=e12] [cursor=pointer]:
+        - /url: ../app/home
+        - img [ref=e13]
+        - generic [ref=e18]: Home
+      - link "Improvements" [ref=e19] [cursor=pointer]:
+        - /url: ../app/improvements
+        - img [ref=e20]
+        - generic [ref=e22]: Improvements
+    - generic [ref=e23]:
+      - link "Tasks" [ref=e24] [cursor=pointer]:
+        - /url: ../app/tasks
+        - img [ref=e25]
+        - generic [ref=e28]: Tasks
+      - link "Threads" [ref=e29] [cursor=pointer]:
+        - /url: ../app/sessions
+        - img [ref=e30]
+        - generic [ref=e33]: Threads
+      - link "Runs" [ref=e34] [cursor=pointer]:
+        - /url: ../app/runs
+        - img [ref=e35]
+        - generic [ref=e37]: Runs
+    - generic [ref=e38]:
+      - link "Projects" [ref=e39] [cursor=pointer]:
+        - /url: ../app/projects
+        - img [ref=e40]
+        - generic [ref=e42]: Projects
+      - link "Goals" [ref=e43] [cursor=pointer]:
+        - /url: ../app/goals
+        - img [ref=e44]
+        - generic [ref=e48]: Goals
+      - link "Planning" [ref=e49] [cursor=pointer]:
+        - /url: ../app/planning
+        - img [ref=e50]
+        - generic [ref=e52]: Planning
+    - generic [ref=e53]:
+      - link "Workers" [ref=e54] [cursor=pointer]:
+        - /url: ../app/workers
+        - img [ref=e55]
+        - generic [ref=e60]: Workers
+      - link "Roles" [ref=e61] [cursor=pointer]:
+        - /url: ../app/roles
+        - img [ref=e62]
+        - generic [ref=e66]: Roles
+      - link "Providers" [ref=e67] [cursor=pointer]:
+        - /url: ../app/providers
+        - img [ref=e68]
+        - generic [ref=e71]: Providers
+  - generic [ref=e74]:
+    - generic [ref=e75]:
+      - generic [ref=e77]:
+        - paragraph [ref=e78]: Threads
+        - heading "Browse active and historical background threads" [level=1] [ref=e79]
+        - paragraph [ref=e80]: Use this page as the remote-work registry. The tables separate active runs from history, and each thread opens on its own detail page for logs, conversation turns, and follow-up work.
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - checkbox "Auto-refresh active runs every 4s" [checked] [ref=e84]
+          - generic [ref=e85]: Auto-refresh active runs every 4s
+        - generic [ref=e86]: Refresh pauses while you are typing or when this tab is in the background.
+        - button "Refresh all" [ref=e87] [cursor=pointer]
+    - generic [ref=e88]:
+      - article [ref=e89]:
+        - paragraph [ref=e90]: Active
+        - paragraph [ref=e91]: "0"
+      - article [ref=e92]:
+        - paragraph [ref=e93]: Available
+        - paragraph [ref=e94]: "0"
+      - article [ref=e95]:
+        - paragraph [ref=e96]: Closed / idle
+        - paragraph [ref=e97]: "0"
+      - article [ref=e98]:
+        - paragraph [ref=e99]: Needs attention
+        - paragraph [ref=e100]: "0"
+      - article [ref=e101]:
+        - paragraph [ref=e102]: Archived
+        - paragraph [ref=e103]: "0"
+    - generic [ref=e104]:
+      - generic [ref=e105]:
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - heading "Thread registry" [level=2] [ref=e108]
+            - paragraph [ref=e109]: Search by thread name, topic label, related task, path, thread state, thread id, or recent prompt text.
+          - generic [ref=e111]:
+            - generic [ref=e112]: Search threads
+            - textbox "Search threads" [ref=e113]
+        - generic [ref=e116]:
+          - checkbox "Show archived threads" [ref=e117]
+          - generic [ref=e118]: Show archived threads
+      - generic [ref=e119]:
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - heading "Active threads" [level=2] [ref=e122]
+            - paragraph [ref=e123]: Threads that currently have a queued or in-progress run. Open any thread on its own detail page.
+          - paragraph [ref=e124]: 0 shown · 0 selected
+        - paragraph [ref=e125]: No active threads match the current search. Clear the search or open tasks to start new work.
+      - generic [ref=e126]:
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - heading "Other threads" [level=2] [ref=e129]
+            - paragraph [ref=e130]: Available, not-resumable, idle, and attention-needed threads kept for reference and follow-up. Open any thread on its own detail page.
+          - paragraph [ref=e131]: 0 shown · 0 selected
+        - paragraph [ref=e132]: No other threads match the current search. Clear the search or review archived threads if you expect older context.

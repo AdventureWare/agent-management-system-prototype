@@ -6,9 +6,11 @@ import type {
 	OntologyArtifact,
 	OntologyCapability,
 	OntologyContextResource,
+	OntologyDecision,
 	OntologyExecutionSurface,
 	OntologyGapSummary,
 	OntologyGoal,
+	OntologyPlanningSession,
 	OntologyProject,
 	OntologyReview,
 	OntologyRole,
@@ -344,7 +346,6 @@ export function buildOntologyV1Snapshot(input: {
 		approvalMode: task.approvalMode,
 		projectId: task.projectId || null,
 		goalId: task.goalId || null,
-		parentTaskId: task.parentTaskId ?? null,
 		dependencyTaskIds: task.dependencyTaskIds,
 		desiredRoleId: task.desiredRoleId || null,
 		assignedActorId: task.assigneeWorkerId ? toActorIdFromWorkerId(task.assigneeWorkerId) : null,
@@ -352,8 +353,8 @@ export function buildOntologyV1Snapshot(input: {
 		workAttemptIds: workAttemptIdsByTask.get(task.id) ?? [],
 		contextResourceIds: contextIdsByTask.get(task.id) ?? [],
 		artifactIds: artifactIdsByTask.get(task.id) ?? [],
-		requiredCapabilityNames: [],
-		requiredToolNames: [],
+		requiredCapabilityNames: task.requiredCapabilityNames ?? [],
+		requiredToolNames: task.requiredToolNames ?? [],
 		targetDate: task.targetDate ?? null,
 		estimateHours: task.estimateHours ?? null,
 		blockedReason: task.blockedReason || null
@@ -382,10 +383,26 @@ export function buildOntologyV1Snapshot(input: {
 		summary: approval.summary
 	}));
 
+	const decisions: OntologyDecision[] = (data.decisions ?? []).map((decision) => ({
+		id: decision.id,
+		planningSessionId: decision.planningSessionId,
+		taskId: decision.taskId,
+		goalId: decision.goalId,
+		decisionType: decision.decisionType,
+		summary: decision.summary
+	}));
+	const planningSessions: OntologyPlanningSession[] = (data.planningSessions ?? []).map(
+		(session) => ({
+			id: session.id,
+			windowStart: session.windowStart,
+			windowEnd: session.windowEnd,
+			goalIds: session.goalIds,
+			taskIds: session.taskIds,
+			decisionIds: session.decisionIds
+		})
+	);
+
 	const limitations = [
-		'Planning sessions are not yet captured as first-class records in the current schema.',
-		'Decisions are not yet captured as first-class records in the current schema.',
-		'Current tasks do not yet express explicit required capabilities or tools.',
 		'Current workers act mostly as execution surfaces; the broader Actor concept is still only approximated.',
 		'Runs are mapped as WorkAttempt instances, but human work attempts are not yet represented.'
 	];
@@ -407,8 +424,8 @@ export function buildOntologyV1Snapshot(input: {
 		projects,
 		reviews,
 		approvals,
-		planningSessions: [],
-		decisions: [],
+		planningSessions,
+		decisions,
 		limitations
 	};
 

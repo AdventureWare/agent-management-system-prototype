@@ -14,11 +14,11 @@
 	let widthClass = $derived.by(() => {
 		switch (width) {
 			case 'medium':
-				return 'max-w-6xl';
+				return 'max-w-[72rem]';
 			case 'full':
 				return 'max-w-none';
 			default:
-				return 'max-w-7xl';
+				return 'max-w-[90rem]';
 		}
 	});
 </script>

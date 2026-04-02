@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import {
 	applyGoalRelationships,
+	getGoalDescendantGoalIds,
 	getGoalLinkedProjectIds,
 	getGoalLinkedTaskIds,
+	getGoalScopeProjectIds,
+	getGoalScopeTaskIds,
 	suggestGoalArtifactPath,
 	wouldCreateGoalCycle
 } from './goal-relationships';
@@ -58,6 +61,18 @@ function buildFixture(): ControlPlaneData {
 				parentGoalId: 'goal_parent',
 				projectIds: [],
 				taskIds: []
+			},
+			{
+				id: 'goal_grandchild',
+				name: 'Grandchild goal',
+				lane: 'product',
+				status: 'ready',
+				summary: 'Grandchild summary',
+				artifactPath: '/tmp/goals/grandchild',
+				successSignal: '',
+				parentGoalId: 'goal_child',
+				projectIds: ['project_2'],
+				taskIds: ['task_3']
 			}
 		],
 		workers: [],
@@ -109,6 +124,30 @@ function buildFixture(): ControlPlaneData {
 				attachments: [],
 				createdAt: '2026-03-31T00:00:00.000Z',
 				updatedAt: '2026-03-31T00:00:00.000Z'
+			},
+			{
+				id: 'task_3',
+				title: 'Grandchild task',
+				summary: 'Assigned to a nested goal',
+				projectId: 'project_2',
+				lane: 'product',
+				goalId: 'goal_grandchild',
+				priority: 'medium',
+				status: 'ready',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_coordinator',
+				assigneeWorkerId: null,
+				threadSessionId: null,
+				blockedReason: '',
+				dependencyTaskIds: [],
+				runCount: 0,
+				latestRunId: null,
+				artifactPath: '/tmp/project-two',
+				attachments: [],
+				createdAt: '2026-03-31T00:00:00.000Z',
+				updatedAt: '2026-03-31T00:00:00.000Z'
 			}
 		],
 		runs: [],
@@ -124,6 +163,17 @@ describe('goal relationship helpers', () => {
 
 		expect(getGoalLinkedTaskIds(data, goal)).toEqual(['task_1']);
 		expect(getGoalLinkedProjectIds(data, goal)).toEqual(['project_1']);
+	});
+
+	it('builds a recursive goal scope across descendant goals', () => {
+		const data = buildFixture();
+
+		expect(getGoalDescendantGoalIds(data, 'goal_parent')).toEqual([
+			'goal_child',
+			'goal_grandchild'
+		]);
+		expect(getGoalScopeTaskIds(data, 'goal_parent')).toEqual(['task_1', 'task_3']);
+		expect(getGoalScopeProjectIds(data, 'goal_parent')).toEqual(['project_1', 'project_2']);
 	});
 
 	it('moves task ownership and removes stale task links from other goals', () => {

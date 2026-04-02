@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
 
 const TASK_THREAD_NAME_PREFIX = 'Task thread';
 const LEGACY_TASK_THREAD_NAME_PREFIX = 'Work thread:';
@@ -13,6 +14,12 @@ export function buildTaskThreadPrompt(input: {
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
 	availableSkillNames?: string[];
+	relevantKnowledgeItems?: Array<
+		Pick<
+			RetrievedSelfImprovementKnowledgeItem,
+			'title' | 'summary' | 'triggerPattern' | 'recommendedResponse' | 'matchReasons'
+		>
+	>;
 }) {
 	const contextLines = [
 		`Task: ${input.taskName}`,
@@ -28,6 +35,17 @@ export function buildTaskThreadPrompt(input: {
 		contextLines.push(`Installed skills available: ${input.availableSkillNames.join(', ')}`);
 	}
 
+	const knowledgeLines = input.relevantKnowledgeItems?.flatMap((knowledgeItem, index) => [
+		`Knowledge ${index + 1}: ${knowledgeItem.title}`,
+		`Summary: ${knowledgeItem.summary}`,
+		`Trigger pattern: ${knowledgeItem.triggerPattern}`,
+		`Recommended response: ${knowledgeItem.recommendedResponse}`,
+		knowledgeItem.matchReasons.length > 0
+			? `Why it applies: ${knowledgeItem.matchReasons.join(' ')}`
+			: '',
+		''
+	]);
+
 	return [
 		'You are executing a queued task from the agent management system.',
 		'',
@@ -35,6 +53,13 @@ export function buildTaskThreadPrompt(input: {
 		'',
 		'Instructions:',
 		input.taskInstructions,
+		...(knowledgeLines?.length
+			? [
+					'',
+					'Apply this published system knowledge when it is relevant to the work:',
+					...knowledgeLines.filter(Boolean)
+				]
+			: []),
 		'',
 		'Work from the project root, make the requested changes, and report progress and outcomes clearly.'
 	].join('\n');

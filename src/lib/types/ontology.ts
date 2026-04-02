@@ -41,7 +41,6 @@ export type OntologyTask = {
 	approvalMode: TaskApprovalMode;
 	projectId: string | null;
 	goalId: string | null;
-	parentTaskId: string | null;
 	dependencyTaskIds: string[];
 	desiredRoleId: string | null;
 	assignedActorId: string | null;
