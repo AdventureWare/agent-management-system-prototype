@@ -97,7 +97,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			startedAt: input.startedAt ?? null,
 			endedAt: input.endedAt ?? null,
 			threadId: input.threadId ?? null,
-			sessionId: input.sessionId ?? null,
+			agentThreadId: input.sessionId ?? null,
 			promptDigest: input.promptDigest ?? '',
 			artifactPaths: input.artifactPaths ?? [],
 			summary: input.summary ?? '',
@@ -168,7 +168,7 @@ describe('session detail page server actions', () => {
 					requiresReview: true,
 					desiredRoleId: 'role_builder',
 					assigneeWorkerId: null,
-					threadSessionId: 'session_1',
+					agentThreadId: 'session_1',
 					blockedReason: '',
 					dependencyTaskIds: [],
 					runCount: 1,
@@ -191,7 +191,7 @@ describe('session detail page server actions', () => {
 					startedAt: '2026-03-31T11:01:00.000Z',
 					endedAt: null,
 					threadId: 'thread_1',
-					sessionId: 'session_1',
+					agentThreadId: 'session_1',
 					promptDigest: 'digest_1',
 					artifactPaths: ['/tmp/project/agent_output'],
 					summary: 'Agent is working.',
@@ -596,7 +596,7 @@ describe('session detail page server actions', () => {
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				id: 'task_1',
-				threadSessionId: 'session_1',
+				agentThreadId: 'session_1',
 				status: 'in_progress',
 				blockedReason: ''
 			})
@@ -717,7 +717,7 @@ describe('session detail page server actions', () => {
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				id: 'task_1',
-				threadSessionId: 'session_replacement',
+				agentThreadId: 'session_replacement',
 				status: 'in_progress',
 				blockedReason: ''
 			})

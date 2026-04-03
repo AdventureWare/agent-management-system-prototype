@@ -326,7 +326,7 @@
 										{formatRunStatusLabel(run.status)}
 									</span>
 									<span class="ui-wrap-anywhere"
-										>{run.threadId || run.sessionId || 'No thread'}</span
+										>{run.threadId || run.agentThreadId || 'No thread'}</span
 									>
 									<a
 										class="text-sky-300 transition hover:text-sky-200"

@@ -7,6 +7,7 @@
 		fetchHomeDashboard,
 		updateSelfImprovementOpportunityStatus
 	} from '$lib/client/agent-data';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import {
@@ -70,26 +71,12 @@
 	let opportunityActionError = $state<string | null>(null);
 	let opportunityActionNotice = $state<string | null>(null);
 
-	function userIsEditingFormControl() {
-		const activeElement = document.activeElement;
-
-		if (!(activeElement instanceof HTMLElement)) {
-			return false;
-		}
-
-		if (activeElement.isContentEditable) {
-			return true;
-		}
-
-		return ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
-	}
-
 	async function refreshDashboard(options: { force?: boolean } = {}) {
 		if (isRefreshing) {
 			return;
 		}
 
-		if (!options.force && (document.hidden || userIsEditingFormControl())) {
+		if (shouldPauseRefresh({ force: options.force })) {
 			return;
 		}
 
@@ -211,7 +198,22 @@
 			window.clearInterval(intervalId);
 		};
 	});
+
+	function handleWindowFocus() {
+		void refreshDashboard();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshDashboard();
+	}
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
+<svelte:document onvisibilitychange={handleVisibilityChange} />
 
 {#snippet sessionCard(session: AgentThreadDetail)}
 	<article class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">

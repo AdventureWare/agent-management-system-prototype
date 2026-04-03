@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThread } from '$lib/client/agent-threads';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
@@ -130,6 +131,7 @@
 		dateStyle: 'medium',
 		timeStyle: 'short'
 	});
+	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 	type SessionStateDescriptor = {
 		label: string;
 		detail: string;
@@ -322,20 +324,6 @@
 		};
 	});
 
-	function userIsEditingFormControl() {
-		const activeElement = document.activeElement;
-
-		if (!(activeElement instanceof HTMLElement)) {
-			return false;
-		}
-
-		if (activeElement.isContentEditable) {
-			return true;
-		}
-
-		return ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
-	}
-
 	function formatAttachmentSize(sizeBytes: number) {
 		if (sizeBytes < 1024) {
 			return `${sizeBytes} B`;
@@ -489,7 +477,7 @@
 			return;
 		}
 
-		if (!options.force && (document.hidden || userIsEditingFormControl())) {
+		if (shouldPauseRefresh({ force: options.force })) {
 			return;
 		}
 
@@ -538,6 +526,18 @@
 		} finally {
 			isCanceling = false;
 		}
+	}
+
+	function handleWindowFocus() {
+		void refreshSession();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshSession();
 	}
 
 	async function submitFollowUp(event: SubmitEvent) {
@@ -776,6 +776,15 @@
 		return run.lastMessage ?? responseStateLabel(run);
 	}
 
+	function shouldShowActiveResponsePlaceholder(run: AgentRunDetail | null) {
+		if (!run?.lastMessage) {
+			const status = latestRunStatus(run);
+			return status === 'queued' || status === 'running';
+		}
+
+		return false;
+	}
+
 	function compactText(value: string, maxLength = 180) {
 		const normalized = value.replace(/\s+/g, ' ').trim();
 
@@ -886,6 +895,9 @@
 	}
 </script>
 
+<svelte:window onfocus={handleWindowFocus} />
+<svelte:document onvisibilitychange={handleVisibilityChange} />
+
 {#snippet focusTaskCard(
 	task: ThreadFocusTask,
 	options: {
@@ -937,6 +949,7 @@
 {/snippet}
 
 {#snippet sessionStatus(detail: AgentThreadDetail, showFocusTask: boolean)}
+	{@const execution = executionMeta(detail)}
 	<div class="space-y-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 			<div>
@@ -982,7 +995,7 @@
 			history below is one start or follow-up execution inside this thread.
 		</p>
 
-		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
 			<DetailFactCard
 				label="Latest run"
 				value={detail.latestRun ? runModeLabel(detail.latestRun) : 'None yet'}
@@ -992,11 +1005,20 @@
 			/>
 			<DetailFactCard
 				label="Execution"
-				value={executionMeta(detail).label}
-				detail={executionMeta(detail).detail}
+				value={execution.label}
+				detail={execution.detail}
 				class="rounded-lg border-transparent bg-black/20"
 				labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
 			/>
+			{#if execution.activityLabel}
+				<DetailFactCard
+					label={execution.activityHeading ?? 'Current activity'}
+					value={execution.activityLabel}
+					detail={execution.activityDetail ?? execution.detail}
+					class="rounded-lg border-transparent bg-black/20"
+					labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
+				/>
+			{/if}
 			<DetailFactCard
 				label="Reply state"
 				value={replyStateLabel(detail)}
@@ -1125,7 +1147,7 @@
 							class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
 						>
 							<input bind:checked={autoRefresh} type="checkbox" />
-							<span>Auto-refresh active runs every 4s</span>
+							<span>Auto-refresh active runs every {autoRefreshIntervalLabel}</span>
 						</label>
 
 						{#if session!.relatedTasks.length > 0}
@@ -1233,6 +1255,7 @@
 							</div>
 
 							{#if latestContextRun}
+								{@const latestExecution = executionMeta(session)}
 								<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.48fr)]">
 									<div class="min-w-0 space-y-4 xl:col-span-2">
 										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
@@ -1277,12 +1300,34 @@
 												Agent response
 											</p>
 											<div class="mt-3">
-												<ThreadMessageContent
-													text={responseText(latestContextRun)}
-													showReferenceSummary={true}
-													contextArtifacts={combinedResponseContextArtifacts}
-													onAttachArtifact={attachReferencedArtifactToFollowUp}
-												/>
+												{#if shouldShowActiveResponsePlaceholder(latestContextRun)}
+													<div class="rounded-xl border border-slate-800/80 bg-slate-950/70 p-4">
+														<div class="min-w-0 animate-pulse opacity-75">
+															<p
+																class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+															>
+																Agent is working
+															</p>
+															<p class="mt-2 text-sm font-medium text-slate-200">
+																{latestExecution.activityLabel ?? latestExecution.label}
+															</p>
+															<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+																{latestExecution.activityDetail ?? latestExecution.detail}
+															</p>
+														</div>
+														<div class="mt-3 text-xs text-slate-500">
+															Updated {latestExecution.ageLabel}. This pane will switch to the saved
+															agent reply as soon as the current run writes one.
+														</div>
+													</div>
+												{:else}
+													<ThreadMessageContent
+														text={responseText(latestContextRun)}
+														showReferenceSummary={true}
+														contextArtifacts={combinedResponseContextArtifacts}
+														onAttachArtifact={attachReferencedArtifactToFollowUp}
+													/>
+												{/if}
 											</div>
 											<div
 												class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500"

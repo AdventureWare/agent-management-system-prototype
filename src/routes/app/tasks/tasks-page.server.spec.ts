@@ -64,7 +64,7 @@ const createTaskMock = vi.hoisted(() =>
 			requiresReview: true,
 			desiredRoleId: input.desiredRoleId,
 			assigneeWorkerId: null,
-			threadSessionId: null,
+			agentThreadId: null,
 			blockedReason: '',
 			dependencyTaskIds: [],
 			targetDate: input.targetDate ?? null,
@@ -148,7 +148,7 @@ function syncTaskExecutionStateLike(data: ControlPlaneData) {
 
 			return {
 				...task,
-				threadSessionId: task.threadSessionId,
+				agentThreadId: task.agentThreadId,
 				runCount: taskRuns.length,
 				latestRunId: taskRuns[0]?.id ?? null
 			};
@@ -343,7 +343,7 @@ describe('tasks page server actions', () => {
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
 					assigneeWorkerId: null,
-					threadSessionId: null,
+					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					runCount: 0,
@@ -464,7 +464,7 @@ describe('tasks page server actions', () => {
 				targetDate: '2026-04-18',
 				requiredCapabilityNames: ['planning', 'citations'],
 				requiredToolNames: ['codex', 'playwright'],
-				threadSessionId: null,
+				agentThreadId: null,
 				runCount: 0
 			})
 		);
@@ -643,7 +643,7 @@ describe('tasks page server actions', () => {
 			expect.objectContaining({
 				title: 'Create and run from the task form',
 				status: 'in_progress',
-				threadSessionId: 'session_created',
+				agentThreadId: 'session_created',
 				runCount: 1,
 				latestRunId: 'run_task_create_and_run_from_the_task_form'
 			})

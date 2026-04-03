@@ -319,7 +319,11 @@ export const load: PageServerLoad = async ({ url }) => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, sessions] = await Promise.all([
 		controlPlanePromise,
-		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({
+			includeArchived: true,
+			controlPlane: controlPlanePromise,
+			includeCategorization: false
+		})
 	]);
 	const defaultDraftRole = getDefaultDraftRole(data);
 	const taskWorkItems = buildTaskWorkItems(data, sessions);
@@ -336,11 +340,11 @@ export const load: PageServerLoad = async ({ url }) => {
 			return {
 				projectId: project.id,
 				projectName: project.name,
-				sessionId: ideationSession.id,
-				sessionState: ideationSession.sessionState,
+				threadId: ideationSession.id,
+				threadState: ideationSession.threadState ?? ideationSession.sessionState,
 				lastActivityAt: ideationSession.lastActivityAt,
 				lastActivityLabel: ideationSession.lastActivityLabel,
-				sessionSummary: ideationSession.sessionSummary,
+				threadSummary: ideationSession.threadSummary ?? ideationSession.sessionSummary,
 				hasActiveRun: ideationSession.hasActiveRun,
 				canResume: ideationSession.canResume,
 				suggestionCount: suggestions.length,
@@ -392,7 +396,10 @@ export const actions: Actions = {
 			return fail(400, { message: 'Select a project before running task ideation.' });
 		}
 
-		const [current, sessions] = await Promise.all([loadControlPlane(), listAgentThreads()]);
+		const [current, sessions] = await Promise.all([
+			loadControlPlane(),
+			listAgentThreads({ includeCategorization: false })
+		]);
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 
 		if (!project) {
@@ -421,7 +428,7 @@ export const actions: Actions = {
 			});
 		}
 
-		let sessionId = ideationThread?.id ?? null;
+		let threadId = ideationThread?.id ?? null;
 		let reusedThread = false;
 		const ideationProvider = selectExecutionProvider(current);
 		const ideationSandbox = resolveThreadSandbox({ project, provider: ideationProvider });
@@ -465,7 +472,7 @@ export const actions: Actions = {
 				});
 			}
 
-			sessionId = session.sessionId;
+			threadId = session.sessionId;
 		}
 
 		return {
@@ -473,7 +480,7 @@ export const actions: Actions = {
 			successAction: 'runTaskIdeationAssistant',
 			projectId: project.id,
 			projectName: project.name,
-			sessionId,
+			threadId,
 			reusedThread
 		};
 	},
@@ -788,7 +795,7 @@ export const actions: Actions = {
 			status: 'running',
 			startedAt: now,
 			threadId: null,
-			sessionId: session.sessionId,
+			agentThreadId: session.sessionId,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -801,7 +808,7 @@ export const actions: Actions = {
 		await updateControlPlane((data) => {
 			const nextTask: Task = {
 				...createdTask,
-				threadSessionId: session.sessionId,
+				agentThreadId: session.sessionId,
 				status: 'in_progress',
 				updatedAt: now
 			};
@@ -817,34 +824,34 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'createTaskAndRun',
 			taskId: createdTask.id,
-			sessionId: session.sessionId,
+			threadId: session.sessionId,
 			attachmentCount: attachments.length
 		};
 	},
 
 	createDraftTasksFromIdeation: async ({ request }) => {
 		const form = await request.formData();
-		const sessionId = form.get('sessionId')?.toString().trim() ?? '';
+		const threadId = form.get('threadId')?.toString().trim() ?? '';
 		const selectedIndexes = parseSuggestionIndexes(form);
 
-		if (!sessionId) {
-			return fail(400, { message: 'Ideation session is required.' });
+		if (!threadId) {
+			return fail(400, { message: 'Ideation thread is required.' });
 		}
 
 		if (selectedIndexes.length === 0) {
 			return fail(400, { message: 'Select at least one suggested task to create.' });
 		}
 
-		const [current, session] = await Promise.all([loadControlPlane(), getAgentThread(sessionId)]);
+		const [current, session] = await Promise.all([loadControlPlane(), getAgentThread(threadId)]);
 
 		if (!session) {
-			return fail(404, { message: 'Ideation session not found.' });
+			return fail(404, { message: 'Ideation thread not found.' });
 		}
 
 		const project = findProjectForTaskIdeationThread(session, current.projects);
 
 		if (!project) {
-			return fail(400, { message: 'Could not match the ideation session to a project.' });
+			return fail(400, { message: 'Could not match the ideation thread to a project.' });
 		}
 
 		const suggestions = parseIdeationTaskSuggestions(session.latestRun?.lastMessage ?? '');
@@ -906,7 +913,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'createDraftTasksFromIdeation',
 			projectName: project.name,
-			sessionId,
+			threadId,
 			createdCount: tasksToCreate.length,
 			skippedCount: selectedSuggestions.length - tasksToCreate.length
 		};
@@ -1051,13 +1058,13 @@ export const actions: Actions = {
 			project,
 			provider
 		});
-		const assignedThread = task.threadSessionId ? await getAgentThread(task.threadSessionId) : null;
+		const assignedThread = task.agentThreadId ? await getAgentThread(task.agentThreadId) : null;
 		const latestRun = task.latestRunId
 			? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
 			: null;
 		const latestRunThread =
-			latestRun?.sessionId && latestRun.sessionId !== task.threadSessionId
-				? await getAgentThread(latestRun.sessionId)
+			latestRun?.agentThreadId && latestRun.agentThreadId !== task.agentThreadId
+				? await getAgentThread(latestRun.agentThreadId)
 				: null;
 		const threadContext = selectProjectTaskThreadContext(project, {
 			assignedThread,
@@ -1065,8 +1072,8 @@ export const actions: Actions = {
 		});
 		const compatibleAssignedThread = threadContext.assignedThread;
 		const compatibleLatestRunThread = threadContext.latestRunThread;
-		let sessionId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
-		let threadId = (compatibleAssignedThread ?? compatibleLatestRunThread)?.threadId ?? null;
+		let agentThreadId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
+		let codexThreadId = (compatibleAssignedThread ?? compatibleLatestRunThread)?.threadId ?? null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 		if (compatibleAssignedThread?.hasActiveRun) {
@@ -1095,8 +1102,8 @@ export const actions: Actions = {
 				});
 			}
 
-			sessionId = compatibleAssignedThread.id;
-			threadId = compatibleAssignedThread.threadId;
+			agentThreadId = compatibleAssignedThread.id;
+			codexThreadId = compatibleAssignedThread.threadId;
 			reusedThreadMode = 'assigned';
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			try {
@@ -1107,8 +1114,8 @@ export const actions: Actions = {
 				});
 			}
 
-			sessionId = compatibleLatestRunThread.id;
-			threadId = compatibleLatestRunThread.threadId;
+			agentThreadId = compatibleLatestRunThread.id;
+			codexThreadId = compatibleLatestRunThread.threadId;
 			reusedThreadMode = 'latest';
 		} else {
 			let session;
@@ -1131,8 +1138,8 @@ export const actions: Actions = {
 				});
 			}
 
-			sessionId = session.sessionId;
-			threadId = null;
+			agentThreadId = session.sessionId;
+			codexThreadId = null;
 		}
 
 		const providerId = provider?.id ?? null;
@@ -1142,8 +1149,8 @@ export const actions: Actions = {
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),
-			threadId,
-			sessionId,
+			threadId: codexThreadId,
+			agentThreadId,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -1170,7 +1177,7 @@ export const actions: Actions = {
 							projectId: project.id,
 							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
 							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
-							threadSessionId: sessionId,
+							agentThreadId,
 							artifactPath:
 								candidate.artifactPath ||
 								project.defaultArtifactRoot ||
@@ -1187,7 +1194,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'launchTaskSession',
 			taskId,
-			sessionId
+			threadId: agentThreadId
 		};
 	},
 
@@ -1218,12 +1225,12 @@ export const actions: Actions = {
 			...new Set(
 				current.runs
 					.filter((run) => deletableTaskIds.includes(run.taskId))
-					.map((run) => run.sessionId)
-					.filter((sessionId): sessionId is string => Boolean(sessionId))
+					.map((run) => run.agentThreadId)
+					.filter((threadId): threadId is string => Boolean(threadId))
 			)
 		];
 
-		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentThread(sessionId)));
+		await Promise.all(relatedSessionIds.map((threadId) => cancelAgentThread(threadId)));
 		await updateControlPlane((data) =>
 			deletableTaskIds.reduce(
 				(currentData, taskId) => removeTaskFromControlPlane(currentData, taskId),

@@ -56,7 +56,14 @@ describe('session activity labels', () => {
 		);
 
 		expect(meta.label).toBe('Working');
-		expect(meta.detail).toBe('The run is marked active, but only minimal local runner output is visible so far.');
+		expect(meta.detail).toBe(
+			'The run is marked active, but only minimal local runner output is visible so far.'
+		);
+		expect(meta.activityHeading).toBe('Now');
+		expect(meta.activityLabel).toBe('Waiting for first signal');
+		expect(meta.activityDetail).toBe(
+			'The run is marked active, but there is no structured Codex event to show yet.'
+		);
 	});
 
 	it('marks recent structured output as confirmed active', () => {
@@ -89,7 +96,9 @@ describe('session activity labels', () => {
 						codexThreadId: 'thread-1'
 					},
 					lastMessage: null,
-					logTail: ['{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still running."}}'],
+					logTail: [
+						'{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still running."}}'
+					],
 					activityAt: '2026-03-31T09:59:56.000Z'
 				}
 			}),
@@ -98,6 +107,53 @@ describe('session activity labels', () => {
 
 		expect(meta.label).toBe('Confirmed active');
 		expect(meta.detail).toBe('Recent Codex output confirms the run is still moving.');
+		expect(meta.activityHeading).toBe('Now');
+		expect(meta.activityLabel).toBe('Shared update');
+		expect(meta.activityDetail).toBe('Still running.');
+	});
+
+	it('surfaces the latest active command from structured log output', () => {
+		const meta: SessionActivityMeta = getSessionActivityMeta(
+			createSession({
+				sessionState: 'working',
+				latestRunStatus: 'running',
+				hasActiveRun: true,
+				canResume: false,
+				lastActivityAt: '2026-03-31T09:59:58.000Z',
+				latestRun: {
+					id: 'run-2',
+					sessionId: 'session-1',
+					mode: 'message',
+					prompt: 'run checks',
+					requestedThreadId: 'thread-1',
+					createdAt: '2026-03-31T09:59:00.000Z',
+					updatedAt: '2026-03-31T09:59:58.000Z',
+					logPath: '/tmp/log',
+					statePath: '/tmp/state',
+					messagePath: '/tmp/message',
+					configPath: '/tmp/config',
+					state: {
+						status: 'running',
+						pid: 123,
+						startedAt: '2026-03-31T09:59:00.000Z',
+						finishedAt: null,
+						exitCode: null,
+						signal: null,
+						codexThreadId: 'thread-1'
+					},
+					lastMessage: null,
+					logTail: [
+						`{"type":"item.started","item":{"id":"item_3","type":"command_execution","command":"/bin/zsh -lc 'npm run check'","aggregated_output":"","exit_code":null,"status":"in_progress"}}`
+					],
+					activityAt: '2026-03-31T09:59:58.000Z'
+				}
+			}),
+			Date.parse('2026-03-31T10:00:00.000Z')
+		);
+
+		expect(meta.activityHeading).toBe('Now');
+		expect(meta.activityLabel).toBe('Running command');
+		expect(meta.activityDetail).toBe('npm run check');
 	});
 
 	it('marks older active runs without recent proof as suspect stalled', () => {
@@ -116,6 +172,8 @@ describe('session activity labels', () => {
 		expect(meta.detail).toBe(
 			'The run is still marked active, but there is no recent structured Codex output to prove it is moving.'
 		);
+		expect(meta.activityHeading).toBe('Last signal');
+		expect(meta.activityLabel).toBe('No live signal');
 	});
 
 	it('describes a resumable thread as available', () => {
@@ -126,5 +184,8 @@ describe('session activity labels', () => {
 
 		expect(meta.label).toBe('Available now');
 		expect(meta.detail).toBe('The thread is idle and available for the next instruction.');
+		expect(meta.activityHeading).toBeNull();
+		expect(meta.activityLabel).toBeNull();
+		expect(meta.activityDetail).toBeNull();
 	});
 });

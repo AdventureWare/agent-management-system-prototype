@@ -1,7 +1,14 @@
 <script lang="ts">
-	import SessionDetailPage from '../../sessions/[sessionId]/+page.svelte';
+	import ThreadDetailPanel from '$lib/components/ThreadDetailPanel.svelte';
 
-	let { data, form } = $props();
+	let { data, form = null } = $props();
 </script>
 
-<SessionDetailPage data={data as never} form={form as never} />
+<ThreadDetailPanel
+	thread={data.session}
+	sandboxOptions={data.sandboxOptions}
+	taskResponseAction={data.taskResponseAction}
+	responseContextArtifacts={data.responseContextArtifacts}
+	{form}
+	backHref="/app/threads"
+/>

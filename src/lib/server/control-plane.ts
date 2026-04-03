@@ -191,6 +191,7 @@ type LegacyGoal = Partial<Goal> & {
 
 type LegacyTask = Partial<Task> & {
 	area?: unknown;
+	agentThreadId?: unknown;
 	projectId?: unknown;
 	attachments?: unknown;
 	estimateHours?: unknown;
@@ -224,6 +225,7 @@ function normalizeRole(role: LegacyRole): Role {
 
 type LegacyRun = Partial<Run> & {
 	artifactPaths?: unknown;
+	sessionId?: unknown;
 };
 
 type LegacyReview = Partial<Review>;
@@ -537,7 +539,12 @@ function normalizeRun(run: LegacyRun): Run {
 		startedAt: typeof run.startedAt === 'string' ? run.startedAt : null,
 		endedAt: typeof run.endedAt === 'string' ? run.endedAt : null,
 		threadId: typeof run.threadId === 'string' && run.threadId.trim() ? run.threadId : null,
-		sessionId: typeof run.sessionId === 'string' && run.sessionId.trim() ? run.sessionId : null,
+		agentThreadId:
+			typeof run.agentThreadId === 'string' && run.agentThreadId.trim()
+				? run.agentThreadId
+				: typeof run.sessionId === 'string' && run.sessionId.trim()
+					? run.sessionId
+					: null,
 		promptDigest: typeof run.promptDigest === 'string' ? run.promptDigest : '',
 		artifactPaths: Array.isArray(run.artifactPaths)
 			? run.artifactPaths.filter((candidate): candidate is string => typeof candidate === 'string')
@@ -740,10 +747,12 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 			typeof task.assigneeWorkerId === 'string' && task.assigneeWorkerId.trim()
 				? task.assigneeWorkerId
 				: null,
-		threadSessionId:
-			typeof task.threadSessionId === 'string' && task.threadSessionId.trim()
-				? task.threadSessionId
-				: null,
+		agentThreadId:
+			typeof task.agentThreadId === 'string' && task.agentThreadId.trim()
+				? task.agentThreadId
+				: typeof task.agentThreadId === 'string' && task.agentThreadId.trim()
+					? task.agentThreadId
+					: null,
 		requiredCapabilityNames: normalizeStringList(task.requiredCapabilityNames),
 		requiredToolNames: normalizeStringList(task.requiredToolNames),
 		blockedReason: typeof task.blockedReason === 'string' ? task.blockedReason : '',
@@ -786,7 +795,7 @@ export function syncTaskExecutionState(data: ControlPlaneData): ControlPlaneData
 
 			return {
 				...task,
-				threadSessionId: task.threadSessionId,
+				agentThreadId: task.agentThreadId,
 				runCount: taskRuns.length,
 				latestRunId: taskRuns[0]?.id ?? null
 			};
@@ -1326,7 +1335,7 @@ export function createTask(input: {
 	estimateHours?: number | null;
 	targetDate?: string | null;
 	assigneeWorkerId?: string | null;
-	threadSessionId?: string | null;
+	agentThreadId?: string | null;
 	status?: TaskStatus;
 	attachments?: TaskAttachment[];
 }): Task {
@@ -1348,7 +1357,7 @@ export function createTask(input: {
 		requiresReview: input.requiresReview,
 		desiredRoleId: input.desiredRoleId,
 		assigneeWorkerId: input.assigneeWorkerId ?? null,
-		threadSessionId: input.threadSessionId ?? null,
+		agentThreadId: input.agentThreadId ?? null,
 		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
 		requiredToolNames: input.requiredToolNames ?? [],
 		blockedReason: input.blockedReason ?? '',
@@ -1372,7 +1381,7 @@ export function createRun(input: {
 	startedAt?: string | null;
 	endedAt?: string | null;
 	threadId?: string | null;
-	sessionId?: string | null;
+	agentThreadId?: string | null;
 	promptDigest?: string;
 	artifactPaths?: string[];
 	summary?: string;
@@ -1392,7 +1401,7 @@ export function createRun(input: {
 		startedAt: input.startedAt ?? null,
 		endedAt: input.endedAt ?? null,
 		threadId: input.threadId ?? null,
-		sessionId: input.sessionId ?? null,
+		agentThreadId: input.agentThreadId ?? null,
 		promptDigest: input.promptDigest ?? '',
 		artifactPaths: input.artifactPaths ?? [],
 		summary: input.summary ?? '',

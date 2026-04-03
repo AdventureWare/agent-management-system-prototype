@@ -12,7 +12,7 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 	const controlPlanePromise = loadControlPlane();
 	const [controlPlane, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentThreads({ controlPlane: controlPlanePromise })
+		listAgentThreads({ controlPlane: controlPlanePromise, includeCategorization: false })
 	]);
 	const selfImprovement = await loadSelfImprovementSnapshot({
 		data: controlPlane,

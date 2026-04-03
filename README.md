@@ -91,9 +91,9 @@ API:
 
 - `GET /api/agents/threads`
 - `POST /api/agents/threads`
-- `GET /api/agents/threads/:sessionId`
-- `POST /api/agents/threads/:sessionId/messages`
-- `POST /api/agents/threads/:sessionId/cancel`
+- `GET /api/agents/threads/:threadId`
+- `POST /api/agents/threads/:threadId/messages`
+- `POST /api/agents/threads/:threadId/cancel`
 - `GET /api/improvement/opportunities`
 
 Environment:
@@ -104,10 +104,10 @@ export CODEX_BIN="$(which codex)"
 
 If `CODEX_BIN` is not set, the prototype uses `codex` from `PATH`.
 
-Thread data lives in:
+Thread records live in:
 
 - `data/agent-sessions.json`
-- `data/agent-sessions/<sessionId>/runs/<runId>/`
+- `data/agent-sessions/<threadId>/runs/<runId>/`
 
 The runner script is:
 

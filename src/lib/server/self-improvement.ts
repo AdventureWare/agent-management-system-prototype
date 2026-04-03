@@ -303,7 +303,7 @@ function buildExecutionOpportunities(data: ControlPlaneData) {
 				relatedTaskIds: [task.id],
 				relatedRunIds: unsuccessfulRuns.map((run) => run.id),
 				relatedSessionIds: unsuccessfulRuns
-					.map((run) => run.sessionId)
+					.map((run) => run.agentThreadId)
 					.filter((sessionId): sessionId is string => Boolean(sessionId)),
 				suggestedTask: createSuggestedTask(
 					task,
@@ -394,7 +394,7 @@ function buildBlockedTaskOpportunities(data: ControlPlaneData) {
 				],
 				relatedTaskIds: [task.id, ...dependencyIds],
 				relatedRunIds: [],
-				relatedSessionIds: task.threadSessionId ? [task.threadSessionId] : [],
+				relatedSessionIds: task.agentThreadId ? [task.agentThreadId] : [],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Resolve blocker for ${task.title}`,
@@ -498,7 +498,7 @@ function buildPlanningGapOpportunities(data: ControlPlaneData) {
 				relatedTaskIds: openTasks.map((task) => task.id),
 				relatedRunIds: [],
 				relatedSessionIds: openTasks
-					.map((task) => task.threadSessionId)
+					.map((task) => task.agentThreadId)
 					.filter((sessionId): sessionId is string => Boolean(sessionId)),
 				suggestedTask: {
 					title: `Plan next step for ${goal.name}`,
@@ -580,7 +580,7 @@ function buildPlanningGapOpportunities(data: ControlPlaneData) {
 				relatedTaskIds: openTasks.map((task) => task.id),
 				relatedRunIds: [],
 				relatedSessionIds: openTasks
-					.map((task) => task.threadSessionId)
+					.map((task) => task.agentThreadId)
 					.filter((sessionId): sessionId is string => Boolean(sessionId)),
 				suggestedTask: {
 					title: `Plan next project step for ${project.name}`,
@@ -740,7 +740,7 @@ function buildReviewFeedbackOpportunities(data: ControlPlaneData) {
 				relatedRunIds: changeRequests
 					.map((review) => review.runId)
 					.filter((runId): runId is string => Boolean(runId)),
-				relatedSessionIds: task.threadSessionId ? [task.threadSessionId] : [],
+				relatedSessionIds: task.agentThreadId ? [task.agentThreadId] : [],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Codify review feedback for ${task.title}`,
@@ -793,16 +793,16 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 
 		const suggestion = buildTaskThreadSuggestions({
 			task,
-			assignedThreadId: task.threadSessionId,
+			assignedThreadId: task.agentThreadId,
 			sessions: projectSessions
 		}).suggestedThread;
 
-		if (!suggestion || suggestion.id === task.threadSessionId) {
+		if (!suggestion || suggestion.id === task.agentThreadId) {
 			return [];
 		}
 
-		const assignedThread = task.threadSessionId
-			? (sessionMap.get(task.threadSessionId) ?? null)
+		const assignedThread = task.agentThreadId
+			? (sessionMap.get(task.agentThreadId) ?? null)
 			: null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
@@ -821,12 +821,12 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 				category: 'knowledge',
 				source: 'thread_reuse_gap',
 				severity: task.priority === 'high' || task.priority === 'urgent' ? 'medium' : 'low',
-				confidence: task.threadSessionId ? 'medium' : 'high',
+				confidence: task.agentThreadId ? 'medium' : 'high',
 				projectId: task.projectId,
 				projectName: projectMap.get(task.projectId)?.name ?? null,
 				signals: [
-					task.threadSessionId
-						? `Assigned thread is not currently reusable: ${task.threadSessionId}.`
+					task.agentThreadId
+						? `Assigned thread is not currently reusable: ${task.agentThreadId}.`
 						: 'Task has no assigned thread.',
 					`Suggested thread: ${suggestion.name}.`,
 					`Why it fits: ${suggestion.suggestionReason ?? 'Relevant prior context exists.'}`
@@ -838,7 +838,7 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 				],
 				relatedTaskIds: [task.id],
 				relatedRunIds: [],
-				relatedSessionIds: [suggestion.id, ...(task.threadSessionId ? [task.threadSessionId] : [])],
+				relatedSessionIds: [suggestion.id, ...(task.agentThreadId ? [task.agentThreadId] : [])],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Improve thread reuse for ${task.title}`,
@@ -852,8 +852,8 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 					`Thread reuse heuristic for ${task.title}`,
 					'Capture why a better thread was suggested so future routing can reuse context more reliably.',
 					[
-						task.threadSessionId
-							? `Current thread was unavailable or weakly matched: ${task.threadSessionId}.`
+						task.agentThreadId
+							? `Current thread was unavailable or weakly matched: ${task.agentThreadId}.`
 							: 'The task did not have an assigned thread.',
 						`Suggested thread: ${suggestion.name}.`,
 						`Suggestion reason: ${suggestion.suggestionReason ?? 'Relevant prior context exists.'}`
@@ -896,7 +896,7 @@ function buildExecutionFeedbackSignals(data: ControlPlaneData): SelfImprovementF
 				taskId: run.taskId,
 				runId: run.id,
 				reviewId: null,
-				sessionId: run.sessionId,
+				sessionId: run.agentThreadId,
 				title: task ? `Run failure for ${task.title}` : `Run failure for ${run.taskId}`,
 				summary: compactText(
 					run.errorSummary || run.summary,
@@ -944,7 +944,7 @@ function buildBlockedTaskFeedbackSignals(data: ControlPlaneData): SelfImprovemen
 				taskId: task.id,
 				runId: null,
 				reviewId: null,
-				sessionId: task.threadSessionId,
+				sessionId: task.agentThreadId,
 				title: `Task blocked: ${task.title}`,
 				summary:
 					blockedReason ||
@@ -1010,7 +1010,7 @@ function buildReviewFeedbackSignals(data: ControlPlaneData): SelfImprovementFeed
 				taskId: review.taskId,
 				runId: review.runId,
 				reviewId: review.id,
-				sessionId: task?.threadSessionId ?? null,
+				sessionId: task?.agentThreadId ?? null,
 				title: task ? `Review feedback for ${task.title}` : `Review feedback for ${review.taskId}`,
 				summary: compactText(review.summary, 'Changes were requested without a detailed summary.')
 			});
@@ -1037,16 +1037,16 @@ function buildThreadReuseFeedbackSignals(
 
 		const suggestion = buildTaskThreadSuggestions({
 			task,
-			assignedThreadId: task.threadSessionId,
+			assignedThreadId: task.agentThreadId,
 			sessions: projectSessions
 		}).suggestedThread;
 
-		if (!suggestion || suggestion.id === task.threadSessionId) {
+		if (!suggestion || suggestion.id === task.agentThreadId) {
 			return [];
 		}
 
-		const assignedThread = task.threadSessionId
-			? (sessionMap.get(task.threadSessionId) ?? null)
+		const assignedThread = task.agentThreadId
+			? (sessionMap.get(task.agentThreadId) ?? null)
 			: null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
@@ -1063,7 +1063,7 @@ function buildThreadReuseFeedbackSignals(
 				opportunityId: createOpportunityId('thread_reuse_gap', task.id),
 				category: 'knowledge',
 				severity: task.priority === 'high' || task.priority === 'urgent' ? 'medium' : 'low',
-				confidence: task.threadSessionId ? 'medium' : 'high',
+				confidence: task.agentThreadId ? 'medium' : 'high',
 				projectId: task.projectId,
 				projectName: projectMap.get(task.projectId)?.name ?? null,
 				taskId: task.id,

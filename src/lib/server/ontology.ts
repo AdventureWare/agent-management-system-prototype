@@ -232,7 +232,7 @@ export function buildOntologyV1Snapshot(input: {
 				source: 'run_artifact_path',
 				producedByWorkAttemptId: run.id,
 				taskId: run.taskId,
-				threadId: run.sessionId
+				threadId: run.agentThreadId
 			});
 			runArtifactIds.push(id);
 		}
@@ -252,7 +252,7 @@ export function buildOntologyV1Snapshot(input: {
 			performedByActorId: run.workerId ? toActorIdFromWorkerId(run.workerId) : null,
 			executionSurfaceId: run.workerId,
 			providerId: run.providerId,
-			threadId: run.sessionId,
+			threadId: run.agentThreadId,
 			status: run.status,
 			startedAt: run.startedAt,
 			endedAt: run.endedAt,
@@ -284,13 +284,13 @@ export function buildOntologyV1Snapshot(input: {
 	const threadTaskIds = new Map<string, Set<string>>();
 
 	for (const task of data.tasks) {
-		if (!task.threadSessionId) {
+		if (!task.agentThreadId) {
 			continue;
 		}
 
-		const taskIds = threadTaskIds.get(task.threadSessionId) ?? new Set<string>();
+		const taskIds = threadTaskIds.get(task.agentThreadId) ?? new Set<string>();
 		taskIds.add(task.id);
-		threadTaskIds.set(task.threadSessionId, taskIds);
+		threadTaskIds.set(task.agentThreadId, taskIds);
 	}
 
 	for (const thread of threads) {
@@ -350,7 +350,7 @@ export function buildOntologyV1Snapshot(input: {
 		dependencyTaskIds: task.dependencyTaskIds,
 		desiredRoleId: task.desiredRoleId || null,
 		assignedActorId: task.assigneeWorkerId ? toActorIdFromWorkerId(task.assigneeWorkerId) : null,
-		primaryThreadId: task.threadSessionId,
+		primaryThreadId: task.agentThreadId,
 		workAttemptIds: workAttemptIdsByTask.get(task.id) ?? [],
 		contextResourceIds: contextIdsByTask.get(task.id) ?? [],
 		artifactIds: artifactIdsByTask.get(task.id) ?? [],

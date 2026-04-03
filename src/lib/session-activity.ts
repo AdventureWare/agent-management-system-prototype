@@ -1,6 +1,6 @@
 import type { AgentSessionDetail } from '$lib/types/agent-thread';
 
-export const ACTIVE_REFRESH_INTERVAL_MS = 4_000;
+export const ACTIVE_REFRESH_INTERVAL_MS = 2_000;
 export const ACTIVITY_CLOCK_INTERVAL_MS = 1_000;
 
 const LIVE_ACTIVITY_WINDOW_MS = 15_000;
@@ -14,6 +14,14 @@ export type SessionActivityMeta = {
 	ageLabel: string;
 	tone: SessionActivityTone;
 	animate: boolean;
+	activityHeading: string | null;
+	activityLabel: string | null;
+	activityDetail: string | null;
+};
+
+type SessionLiveActivity = {
+	label: string;
+	detail: string;
 };
 
 function hasStructuredProgressEvidence(session: AgentSessionDetail) {
@@ -44,6 +52,371 @@ function hasStartupEvidence(session: AgentSessionDetail) {
 				line.startsWith('{"type":"thread.started"') || line.startsWith('{"type":"turn.started"')
 		) ?? false
 	);
+}
+
+function compactText(value: string, maxLength = 140) {
+	const normalized = value.replace(/\s+/g, ' ').trim();
+
+	if (normalized.length <= maxLength) {
+		return normalized;
+	}
+
+	return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function extractLogJson(line: string) {
+	try {
+		return JSON.parse(line) as Record<string, unknown>;
+	} catch {
+		return null;
+	}
+}
+
+function stripShellWrapper(command: string) {
+	const normalized = command.trim();
+	const shellMatch = normalized.match(/^\/bin\/(?:zsh|bash|sh)\s+-lc\s+(.+)$/);
+
+	if (!shellMatch) {
+		return compactText(normalized, 96);
+	}
+
+	const wrapped = shellMatch[1]?.trim() ?? '';
+
+	if (
+		(wrapped.startsWith("'") && wrapped.endsWith("'")) ||
+		(wrapped.startsWith('"') && wrapped.endsWith('"'))
+	) {
+		return compactText(wrapped.slice(1, -1), 96);
+	}
+
+	return compactText(wrapped, 96);
+}
+
+function describePath(path: string) {
+	const normalized = path.trim();
+
+	if (!normalized) {
+		return 'file';
+	}
+
+	const segments = normalized.split('/').filter(Boolean);
+	return segments.at(-1) ?? normalized;
+}
+
+function describeFileChanges(changes: unknown) {
+	if (!Array.isArray(changes) || changes.length === 0) {
+		return 'Working tree updates';
+	}
+
+	const normalizedChanges = changes
+		.filter((change): change is { path?: unknown; kind?: unknown } => Boolean(change))
+		.map((change) => ({
+			path: typeof change.path === 'string' ? change.path : '',
+			kind: typeof change.kind === 'string' ? change.kind : 'update'
+		}))
+		.filter((change) => change.path.length > 0);
+
+	if (normalizedChanges.length === 0) {
+		return 'Working tree updates';
+	}
+
+	if (normalizedChanges.length === 1) {
+		const change = normalizedChanges[0];
+		const verb =
+			change.kind === 'create' ? 'Creating' : change.kind === 'delete' ? 'Deleting' : 'Updating';
+
+		return `${verb} ${describePath(change.path)}`;
+	}
+
+	return `${normalizedChanges.length} files touched`;
+}
+
+function extractStructuredMessageContent(content: unknown) {
+	if (typeof content === 'string') {
+		return compactText(content);
+	}
+
+	if (!Array.isArray(content)) {
+		return null;
+	}
+
+	const text = content
+		.map((part) => {
+			if (!part || typeof part !== 'object') {
+				return null;
+			}
+
+			const candidate = (part as { text?: unknown }).text;
+			return typeof candidate === 'string' ? candidate : null;
+		})
+		.filter((candidate): candidate is string => Boolean(candidate))
+		.join(' ')
+		.trim();
+
+	return text ? compactText(text) : null;
+}
+
+function describeItemEvent(
+	type: 'item.started' | 'item.completed',
+	item: Record<string, unknown>
+): SessionLiveActivity | null {
+	const itemType = typeof item.type === 'string' ? item.type : null;
+
+	if (!itemType) {
+		return null;
+	}
+
+	switch (itemType) {
+		case 'command_execution': {
+			const command =
+				typeof item.command === 'string' ? stripShellWrapper(item.command) : 'Shell command';
+			const exitCode =
+				typeof item.exit_code === 'number' && Number.isFinite(item.exit_code)
+					? item.exit_code
+					: null;
+
+			if (type === 'item.started') {
+				return {
+					label: 'Running command',
+					detail: command
+				};
+			}
+
+			return {
+				label: exitCode === null || exitCode === 0 ? 'Finished command' : 'Command failed',
+				detail: exitCode === null || exitCode === 0 ? command : `${command} (exit ${exitCode})`
+			};
+		}
+		case 'file_change':
+			return {
+				label: type === 'item.started' ? 'Editing files' : 'Saved file changes',
+				detail: describeFileChanges(item.changes)
+			};
+		case 'agent_message': {
+			const text = typeof item.text === 'string' ? compactText(item.text) : 'Status update';
+
+			return {
+				label: type === 'item.started' ? 'Writing update' : 'Shared update',
+				detail: text
+			};
+		}
+		default:
+			return {
+				label: type === 'item.started' ? 'Working' : 'Finished work item',
+				detail: compactText(itemType.replace(/_/g, ' '))
+			};
+	}
+}
+
+function parseLiveActivityFromLogLine(line: string): SessionLiveActivity | null {
+	const trimmed = line.trim();
+
+	if (!trimmed || trimmed.startsWith('===') || trimmed.startsWith('cwd=')) {
+		return null;
+	}
+
+	if (trimmed.startsWith('Reasoning: ')) {
+		return {
+			label: 'Thinking',
+			detail: compactText(trimmed.slice('Reasoning: '.length))
+		};
+	}
+
+	if (trimmed.startsWith('Assistant: ')) {
+		return {
+			label: 'Drafted reply',
+			detail: compactText(trimmed.slice('Assistant: '.length))
+		};
+	}
+
+	if (trimmed.startsWith('Tool call: ')) {
+		return {
+			label: 'Calling tool',
+			detail: compactText(trimmed.slice('Tool call: '.length))
+		};
+	}
+
+	if (trimmed.startsWith('Tool output: ')) {
+		return {
+			label: 'Received tool output',
+			detail: compactText(trimmed.slice('Tool output: '.length))
+		};
+	}
+
+	if (trimmed.startsWith('RUNNER ERROR: ')) {
+		return {
+			label: 'Runner error',
+			detail: compactText(trimmed.slice('RUNNER ERROR: '.length))
+		};
+	}
+
+	if (!trimmed.startsWith('{')) {
+		return {
+			label: 'Log update',
+			detail: compactText(trimmed)
+		};
+	}
+
+	const record = extractLogJson(trimmed);
+
+	if (!record || typeof record.type !== 'string') {
+		return null;
+	}
+
+	switch (record.type) {
+		case 'thread.started':
+			return {
+				label: 'Thread started',
+				detail: 'Codex created a reusable thread for follow-up work.'
+			};
+		case 'turn.started':
+			return {
+				label: 'Turn started',
+				detail: 'Codex accepted the latest instruction and began work.'
+			};
+		case 'event_msg': {
+			const payload = record.payload;
+
+			if (!payload || typeof payload !== 'object') {
+				return null;
+			}
+
+			const payloadRecord = payload as Record<string, unknown>;
+			const type = typeof payloadRecord.type === 'string' ? payloadRecord.type : null;
+
+			if (type === 'agent_reasoning') {
+				return {
+					label: 'Thinking',
+					detail:
+						typeof payloadRecord.text === 'string'
+							? compactText(payloadRecord.text)
+							: 'Reasoning through the next step.'
+				};
+			}
+
+			if (type === 'agent_message') {
+				return {
+					label: 'Shared update',
+					detail:
+						typeof payloadRecord.message === 'string'
+							? compactText(payloadRecord.message)
+							: 'Sent a status update.'
+				};
+			}
+
+			return null;
+		}
+		case 'response_item': {
+			const payload = record.payload;
+
+			if (!payload || typeof payload !== 'object') {
+				return null;
+			}
+
+			const payloadRecord = payload as Record<string, unknown>;
+			const type = typeof payloadRecord.type === 'string' ? payloadRecord.type : null;
+
+			if (type === 'function_call' || type === 'custom_tool_call') {
+				return {
+					label: 'Calling tool',
+					detail:
+						typeof payloadRecord.name === 'string'
+							? compactText(payloadRecord.name)
+							: 'Invoking a tool'
+				};
+			}
+
+			if (type === 'function_call_output' || type === 'custom_tool_call_output') {
+				return {
+					label: 'Received tool output',
+					detail:
+						typeof payloadRecord.output === 'string'
+							? compactText(payloadRecord.output)
+							: 'Tool output arrived.'
+				};
+			}
+
+			if (type === 'message' && payloadRecord.role === 'assistant') {
+				return {
+					label: 'Drafted reply',
+					detail:
+						extractStructuredMessageContent(payloadRecord.content) ??
+						'Composing the assistant response.'
+				};
+			}
+
+			return null;
+		}
+		case 'item.started':
+		case 'item.completed': {
+			const item = record.item;
+
+			if (!item || typeof item !== 'object') {
+				return null;
+			}
+
+			return describeItemEvent(record.type, item as Record<string, unknown>);
+		}
+		default:
+			return null;
+	}
+}
+
+function getLatestLiveActivity(session: AgentSessionDetail): SessionLiveActivity | null {
+	const lines = session.latestRun?.logTail ?? [];
+
+	for (const line of [...lines].reverse()) {
+		const activity = parseLiveActivityFromLogLine(line);
+
+		if (activity) {
+			return activity;
+		}
+	}
+
+	if (session.latestRunStatus === 'running' && session.latestRun?.lastMessage) {
+		return {
+			label: 'Drafted reply',
+			detail: compactText(session.latestRun.lastMessage)
+		};
+	}
+
+	return null;
+}
+
+function getFallbackActivity(
+	session: AgentSessionDetail,
+	options: {
+		isLive: boolean;
+		isRecent: boolean;
+	}
+): SessionLiveActivity | null {
+	switch (session.sessionState) {
+		case 'starting':
+			return {
+				label: 'Queueing run',
+				detail: 'Waiting for the local runner process to spin up.'
+			};
+		case 'waiting':
+		case 'working':
+			if (hasStartupEvidence(session)) {
+				return {
+					label: options.isLive ? 'Starting up' : 'Awaiting work signal',
+					detail: 'Startup output is visible, but there is no specific work item yet.'
+				};
+			}
+
+			return {
+				label: options.isRecent ? 'Waiting for first signal' : 'No live signal',
+				detail: 'The run is marked active, but there is no structured Codex event to show yet.'
+			};
+		case 'attention':
+			return {
+				label: session.latestRunStatus === 'canceled' ? 'Run canceled' : 'Run needs attention',
+				detail: 'Review the recent logs before reusing this thread.'
+			};
+		default:
+			return null;
+	}
 }
 
 export function formatSessionStateLabel(state: AgentSessionDetail['sessionState']) {
@@ -119,6 +492,19 @@ export function getSessionActivityMeta(
 	const ageLabel = formatActivityAge(session.lastActivityAt, now);
 	const isLive = ageMs !== null && ageMs <= LIVE_ACTIVITY_WINDOW_MS;
 	const isRecent = ageMs !== null && ageMs <= RECENT_ACTIVITY_WINDOW_MS;
+	const activity =
+		getLatestLiveActivity(session) ?? getFallbackActivity(session, { isLive, isRecent });
+	const activityHeading =
+		activity &&
+		(session.sessionState === 'starting' ||
+			session.sessionState === 'waiting' ||
+			session.sessionState === 'working')
+			? isRecent
+				? 'Now'
+				: 'Last signal'
+			: activity
+				? 'Status'
+				: null;
 
 	switch (session.sessionState) {
 		case 'starting':
@@ -127,7 +513,10 @@ export function getSessionActivityMeta(
 				detail: 'The run is queued and the local runner is warming up.',
 				ageLabel,
 				tone: 'progress',
-				animate: true
+				animate: true,
+				activityHeading,
+				activityLabel: activity?.label ?? null,
+				activityDetail: activity?.detail ?? null
 			};
 		case 'waiting':
 		case 'working':
@@ -139,7 +528,10 @@ export function getSessionActivityMeta(
 						: 'The run is still marked active, but there is no recent structured Codex output to prove it is moving.',
 					ageLabel,
 					tone: 'attention',
-					animate: false
+					animate: false,
+					activityHeading,
+					activityLabel: activity?.label ?? null,
+					activityDetail: activity?.detail ?? null
 				};
 			}
 
@@ -149,17 +541,24 @@ export function getSessionActivityMeta(
 					detail: 'Recent Codex output confirms the run is still moving.',
 					ageLabel,
 					tone: 'live',
-					animate: true
+					animate: true,
+					activityHeading,
+					activityLabel: activity?.label ?? null,
+					activityDetail: activity?.detail ?? null
 				};
 			}
 
 			if (hasStartupEvidence(session)) {
 				return {
 					label: isLive ? 'Starting up' : 'Awaiting proof',
-					detail: 'The run has startup output, but there is not enough work output yet to confirm progress.',
+					detail:
+						'The run has startup output, but there is not enough work output yet to confirm progress.',
 					ageLabel,
 					tone: 'progress',
-					animate: true
+					animate: true,
+					activityHeading,
+					activityLabel: activity?.label ?? null,
+					activityDetail: activity?.detail ?? null
 				};
 			}
 
@@ -168,7 +567,10 @@ export function getSessionActivityMeta(
 				detail: 'The run is marked active, but only minimal local runner output is visible so far.',
 				ageLabel,
 				tone: 'progress',
-				animate: true
+				animate: true,
+				activityHeading,
+				activityLabel: activity?.label ?? null,
+				activityDetail: activity?.detail ?? null
 			};
 		case 'ready':
 			return {
@@ -176,7 +578,10 @@ export function getSessionActivityMeta(
 				detail: 'The thread is idle and available for the next instruction.',
 				ageLabel,
 				tone: 'ready',
-				animate: false
+				animate: false,
+				activityHeading: null,
+				activityLabel: null,
+				activityDetail: null
 			};
 		case 'attention':
 			return {
@@ -187,7 +592,10 @@ export function getSessionActivityMeta(
 						: 'The latest run stopped unexpectedly. Review the recent logs.',
 				ageLabel,
 				tone: 'attention',
-				animate: false
+				animate: false,
+				activityHeading,
+				activityLabel: activity?.label ?? null,
+				activityDetail: activity?.detail ?? null
 			};
 		case 'unavailable':
 			return {
@@ -195,7 +603,10 @@ export function getSessionActivityMeta(
 				detail: 'This thread finished, but it is not resumable from the manager right now.',
 				ageLabel,
 				tone: 'idle',
-				animate: false
+				animate: false,
+				activityHeading: null,
+				activityLabel: null,
+				activityDetail: null
 			};
 		case 'idle':
 		default:
@@ -204,7 +615,10 @@ export function getSessionActivityMeta(
 				detail: 'No run is currently active in this thread.',
 				ageLabel,
 				tone: 'idle',
-				animate: false
+				animate: false,
+				activityHeading: null,
+				activityLabel: null,
+				activityDetail: null
 			};
 	}
 }

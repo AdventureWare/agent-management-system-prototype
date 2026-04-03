@@ -403,7 +403,7 @@ export type Task = {
 	requiresReview: boolean;
 	desiredRoleId: string;
 	assigneeWorkerId: string | null;
-	threadSessionId: string | null;
+	agentThreadId: string | null;
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
 	blockedReason: string;
@@ -429,7 +429,7 @@ export type Run = {
 	startedAt: string | null;
 	endedAt: string | null;
 	threadId: string | null;
-	sessionId: string | null;
+	agentThreadId: string | null;
 	promptDigest: string;
 	artifactPaths: string[];
 	summary: string;

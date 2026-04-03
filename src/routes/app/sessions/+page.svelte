@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThreads, updateAgentThreadArchiveState } from '$lib/client/agent-threads';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
@@ -38,6 +39,7 @@
 		dateStyle: 'medium',
 		timeStyle: 'short'
 	});
+	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 
 	let filteredSessions = $derived.by(() => {
 		const term = query.trim().toLowerCase();
@@ -175,20 +177,6 @@
 		return state === 'starting' || state === 'waiting' || state === 'working';
 	}
 
-	function userIsEditingFormControl() {
-		const activeElement = document.activeElement;
-
-		if (!(activeElement instanceof HTMLElement)) {
-			return false;
-		}
-
-		if (activeElement.isContentEditable) {
-			return true;
-		}
-
-		return ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
-	}
-
 	async function loadSessions() {
 		sessions = await fetchAgentThreads({ includeArchived: true });
 	}
@@ -198,7 +186,7 @@
 			return;
 		}
 
-		if (!options.force && (document.hidden || userIsEditingFormControl())) {
+		if (shouldPauseRefresh({ force: options.force })) {
 			return;
 		}
 
@@ -349,6 +337,21 @@
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
 </script>
+
+<svelte:window
+	onfocus={() => {
+		void refreshSessions();
+	}}
+/>
+<svelte:document
+	onvisibilitychange={() => {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshSessions();
+	}}
+/>
 
 {#snippet sessionTable(
 	title: string,
@@ -539,7 +542,7 @@
 					class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2"
 				>
 					<input bind:checked={autoRefresh} type="checkbox" />
-					<span>Auto-refresh active runs every 4s</span>
+					<span>Auto-refresh active runs every {autoRefreshIntervalLabel}</span>
 				</label>
 				<span>Refresh pauses while you are typing or when this tab is in the background.</span>
 				<AppButton

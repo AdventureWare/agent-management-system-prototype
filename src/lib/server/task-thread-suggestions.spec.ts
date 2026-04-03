@@ -53,7 +53,7 @@ function createTask(overrides: Partial<Task> = {}): Task {
 		requiredCapabilityNames: [],
 		requiredToolNames: [],
 		assigneeWorkerId: null,
-		threadSessionId: null,
+		agentThreadId: null,
 		blockedReason: '',
 		dependencyTaskIds: [],
 		runCount: 0,

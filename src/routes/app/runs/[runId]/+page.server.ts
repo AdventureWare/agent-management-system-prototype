@@ -9,7 +9,11 @@ export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({
+			includeArchived: true,
+			controlPlane: controlPlanePromise,
+			includeCategorization: false
+		})
 	]);
 	const runs = buildRunRecords(data, threads);
 	const run = runs.find((candidate) => candidate.id === params.runId) ?? null;
@@ -35,7 +39,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,
-		thread: run.sessionId ? (threads.find((thread) => thread.id === run.sessionId) ?? null) : null,
+		thread:
+			run.agentThreadId ? (threads.find((thread) => thread.id === run.agentThreadId) ?? null) : null,
 		relatedTaskRuns: runs
 			.filter((candidate) => candidate.taskId === run.taskId && candidate.id !== run.id)
 			.slice(0, 6)

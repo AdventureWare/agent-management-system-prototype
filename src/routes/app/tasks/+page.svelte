@@ -737,8 +737,8 @@
 						? ' 1 attachment saved with it.'
 						: ` ${createdAttachmentCount} attachments saved with it.`}
 				{/if}
-				{#if form?.sessionId}
-					<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
+				{#if form?.threadId}
+					<a class="underline" href={resolve(`/app/threads/${form.threadId.toString()}`)}>
 						Open thread details
 					</a>
 					to follow the run.
@@ -762,8 +762,8 @@
 				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 			>
 				Task ideation queued for {form?.projectName?.toString() || 'the selected project'}.
-				{#if form?.sessionId}
-					<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
+				{#if form?.threadId}
+					<a class="underline" href={resolve(`/app/threads/${form.threadId.toString()}`)}>
 						Open thread details
 					</a>
 					to review the suggested tasks.
@@ -1067,13 +1067,13 @@
 								</p>
 							{:else}
 								<div class="mt-4 space-y-4">
-									{#each data.ideationReviews as review (review.sessionId)}
+									{#each data.ideationReviews as review (review.threadId)}
 										<form
 											class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
 											method="POST"
 											action="?/createDraftTasksFromIdeation"
 										>
-											<input name="sessionId" type="hidden" value={review.sessionId} />
+											<input name="threadId" type="hidden" value={review.threadId} />
 
 											<div class="flex flex-col gap-3">
 												<div
@@ -1081,11 +1081,11 @@
 												>
 													<div>
 														<h4 class="text-base font-semibold text-white">{review.projectName}</h4>
-														<p class="mt-1 text-sm text-slate-400">{review.sessionSummary}</p>
+														<p class="mt-1 text-sm text-slate-400">{review.threadSummary}</p>
 													</div>
 													<a
 														class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-														href={resolve(`/app/threads/${review.sessionId}`)}
+														href={resolve(`/app/threads/${review.threadId}`)}
 													>
 														Open thread
 													</a>

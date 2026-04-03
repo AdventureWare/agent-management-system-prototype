@@ -34,7 +34,7 @@ const createRun = vi.hoisted(() =>
 			startedAt: input.startedAt,
 			endedAt: null,
 			threadId: input.threadId,
-			sessionId: input.sessionId,
+			agentThreadId: input.sessionId,
 			promptDigest: input.promptDigest,
 			artifactPaths: input.artifactPaths,
 			summary: input.summary,
@@ -88,7 +88,7 @@ function syncTaskExecutionStateLike(data: ControlPlaneData) {
 
 			return {
 				...task,
-				threadSessionId: task.threadSessionId,
+				agentThreadId: task.agentThreadId,
 				runCount: taskRuns.length,
 				latestRunId: taskRuns[0]?.id ?? null
 			};
@@ -328,7 +328,7 @@ describe('task detail page server actions', () => {
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
 					assigneeWorkerId: null,
-					threadSessionId: null,
+					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					targetDate: null,
@@ -437,7 +437,7 @@ describe('task detail page server actions', () => {
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
 					assigneeWorkerId: null,
-					threadSessionId: null,
+					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
 					targetDate: null,
@@ -574,7 +574,7 @@ describe('task detail page server actions', () => {
 			tasks: [
 				{
 					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
-					threadSessionId: 'session_stale',
+					agentThreadId: 'session_stale',
 					latestRunId: 'run_previous'
 				}
 			]
@@ -624,7 +624,7 @@ describe('task detail page server actions', () => {
 		);
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
-				threadSessionId: 'session_new',
+				agentThreadId: 'session_new',
 				status: 'in_progress',
 				latestRunId: 'run_test'
 			})
@@ -692,7 +692,7 @@ describe('task detail page server actions', () => {
 			tasks: [
 				{
 					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
-					threadSessionId: null,
+					agentThreadId: null,
 					latestRunId: 'run_previous'
 				}
 			],
@@ -708,7 +708,7 @@ describe('task detail page server actions', () => {
 					startedAt: '2026-03-30T12:10:00.000Z',
 					endedAt: '2026-03-30T12:15:00.000Z',
 					threadId: 'thread_previous',
-					sessionId: 'session_previous',
+					agentThreadId: 'session_previous',
 					promptDigest: 'digest_previous',
 					artifactPaths: ['/tmp/project/agent_output'],
 					summary: 'Completed previous run.',
@@ -755,7 +755,7 @@ describe('task detail page server actions', () => {
 		expect(startAgentSession).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
-				threadSessionId: 'session_previous',
+				agentThreadId: 'session_previous',
 				status: 'in_progress',
 				latestRunId: 'run_test'
 			})
@@ -785,7 +785,7 @@ describe('task detail page server actions', () => {
 					startedAt: '2026-03-30T12:10:00.000Z',
 					endedAt: null,
 					threadId: 'thread_active',
-					sessionId: 'session_active',
+					agentThreadId: 'session_active',
 					promptDigest: 'digest_active',
 					artifactPaths: ['/tmp/project/agent_output'],
 					summary: 'Already running.',
@@ -823,7 +823,7 @@ describe('task detail page server actions', () => {
 				{
 					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
 					status: 'in_progress',
-					threadSessionId: 'session_active',
+					agentThreadId: 'session_active',
 					latestRunId: 'run_active',
 					updatedAt: '2026-03-30T12:00:00.000Z'
 				}
@@ -840,7 +840,7 @@ describe('task detail page server actions', () => {
 					startedAt: '2026-03-30T12:00:00.000Z',
 					endedAt: null,
 					threadId: 'thread_active',
-					sessionId: 'session_active',
+					agentThreadId: 'session_active',
 					promptDigest: 'digest_active',
 					artifactPaths: ['/tmp/project/agent_output'],
 					summary: 'Already running.',
@@ -922,7 +922,7 @@ describe('task detail page server actions', () => {
 			expect.objectContaining({
 				status: 'in_progress',
 				blockedReason: '',
-				threadSessionId: 'session_active',
+				agentThreadId: 'session_active',
 				latestRunId: 'run_test'
 			})
 		);

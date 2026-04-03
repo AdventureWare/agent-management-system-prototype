@@ -136,11 +136,11 @@ export function buildTaskWorkItems(
 		.map((task) => {
 			const project = projectMap.get(task.projectId) ?? null;
 			const latestRun = task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null;
-			const assignedThread = task.threadSessionId
-				? (sessionMap.get(task.threadSessionId) ?? null)
+			const assignedThread = task.agentThreadId
+				? (sessionMap.get(task.agentThreadId) ?? null)
 				: null;
-			const latestRunThread = latestRun?.sessionId
-				? (sessionMap.get(latestRun.sessionId) ?? null)
+			const latestRunThread = latestRun?.agentThreadId
+				? (sessionMap.get(latestRun.agentThreadId) ?? null)
 				: null;
 			const threadContext = selectProjectTaskThreadContext(project, {
 				assignedThread,

@@ -35,7 +35,7 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 			const project = task ? (projectMap.get(task.projectId) ?? null) : null;
 			const worker = run.workerId ? (workerMap.get(run.workerId) ?? null) : null;
 			const provider = run.providerId ? (providerMap.get(run.providerId) ?? null) : null;
-			const thread = run.sessionId ? (threadMap.get(run.sessionId) ?? null) : null;
+			const thread = run.agentThreadId ? (threadMap.get(run.agentThreadId) ?? null) : null;
 			const heartbeatAgeMs = run.lastHeartbeatAt
 				? Math.max(0, Date.now() - Date.parse(run.lastHeartbeatAt))
 				: null;

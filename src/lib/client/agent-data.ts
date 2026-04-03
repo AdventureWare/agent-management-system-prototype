@@ -9,7 +9,7 @@ import type {
 } from '$lib/types/self-improvement';
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
-async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
+export async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
 	const response = await fetch(path, {
 		cache: 'no-store'
 	});
@@ -25,14 +25,9 @@ export async function fetchAgentThreads(options: { includeArchived?: boolean } =
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
 	const payload = await fetchJson<{
 		threads?: AgentThreadDetail[];
-		sessions?: AgentThreadDetail[];
 	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
 
-	return payload.threads ?? payload.sessions ?? [];
-}
-
-export async function fetchAgentSessions(options: { includeArchived?: boolean } = {}) {
-	return fetchAgentThreads(options);
+	return payload.threads ?? [];
 }
 
 export async function updateAgentThreadArchiveState(threadIds: string[], archived: boolean) {
@@ -50,18 +45,13 @@ export async function updateAgentThreadArchiveState(threadIds: string[], archive
 	const payload = (await response.json()) as {
 		error?: string;
 		updatedThreadIds?: string[];
-		updatedSessionIds?: string[];
 	};
 
 	if (!response.ok) {
 		throw new Error(payload.error ?? 'Could not update thread archive state.');
 	}
 
-	return payload.updatedThreadIds ?? payload.updatedSessionIds ?? [];
-}
-
-export async function updateAgentSessionArchiveState(sessionIds: string[], archived: boolean) {
-	return updateAgentThreadArchiveState(sessionIds, archived);
+	return payload.updatedThreadIds ?? [];
 }
 
 export async function fetchAgentThread(threadId: string) {
@@ -79,19 +69,14 @@ export async function fetchAgentThread(threadId: string) {
 
 	const payload = (await response.json()) as {
 		thread?: AgentThreadDetail;
-		session?: AgentThreadDetail;
 	};
-	const thread = payload.thread ?? payload.session;
+	const thread = payload.thread;
 
 	if (!thread) {
 		throw new Error('Could not refresh the thread.');
 	}
 
 	return thread;
-}
-
-export async function fetchAgentSession(sessionId: string) {
-	return fetchAgentThread(sessionId);
 }
 
 export function fetchHomeDashboard() {

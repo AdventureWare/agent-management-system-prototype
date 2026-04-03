@@ -65,7 +65,7 @@ function getCategoryHintScore(task: Task, knowledgeItem: SelfImprovementKnowledg
 		case 'quality':
 			return task.status === 'review' || task.requiresReview ? 14 : 0;
 		case 'knowledge':
-			return task.threadSessionId ? 6 : 10;
+			return task.agentThreadId ? 6 : 10;
 		case 'automation':
 			return task.status === 'in_progress' ? 8 : 0;
 		case 'reliability':

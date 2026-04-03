@@ -397,7 +397,9 @@ export async function loadSelfImprovementSnapshot(input?: {
 }): Promise<SelfImprovementSnapshot> {
 	const [data, sessions] = await Promise.all([
 		input?.data ? Promise.resolve(input.data) : loadControlPlane(),
-		input?.sessions ? Promise.resolve(input.sessions) : listAgentThreads()
+		input?.sessions
+			? Promise.resolve(input.sessions)
+			: listAgentThreads({ includeCategorization: false })
 	]);
 	const analysis = buildSelfImprovementAnalysis({
 		data,

@@ -65,7 +65,7 @@
 			run.taskProjectName,
 			run.workerName,
 			run.providerName,
-			run.sessionId ?? '',
+			run.agentThreadId ?? '',
 			run.threadName ?? '',
 			run.threadId ?? '',
 			run.promptDigest,
@@ -292,12 +292,12 @@
 										<p>{compactText(run.promptDigest || 'No prompt digest')}</p>
 										<div class="space-y-1 text-xs text-slate-500">
 											<p>Thread record</p>
-											{#if run.sessionId}
+											{#if run.agentThreadId}
 												<a
 													class="ui-wrap-inline text-sky-300 transition hover:text-sky-200"
-													href={resolve(`/app/threads/${run.sessionId}`)}
+													href={resolve(`/app/threads/${run.agentThreadId}`)}
 												>
-													{run.threadName || run.sessionId}
+													{run.threadName || run.agentThreadId}
 												</a>
 											{:else}
 												<p>No managed thread record</p>

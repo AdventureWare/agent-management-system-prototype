@@ -66,6 +66,23 @@
 				{meta.label}
 			</p>
 			<p class="text-xs text-slate-400">{meta.detail}</p>
+			{#if meta.activityLabel}
+				<div
+					class={`inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border px-2 py-1 text-[11px] leading-relaxed ${toneClass.chip}`}
+				>
+					{#if meta.activityHeading}
+						<span class="font-semibold uppercase opacity-80">{meta.activityHeading}</span>
+					{/if}
+					<span class="text-white">{meta.activityLabel}</span>
+					{#if !compact && meta.activityDetail}
+						<span class="ui-wrap-anywhere text-slate-300/90">{meta.activityDetail}</span>
+					{:else if compact && meta.activityDetail}
+						<span class="ui-wrap-anywhere text-slate-300/90">
+							{meta.activityDetail}
+						</span>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</div>
 

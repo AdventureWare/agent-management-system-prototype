@@ -37,7 +37,7 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: false,
 				desiredRoleId: 'role_app_worker',
 				assigneeWorkerId: null,
-				threadSessionId: 'session_1',
+				agentThreadId: 'session_1',
 				blockedReason: '',
 				dependencyTaskIds: [],
 				runCount: 1,
@@ -61,7 +61,7 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: true,
 				desiredRoleId: 'role_app_worker',
 				assigneeWorkerId: null,
-				threadSessionId: null,
+				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_done'],
 				runCount: 0,
@@ -85,7 +85,7 @@ function buildFixture(): ControlPlaneData {
 				requiresReview: true,
 				desiredRoleId: 'role_researcher',
 				assigneeWorkerId: null,
-				threadSessionId: null,
+				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_review'],
 				runCount: 0,
@@ -108,7 +108,7 @@ function buildFixture(): ControlPlaneData {
 				startedAt: '2026-03-26T00:00:00.000Z',
 				endedAt: '2026-03-26T00:10:00.000Z',
 				threadId: 'thread_1',
-				sessionId: 'session_1',
+				agentThreadId: 'session_1',
 				promptDigest: 'abc123',
 				artifactPaths: ['/tmp/done'],
 				summary: 'Completed work.',
@@ -172,7 +172,7 @@ describe('control-plane helpers', () => {
 		expect(task.blockedReason).toBe('');
 		expect(task.runCount).toBe(0);
 		expect(task.latestRunId).toBeNull();
-		expect(task.threadSessionId).toBeNull();
+		expect(task.agentThreadId).toBeNull();
 		expect(task.estimateHours).toBeNull();
 		expect(task.targetDate).toBeNull();
 		expect(task.attachments).toEqual([]);
@@ -184,7 +184,7 @@ describe('control-plane helpers', () => {
 			workerId: 'worker_1',
 			providerId: 'provider_1',
 			status: 'running',
-			sessionId: 'session_1',
+			agentThreadId: 'session_1',
 			summary: 'Executing task.'
 		});
 
@@ -192,7 +192,7 @@ describe('control-plane helpers', () => {
 		expect(run.taskId).toBe('task_1');
 		expect(run.workerId).toBe('worker_1');
 		expect(run.status).toBe('running');
-		expect(run.sessionId).toBe('session_1');
+		expect(run.agentThreadId).toBe('session_1');
 	});
 
 	it('creates review and approval records for governance queues', () => {
@@ -248,7 +248,7 @@ describe('control-plane helpers', () => {
 			startedAt: '2026-03-26T00:20:00.000Z',
 			endedAt: null,
 			threadId: 'thread_2',
-			sessionId: 'session_2',
+			agentThreadId: 'session_2',
 			promptDigest: 'def456',
 			artifactPaths: ['/tmp/review'],
 			summary: 'Still executing.',

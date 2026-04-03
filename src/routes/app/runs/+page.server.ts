@@ -8,7 +8,11 @@ export const load: PageServerLoad = async () => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({
+			includeArchived: true,
+			controlPlane: controlPlanePromise,
+			includeCategorization: false
+		})
 	]);
 	const taskIdsWithRuns = new Set(data.runs.map((run) => run.taskId));
 	const workerIdsWithRuns = new Set(

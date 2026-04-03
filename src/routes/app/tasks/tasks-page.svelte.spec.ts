@@ -19,7 +19,7 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		requiresReview: true,
 		desiredRoleId: 'role_1',
 		assigneeWorkerId: null,
-		threadSessionId: null,
+		agentThreadId: null,
 		blockedReason: '',
 		dependencyTaskIds: [],
 		targetDate: null,

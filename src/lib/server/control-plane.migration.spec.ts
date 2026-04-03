@@ -184,7 +184,7 @@ describe('control-plane project migration', () => {
 			expect.objectContaining({
 				id: 'task_1',
 				status: 'in_progress',
-				threadSessionId: null,
+				agentThreadId: null,
 				runCount: 1,
 				latestRunId: 'run_1',
 				attachments: []

@@ -1,5 +1,8 @@
 <script lang="ts">
+	import type { ActionData, PageData } from './$types';
 	import { resolve } from '$app/paths';
+	import { fetchJson } from '$lib/client/agent-data';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
@@ -8,7 +11,7 @@
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
-	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import {
 		PRIORITY_OPTIONS,
@@ -27,7 +30,25 @@
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
 
-	let { data, form } = $props();
+	let props = $props<{ data: PageData; form?: ActionData }>();
+	let form = $derived(props.form);
+	let refreshedData = $state.raw<PageData | null>(null);
+	let data = $derived(refreshedData ?? props.data);
+	let autoRefresh = $state(true);
+	let isRefreshing = $state(false);
+	let refreshError = $state<string | null>(null);
+
+	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+
+	function assignmentSuggestionIsEligible(
+		suggestion: PageData['assignmentSuggestions'][number]
+	) {
+		return suggestion.eligible;
+	}
+
+	function roleMatchesDesiredRole(role: PageData['roles'][number]) {
+		return role.id === data.task.desiredRoleId;
+	}
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateTask');
 	let attachSuccess = $derived(form?.ok && form?.successAction === 'attachTaskFile');
@@ -37,11 +58,18 @@
 	let threadAssignSuccess = $derived(form?.ok && form?.successAction === 'updateTaskThread');
 	let launchSuccess = $derived(form?.ok && form?.successAction === 'launchTaskSession');
 	let recoverSuccess = $derived(form?.ok && form?.successAction === 'recoverTaskSession');
+	let submittedThreadId = $derived(
+		form && typeof form === 'object' && 'threadId' in form ? form.threadId?.toString() ?? '' : ''
+	);
 	let showAllCandidateThreads = $state(false);
 	let visibleCandidateThreads = $derived(
 		showAllCandidateThreads ? data.candidateThreads : data.candidateThreads.slice(0, 3)
 	);
 	let visibleAssignmentSuggestions = $derived(data.assignmentSuggestions.slice(0, 4));
+	let eligibleAssignmentSuggestionCount = $derived(
+		data.assignmentSuggestions.filter(assignmentSuggestionIsEligible).length
+	);
+	let desiredRoleExists = $derived((data.roles ?? []).some(roleMatchesDesiredRole));
 	let governanceSuccessMessage = $derived.by(() => {
 		switch (form?.successAction) {
 			case 'approveReview':
@@ -83,6 +111,68 @@
 	let taskInstructionsExpanded = $state(false);
 	let taskTitleNeedsClamp = $derived(data.task.title.trim().length > 140);
 	let taskInstructionsNeedClamp = $derived(data.task.summary.trim().length > 360);
+
+	$effect(() => {
+		props.data;
+		refreshedData = null;
+	});
+
+	function isActiveThreadState(state: string | null | undefined) {
+		return state === 'starting' || state === 'waiting' || state === 'working';
+	}
+
+	function shouldAutoRefreshTaskDetail() {
+		return (
+			data.task.hasActiveRun ||
+			isActiveThreadState(data.task.statusThread?.threadState ?? data.task.statusThread?.sessionState)
+		);
+	}
+
+	async function refreshTaskDetail(options: { force?: boolean } = {}) {
+		if (isRefreshing || shouldPauseRefresh({ force: options.force })) {
+			return;
+		}
+
+		isRefreshing = true;
+
+		try {
+			refreshedData = await fetchJson<PageData>(
+				`/api/tasks/${data.task.id}`,
+				'Could not refresh the task detail.'
+			);
+			refreshError = null;
+		} catch (err) {
+			refreshError = err instanceof Error ? err.message : 'Could not refresh the task detail.';
+		} finally {
+			isRefreshing = false;
+		}
+	}
+
+	function handleWindowFocus() {
+		void refreshTaskDetail();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshTaskDetail();
+	}
+
+	$effect(() => {
+		if (!autoRefresh || !shouldAutoRefreshTaskDetail()) {
+			return;
+		}
+
+		const intervalId = window.setInterval(() => {
+			void refreshTaskDetail();
+		}, ACTIVE_REFRESH_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
 
 	function threadActionLabel() {
 		if (!data.task.linkThread) {
@@ -198,6 +288,12 @@
 			: 'border-slate-800 bg-slate-950/70';
 	}
 
+	function relatedThreadTasksLabel(thread: { relatedTasks: Array<{ title: string }> }) {
+		return thread.relatedTasks.length > 0
+			? `Related tasks: ${thread.relatedTasks.map((task) => task.title).join(', ')}`
+			: 'No tasks linked yet.';
+	}
+
 	function createFollowUpTaskInstructions() {
 		return [
 			`Create a follow-up task related to "${data.task.title}".`,
@@ -243,6 +339,9 @@
 		return '';
 	});
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
+<svelte:document onvisibilitychange={handleVisibilityChange} />
 
 <AppPage width="full">
 	<DetailHeader
@@ -321,6 +420,29 @@
 			</div>
 		{/snippet}
 	</DetailHeader>
+
+	<div class="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+		<button
+			class="rounded-full border border-slate-800 bg-slate-950/70 px-3 py-2 font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
+			type="button"
+			onclick={() => {
+				void refreshTaskDetail({ force: true });
+			}}
+			disabled={isRefreshing}
+		>
+			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
+		</button>
+		{#if shouldAutoRefreshTaskDetail()}
+			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+				Live updates every {autoRefreshIntervalLabel} while work is active
+			</span>
+		{/if}
+		{#if refreshError}
+			<span class="rounded-full border border-rose-900/70 bg-rose-950/40 px-3 py-2 text-rose-200">
+				{refreshError}
+			</span>
+		{/if}
+	</div>
 
 	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 		<DetailFactCard
@@ -475,8 +597,8 @@
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Task queued in its work thread.
-			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
+			{#if submittedThreadId}
+				<a class="underline" href={resolve(`/app/threads/${submittedThreadId}`)}>
 					Open thread details
 				</a>
 				to review the queued work.
@@ -488,8 +610,8 @@
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Recovered the stalled run and queued fresh work.
-			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
+			{#if submittedThreadId}
+				<a class="underline" href={resolve(`/app/threads/${submittedThreadId}`)}>
 					Open thread details
 				</a>
 				to review the recovered work.
@@ -674,8 +796,7 @@
 								</p>
 							</div>
 							<p class="text-xs text-slate-500">
-								{data.assignmentSuggestions.filter((suggestion) => suggestion.eligible).length} fit current
-								requirements
+								{eligibleAssignmentSuggestionCount} fit current requirements
 							</p>
 						</div>
 
@@ -828,7 +949,7 @@
 							<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span>
 							<select class="select text-white" name="desiredRoleId">
 								<option value="" selected={!data.task.desiredRoleId}>No role preference</option>
-								{#if data.task.desiredRoleId && !(data.roles ?? []).some((role) => role.id === data.task.desiredRoleId)}
+								{#if data.task.desiredRoleId && !desiredRoleExists}
 									<option value={data.task.desiredRoleId} selected>
 										{data.task.desiredRoleName || data.task.desiredRoleId} (missing role)
 									</option>
@@ -1258,7 +1379,7 @@
 								one.
 							</p>
 
-							{#if data.suggestedThread && data.suggestedThread.id !== data.task.threadSessionId}
+							{#if data.suggestedThread && data.suggestedThread.id !== data.task.agentThreadId}
 								<div class="mt-5 rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4">
 									<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 										<div class="min-w-0">
@@ -1311,7 +1432,7 @@
 											<form method="POST" action="?/updateTaskThread">
 												<input
 													type="hidden"
-													name="threadSessionId"
+													name="agentThreadId"
 													value={data.suggestedThread.id}
 												/>
 												<button
@@ -1335,12 +1456,12 @@
 							<form class="mt-5 space-y-4" method="POST" action="?/updateTaskThread">
 								<label class="block">
 									<span class="mb-2 block text-sm font-medium text-slate-200">Assigned thread</span>
-									<select class="select text-white" name="threadSessionId">
-										<option value="" selected={!data.task.threadSessionId}>
+									<select class="select text-white" name="agentThreadId">
+										<option value="" selected={!data.task.agentThreadId}>
 											Create a new thread when this task runs
 										</option>
 										{#each data.candidateThreads as thread (thread.id)}
-											<option value={thread.id} selected={data.task.threadSessionId === thread.id}>
+											<option value={thread.id} selected={data.task.agentThreadId === thread.id}>
 												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
 												{formatThreadStateLabel(
 													thread.threadState ?? thread.sessionState ?? 'idle'
@@ -1450,9 +1571,7 @@
 												</p>
 											{/if}
 											<p class="ui-wrap-anywhere mt-3 text-xs text-slate-400">
-												{thread.relatedTasks.length > 0
-													? `Related tasks: ${thread.relatedTasks.map((task) => task.title).join(', ')}`
-													: 'No tasks linked yet.'}
+												{relatedThreadTasksLabel(thread)}
 											</p>
 										</div>
 									{/each}
@@ -1544,12 +1663,12 @@
 													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 														Thread record
 													</p>
-													{#if run.sessionId}
+													{#if run.agentThreadId}
 														<a
 															class="ui-wrap-inline mt-2 text-sm text-sky-300 transition hover:text-sky-200"
-															href={resolve(`/app/threads/${run.sessionId}`)}
+															href={resolve(`/app/threads/${run.agentThreadId}`)}
 														>
-															{run.threadId || run.sessionId}
+															{run.threadId || run.agentThreadId}
 														</a>
 													{:else}
 														<p class="mt-2 text-sm text-white">No thread</p>

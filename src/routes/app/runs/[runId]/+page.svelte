@@ -1,20 +1,34 @@
 <script lang="ts">
+	import type { PageData } from './$types';
 	import { resolve } from '$app/paths';
+	import { fetchJson } from '$lib/client/agent-data';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
-	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
 	import {
 		formatRunStatusLabel,
 		formatWorkerStatusLabel,
 		runStatusToneClass
 	} from '$lib/types/control-plane';
 
-	let { data } = $props();
+	let props = $props<{ data: PageData }>();
+	let refreshedData = $state.raw<PageData | null>(null);
+	let data = $derived(refreshedData ?? props.data);
+	let isRefreshing = $state(false);
+	let refreshError = $state<string | null>(null);
+
+	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
 		timeStyle: 'short'
+	});
+
+	$effect(() => {
+		props.data;
+		refreshedData = null;
 	});
 
 	function formatTimestamp(iso: string | null) {
@@ -24,7 +38,60 @@
 
 		return timestampFormatter.format(new Date(iso));
 	}
+
+	function shouldAutoRefreshRunDetail() {
+		return ['queued', 'starting', 'running'].includes(data.run.status);
+	}
+
+	async function refreshRunDetail(options: { force?: boolean } = {}) {
+		if (isRefreshing || shouldPauseRefresh({ force: options.force })) {
+			return;
+		}
+
+		isRefreshing = true;
+
+		try {
+			refreshedData = await fetchJson<PageData>(
+				`/api/runs/${data.run.id}`,
+				'Could not refresh the run.'
+			);
+			refreshError = null;
+		} catch (err) {
+			refreshError = err instanceof Error ? err.message : 'Could not refresh the run.';
+		} finally {
+			isRefreshing = false;
+		}
+	}
+
+	function handleWindowFocus() {
+		void refreshRunDetail();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshRunDetail();
+	}
+
+	$effect(() => {
+		if (!shouldAutoRefreshRunDetail()) {
+			return;
+		}
+
+		const intervalId = window.setInterval(() => {
+			void refreshRunDetail();
+		}, ACTIVE_REFRESH_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
+<svelte:document onvisibilitychange={handleVisibilityChange} />
 
 <AppPage width="full">
 	<DetailHeader
@@ -34,6 +101,29 @@
 		title={data.run.id}
 		description={data.run.summary || 'No summary recorded for this execution.'}
 	/>
+
+	<div class="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+		<button
+			class="rounded-full border border-slate-800 bg-slate-950/70 px-3 py-2 font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
+			type="button"
+			onclick={() => {
+				void refreshRunDetail({ force: true });
+			}}
+			disabled={isRefreshing}
+		>
+			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
+		</button>
+		{#if shouldAutoRefreshRunDetail()}
+			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+				Live updates every {autoRefreshIntervalLabel} while the run is active
+			</span>
+		{/if}
+		{#if refreshError}
+			<span class="rounded-full border border-rose-900/70 bg-rose-950/40 px-3 py-2 text-rose-200">
+				{refreshError}
+			</span>
+		{/if}
+	</div>
 
 	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
@@ -81,12 +171,12 @@
 
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Thread record</p>
-			{#if data.run.sessionId}
+			{#if data.run.agentThreadId}
 				<a
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-					href={resolve(`/app/threads/${data.run.sessionId}`)}
+					href={resolve(`/app/threads/${data.run.agentThreadId}`)}
 				>
-					{data.run.threadName ?? data.run.sessionId}
+					{data.run.threadName ?? data.run.agentThreadId}
 				</a>
 				<p class="mt-2 text-sm text-slate-400">
 					{data.run.threadState ? formatThreadStateLabel(data.run.threadState) : 'Unknown state'}
@@ -244,12 +334,12 @@
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 							Thread record
 						</p>
-						{#if data.run.sessionId}
+						{#if data.run.agentThreadId}
 							<a
 								class="ui-wrap-inline mt-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
-								href={resolve(`/app/threads/${data.run.sessionId}`)}
+								href={resolve(`/app/threads/${data.run.agentThreadId}`)}
 							>
-								{data.run.threadName ?? data.run.sessionId}
+								{data.run.threadName ?? data.run.agentThreadId}
 							</a>
 						{:else}
 							<p class="mt-2 text-sm text-white">No thread record linked</p>

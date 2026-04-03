@@ -48,8 +48,16 @@ const CODEX_STATE_DB_FILE = resolve(CODEX_HOME, 'state_5.sqlite');
 const STALE_RUN_GRACE_MS = 5 * 60 * 1000;
 const STARTUP_AUTH_FAILURE_GRACE_MS = 30 * 1000;
 const STARTUP_STDIN_STALL_GRACE_MS = 60 * 1000;
+const NATIVE_THREAD_CACHE_TTL_MS = 3_000;
 const AUTH_REFRESH_FAILURE_MARKER = 'Auth(TokenRefreshFailed("Failed to parse server response"))';
 const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
+
+let nativeThreadCache:
+	| {
+			expiresAt: number;
+			threads: NativeCodexThread[];
+	  }
+	| null = null;
 
 function defaultDb(): AgentSessionsDb {
 	return {
@@ -259,7 +267,7 @@ type TaskContextTask = {
 	desiredRole: string | null;
 	requiredCapabilityNames: string[];
 	requiredToolNames: string[];
-	threadSessionId: string | null;
+	agentThreadId: string | null;
 };
 
 type NativeCodexThread = {
@@ -428,9 +436,14 @@ function parseNativeRolloutRecord(line: string): NativeRolloutRecord | null {
 }
 
 async function listNativeCodexThreads() {
-	const rows = listCodexStateThreadRows(CODEX_STATE_DB_FILE);
+	const now = Date.now();
 
-	return rows
+	if (nativeThreadCache && nativeThreadCache.expiresAt > now) {
+		return nativeThreadCache.threads;
+	}
+
+	const rows = listCodexStateThreadRows(CODEX_STATE_DB_FILE);
+	const threads = rows
 		.map((row) => {
 			const createdAt = epochSecondsToIso(row.created_at);
 			const updatedAt = epochSecondsToIso(row.updated_at);
@@ -452,6 +465,13 @@ async function listNativeCodexThreads() {
 			} satisfies NativeCodexThread;
 		})
 		.filter((thread): thread is NativeCodexThread => Boolean(thread));
+
+	nativeThreadCache = {
+		expiresAt: now + NATIVE_THREAD_CACHE_TTL_MS,
+		threads
+	};
+
+	return threads;
 }
 
 async function getNativeCodexThread(threadId: string) {
@@ -1253,6 +1273,7 @@ function finalizeSessionDetail(input: {
 	session: AgentSession;
 	runDetails: AgentRunDetail[];
 	runCount?: number;
+	includeCategorization?: boolean;
 	taskContext: TaskContext;
 	origin: AgentSessionOrigin;
 	sessionSummaryOverride?: string | null;
@@ -1269,29 +1290,6 @@ function finalizeSessionDetail(input: {
 		input.origin === 'managed'
 			? buildStandardizedManagedSessionName(input.session, input.taskContext, relatedTasks)
 			: input.session.name;
-	const relatedTaskDetails = relatedTasks
-		.map((relatedTask) => {
-			const task = input.taskContext.tasksById.get(relatedTask.id);
-
-			if (!task) {
-				return null;
-			}
-
-			return {
-				title: task.title,
-				summary: task.summary,
-				projectId: task.projectId,
-				projectName: task.projectName,
-				goalId: task.goalId,
-				goalName: task.goalName,
-				area: task.area,
-				desiredRole: task.desiredRole,
-				requiredCapabilityNames: task.requiredCapabilityNames,
-				requiredToolNames: task.requiredToolNames,
-				isPrimary: relatedTask.isPrimary
-			};
-		})
-		.filter((task): task is NonNullable<typeof task> => Boolean(task));
 	const sessionState = getSessionState({
 		latestRunStatus,
 		canResume,
@@ -1309,15 +1307,40 @@ function finalizeSessionDetail(input: {
 			lastMessage: latestRun?.lastMessage ?? null,
 			threadId
 		});
-	const categorization = deriveThreadCategorization({
-		threadName: name,
-		threadSummary: sessionSummary,
-		runDetails: input.runDetails.map((run) => ({
-			prompt: run.prompt,
-			lastMessage: run.lastMessage
-		})),
-		relatedTasks: relatedTaskDetails
-	});
+	const categorization =
+		input.includeCategorization === false
+			? null
+			: deriveThreadCategorization({
+					threadName: name,
+					threadSummary: sessionSummary,
+					runDetails: input.runDetails.map((run) => ({
+						prompt: run.prompt,
+						lastMessage: run.lastMessage
+					})),
+					relatedTasks: relatedTasks
+						.map((relatedTask) => {
+							const task = input.taskContext.tasksById.get(relatedTask.id);
+
+							if (!task) {
+								return null;
+							}
+
+							return {
+								title: task.title,
+								summary: task.summary,
+								projectId: task.projectId,
+								projectName: task.projectName,
+								goalId: task.goalId,
+								goalName: task.goalName,
+								area: task.area,
+								desiredRole: task.desiredRole,
+								requiredCapabilityNames: task.requiredCapabilityNames,
+								requiredToolNames: task.requiredToolNames,
+								isPrimary: relatedTask.isPrimary
+							};
+						})
+						.filter((task): task is NonNullable<typeof task> => Boolean(task))
+				});
 
 	return {
 		...input.session,
@@ -1325,8 +1348,8 @@ function finalizeSessionDetail(input: {
 		attachments: input.session.attachments ?? [],
 		origin: input.origin,
 		threadId,
-		topicLabels: categorization.labels,
-		categorization,
+		topicLabels: categorization?.labels ?? [],
+		categorization: categorization ?? undefined,
 		threadState: sessionState,
 		sessionState,
 		latestRunStatus,
@@ -1384,7 +1407,8 @@ async function buildLatestRunDetails(runs: AgentRun[]) {
 async function buildManagedSessionListDetail(
 	session: AgentSession,
 	runs: AgentRun[],
-	taskContext: TaskContext
+	taskContext: TaskContext,
+	includeCategorization: boolean
 ) {
 	const runDetails = await buildLatestRunDetails(runs);
 
@@ -1392,6 +1416,7 @@ async function buildManagedSessionListDetail(
 		session,
 		runDetails,
 		runCount: runs.length,
+		includeCategorization,
 		taskContext,
 		origin: 'managed'
 	});
@@ -1417,7 +1442,8 @@ async function buildSessionDetail(
 async function buildExternalSessionListDetail(
 	thread: NativeCodexThread,
 	runs: AgentRun[],
-	taskContext: TaskContext
+	taskContext: TaskContext,
+	includeCategorization: boolean
 ) {
 	if (runs.length > 0) {
 		const runDetails = await buildLatestRunDetails(runs);
@@ -1426,6 +1452,7 @@ async function buildExternalSessionListDetail(
 			session: materializeNativeSession(thread),
 			runDetails,
 			runCount: runs.length,
+			includeCategorization,
 			taskContext,
 			origin: 'external'
 		});
@@ -1436,6 +1463,7 @@ async function buildExternalSessionListDetail(
 	return finalizeSessionDetail({
 		session: materializeNativeSession(thread),
 		runDetails: summaryRun ? [summaryRun] : [],
+		includeCategorization,
 		taskContext,
 		origin: 'external',
 		sessionSummaryOverride:
@@ -1486,29 +1514,29 @@ function buildTaskContextFromControlPlane(controlPlane: ControlPlaneData): TaskC
 		desiredRole: roleNames.get(task.desiredRoleId) ?? task.desiredRoleId ?? null,
 		requiredCapabilityNames: [...(task.requiredCapabilityNames ?? [])],
 		requiredToolNames: [...(task.requiredToolNames ?? [])],
-		threadSessionId: task.threadSessionId
+		agentThreadId: task.agentThreadId
 	}));
 	const tasksById = new Map<string, TaskContextTask>(tasks.map((task) => [task.id, task]));
 	const relatedTaskIdsBySessionId = new Map<string, Set<string>>();
 
 	for (const task of tasks) {
-		if (!task.threadSessionId) {
+		if (!task.agentThreadId) {
 			continue;
 		}
 
-		const relatedTaskIds = relatedTaskIdsBySessionId.get(task.threadSessionId) ?? new Set<string>();
+		const relatedTaskIds = relatedTaskIdsBySessionId.get(task.agentThreadId) ?? new Set<string>();
 		relatedTaskIds.add(task.id);
-		relatedTaskIdsBySessionId.set(task.threadSessionId, relatedTaskIds);
+		relatedTaskIdsBySessionId.set(task.agentThreadId, relatedTaskIds);
 	}
 
 	for (const run of controlPlane.runs) {
-		if (!run.sessionId) {
+		if (!run.agentThreadId) {
 			continue;
 		}
 
-		const relatedTaskIds = relatedTaskIdsBySessionId.get(run.sessionId) ?? new Set<string>();
+		const relatedTaskIds = relatedTaskIdsBySessionId.get(run.agentThreadId) ?? new Set<string>();
 		relatedTaskIds.add(run.taskId);
-		relatedTaskIdsBySessionId.set(run.sessionId, relatedTaskIds);
+		relatedTaskIdsBySessionId.set(run.agentThreadId, relatedTaskIds);
 	}
 
 	const relatedTaskLinksBySessionId = new Map<string, AgentSessionTaskLink[]>();
@@ -1521,7 +1549,7 @@ function buildTaskContextFromControlPlane(controlPlane: ControlPlaneData): TaskC
 				id: task.id,
 				title: task.title,
 				status: task.status,
-				isPrimary: task.threadSessionId === sessionId
+				isPrimary: task.agentThreadId === sessionId
 			}))
 			.sort((left, right) => {
 				if (left.isPrimary !== right.isPrimary) {
@@ -1728,7 +1756,7 @@ export function reconcileControlPlaneSessionState(
 			? (data.runs.find((candidate) => candidate.id === task.latestRunId) ?? null)
 			: null;
 		const isLinkedToSession =
-			latestRun?.sessionId === detail.id || (!latestRun && task.threadSessionId === detail.id);
+			latestRun?.agentThreadId === detail.id || (!latestRun && task.agentThreadId === detail.id);
 
 		if (!isLinkedToSession) {
 			return task;
@@ -1825,7 +1853,7 @@ export function reconcileControlPlaneSessionMessage(
 			? (data.runs.find((candidate) => candidate.id === task.latestRunId) ?? null)
 			: null;
 		const isLinkedToSession =
-			latestRun?.sessionId === sessionId || (!latestRun && task.threadSessionId === sessionId);
+			latestRun?.agentThreadId === sessionId || (!latestRun && task.agentThreadId === sessionId);
 
 		if (!isLinkedToSession) {
 			return task;
@@ -1932,6 +1960,7 @@ async function reconcileTaskStateFromSessionDetails(
 export async function listAgentSessions(
 	options: {
 		includeArchived?: boolean;
+		includeCategorization?: boolean;
 		controlPlane?: ControlPlaneData | Promise<ControlPlaneData>;
 	} = {}
 ) {
@@ -1958,14 +1987,31 @@ export async function listAgentSessions(
 			const runs = runsBySessionId.get(session.id) ?? [];
 
 			if (nativeThread && session.id === nativeThread.id) {
-				return buildExternalSessionListDetail(nativeThread, runs, taskContext);
+				return buildExternalSessionListDetail(
+					nativeThread,
+					runs,
+					taskContext,
+					options.includeCategorization !== false
+				);
 			}
 
-			return buildManagedSessionListDetail(session, runs, taskContext);
+			return buildManagedSessionListDetail(
+				session,
+				runs,
+				taskContext,
+				options.includeCategorization !== false
+			);
 		}),
 		...nativeThreads
 			.filter((thread) => !existingSessionIds.has(thread.id) && !managedThreadIds.has(thread.id))
-			.map((thread) => buildExternalSessionListDetail(thread, [], taskContext))
+			.map((thread) =>
+				buildExternalSessionListDetail(
+					thread,
+					[],
+					taskContext,
+					options.includeCategorization !== false
+				)
+			)
 	]);
 	const reconciled = await reconcileTaskStateFromSessionDetails(details, controlPlane);
 

@@ -72,7 +72,7 @@ function updateLatestRunForTask(runId: string | null, summary: string) {
 function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 	const latestSessionRun =
 		[...data.runs]
-			.filter((run) => run.sessionId === sessionId)
+			.filter((run) => run.agentThreadId === sessionId)
 			.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
 
 	if (latestSessionRun) {
@@ -84,7 +84,7 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 	}
 
 	const assignedTasks = [...data.tasks]
-		.filter((task) => task.threadSessionId === sessionId)
+		.filter((task) => task.agentThreadId === sessionId)
 		.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
 	if (assignedTasks.length === 1) {
@@ -98,7 +98,7 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 	const relatedTaskIds = [
 		...new Set(
 			data.runs
-				.filter((run) => run.sessionId === sessionId)
+				.filter((run) => run.agentThreadId === sessionId)
 				.map((run) => run.taskId)
 				.filter(Boolean)
 		)
@@ -237,7 +237,7 @@ function getLatestThreadPrompt(session: NonNullable<Awaited<ReturnType<typeof ge
 
 function getTasksToCarryForward(data: ControlPlaneData, sessionId: string) {
 	const directlyAssignedTasks = data.tasks.filter(
-		(task) => task.threadSessionId === sessionId && task.status !== 'done'
+		(task) => task.agentThreadId === sessionId && task.status !== 'done'
 	);
 
 	if (directlyAssignedTasks.length > 0) {
@@ -279,7 +279,7 @@ function reopenTasksForThreadRetry(input: {
 			status: 'running',
 			startedAt: now,
 			threadId: input.threadId,
-			sessionId: input.targetSessionId,
+			agentThreadId: input.targetSessionId,
 			promptDigest: buildPromptDigest(input.prompt),
 			artifactPaths: latestRun?.artifactPaths.length
 				? latestRun.artifactPaths
@@ -308,7 +308,7 @@ function reopenTasksForThreadRetry(input: {
 
 			return {
 				...task,
-				threadSessionId: input.targetSessionId,
+				agentThreadId: input.targetSessionId,
 				latestRunId: nextRun.id,
 				runCount: task.runCount + 1,
 				status: 'in_progress' as const,

@@ -1,7 +1,11 @@
 <script lang="ts">
+	import type { ActionData, PageData } from './$types';
 	import { resolve } from '$app/paths';
+	import { fetchJson } from '$lib/client/agent-data';
+	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
+	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
 	import {
 		formatRunStatusLabel,
 		formatTaskStatusLabel,
@@ -11,10 +15,82 @@
 		workerStatusToneClass
 	} from '$lib/types/control-plane';
 
-	let { data, form } = $props();
+	let props = $props<{ data: PageData; form?: ActionData }>();
+	let form = $derived(props.form);
+	let refreshedData = $state.raw<PageData | null>(null);
+	let data = $derived(refreshedData ?? props.data);
+	let isRefreshing = $state(false);
+	let refreshError = $state<string | null>(null);
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateWorker');
+	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+	function runIsActive(run: PageData['recentRuns'][number]) {
+		return ['queued', 'starting', 'running'].includes(run.status);
+	}
+
+	let hasActiveRecentRun = $derived(
+		data.recentRuns.some(runIsActive)
+	);
+
+	$effect(() => {
+		props.data;
+		refreshedData = null;
+	});
+
+	function shouldAutoRefreshWorkerDetail() {
+		return data.worker.status === 'busy' || hasActiveRecentRun;
+	}
+
+	async function refreshWorkerDetail(options: { force?: boolean } = {}) {
+		if (isRefreshing || shouldPauseRefresh({ force: options.force })) {
+			return;
+		}
+
+		isRefreshing = true;
+
+		try {
+			refreshedData = await fetchJson<PageData>(
+				`/api/workers/${data.worker.id}`,
+				'Could not refresh the worker detail.'
+			);
+			refreshError = null;
+		} catch (err) {
+			refreshError =
+				err instanceof Error ? err.message : 'Could not refresh the worker detail.';
+		} finally {
+			isRefreshing = false;
+		}
+	}
+
+	function handleWindowFocus() {
+		void refreshWorkerDetail();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState !== 'visible') {
+			return;
+		}
+
+		void refreshWorkerDetail();
+	}
+
+	$effect(() => {
+		if (!shouldAutoRefreshWorkerDetail()) {
+			return;
+		}
+
+		const intervalId = window.setInterval(() => {
+			void refreshWorkerDetail();
+		}, ACTIVE_REFRESH_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
+<svelte:document onvisibilitychange={handleVisibilityChange} />
 
 <AppPage width="full">
 	<DetailHeader
@@ -34,6 +110,29 @@
 			</div>
 		{/snippet}
 	</DetailHeader>
+
+	<div class="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+		<button
+			class="rounded-full border border-slate-800 bg-slate-950/70 px-3 py-2 font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
+			type="button"
+			onclick={() => {
+				void refreshWorkerDetail({ force: true });
+			}}
+			disabled={isRefreshing}
+		>
+			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
+		</button>
+		{#if shouldAutoRefreshWorkerDetail()}
+			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+				Live updates every {autoRefreshIntervalLabel} while this worker is active
+			</span>
+		{/if}
+		{#if refreshError}
+			<span class="rounded-full border border-rose-900/70 bg-rose-950/40 px-3 py-2 text-rose-200">
+				{refreshError}
+			</span>
+		{/if}
+	</div>
 
 	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
@@ -280,10 +379,10 @@
 									>
 										Open run
 									</a>
-									{#if run.sessionId}
+									{#if run.agentThreadId}
 										<a
 											class="text-sky-300 transition hover:text-sky-200"
-											href={resolve(`/app/threads/${run.sessionId}`)}
+											href={resolve(`/app/threads/${run.agentThreadId}`)}
 										>
 											Open thread
 										</a>
