@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import {
 	buildTaskWorkItems,
@@ -7,7 +7,7 @@ import {
 	summarizeTaskFreshness
 } from './task-work-items';
 
-function createSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessionDetail {
+function createSession(overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id: 'session_1',
 		name: 'Task thread',
@@ -19,14 +19,14 @@ function createSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessio
 		createdAt: '2026-03-31T08:00:00.000Z',
 		updatedAt: '2026-03-31T09:00:00.000Z',
 		origin: 'managed',
-		sessionState: 'working',
+		threadState: 'working',
 		latestRunStatus: 'running',
 		hasActiveRun: true,
 		canResume: false,
 		runCount: 1,
 		lastActivityAt: '2026-03-31T11:40:00.000Z',
 		lastActivityLabel: '20m ago',
-		sessionSummary: 'Worker is still running.',
+		threadSummary: 'Worker is still running.',
 		lastExitCode: null,
 		runTimeline: [],
 		relatedTasks: [],
@@ -61,7 +61,7 @@ function createControlPlane(): ControlPlaneData {
 			{
 				id: 'role_1',
 				name: 'Coordinator',
-				lane: 'shared',
+				area: 'shared',
 				description: 'Coordinates work'
 			}
 		],
@@ -101,7 +101,7 @@ function createControlPlane(): ControlPlaneData {
 				title: 'Stale in-progress task',
 				summary: 'A task that has not been updated in hours.',
 				projectId: 'project_1',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'in_progress',
@@ -125,7 +125,7 @@ function createControlPlane(): ControlPlaneData {
 				title: 'Quiet active thread task',
 				summary: 'Run is active but thread output has gone quiet.',
 				projectId: 'project_1',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'ready',
@@ -149,7 +149,7 @@ function createControlPlane(): ControlPlaneData {
 				title: 'Fresh task',
 				summary: 'Fresh work stays out of the stale watchlist.',
 				projectId: 'project_1',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'ready',

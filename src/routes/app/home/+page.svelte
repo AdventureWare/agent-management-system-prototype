@@ -31,26 +31,22 @@
 	let refreshedDashboard = $state.raw<HomeDashboardData | null>(null);
 	let refreshError = $state<string | null>(null);
 	let dashboard: HomeDashboardData = $derived(refreshedDashboard ?? data);
-	let dashboardThreads = $derived(dashboard.threads ?? dashboard.sessions ?? []);
-	let dashboardThreadSummary = $derived(dashboard.threadSummary ?? dashboard.sessionSummary);
+	let dashboardThreads = $derived(dashboard.threads);
+	let dashboardThreadSummary = $derived(dashboard.threadSummary);
 
 	let activeSessions = $derived(
 		dashboardThreads.filter(
 			(session: AgentThreadDetail) =>
-				(session.threadState ?? session.sessionState) === 'starting' ||
-				(session.threadState ?? session.sessionState) === 'waiting' ||
-				(session.threadState ?? session.sessionState) === 'working'
+				session.threadState === 'starting' ||
+				session.threadState === 'waiting' ||
+				session.threadState === 'working'
 		)
 	);
 	let attentionSessions = $derived(
-		dashboardThreads.filter(
-			(session: AgentThreadDetail) => (session.threadState ?? session.sessionState) === 'attention'
-		)
+		dashboardThreads.filter((session: AgentThreadDetail) => session.threadState === 'attention')
 	);
 	let availableSessions = $derived(
-		dashboardThreads.filter(
-			(session: AgentThreadDetail) => (session.threadState ?? session.sessionState) === 'ready'
-		)
+		dashboardThreads.filter((session: AgentThreadDetail) => session.threadState === 'ready')
 	);
 	let latestSessions = $derived(dashboardThreads.slice(0, 5));
 	let blockedTasks = $derived(
@@ -138,7 +134,7 @@
 		}
 	}
 
-	function sessionStateClass(state: AgentThreadDetail['sessionState']) {
+	function threadStateClass(state: AgentThreadDetail['threadState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -229,10 +225,10 @@
 					<span
 						class={[
 							'inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase',
-							sessionStateClass(session.sessionState)
+							threadStateClass(session.threadState)
 						]}
 					>
-						{formatThreadStateLabel(session.sessionState)}
+						{formatThreadStateLabel(session.threadState)}
 					</span>
 					<span
 						class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
@@ -240,7 +236,7 @@
 						latest run {session.latestRunStatus}
 					</span>
 				</div>
-				<p class="ui-clamp-3 text-sm text-slate-300">{session.sessionSummary}</p>
+				<p class="ui-clamp-3 text-sm text-slate-300">{session.threadSummary}</p>
 				<p class="ui-wrap-anywhere text-xs text-slate-500">{session.cwd}</p>
 			</div>
 
@@ -875,7 +871,7 @@
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div class="min-w-0">
 										<p class="font-medium text-white">{session.name}</p>
-										<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>
+										<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.threadSummary}</p>
 										<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">{session.cwd}</p>
 									</div>
 									<div class="text-left text-xs text-slate-500 sm:text-right">
@@ -905,10 +901,10 @@
 										<span
 											class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
-											{formatThreadStateLabel(session.sessionState)}
+											{formatThreadStateLabel(session.threadState)}
 										</span>
 									</div>
-									<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.sessionSummary}</p>
+									<p class="ui-clamp-3 mt-1 text-sm text-slate-300">{session.threadSummary}</p>
 								</div>
 								<p class="text-xs text-slate-500 sm:text-right">{session.lastActivityLabel}</p>
 							</div>

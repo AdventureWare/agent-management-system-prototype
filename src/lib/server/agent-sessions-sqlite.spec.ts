@@ -8,24 +8,24 @@ const originalCwd = process.cwd();
 const tempDirs: string[] = [];
 
 function createTempDir() {
-	const path = mkdtempSync(join(tmpdir(), 'ams-agent-sessions-sqlite-'));
+	const path = mkdtempSync(join(tmpdir(), 'ams-agent-threads-sqlite-'));
 	tempDirs.push(path);
 	return path;
 }
 
-async function importAgentSessionsModule() {
+async function importAgentThreadsModule() {
 	vi.resetModules();
-	return import('./agent-sessions');
+	return import('./agent-threads');
 }
 
-function writeAgentSessionsJson(root: string) {
+function writeAgentThreadsJson(root: string) {
 	mkdirSync(resolve(root, 'data'), { recursive: true });
 	writeFileSync(
-		resolve(root, 'data', 'agent-sessions.json'),
+		resolve(root, 'data', 'agent-threads.json'),
 		JSON.stringify({
-			sessions: [
+			threads: [
 				{
-					id: 'session_seeded',
+					id: 'thread_seeded',
 					name: 'Seeded session',
 					cwd: '/tmp/project',
 					sandbox: 'workspace-write',
@@ -62,10 +62,10 @@ describe('agent sessions sqlite backend', () => {
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 		vi.stubEnv('CODEX_HOME', resolve(root, '.codex'));
-		writeAgentSessionsJson(root);
+		writeAgentThreadsJson(root);
 
-		const { loadAgentSessionsDb } = await importAgentSessionsModule();
-		const db = await loadAgentSessionsDb();
+		const { loadAgentThreadsDb } = await importAgentThreadsModule();
+		const db = await loadAgentThreadsDb();
 		const sqlite = new Database(resolve(root, 'data', 'app.sqlite'), {
 			readonly: true,
 			fileMustExist: true
@@ -75,15 +75,15 @@ describe('agent sessions sqlite backend', () => {
 				`
 					select payload
 					from agent_session_records
-					where collection = 'sessions' and id = 'session_seeded'
+					where collection = 'sessions' and id = 'thread_seeded'
 				`
 			)
 			.get();
 		sqlite.close();
 
-		expect(db.sessions.map((session) => session.id)).toEqual(['session_seeded']);
+		expect(db.threads.map((session) => session.id)).toEqual(['thread_seeded']);
 		expect(JSON.parse(row?.payload ?? '{}')).toMatchObject({
-			id: 'session_seeded',
+			id: 'thread_seeded',
 			name: 'Seeded session'
 		});
 	});
@@ -93,13 +93,13 @@ describe('agent sessions sqlite backend', () => {
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 		vi.stubEnv('CODEX_HOME', resolve(root, '.codex'));
-		writeAgentSessionsJson(root);
+		writeAgentThreadsJson(root);
 
-		const { loadAgentSessionsDb, setAgentSessionsArchived } = await importAgentSessionsModule();
+		const { loadAgentThreadsDb, setAgentThreadsArchived } = await importAgentThreadsModule();
 
-		await setAgentSessionsArchived(['session_seeded'], true);
+		await setAgentThreadsArchived(['thread_seeded'], true);
 
-		const db = await loadAgentSessionsDb();
+		const db = await loadAgentThreadsDb();
 		const sqlite = new Database(resolve(root, 'data', 'app.sqlite'), {
 			readonly: true,
 			fileMustExist: true
@@ -109,13 +109,13 @@ describe('agent sessions sqlite backend', () => {
 				`
 					select payload
 					from agent_session_records
-					where collection = 'sessions' and id = 'session_seeded'
+					where collection = 'sessions' and id = 'thread_seeded'
 				`
 			)
 			.get();
 		sqlite.close();
 
-		expect(db.sessions[0]?.archivedAt).toBeTypeOf('string');
+		expect(db.threads[0]?.archivedAt).toBeTypeOf('string');
 		expect(JSON.parse(row?.payload ?? '{}').archivedAt).toBeTypeOf('string');
 	});
 });

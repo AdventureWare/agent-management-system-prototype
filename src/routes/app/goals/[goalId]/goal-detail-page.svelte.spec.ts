@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
+import { GOAL_STATUS_OPTIONS, AREA_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
 
 describe('/app/goals/[goalId]/+page.svelte', () => {
@@ -12,7 +12,7 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 				goal: {
 					id: 'goal_parent',
 					name: 'Grow Kwipoo into a repeatable business',
-					lane: 'growth',
+					area: 'growth',
 					status: 'running',
 					summary: 'Establish repeatable acquisition and retention loops.',
 					artifactPath: '/tmp/project/agent_output/goals/grow-kwipoo',
@@ -74,7 +74,7 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 					linkedProjectCount: 1,
 					childGoalCount: 1
 				},
-				laneOptions: LANE_OPTIONS,
+				laneOptions: AREA_OPTIONS,
 				statusOptions: GOAL_STATUS_OPTIONS,
 				folderOptions: [],
 				parentGoalOptions: [],

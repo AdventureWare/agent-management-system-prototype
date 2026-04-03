@@ -12,7 +12,7 @@ describe('task thread topics', () => {
 			deriveTaskTopicLabels({
 				title: 'Add attachment browser coverage',
 				summary: 'Expand task attachment tests and improve artifact browser validation.',
-				lane: 'product'
+				area: 'product'
 			})
 		).toEqual(expect.arrayContaining(['Product', 'Testing', 'Attachment']));
 	});
@@ -22,13 +22,13 @@ describe('task thread topics', () => {
 			deriveTaskCategorization({
 				title: 'Improve thread assignment suggestions',
 				summary: 'Match new tasks to reusable work threads and surface better context.',
-				lane: 'product',
+				area: 'product',
 				desiredRoleId: 'role_coordinator',
 				requiredCapabilityNames: ['assignment'],
 				requiredToolNames: ['context']
 			})
 		).toMatchObject({
-			laneLabels: ['Product'],
+			areaLabels: ['Product'],
 			focusLabels: expect.arrayContaining(['Coordination']),
 			entityLabels: expect.arrayContaining(['Thread']),
 			roleLabels: expect.arrayContaining(['Coordinator']),
@@ -41,8 +41,8 @@ describe('task thread topics', () => {
 	it('derives thread topic labels from related tasks and recent thread content', () => {
 		expect(
 			deriveThreadTopicLabels({
-				sessionName: 'Artifact browser follow-up',
-				sessionSummary: 'Continue validating attachments and browser output.',
+				threadName: 'Artifact browser follow-up',
+				threadSummary: 'Continue validating attachments and browser output.',
 				runDetails: [
 					{
 						prompt: 'Add browser specs for attachment flows and artifact output.',
@@ -53,7 +53,7 @@ describe('task thread topics', () => {
 					{
 						title: 'Expand attachment browser coverage',
 						summary: 'Add tests for task attachments and artifact output.',
-						lane: 'product',
+						area: 'product',
 						isPrimary: true
 					}
 				]
@@ -64,8 +64,8 @@ describe('task thread topics', () => {
 	it('derives structured thread categories from task and run context', () => {
 		expect(
 			deriveThreadCategorization({
-				sessionName: 'Thread assignment follow-up',
-				sessionSummary: 'Continue matching tasks to reusable threads.',
+				threadName: 'Thread assignment follow-up',
+				threadSummary: 'Continue matching tasks to reusable threads.',
 				runDetails: [
 					{
 						prompt: 'Review the thread reuse rules and improve context discovery.',
@@ -80,7 +80,7 @@ describe('task thread topics', () => {
 						projectName: 'Agent Management System Prototype',
 						goalId: 'goal_threads',
 						goalName: 'Improve Thread Reuse',
-						lane: 'product',
+						area: 'product',
 						desiredRole: 'Coordinator',
 						requiredCapabilityNames: ['assignment'],
 						requiredToolNames: ['context'],
@@ -93,7 +93,7 @@ describe('task thread topics', () => {
 			projectLabels: ['Agent Management System Prototype'],
 			goalIds: ['goal_threads'],
 			goalLabels: ['Improve Thread Reuse'],
-			laneLabels: ['Product'],
+			areaLabels: ['Product'],
 			focusLabels: expect.arrayContaining(['Coordination']),
 			entityLabels: expect.arrayContaining(['Thread']),
 			roleLabels: expect.arrayContaining(['Coordinator']),

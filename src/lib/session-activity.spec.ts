@@ -4,9 +4,9 @@ import {
 	getSessionActivityMeta,
 	type SessionActivityMeta
 } from './session-activity';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 
-function createSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessionDetail {
+function createSession(overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id: 'session-1',
 		name: 'Session 1',
@@ -18,14 +18,14 @@ function createSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessio
 		createdAt: '2026-03-31T10:00:00.000Z',
 		updatedAt: '2026-03-31T10:00:00.000Z',
 		origin: 'managed',
-		sessionState: 'ready',
+		threadState: 'ready',
 		latestRunStatus: 'completed',
 		hasActiveRun: false,
 		canResume: true,
 		runCount: 1,
 		lastActivityAt: '2026-03-31T10:00:00.000Z',
 		lastActivityLabel: 'just now',
-		sessionSummary: 'summary',
+		threadSummary: 'summary',
 		lastExitCode: 0,
 		runTimeline: [],
 		relatedTasks: [],
@@ -46,7 +46,7 @@ describe('session activity labels', () => {
 	it('describes a waiting session as active work rather than user follow-up', () => {
 		const meta: SessionActivityMeta = getSessionActivityMeta(
 			createSession({
-				sessionState: 'waiting',
+				threadState: 'waiting',
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,
@@ -69,14 +69,14 @@ describe('session activity labels', () => {
 	it('marks recent structured output as confirmed active', () => {
 		const meta: SessionActivityMeta = getSessionActivityMeta(
 			createSession({
-				sessionState: 'working',
+				threadState: 'working',
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,
 				lastActivityAt: '2026-03-31T09:59:56.000Z',
 				latestRun: {
 					id: 'run-1',
-					sessionId: 'session-1',
+					agentThreadId: 'session-1',
 					mode: 'start',
 					prompt: 'start work',
 					requestedThreadId: null,
@@ -115,14 +115,14 @@ describe('session activity labels', () => {
 	it('surfaces the latest active command from structured log output', () => {
 		const meta: SessionActivityMeta = getSessionActivityMeta(
 			createSession({
-				sessionState: 'working',
+				threadState: 'working',
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,
 				lastActivityAt: '2026-03-31T09:59:58.000Z',
 				latestRun: {
 					id: 'run-2',
-					sessionId: 'session-1',
+					agentThreadId: 'session-1',
 					mode: 'message',
 					prompt: 'run checks',
 					requestedThreadId: 'thread-1',
@@ -159,7 +159,7 @@ describe('session activity labels', () => {
 	it('marks older active runs without recent proof as suspect stalled', () => {
 		const meta: SessionActivityMeta = getSessionActivityMeta(
 			createSession({
-				sessionState: 'waiting',
+				threadState: 'waiting',
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,

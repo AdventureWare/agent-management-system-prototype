@@ -39,7 +39,7 @@ function buildRankingFactors(opportunity: SelfImprovementOpportunity): RankingFa
 	const relatedRecordCount =
 		opportunity.relatedTaskIds.length +
 		opportunity.relatedRunIds.length +
-		opportunity.relatedSessionIds.length;
+		opportunity.relatedThreadIds.length;
 	const evidenceScore = Math.min(opportunity.signals.length * 4, 16);
 	const relatedRecordScore = Math.min(relatedRecordCount * 3, 18);
 	const actionabilityScore = opportunity.suggestedTask

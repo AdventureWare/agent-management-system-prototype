@@ -87,8 +87,8 @@
 			message?: string;
 			successAction?: string;
 			taskId?: string;
-			sessionId?: string;
-			previousSessionId?: string;
+			threadId?: string;
+			previousThreadId?: string;
 		} | null;
 		backHref?: string;
 	}>();
@@ -115,16 +115,16 @@
 			form?.successAction === 'approveTaskResponse' &&
 			form?.taskId === taskResponseAction?.taskId
 	);
-	let recoverSessionThreadSuccess = $derived(
-		form?.ok && form?.successAction === 'recoverSessionThread' && form?.sessionId === session?.id
+	let recoverThreadSuccess = $derived(
+		form?.ok && form?.successAction === 'recoverThread' && form?.threadId === session?.id
 	);
 	let moveLatestRequestToNewThreadSuccess = $derived(
 		form?.ok &&
 			form?.successAction === 'moveLatestRequestToNewThread' &&
-			form?.previousSessionId === session?.id
+			form?.previousThreadId === session?.id
 	);
-	let updateSessionSandboxSuccess = $derived(
-		form?.ok && form?.successAction === 'updateSessionSandbox' && form?.sessionId === session?.id
+	let updateThreadSandboxSuccess = $derived(
+		form?.ok && form?.successAction === 'updateThreadSandbox' && form?.threadId === session?.id
 	);
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
@@ -132,7 +132,7 @@
 		timeStyle: 'short'
 	});
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
-	type SessionStateDescriptor = {
+	type ThreadStateDescriptor = {
 		label: string;
 		detail: string;
 		className: string;
@@ -166,7 +166,7 @@
 	let runNumberById = $derived.by(
 		() => new Map(chronologicalRuns.map((run, index) => [run.id, index + 1]))
 	);
-	let sessionState = $derived.by(() => (session ? describeSessionState(session) : null));
+	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
 	let combinedResponseContextArtifacts = $derived.by(() => [
 		...threadAttachments.map((attachment) => ({
@@ -227,7 +227,7 @@
 	let needsRecovery = $derived.by(
 		() =>
 			Boolean(session?.latestRun) &&
-			(session?.hasActiveRun || (session?.threadState ?? session?.sessionState) === 'attention')
+			(session?.hasActiveRun || (session?.threadState ?? session?.threadState) === 'attention')
 	);
 	let canRecoverInPlace = $derived.by(() => {
 		if (!session?.latestRun) {
@@ -277,15 +277,15 @@
 		}
 	});
 
-	let previousConversationSessionId = '';
+	let previousConversationThreadId = '';
 
 	$effect(() => {
-		const currentSessionId = session?.id ?? '';
+		const currentThreadId = session?.id ?? '';
 
-		if (currentSessionId !== previousConversationSessionId) {
+		if (currentThreadId !== previousConversationThreadId) {
 			conversationHistoryExpanded = false;
 			expandedConversationRunIds = [];
-			previousConversationSessionId = currentSessionId;
+			previousConversationThreadId = currentThreadId;
 		}
 	});
 
@@ -306,7 +306,7 @@
 		}
 
 		const intervalId = window.setInterval(() => {
-			void refreshSession();
+			void refreshThread();
 		}, ACTIVE_REFRESH_INTERVAL_MS);
 
 		return () => {
@@ -346,7 +346,7 @@
 			{ label: 'Goals', values: detail.categorization.goalLabels },
 			{
 				label: 'Area',
-				values: detail.categorization.areaLabels ?? detail.categorization.laneLabels ?? []
+				values: detail.categorization.areaLabels ?? detail.categorization.areaLabels ?? []
 			},
 			{ label: 'Focus', values: detail.categorization.focusLabels },
 			{ label: 'Context', values: detail.categorization.entityLabels },
@@ -464,7 +464,7 @@
 		mergeFollowUpAttachmentFiles(pastedFiles);
 	}
 
-	async function loadSession() {
+	async function loadThread() {
 		if (!session) {
 			throw new Error('Thread not found.');
 		}
@@ -472,7 +472,7 @@
 		session = (await fetchAgentThread(session.id)) ?? null;
 	}
 
-	async function refreshSession(options: { force?: boolean } = {}) {
+	async function refreshThread(options: { force?: boolean } = {}) {
 		if (isRefreshing) {
 			return;
 		}
@@ -484,7 +484,7 @@
 		isRefreshing = true;
 
 		try {
-			await loadSession();
+			await loadThread();
 			pageNotice = null;
 		} catch (err) {
 			pageNotice = {
@@ -513,7 +513,7 @@
 				throw new Error(payload.error ?? 'Could not cancel the active run.');
 			}
 
-			await refreshSession({ force: true });
+			await refreshThread({ force: true });
 			pageNotice = {
 				tone: 'success',
 				message: 'Active run canceled.'
@@ -529,7 +529,7 @@
 	}
 
 	function handleWindowFocus() {
-		void refreshSession();
+		void refreshThread();
 	}
 
 	function handleVisibilityChange() {
@@ -537,7 +537,7 @@
 			return;
 		}
 
-		void refreshSession();
+		void refreshThread();
 	}
 
 	async function submitFollowUp(event: SubmitEvent) {
@@ -589,7 +589,7 @@
 			formElement.reset();
 			followUpPrompt = '';
 			clearPendingFollowUpAttachments();
-			await refreshSession({ force: true });
+			await refreshThread({ force: true });
 			sendState = {
 				status: 'success',
 				message:
@@ -648,7 +648,7 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function sessionStatusClass(state: AgentThreadDetail['sessionState']) {
+	function sessionStatusClass(state: AgentThreadDetail['threadState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -709,11 +709,11 @@
 		return run.mode === 'message' ? 'Follow-up queued on' : 'Queued on';
 	}
 
-	function describeSessionState(detail: AgentThreadDetail): SessionStateDescriptor {
+	function describeThreadState(detail: AgentThreadDetail): ThreadStateDescriptor {
 		return {
-			label: formatThreadStateLabel(detail.threadState ?? detail.sessionState ?? 'idle'),
-			detail: detail.threadSummary ?? detail.sessionSummary ?? '',
-			className: sessionStatusClass(detail.threadState ?? detail.sessionState ?? 'idle')
+			label: formatThreadStateLabel(detail.threadState ?? detail.threadState ?? 'idle'),
+			detail: detail.threadSummary ?? detail.threadSummary ?? '',
+			className: sessionStatusClass(detail.threadState ?? detail.threadState ?? 'idle')
 		};
 	}
 
@@ -888,7 +888,7 @@
 			focusTask ? `Current task context: ${focusTask.title}` : '',
 			latestContextRun
 				? `Latest response summary:\n${compactText(responseText(latestContextRun), 420)}`
-				: (session?.threadSummary ?? session?.sessionSummary ?? '')
+				: (session?.threadSummary ?? session?.threadSummary ?? '')
 		].filter(Boolean);
 
 		return sections.join('\n\n');
@@ -954,19 +954,19 @@
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 			<div>
 				<p class="text-xs font-medium tracking-[0.16em] text-slate-400 uppercase">Thread status</p>
-				<h2 class="mt-1 text-lg font-semibold text-white">{sessionState?.label ?? 'Unknown'}</h2>
+				<h2 class="mt-1 text-lg font-semibold text-white">{threadState?.label ?? 'Unknown'}</h2>
 			</div>
-			{#if sessionState}
+			{#if threadState}
 				<span
-					class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionState.className}`}
+					class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${threadState.className}`}
 				>
-					{sessionState.label}
+					{threadState.label}
 				</span>
 			{/if}
 		</div>
 
 		<p class="ui-wrap-anywhere text-sm text-slate-300">
-			{sessionState?.detail ?? detail.threadSummary ?? detail.sessionSummary}
+			{threadState?.detail ?? detail.threadSummary ?? detail.threadSummary}
 		</p>
 		{#if uniqueTopicLabels(detail.topicLabels).length > 0}
 			<div class="flex flex-wrap gap-2">
@@ -1088,7 +1088,7 @@
 				backLabel="Back to threads"
 				eyebrow="Thread detail"
 				title={session.name}
-				description={session.threadSummary ?? session.sessionSummary}
+				description={session.threadSummary ?? session.threadSummary}
 			>
 				{#snippet actions()}
 					<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -1096,7 +1096,7 @@
 							class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-100"
 							type="button"
 							onclick={() => {
-								void refreshSession({ force: true });
+								void refreshThread({ force: true });
 							}}
 						>
 							{isRefreshing ? 'Refreshing...' : 'Refresh thread'}
@@ -1120,9 +1120,9 @@
 					<div class="space-y-4">
 						<div class="flex flex-wrap items-center gap-2">
 							<span
-								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.sessionState ?? 'idle')}`}
+								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.threadState ?? 'idle')}`}
 							>
-								{formatThreadStateLabel(session!.threadState ?? session!.sessionState ?? 'idle')}
+								{formatThreadStateLabel(session!.threadState ?? session!.threadState ?? 'idle')}
 							</span>
 							<span
 								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session!.latestRunStatus)}`}
@@ -1176,7 +1176,7 @@
 				</p>
 			{/if}
 
-			{#if updateSessionSandboxSuccess}
+			{#if updateThreadSandboxSuccess}
 				<p
 					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
@@ -1184,7 +1184,7 @@
 				</p>
 			{/if}
 
-			{#if recoverSessionThreadSuccess}
+			{#if recoverThreadSuccess}
 				<p
 					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
@@ -1197,10 +1197,10 @@
 					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
 					Latest request moved into a fresh thread.
-					{#if form?.sessionId}
+					{#if form?.threadId}
 						<a
 							class="ui-wrap-anywhere ml-2 font-medium text-emerald-100 underline decoration-emerald-300/60 underline-offset-2"
-							href={resolve(`/app/threads/${form.sessionId}`)}
+							href={resolve(`/app/threads/${form.threadId}`)}
 						>
 							Open new thread
 						</a>
@@ -1357,14 +1357,14 @@
 								<div class="min-w-0">
 									<p class="text-sm font-medium text-white">Relevant context</p>
 									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-										{session.threadSummary ?? session.sessionSummary}
+										{session.threadSummary ?? session.threadSummary}
 									</p>
 								</div>
 								<div class="flex min-w-0 flex-wrap items-center gap-2">
 									<span
-										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState ?? session.sessionState ?? 'idle')}`}
+										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState ?? session.threadState ?? 'idle')}`}
 									>
-										{formatThreadStateLabel(session.threadState ?? session.sessionState ?? 'idle')}
+										{formatThreadStateLabel(session.threadState ?? session.threadState ?? 'idle')}
 									</span>
 									<span
 										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session.latestRunStatus)}`}
@@ -1709,7 +1709,7 @@
 								</p>
 							</div>
 							<PageTabs
-								ariaLabel="Session sidebar views"
+								ariaLabel="Thread sidebar views"
 								bind:value={selectedSidebarView}
 								items={[
 									{ id: 'follow_up', label: 'Follow-up' },
@@ -2061,7 +2061,7 @@
 									</div>
 
 									<div class="grid gap-3 lg:grid-cols-2">
-										<form method="POST" action="?/recoverSessionThread">
+										<form method="POST" action="?/recoverThread">
 											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
 												<p class="text-sm font-medium text-white">Retry in this thread</p>
 												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
@@ -2108,7 +2108,7 @@
 								</DetailSection>
 							{/if}
 
-							<form method="POST" action="?/updateSessionSandbox">
+							<form method="POST" action="?/updateThreadSandbox">
 								<DetailSection
 									eyebrow="Thread access"
 									title="Sandbox for future follow-up runs"

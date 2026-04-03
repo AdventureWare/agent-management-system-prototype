@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import { isActiveTaskThread, selectTaskThreadContext } from './task-thread-context';
 
 function createSession(
 	id: string,
-	sessionState: AgentSessionDetail['sessionState']
-): AgentSessionDetail {
+	threadState: AgentThreadDetail['threadState']
+): AgentThreadDetail {
 	return {
 		id,
 		name: `Thread ${id}`,
@@ -17,18 +17,18 @@ function createSession(
 		createdAt: '2026-03-30T00:00:00.000Z',
 		updatedAt: '2026-03-30T00:00:00.000Z',
 		origin: 'managed',
-		sessionState,
+		threadState,
 		latestRunStatus:
-			sessionState === 'starting' || sessionState === 'waiting' || sessionState === 'working'
+			threadState === 'starting' || threadState === 'waiting' || threadState === 'working'
 				? 'running'
 				: 'completed',
 		hasActiveRun:
-			sessionState === 'starting' || sessionState === 'waiting' || sessionState === 'working',
-		canResume: sessionState === 'ready',
+			threadState === 'starting' || threadState === 'waiting' || threadState === 'working',
+		canResume: threadState === 'ready',
 		runCount: 1,
 		lastActivityAt: '2026-03-30T00:00:00.000Z',
 		lastActivityLabel: 'just now',
-		sessionSummary: 'summary',
+		threadSummary: 'summary',
 		lastExitCode: null,
 		runTimeline: [],
 		relatedTasks: [],

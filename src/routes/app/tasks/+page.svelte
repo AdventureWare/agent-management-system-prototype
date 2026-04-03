@@ -217,10 +217,10 @@
 			...(task.requiredToolNames ?? []),
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
 			task.statusThread?.name ?? '',
-			task.statusThread?.threadState ?? task.statusThread?.sessionState ?? '',
+			task.statusThread?.threadState ?? task.statusThread?.threadState ?? '',
 			task.statusThread
 				? formatThreadStateLabel(
-						task.statusThread.threadState ?? task.statusThread.sessionState ?? 'idle'
+						task.statusThread.threadState ?? task.statusThread.threadState ?? 'idle'
 					)
 				: '',
 			...task.freshness.staleSignals
@@ -276,7 +276,7 @@
 		}
 
 		if (task.statusThread?.id === task.linkThread.id) {
-			switch (task.statusThread.threadState ?? task.statusThread.sessionState) {
+			switch (task.statusThread.threadState ?? task.statusThread.threadState) {
 				case 'starting':
 				case 'waiting':
 				case 'working':
@@ -371,10 +371,7 @@
 					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
-					area:
-						('area' in form ? form.area?.toString() : undefined) ??
-						form.lane?.toString() ??
-						'product',
+					area: ('area' in form ? form.area?.toString() : undefined) ?? 'product',
 					priority: form.priority?.toString() ?? 'medium',
 					riskLevel: form.riskLevel?.toString() ?? 'medium',
 					approvalMode: form.approvalMode?.toString() ?? 'none',
@@ -437,8 +434,7 @@
 		createTaskAssigneeWorkerId = prefill?.assigneeWorkerId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
-		createTaskArea =
-			(prefill as { area?: string } | null | undefined)?.area ?? prefill?.lane ?? 'product';
+		createTaskArea = (prefill as { area?: string } | null | undefined)?.area ?? 'product';
 		createTaskPriority = prefill?.priority ?? 'medium';
 		createTaskRiskLevel = prefill?.riskLevel ?? 'medium';
 		createTaskApprovalMode = prefill?.approvalMode ?? 'none';
@@ -832,8 +828,13 @@
 							<input
 								id="task-search"
 								bind:value={query}
+								autocomplete="off"
+								autocapitalize="off"
+								autocorrect="off"
 								class="input text-white placeholder:text-slate-500"
+								data-persist-off
 								placeholder="Search tasks…"
+								spellcheck="false"
 							/>
 						</div>
 

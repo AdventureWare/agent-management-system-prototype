@@ -7,7 +7,7 @@ import {
 	getProjectTaskIdeationWorkspace,
 	parseIdeationTaskSuggestions
 } from './task-ideation';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Project } from '$lib/types/control-plane';
 
 function buildProject(overrides: Partial<Project> = {}): Project {
@@ -45,7 +45,7 @@ function buildFixture(): ControlPlaneData {
 			{
 				id: 'goal_1',
 				name: 'Improve operator workflow',
-				lane: 'product',
+				area: 'product',
 				status: 'running',
 				summary: 'Make task execution easier to manage.',
 				artifactPath: '/workspace/ams/agent_output'
@@ -58,7 +58,7 @@ function buildFixture(): ControlPlaneData {
 				title: 'Add task board filtering',
 				summary: 'Improve how operators narrow a large queue.',
 				projectId: 'project_ams',
-				lane: 'product',
+				area: 'product',
 				goalId: 'goal_1',
 				priority: 'high',
 				status: 'in_progress',
@@ -82,7 +82,7 @@ function buildFixture(): ControlPlaneData {
 				title: 'Add project detail page',
 				summary: 'Ship the first project drill-down view.',
 				projectId: 'project_ams',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'done',
@@ -106,7 +106,7 @@ function buildFixture(): ControlPlaneData {
 				title: 'Export user data',
 				summary: 'Plan data export for the product.',
 				projectId: 'project_kwipoo',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'high',
 				status: 'ready',
@@ -169,7 +169,7 @@ function buildFixture(): ControlPlaneData {
 	};
 }
 
-function buildSession(overrides: Partial<AgentSessionDetail> = {}): AgentSessionDetail {
+function buildSession(overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id: 'session_thread',
 		name: buildProjectTaskIdeationThreadName('Agent Management System Prototype'),
@@ -181,14 +181,14 @@ function buildSession(overrides: Partial<AgentSessionDetail> = {}): AgentSession
 		createdAt: '2026-03-30T09:00:00.000Z',
 		updatedAt: '2026-03-30T10:00:00.000Z',
 		origin: 'managed',
-		sessionState: 'ready',
+		threadState: 'ready',
 		latestRunStatus: 'completed',
 		hasActiveRun: false,
 		canResume: true,
 		runCount: 1,
 		lastActivityAt: '2026-03-30T10:00:00.000Z',
 		lastActivityLabel: 'just now',
-		sessionSummary: 'Suggested the next tasks for the queue.',
+		threadSummary: 'Suggested the next tasks for the queue.',
 		lastExitCode: 0,
 		runTimeline: [],
 		relatedTasks: [],
@@ -258,7 +258,7 @@ describe('task ideation helpers', () => {
 		const session = buildSession({
 			latestRun: {
 				id: 'run_1',
-				sessionId: 'session_thread',
+				agentThreadId: 'session_thread',
 				mode: 'start',
 				prompt: 'prompt',
 				requestedThreadId: null,

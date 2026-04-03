@@ -1,17 +1,17 @@
 import { existsSync } from 'node:fs';
 import { selectTaskThreadContext } from '$lib/task-thread-context';
 import { projectMatchesPath } from '$lib/server/control-plane';
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { Project } from '$lib/types/control-plane';
 
 type TaskThreadInput = {
-	assignedThread: AgentSessionDetail | null;
-	latestRunThread: AgentSessionDetail | null;
+	assignedThread: AgentThreadDetail | null;
+	latestRunThread: AgentThreadDetail | null;
 };
 
 export function isTaskThreadCompatibleWithProject(
 	project: Project | null,
-	session: Pick<AgentSessionDetail, 'cwd'> | null | undefined
+	session: Pick<AgentThreadDetail, 'cwd'> | null | undefined
 ) {
 	if (!project || !session?.cwd) {
 		return false;

@@ -10,7 +10,7 @@ import {
 	getGoalScopeProjectIds,
 	getGoalScopeTaskIds
 } from '$lib/server/goal-relationships';
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Goal, Project, Review, Run, Task } from '$lib/types/control-plane';
 import {
 	SELF_IMPROVEMENT_CATEGORY_OPTIONS,
@@ -113,7 +113,7 @@ function createOpportunity(
 		recommendedActions: input.recommendedActions,
 		relatedTaskIds: input.relatedTaskIds,
 		relatedRunIds: input.relatedRunIds,
-		relatedSessionIds: input.relatedSessionIds,
+		relatedThreadIds: input.relatedThreadIds,
 		suggestedTask: input.suggestedTask,
 		suggestedKnowledgeItem: input.suggestedKnowledgeItem
 	};
@@ -302,9 +302,9 @@ function buildExecutionOpportunities(data: ControlPlaneData) {
 				],
 				relatedTaskIds: [task.id],
 				relatedRunIds: unsuccessfulRuns.map((run) => run.id),
-				relatedSessionIds: unsuccessfulRuns
+				relatedThreadIds: unsuccessfulRuns
 					.map((run) => run.agentThreadId)
-					.filter((sessionId): sessionId is string => Boolean(sessionId)),
+					.filter((threadId): threadId is string => Boolean(threadId)),
 				suggestedTask: createSuggestedTask(
 					task,
 					`Stabilize repeated failure path for ${task.title}`,
@@ -394,7 +394,7 @@ function buildBlockedTaskOpportunities(data: ControlPlaneData) {
 				],
 				relatedTaskIds: [task.id, ...dependencyIds],
 				relatedRunIds: [],
-				relatedSessionIds: task.agentThreadId ? [task.agentThreadId] : [],
+				relatedThreadIds: task.agentThreadId ? [task.agentThreadId] : [],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Resolve blocker for ${task.title}`,
@@ -497,9 +497,9 @@ function buildPlanningGapOpportunities(data: ControlPlaneData) {
 				],
 				relatedTaskIds: openTasks.map((task) => task.id),
 				relatedRunIds: [],
-				relatedSessionIds: openTasks
+				relatedThreadIds: openTasks
 					.map((task) => task.agentThreadId)
-					.filter((sessionId): sessionId is string => Boolean(sessionId)),
+					.filter((threadId): threadId is string => Boolean(threadId)),
 				suggestedTask: {
 					title: `Plan next step for ${goal.name}`,
 					summary: [
@@ -579,9 +579,9 @@ function buildPlanningGapOpportunities(data: ControlPlaneData) {
 				],
 				relatedTaskIds: openTasks.map((task) => task.id),
 				relatedRunIds: [],
-				relatedSessionIds: openTasks
+				relatedThreadIds: openTasks
 					.map((task) => task.agentThreadId)
-					.filter((sessionId): sessionId is string => Boolean(sessionId)),
+					.filter((threadId): threadId is string => Boolean(threadId)),
 				suggestedTask: {
 					title: `Plan next project step for ${project.name}`,
 					summary: [
@@ -611,10 +611,10 @@ function buildPlanningGapOpportunities(data: ControlPlaneData) {
 
 function buildStaleTaskOpportunities(
 	data: ControlPlaneData,
-	sessions: AgentSessionDetail[],
+	threads: AgentThreadDetail[],
 	now?: number
 ) {
-	return buildTaskWorkItems(data, sessions, { now })
+	return buildTaskWorkItems(data, threads, { now })
 		.filter((task) => task.status !== 'done' && task.freshness.isStale)
 		.map((task) => {
 			const staleSignals = [];
@@ -656,7 +656,7 @@ function buildStaleTaskOpportunities(
 				],
 				relatedTaskIds: [task.id],
 				relatedRunIds: task.latestRun ? [task.latestRun.id] : [],
-				relatedSessionIds: task.statusThread ? [task.statusThread.id] : [],
+				relatedThreadIds: task.statusThread ? [task.statusThread.id] : [],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Add stale-work recovery for ${task.title}`,
@@ -740,7 +740,7 @@ function buildReviewFeedbackOpportunities(data: ControlPlaneData) {
 				relatedRunIds: changeRequests
 					.map((review) => review.runId)
 					.filter((runId): runId is string => Boolean(runId)),
-				relatedSessionIds: task.agentThreadId ? [task.agentThreadId] : [],
+				relatedThreadIds: task.agentThreadId ? [task.agentThreadId] : [],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Codify review feedback for ${task.title}`,
@@ -768,24 +768,24 @@ function buildReviewFeedbackOpportunities(data: ControlPlaneData) {
 	});
 }
 
-function selectProjectSessions(project: Project | undefined, sessions: AgentSessionDetail[]) {
+function selectProjectSessions(project: Project | undefined, threads: AgentThreadDetail[]) {
 	if (!project) {
 		return [];
 	}
 
-	return sessions.filter((session) => projectMatchesPath(project, session.cwd));
+	return threads.filter((thread) => projectMatchesPath(project, thread.cwd));
 }
 
-function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSessionDetail[]) {
+function buildThreadReuseOpportunities(data: ControlPlaneData, threads: AgentThreadDetail[]) {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 
 	return data.tasks.flatMap((task) => {
 		if (!ACTIVE_TASK_STATUSES.has(task.status) || task.status === 'blocked') {
 			return [];
 		}
 
-		const projectSessions = selectProjectSessions(projectMap.get(task.projectId), sessions);
+		const projectSessions = selectProjectSessions(projectMap.get(task.projectId), threads);
 
 		if (projectSessions.length === 0) {
 			return [];
@@ -794,7 +794,7 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 		const suggestion = buildTaskThreadSuggestions({
 			task,
 			assignedThreadId: task.agentThreadId,
-			sessions: projectSessions
+			threads: projectSessions
 		}).suggestedThread;
 
 		if (!suggestion || suggestion.id === task.agentThreadId) {
@@ -802,7 +802,7 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 		}
 
 		const assignedThread = task.agentThreadId
-			? (sessionMap.get(task.agentThreadId) ?? null)
+			? (threadMap.get(task.agentThreadId) ?? null)
 			: null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
@@ -838,7 +838,7 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, sessions: AgentSe
 				],
 				relatedTaskIds: [task.id],
 				relatedRunIds: [],
-				relatedSessionIds: [suggestion.id, ...(task.agentThreadId ? [task.agentThreadId] : [])],
+				relatedThreadIds: [suggestion.id, ...(task.agentThreadId ? [task.agentThreadId] : [])],
 				suggestedTask: createSuggestedTask(
 					task,
 					`Improve thread reuse for ${task.title}`,
@@ -896,7 +896,7 @@ function buildExecutionFeedbackSignals(data: ControlPlaneData): SelfImprovementF
 				taskId: run.taskId,
 				runId: run.id,
 				reviewId: null,
-				sessionId: run.agentThreadId,
+				threadId: run.agentThreadId,
 				title: task ? `Run failure for ${task.title}` : `Run failure for ${run.taskId}`,
 				summary: compactText(
 					run.errorSummary || run.summary,
@@ -944,7 +944,7 @@ function buildBlockedTaskFeedbackSignals(data: ControlPlaneData): SelfImprovemen
 				taskId: task.id,
 				runId: null,
 				reviewId: null,
-				sessionId: task.agentThreadId,
+				threadId: task.agentThreadId,
 				title: `Task blocked: ${task.title}`,
 				summary:
 					blockedReason ||
@@ -958,10 +958,10 @@ function buildBlockedTaskFeedbackSignals(data: ControlPlaneData): SelfImprovemen
 
 function buildStaleFeedbackSignals(
 	data: ControlPlaneData,
-	sessions: AgentSessionDetail[],
+	threads: AgentThreadDetail[],
 	now?: number
 ): SelfImprovementFeedbackSignal[] {
-	return buildTaskWorkItems(data, sessions, { now })
+	return buildTaskWorkItems(data, threads, { now })
 		.filter((task) => task.status !== 'done' && task.freshness.isStale)
 		.map((task) =>
 			createFeedbackSignal({
@@ -977,7 +977,7 @@ function buildStaleFeedbackSignals(
 				taskId: task.id,
 				runId: task.latestRun?.id ?? null,
 				reviewId: null,
-				sessionId: task.statusThread?.id ?? null,
+				threadId: task.statusThread?.id ?? null,
 				title: `Stale work on ${task.title}`,
 				summary:
 					task.freshness.staleSignals.length > 0
@@ -1010,7 +1010,7 @@ function buildReviewFeedbackSignals(data: ControlPlaneData): SelfImprovementFeed
 				taskId: review.taskId,
 				runId: review.runId,
 				reviewId: review.id,
-				sessionId: task?.agentThreadId ?? null,
+				threadId: task?.agentThreadId ?? null,
 				title: task ? `Review feedback for ${task.title}` : `Review feedback for ${review.taskId}`,
 				summary: compactText(review.summary, 'Changes were requested without a detailed summary.')
 			});
@@ -1019,17 +1019,17 @@ function buildReviewFeedbackSignals(data: ControlPlaneData): SelfImprovementFeed
 
 function buildThreadReuseFeedbackSignals(
 	data: ControlPlaneData,
-	sessions: AgentSessionDetail[]
+	threads: AgentThreadDetail[]
 ): SelfImprovementFeedbackSignal[] {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 
 	return data.tasks.flatMap((task) => {
 		if (!ACTIVE_TASK_STATUSES.has(task.status) || task.status === 'blocked') {
 			return [];
 		}
 
-		const projectSessions = selectProjectSessions(projectMap.get(task.projectId), sessions);
+		const projectSessions = selectProjectSessions(projectMap.get(task.projectId), threads);
 
 		if (projectSessions.length === 0) {
 			return [];
@@ -1038,7 +1038,7 @@ function buildThreadReuseFeedbackSignals(
 		const suggestion = buildTaskThreadSuggestions({
 			task,
 			assignedThreadId: task.agentThreadId,
-			sessions: projectSessions
+			threads: projectSessions
 		}).suggestedThread;
 
 		if (!suggestion || suggestion.id === task.agentThreadId) {
@@ -1046,7 +1046,7 @@ function buildThreadReuseFeedbackSignals(
 		}
 
 		const assignedThread = task.agentThreadId
-			? (sessionMap.get(task.agentThreadId) ?? null)
+			? (threadMap.get(task.agentThreadId) ?? null)
 			: null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
@@ -1069,7 +1069,7 @@ function buildThreadReuseFeedbackSignals(
 				taskId: task.id,
 				runId: null,
 				reviewId: null,
-				sessionId: suggestion.id,
+				threadId: suggestion.id,
 				title: `Thread reuse gap for ${task.title}`,
 				summary:
 					suggestion.suggestionReason ?? 'A better reusable thread is available for this task.'
@@ -1080,15 +1080,15 @@ function buildThreadReuseFeedbackSignals(
 
 export function buildSelfImprovementFeedbackSignals(input: {
 	data: ControlPlaneData;
-	sessions: AgentSessionDetail[];
+	threads: AgentThreadDetail[];
 	now?: number;
 }): SelfImprovementFeedbackSignal[] {
 	return [
 		...buildExecutionFeedbackSignals(input.data),
 		...buildBlockedTaskFeedbackSignals(input.data),
-		...buildStaleFeedbackSignals(input.data, input.sessions, input.now),
+		...buildStaleFeedbackSignals(input.data, input.threads, input.now),
 		...buildReviewFeedbackSignals(input.data),
-		...buildThreadReuseFeedbackSignals(input.data, input.sessions)
+		...buildThreadReuseFeedbackSignals(input.data, input.threads)
 	].sort((left, right) => {
 		if (SEVERITY_RANK[left.severity] !== SEVERITY_RANK[right.severity]) {
 			return SEVERITY_RANK[right.severity] - SEVERITY_RANK[left.severity];
@@ -1159,16 +1159,16 @@ export function applySelfImprovementGoalContext<
 
 export function buildSelfImprovementAnalysis(input: {
 	data: ControlPlaneData;
-	sessions: AgentSessionDetail[];
+	threads: AgentThreadDetail[];
 	now?: number;
 }): SelfImprovementAnalysis {
 	const opportunities = [
 		...buildExecutionOpportunities(input.data),
 		...buildBlockedTaskOpportunities(input.data),
 		...buildPlanningGapOpportunities(input.data),
-		...buildStaleTaskOpportunities(input.data, input.sessions, input.now),
+		...buildStaleTaskOpportunities(input.data, input.threads, input.now),
 		...buildReviewFeedbackOpportunities(input.data),
-		...buildThreadReuseOpportunities(input.data, input.sessions)
+		...buildThreadReuseOpportunities(input.data, input.threads)
 	].sort(compareOpportunities);
 	const byCategory = initializeCountRecord(SELF_IMPROVEMENT_CATEGORY_OPTIONS);
 	const bySource = initializeCountRecord(SELF_IMPROVEMENT_SOURCE_OPTIONS);

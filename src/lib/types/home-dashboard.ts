@@ -12,7 +12,6 @@ export type AgentThreadSummary = {
 	unavailableCount: number;
 	attentionCount: number;
 };
-export type AgentSessionSummary = AgentThreadSummary;
 
 export type ControlSummary = {
 	taskCount: number;
@@ -42,9 +41,7 @@ export type DashboardTaskAttentionItem = TaskWorkItem & {
 
 export type HomeDashboardData = {
 	threads: AgentThreadDetail[];
-	sessions?: AgentThreadDetail[];
 	threadSummary: AgentThreadSummary;
-	sessionSummary?: AgentThreadSummary;
 	controlSummary: ControlSummary;
 	taskAttention: DashboardTaskAttentionItem[];
 	staleTaskSummary: TaskFreshnessSummary;

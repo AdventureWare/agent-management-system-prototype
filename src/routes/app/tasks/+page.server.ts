@@ -88,7 +88,7 @@ function readTaskForm(form: FormData) {
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
 		targetDate: form.get('targetDate')?.toString().trim() ?? '',
 		goalId: form.get('goalId')?.toString().trim() ?? '',
-		lane: parseOption(AREA_OPTIONS, form.get('area') ?? form.get('lane'), 'product'),
+		area: parseOption(AREA_OPTIONS, form.get('area'), 'product'),
 		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
 		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
@@ -127,7 +127,7 @@ function failTaskCreate(
 		assigneeWorkerId: string;
 		targetDate: string;
 		goalId: string;
-		lane: string;
+		area: string;
 		priority: string;
 		riskLevel: string;
 		approvalMode: string;
@@ -296,11 +296,7 @@ function readCreateTaskPrefill(url: URL) {
 			return value && isValidDate(value) ? value : '';
 		})(),
 		goalId: url.searchParams.get('goalId')?.trim() ?? '',
-		lane: parseOption(
-			AREA_OPTIONS,
-			url.searchParams.get('area') ?? url.searchParams.get('lane'),
-			'product'
-		),
+		area: parseOption(AREA_OPTIONS, url.searchParams.get('area'), 'product'),
 		priority: parseOption(PRIORITY_OPTIONS, url.searchParams.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, url.searchParams.get('riskLevel'), 'medium'),
 		approvalMode: parseOption(
@@ -341,10 +337,10 @@ export const load: PageServerLoad = async ({ url }) => {
 				projectId: project.id,
 				projectName: project.name,
 				threadId: ideationSession.id,
-				threadState: ideationSession.threadState ?? ideationSession.sessionState,
+				threadState: ideationSession.threadState ?? ideationSession.threadState,
 				lastActivityAt: ideationSession.lastActivityAt,
 				lastActivityLabel: ideationSession.lastActivityLabel,
-				threadSummary: ideationSession.threadSummary ?? ideationSession.sessionSummary,
+				threadSummary: ideationSession.threadSummary ?? ideationSession.threadSummary,
 				hasActiveRun: ideationSession.hasActiveRun,
 				canResume: ideationSession.canResume,
 				suggestionCount: suggestions.length,
@@ -472,7 +468,7 @@ export const actions: Actions = {
 				});
 			}
 
-			threadId = session.sessionId;
+			threadId = session.agentThreadId;
 		}
 
 		return {
@@ -494,7 +490,7 @@ export const actions: Actions = {
 			assigneeWorkerId,
 			targetDate,
 			goalId,
-			lane,
+			area,
 			priority,
 			riskLevel,
 			approvalMode,
@@ -515,7 +511,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -536,7 +532,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -564,7 +560,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -585,7 +581,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -606,7 +602,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -627,7 +623,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -652,11 +648,11 @@ export const actions: Actions = {
 					'This project needs an artifact root before files can be attached during creation.',
 				name,
 				instructions,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				lane,
+			projectId,
+			assigneeWorkerId,
+			targetDate,
+			goalId,
+			area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -680,7 +676,7 @@ export const actions: Actions = {
 			title: name,
 			summary: instructions,
 			projectId: project.id,
-			lane,
+			area,
 			goalId: nextGoalId,
 			priority,
 			riskLevel,
@@ -740,7 +736,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -775,7 +771,7 @@ export const actions: Actions = {
 				assigneeWorkerId,
 				targetDate,
 				goalId,
-				lane,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
@@ -795,7 +791,7 @@ export const actions: Actions = {
 			status: 'running',
 			startedAt: now,
 			threadId: null,
-			agentThreadId: session.sessionId,
+			agentThreadId: session.agentThreadId,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -808,7 +804,7 @@ export const actions: Actions = {
 		await updateControlPlane((data) => {
 			const nextTask: Task = {
 				...createdTask,
-				agentThreadId: session.sessionId,
+				agentThreadId: session.agentThreadId,
 				status: 'in_progress',
 				updatedAt: now
 			};
@@ -824,7 +820,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'createTaskAndRun',
 			taskId: createdTask.id,
-			threadId: session.sessionId,
+			threadId: session.agentThreadId,
 			attachmentCount: attachments.length
 		};
 	},
@@ -893,7 +889,7 @@ export const actions: Actions = {
 						title: suggestion.title,
 						summary: suggestion.suggestedInstructions,
 						projectId: project.id,
-						lane: 'product',
+						area: 'product',
 						goalId: '',
 						priority: 'medium',
 						riskLevel: 'medium',
@@ -1138,7 +1134,7 @@ export const actions: Actions = {
 				});
 			}
 
-			agentThreadId = session.sessionId;
+			agentThreadId = session.agentThreadId;
 			codexThreadId = null;
 		}
 
@@ -1221,7 +1217,7 @@ export const actions: Actions = {
 			return fail(404, { message: 'Selected tasks were not found.' });
 		}
 
-		const relatedSessionIds = [
+		const relatedThreadIds = [
 			...new Set(
 				current.runs
 					.filter((run) => deletableTaskIds.includes(run.taskId))
@@ -1230,7 +1226,7 @@ export const actions: Actions = {
 			)
 		];
 
-		await Promise.all(relatedSessionIds.map((threadId) => cancelAgentThread(threadId)));
+		await Promise.all(relatedThreadIds.map((threadId) => cancelAgentThread(threadId)));
 		await updateControlPlane((data) =>
 			deletableTaskIds.reduce(
 				(currentData, taskId) => removeTaskFromControlPlane(currentData, taskId),

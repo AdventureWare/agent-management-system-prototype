@@ -22,13 +22,13 @@ import {
 import { buildPromptDigest } from '$lib/server/task-threads';
 import type { Approval, ControlPlaneData, Review, Run, Task } from '$lib/types/control-plane';
 
-type SessionTaskResponseAction = {
+type ThreadTaskResponseAction = {
 	taskId: string;
 	taskTitle: string;
 	taskProjectId: string;
 	taskStatus: Task['status'];
 	taskGoalId: string;
-	taskArea: NonNullable<Task['area'] | Task['lane']>;
+	taskArea: Task['area'];
 	taskPriority: Task['priority'];
 	taskRiskLevel: Task['riskLevel'];
 	taskApprovalMode: Task['approvalMode'];
@@ -45,7 +45,7 @@ type SessionTaskResponseAction = {
 	disabledReason: string;
 };
 
-type SessionResponseContextArtifact = {
+type ThreadResponseContextArtifact = {
 	path: string;
 	label: string;
 	href: string;
@@ -69,14 +69,14 @@ function updateLatestRunForTask(runId: string | null, summary: string) {
 			: run;
 }
 
-function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
-	const latestSessionRun =
+function resolveThreadTask(data: ControlPlaneData, threadId: string) {
+	const latestThreadRun =
 		[...data.runs]
-			.filter((run) => run.agentThreadId === sessionId)
+			.filter((run) => run.agentThreadId === threadId)
 			.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
 
-	if (latestSessionRun) {
-		const task = data.tasks.find((candidate) => candidate.id === latestSessionRun.taskId) ?? null;
+	if (latestThreadRun) {
+		const task = data.tasks.find((candidate) => candidate.id === latestThreadRun.taskId) ?? null;
 
 		if (task) {
 			return task;
@@ -84,7 +84,7 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 	}
 
 	const assignedTasks = [...data.tasks]
-		.filter((task) => task.agentThreadId === sessionId)
+		.filter((task) => task.agentThreadId === threadId)
 		.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
 	if (assignedTasks.length === 1) {
@@ -98,7 +98,7 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 	const relatedTaskIds = [
 		...new Set(
 			data.runs
-				.filter((run) => run.agentThreadId === sessionId)
+				.filter((run) => run.agentThreadId === threadId)
 				.map((run) => run.taskId)
 				.filter(Boolean)
 		)
@@ -112,11 +112,11 @@ function resolveSessionTask(data: ControlPlaneData, sessionId: string) {
 }
 
 function buildTaskResponseAction(input: {
-	sessionId: string;
-	session: Awaited<ReturnType<typeof getAgentThread>>;
+	threadId: string;
+	thread: Awaited<ReturnType<typeof getAgentThread>>;
 	data: ControlPlaneData;
-}): SessionTaskResponseAction | null {
-	const task = resolveSessionTask(input.data, input.sessionId);
+}): ThreadTaskResponseAction | null {
+	const task = resolveThreadTask(input.data, input.threadId);
 
 	if (!task) {
 		return null;
@@ -140,13 +140,13 @@ function buildTaskResponseAction(input: {
 
 	if (task.status === 'done') {
 		disabledReason = 'This task is already complete.';
-	} else if (input.session?.hasActiveRun) {
+	} else if (input.thread?.hasActiveRun) {
 		disabledReason = 'Wait for the active run to finish before approving this response.';
-	} else if (!input.session?.latestRun) {
+	} else if (!input.thread?.latestRun) {
 		disabledReason = 'No thread output is available yet.';
 	} else if (
-		!input.session.latestRun.lastMessage &&
-		input.session.latestRunStatus !== 'completed'
+		!input.thread.latestRun.lastMessage &&
+		input.thread.latestRunStatus !== 'completed'
 	) {
 		disabledReason = 'This thread has not captured a response yet.';
 	}
@@ -157,7 +157,7 @@ function buildTaskResponseAction(input: {
 		taskProjectId: task.projectId,
 		taskStatus: task.status,
 		taskGoalId: task.goalId,
-		taskArea: task.area ?? task.lane ?? 'product',
+		taskArea: task.area,
 		taskPriority: task.priority,
 		taskRiskLevel: task.riskLevel,
 		taskApprovalMode: task.approvalMode,
@@ -175,18 +175,18 @@ function buildTaskResponseAction(input: {
 	};
 }
 
-function buildSessionResponseContextArtifacts(input: {
-	sessionId: string;
-	session: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>;
+function buildThreadResponseContextArtifacts(input: {
+	threadId: string;
+	thread: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>;
 	data: ControlPlaneData;
 }) {
 	const tasksById = new Map(input.data.tasks.map((task) => [task.id, task]));
 	const relatedTaskIds = [
-		resolveSessionTask(input.data, input.sessionId)?.id ?? null,
-		...input.session.relatedTasks.map((task) => task.id)
+		resolveThreadTask(input.data, input.threadId)?.id ?? null,
+		...input.thread.relatedTasks.map((task) => task.id)
 	].filter((taskId, index, taskIds): taskId is string => Boolean(taskId) && taskIds.indexOf(taskId) === index);
 
-	const contextArtifacts = relatedTaskIds.flatMap((taskId): SessionResponseContextArtifact[] => {
+	const contextArtifacts = relatedTaskIds.flatMap((taskId): ThreadResponseContextArtifact[] => {
 		const task = tasksById.get(taskId);
 
 		if (!task) {
@@ -194,7 +194,7 @@ function buildSessionResponseContextArtifacts(input: {
 		}
 
 		const taskHref = `/app/tasks/${task.id}#resources`;
-		const artifacts: SessionResponseContextArtifact[] = [];
+		const artifacts: ThreadResponseContextArtifact[] = [];
 
 		if (task.artifactPath.trim().length > 0) {
 			artifacts.push({
@@ -225,8 +225,8 @@ function buildSessionResponseContextArtifacts(input: {
 	);
 }
 
-function getLatestThreadPrompt(session: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>) {
-	const prompt = session.latestRun?.prompt?.trim() ?? '';
+function getLatestThreadPrompt(thread: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>) {
+	const prompt = thread.latestRun?.prompt?.trim() ?? '';
 
 	if (!prompt) {
 		throw new Error('No saved request is available to replay from this thread.');
@@ -235,16 +235,16 @@ function getLatestThreadPrompt(session: NonNullable<Awaited<ReturnType<typeof ge
 	return prompt;
 }
 
-function getTasksToCarryForward(data: ControlPlaneData, sessionId: string) {
+function getTasksToCarryForward(data: ControlPlaneData, threadId: string) {
 	const directlyAssignedTasks = data.tasks.filter(
-		(task) => task.agentThreadId === sessionId && task.status !== 'done'
+		(task) => task.agentThreadId === threadId && task.status !== 'done'
 	);
 
 	if (directlyAssignedTasks.length > 0) {
 		return directlyAssignedTasks;
 	}
 
-	const resolvedTask = resolveSessionTask(data, sessionId);
+	const resolvedTask = resolveThreadTask(data, threadId);
 
 	if (!resolvedTask || resolvedTask.status === 'done') {
 		return [];
@@ -255,8 +255,8 @@ function getTasksToCarryForward(data: ControlPlaneData, sessionId: string) {
 
 function reopenTasksForThreadRetry(input: {
 	data: ControlPlaneData;
-	sourceSessionId: string;
-	targetSessionId: string;
+	sourceThreadId: string;
+	targetThreadId: string;
 	threadId: string | null;
 	prompt: string;
 	tasks: Task[];
@@ -279,7 +279,7 @@ function reopenTasksForThreadRetry(input: {
 			status: 'running',
 			startedAt: now,
 			threadId: input.threadId,
-			agentThreadId: input.targetSessionId,
+			agentThreadId: input.targetThreadId,
 			promptDigest: buildPromptDigest(input.prompt),
 			artifactPaths: latestRun?.artifactPaths.length
 				? latestRun.artifactPaths
@@ -308,7 +308,7 @@ function reopenTasksForThreadRetry(input: {
 
 			return {
 				...task,
-				agentThreadId: input.targetSessionId,
+				agentThreadId: input.targetThreadId,
 				latestRunId: nextRun.id,
 				runCount: task.runCount + 1,
 				status: 'in_progress' as const,
@@ -325,7 +325,7 @@ function reopenTasksForThreadRetry(input: {
 						updatedAt: now,
 						resolvedAt: now,
 						summary:
-							input.targetSessionId === input.sourceSessionId
+							input.targetThreadId === input.sourceThreadId
 								? 'Dismissed after the thread was recovered and re-queued from the thread detail page.'
 								: 'Dismissed after work moved to a new thread from the thread detail page.'
 					}
@@ -341,7 +341,7 @@ function reopenTasksForThreadRetry(input: {
 						updatedAt: now,
 						resolvedAt: now,
 						summary:
-							input.targetSessionId === input.sourceSessionId
+							input.targetThreadId === input.sourceThreadId
 								? 'Canceled after the thread was recovered and re-queued from the thread detail page.'
 								: 'Canceled after work moved to a new thread from the thread detail page.'
 					}
@@ -366,7 +366,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, thread] = await Promise.all([
 		controlPlanePromise,
-		getAgentThread(params.sessionId, { controlPlane: controlPlanePromise })
+		getAgentThread(params.threadId, { controlPlane: controlPlanePromise })
 	]);
 
 	if (!thread) {
@@ -377,56 +377,56 @@ export const load: PageServerLoad = async ({ params }) => {
 		thread,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		taskResponseAction: buildTaskResponseAction({
-			sessionId: params.sessionId,
-			session: thread,
+			threadId: params.threadId,
+			thread,
 			data
 		}),
-		responseContextArtifacts: buildSessionResponseContextArtifacts({
-			sessionId: params.sessionId,
-			session: thread,
+		responseContextArtifacts: buildThreadResponseContextArtifacts({
+			threadId: params.threadId,
+			thread,
 			data
 		})
 	};
 };
 
 export const actions: Actions = {
-	updateSessionSandbox: async ({ params, request }) => {
+	updateThreadSandbox: async ({ params, request }) => {
 		const form = await request.formData();
 		const nextSandbox = parseAgentSandbox(form.get('sandbox')?.toString(), 'workspace-write');
-		const session = await getAgentThread(params.sessionId);
+		const thread = await getAgentThread(params.threadId);
 
-		if (!session) {
+		if (!thread) {
 			return fail(404, { message: 'Thread not found.' });
 		}
 
-		await updateAgentThreadSandbox(params.sessionId, nextSandbox);
+		await updateAgentThreadSandbox(params.threadId, nextSandbox);
 
 		return {
 			ok: true,
-			successAction: 'updateSessionSandbox',
-			sessionId: params.sessionId
+			successAction: 'updateThreadSandbox',
+			threadId: params.threadId
 		};
 	},
 
-	recoverSessionThread: async ({ params }) => {
-		const session = await getAgentThread(params.sessionId);
+	recoverThread: async ({ params }) => {
+		const thread = await getAgentThread(params.threadId);
 
-		if (!session) {
+		if (!thread) {
 			return fail(404, { message: 'Thread not found.' });
 		}
 
 		let prompt = '';
 
 		try {
-			prompt = getLatestThreadPrompt(session);
+			prompt = getLatestThreadPrompt(thread);
 		} catch (err) {
 			return fail(409, {
 				message: err instanceof Error ? err.message : 'No saved request is available to recover.'
 			});
 		}
 
-		if (session.hasActiveRun) {
-			if (session.origin !== 'managed') {
+		if (thread.hasActiveRun) {
+			if (thread.origin !== 'managed') {
 				return fail(409, {
 					message:
 						'Imported Codex threads with an active run cannot be force-recovered yet. Move the latest request to a new thread instead.'
@@ -434,7 +434,7 @@ export const actions: Actions = {
 			}
 
 			try {
-				await recoverAgentThread(params.sessionId);
+				await recoverAgentThread(params.threadId);
 			} catch (err) {
 				return fail(400, {
 					message: err instanceof Error ? err.message : 'Could not recover the active work thread.'
@@ -442,7 +442,7 @@ export const actions: Actions = {
 			}
 		}
 
-		const refreshed = await getAgentThread(params.sessionId);
+		const refreshed = await getAgentThread(params.threadId);
 
 		if (!refreshed?.canResume || !refreshed.threadId) {
 			return fail(409, {
@@ -452,7 +452,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			await sendAgentThreadMessage(params.sessionId, prompt);
+			await sendAgentThreadMessage(params.threadId, prompt);
 		} catch (err) {
 			return fail(400, {
 				message:
@@ -463,50 +463,50 @@ export const actions: Actions = {
 		}
 
 		const current = await loadControlPlane();
-		const tasksToCarryForward = getTasksToCarryForward(current, params.sessionId);
+		const tasksToCarryForward = getTasksToCarryForward(current, params.threadId);
 
 		if (tasksToCarryForward.length > 0) {
 			await updateControlPlane((data) =>
 				reopenTasksForThreadRetry({
 					data,
-					sourceSessionId: params.sessionId,
-					targetSessionId: params.sessionId,
+					sourceThreadId: params.threadId,
+					targetThreadId: params.threadId,
 					threadId: refreshed.threadId,
 					prompt,
-					tasks: getTasksToCarryForward(data, params.sessionId),
+					tasks: getTasksToCarryForward(data, params.threadId),
 					runSummary: 'Recovered the work thread and re-queued the latest request.',
 					decisionSummary: (task) =>
-						`Recovered thread ${params.sessionId} from the thread detail page and re-queued the latest request for ${task.title}.`
+						`Recovered thread ${params.threadId} from the thread detail page and re-queued the latest request for ${task.title}.`
 				})
 			);
 		}
 
 		return {
 			ok: true,
-			successAction: 'recoverSessionThread',
-			sessionId: params.sessionId
+			successAction: 'recoverThread',
+			threadId: params.threadId
 		};
 	},
 
 	moveLatestRequestToNewThread: async ({ params }) => {
-		const session = await getAgentThread(params.sessionId);
+		const thread = await getAgentThread(params.threadId);
 
-		if (!session) {
+		if (!thread) {
 			return fail(404, { message: 'Thread not found.' });
 		}
 
 		let prompt = '';
 
 		try {
-			prompt = getLatestThreadPrompt(session);
+			prompt = getLatestThreadPrompt(thread);
 		} catch (err) {
 			return fail(409, {
 				message: err instanceof Error ? err.message : 'No saved request is available to move.'
 			});
 		}
 
-		if (session.hasActiveRun) {
-			if (session.origin !== 'managed') {
+		if (thread.hasActiveRun) {
+			if (thread.origin !== 'managed') {
 				return fail(409, {
 					message:
 						'Imported Codex threads with an active run cannot be force-recovered yet. Wait for the run to finish or cancel it before moving work.'
@@ -514,7 +514,7 @@ export const actions: Actions = {
 			}
 
 			try {
-				await recoverAgentThread(params.sessionId);
+				await recoverAgentThread(params.threadId);
 			} catch (err) {
 				return fail(400, {
 					message:
@@ -529,11 +529,11 @@ export const actions: Actions = {
 
 		try {
 			nextThread = await startAgentThread({
-				name: session.name,
-				cwd: session.cwd,
+				name: thread.name,
+				cwd: thread.cwd,
 				prompt,
-				sandbox: session.sandbox,
-				model: session.model
+				sandbox: thread.sandbox,
+				model: thread.model
 			});
 		} catch (err) {
 			return fail(400, {
@@ -545,20 +545,20 @@ export const actions: Actions = {
 		}
 
 		const current = await loadControlPlane();
-		const tasksToCarryForward = getTasksToCarryForward(current, params.sessionId);
+		const tasksToCarryForward = getTasksToCarryForward(current, params.threadId);
 
 		if (tasksToCarryForward.length > 0) {
 			await updateControlPlane((data) =>
 				reopenTasksForThreadRetry({
 					data,
-					sourceSessionId: params.sessionId,
-					targetSessionId: nextThread.sessionId,
+					sourceThreadId: params.threadId,
+					targetThreadId: nextThread.agentThreadId,
 					threadId: null,
 					prompt,
-					tasks: getTasksToCarryForward(data, params.sessionId),
+					tasks: getTasksToCarryForward(data, params.threadId),
 					runSummary: 'Moved the latest request into a new work thread.',
 					decisionSummary: (task) =>
-						`Moved the latest request from thread ${params.sessionId} to fresh thread ${nextThread.sessionId} from the thread detail page for ${task.title}.`
+						`Moved the latest request from thread ${params.threadId} to fresh thread ${nextThread.agentThreadId} from the thread detail page for ${task.title}.`
 				})
 			);
 		}
@@ -566,22 +566,22 @@ export const actions: Actions = {
 		return {
 			ok: true,
 			successAction: 'moveLatestRequestToNewThread',
-			sessionId: nextThread.sessionId,
-			previousSessionId: params.sessionId
+			threadId: nextThread.agentThreadId,
+			previousThreadId: params.threadId
 		};
 	},
 
 	approveTaskResponse: async ({ params }) => {
-		const [session, current] = await Promise.all([
-			getAgentThread(params.sessionId),
+		const [thread, current] = await Promise.all([
+			getAgentThread(params.threadId),
 			loadControlPlane()
 		]);
 
-		if (!session) {
+		if (!thread) {
 			return fail(404, { message: 'Thread not found.' });
 		}
 
-		const task = resolveSessionTask(current, params.sessionId);
+		const task = resolveThreadTask(current, params.threadId);
 
 		if (!task) {
 			return fail(404, { message: 'No task response is linked to this thread.' });
@@ -591,15 +591,15 @@ export const actions: Actions = {
 			return fail(409, { message: 'This task is already complete.' });
 		}
 
-		if (session.hasActiveRun) {
+		if (thread.hasActiveRun) {
 			return fail(409, {
 				message: 'Wait for the active run to finish before approving this thread response.'
 			});
 		}
 
 		if (
-			!session.latestRun ||
-			(!session.latestRun.lastMessage && session.latestRunStatus !== 'completed')
+			!thread.latestRun ||
+			(!thread.latestRun.lastMessage && thread.latestRunStatus !== 'completed')
 		) {
 			return fail(409, { message: 'No saved thread response is available to approve yet.' });
 		}

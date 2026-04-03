@@ -10,7 +10,7 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		title: 'Default task',
 		summary: 'Default summary',
 		projectId: 'project_1',
-		lane: 'product',
+		area: 'product',
 		goalId: '',
 		priority: 'medium',
 		status: 'ready',
@@ -62,11 +62,11 @@ function createIdeationReview(overrides: Record<string, unknown> = {}) {
 	return {
 		projectId: 'project_1',
 		projectName: 'Agent Management System Prototype',
-		sessionId: 'session_ideation_1',
-		sessionState: 'waiting',
+		agentThreadId: 'session_ideation_1',
+		threadState: 'waiting',
 		lastActivityAt: '2026-03-31T09:00:00.000Z',
 		lastActivityLabel: '1h ago',
-		sessionSummary: 'Suggested follow-up queue work.',
+		threadSummary: 'Suggested follow-up queue work.',
 		hasActiveRun: false,
 		canResume: true,
 		suggestionCount: 1,
@@ -96,7 +96,7 @@ function createGoal(overrides: Record<string, unknown> = {}) {
 		depth: 0,
 		parentGoalId: null,
 		status: 'running',
-		lane: 'product',
+		area: 'product',
 		...overrides
 	};
 }

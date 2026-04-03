@@ -34,7 +34,6 @@ import {
 	type DecisionType,
 	type Goal,
 	type GoalStatus,
-	type Lane,
 	type PlanningConfidence,
 	type PlanningSession,
 	type Provider,
@@ -141,7 +140,6 @@ function defaultData(): ControlPlaneData {
 }
 
 type LegacyProject = Partial<Project> & {
-	lane?: unknown;
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
 };
@@ -202,30 +200,20 @@ type LegacyRole = Partial<Role> & {
 	area?: unknown;
 };
 
-function resolveLegacyArea(value: { area?: unknown; lane?: unknown }, fallback: Area): Area {
-	const candidate =
-		typeof value.area === 'string' ? value.area : typeof value.lane === 'string' ? value.lane : '';
-
-	return isArea(candidate) ? candidate : fallback;
-}
-
 function normalizeRole(role: LegacyRole): Role {
-	const areaValue =
-		typeof role.area === 'string' ? role.area : typeof role.lane === 'string' ? role.lane : '';
-	const area: Role['lane'] = areaValue === 'shared' || isArea(areaValue) ? areaValue : 'shared';
+	const areaValue = typeof role.area === 'string' ? role.area : '';
+	const area: Role['area'] = areaValue === 'shared' || isArea(areaValue) ? areaValue : 'shared';
 
 	return {
 		id: typeof role.id === 'string' ? role.id : `role_${randomUUID()}`,
 		name: typeof role.name === 'string' ? role.name : '',
 		area,
-		lane: area,
 		description: typeof role.description === 'string' ? role.description : ''
 	};
 }
 
 type LegacyRun = Partial<Run> & {
 	artifactPaths?: unknown;
-	sessionId?: unknown;
 };
 
 type LegacyReview = Partial<Review>;
@@ -435,7 +423,8 @@ function normalizeWorker(worker: LegacyWorker): Worker {
 }
 
 function normalizeGoal(goal: LegacyGoal): Goal {
-	const area = resolveLegacyArea(goal, 'product');
+	const area =
+		typeof goal.area === 'string' && isArea(goal.area) ? goal.area : 'product';
 	const statusValue = typeof goal.status === 'string' ? goal.status : '';
 
 	return {
@@ -443,7 +432,6 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 		name: typeof goal.name === 'string' ? goal.name : '',
 		summary: typeof goal.summary === 'string' ? goal.summary : '',
 		area,
-		lane: area,
 		status: isGoalStatus(statusValue) ? statusValue : 'ready',
 		artifactPath: normalizePathInput(
 			typeof goal.artifactPath === 'string' ? goal.artifactPath : ''
@@ -542,9 +530,7 @@ function normalizeRun(run: LegacyRun): Run {
 		agentThreadId:
 			typeof run.agentThreadId === 'string' && run.agentThreadId.trim()
 				? run.agentThreadId
-				: typeof run.sessionId === 'string' && run.sessionId.trim()
-					? run.sessionId
-					: null,
+				: null,
 		promptDigest: typeof run.promptDigest === 'string' ? run.promptDigest : '',
 		artifactPaths: Array.isArray(run.artifactPaths)
 			? run.artifactPaths.filter((candidate): candidate is string => typeof candidate === 'string')
@@ -717,7 +703,8 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		.filter((run) => run.taskId === task.id)
 		.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
-	const area = resolveLegacyArea(task, 'product');
+	const area =
+		typeof task.area === 'string' && isArea(task.area) ? task.area : 'product';
 	const priority: Priority =
 		typeof priorityValue === 'string' && isPriority(priorityValue) ? priorityValue : 'medium';
 	const status = typeof statusValue === 'string' ? normalizeTaskStatus(statusValue) : null;
@@ -735,7 +722,6 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		summary: typeof task.summary === 'string' ? task.summary : '',
 		projectId: inferTaskProjectId(task, projects),
 		area,
-		lane: area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
 		priority,
 		status: status ?? 'ready',
@@ -1136,7 +1122,7 @@ export function parseArea(value: string, fallback: Area): Area {
 	return isArea(value) ? value : fallback;
 }
 
-export function parseLane(value: string, fallback: Lane): Lane {
+export function parseLane(value: string, fallback: Area): Area {
 	return parseArea(value, fallback);
 }
 
@@ -1234,7 +1220,6 @@ export function createGoal(input: {
 	name: string;
 	summary: string;
 	area?: Area;
-	lane?: Lane;
 	status: GoalStatus;
 	artifactPath: string;
 	successSignal?: string;
@@ -1245,14 +1230,13 @@ export function createGoal(input: {
 	planningPriority?: number;
 	confidence?: PlanningConfidence;
 }): Goal {
-	const area = input.area ?? input.lane ?? 'product';
+	const area = input.area ?? 'product';
 
 	return {
 		id: createGoalId(),
 		name: input.name,
 		summary: input.summary,
 		area,
-		lane: area,
 		status: input.status,
 		artifactPath: normalizePathInput(input.artifactPath),
 		successSignal: input.successSignal ?? '',
@@ -1320,7 +1304,6 @@ export function createTask(input: {
 	summary: string;
 	projectId: string;
 	area?: Area;
-	lane?: Lane;
 	goalId: string;
 	priority: Priority;
 	riskLevel: TaskRiskLevel;
@@ -1340,7 +1323,7 @@ export function createTask(input: {
 	attachments?: TaskAttachment[];
 }): Task {
 	const now = new Date().toISOString();
-	const area = input.area ?? input.lane ?? 'product';
+	const area = input.area ?? 'product';
 
 	return {
 		id: createTaskId(),
@@ -1348,7 +1331,6 @@ export function createTask(input: {
 		summary: input.summary,
 		projectId: input.projectId,
 		area,
-		lane: area,
 		goalId: input.goalId,
 		priority: input.priority,
 		status: input.status ?? 'ready',

@@ -46,7 +46,7 @@ describe('control-plane sqlite backend', () => {
 				{
 					id: 'role_coordinator',
 					name: 'Coordinator',
-					lane: 'shared',
+					area: 'shared',
 					description: 'Coordinates queued work'
 				}
 			]
@@ -59,7 +59,7 @@ describe('control-plane sqlite backend', () => {
 			{
 				id: 'role_coordinator',
 				name: 'Coordinator',
-				lane: 'shared',
+				area: 'shared',
 				description: 'Coordinates queued work'
 			}
 		]);
@@ -91,7 +91,7 @@ describe('control-plane sqlite backend', () => {
 					{
 						id: 'role_seeded',
 						name: 'Seeded role',
-						lane: 'shared',
+						area: 'shared',
 						description: 'Loaded from json'
 					}
 				],

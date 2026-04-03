@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentRunDetail, AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentRunDetail, AgentThreadDetail } from '$lib/types/agent-thread';
 import {
 	deriveRunState,
 	extractThreadIdFromOutputLine,
-	isAbandonedSessionDetail,
+	isAbandonedThreadDetail,
 	parseAgentSandbox,
-	reconcileControlPlaneSessionMessage,
-	reconcileControlPlaneSessionState
-} from './agent-sessions';
-import { buildSessionAttachmentPrompt } from './agent-session-attachments';
-import { buildCodexArgs } from '../../../scripts/agent-session-runner-args.mjs';
+	reconcileControlPlaneThreadMessage,
+	reconcileControlPlaneThreadState
+} from './agent-threads';
+import { buildThreadAttachmentPrompt } from './agent-thread-attachments';
+import { buildCodexArgs } from '../../../scripts/agent-thread-runner-args.mjs';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
 describe('agent session helpers', () => {
@@ -147,7 +147,7 @@ describe('agent session helpers', () => {
 
 		const run: AgentRunDetail = {
 			id: 'run_stale',
-			sessionId: 'session_stale',
+			agentThreadId: 'session_stale',
 			mode: 'start',
 			prompt: 'start work',
 			requestedThreadId: null,
@@ -190,7 +190,7 @@ describe('agent session helpers', () => {
 
 		const run: AgentRunDetail = {
 			id: 'run_stale_followup',
-			sessionId: 'session_stale',
+			agentThreadId: 'session_stale',
 			mode: 'message',
 			prompt: 'follow up',
 			requestedThreadId: 'thread_123',
@@ -233,7 +233,7 @@ describe('agent session helpers', () => {
 
 		const run: AgentRunDetail = {
 			id: 'run_auth_failure',
-			sessionId: 'session_auth_failure',
+			agentThreadId: 'session_auth_failure',
 			mode: 'start',
 			prompt: 'start work',
 			requestedThreadId: null,
@@ -281,7 +281,7 @@ describe('agent session helpers', () => {
 
 		const run: AgentRunDetail = {
 			id: 'run_auth_start_failed',
-			sessionId: 'session_auth_start_failed',
+			agentThreadId: 'session_auth_start_failed',
 			mode: 'start',
 			prompt: 'start work',
 			requestedThreadId: null,
@@ -326,7 +326,7 @@ describe('agent session helpers', () => {
 	it('treats auth-refresh startup failures as failed even when the runner exits code 0', () => {
 		const run: AgentRunDetail = {
 			id: 'run_auth_exit_zero',
-			sessionId: 'session_auth_exit_zero',
+			agentThreadId: 'session_auth_exit_zero',
 			mode: 'start',
 			prompt: 'start work',
 			requestedThreadId: null,
@@ -373,7 +373,7 @@ describe('agent session helpers', () => {
 
 		const run: AgentRunDetail = {
 			id: 'run_stdin_stall',
-			sessionId: 'session_stdin_stall',
+			agentThreadId: 'session_stdin_stall',
 			mode: 'start',
 			prompt: 'start work',
 			requestedThreadId: null,
@@ -417,7 +417,7 @@ describe('agent session helpers', () => {
 	it('marks active runs as completed when the runner already wrote a clean exit marker', () => {
 		const run: AgentRunDetail = {
 			id: 'run_completed_log',
-			sessionId: 'session_completed_log',
+			agentThreadId: 'session_completed_log',
 			mode: 'message',
 			prompt: 'follow up',
 			requestedThreadId: 'thread_123',
@@ -457,7 +457,7 @@ describe('agent session helpers', () => {
 
 	it('builds follow-up prompts that include attached thread files as immediate context', () => {
 		expect(
-			buildSessionAttachmentPrompt({
+			buildThreadAttachmentPrompt({
 				prompt: 'Use the brief and continue.',
 				attachments: [
 					{
@@ -485,7 +485,7 @@ describe('agent session helpers', () => {
 			})
 		).toContain('Treat them as immediate context for this run.');
 		expect(
-			buildSessionAttachmentPrompt({
+			buildThreadAttachmentPrompt({
 				prompt: 'Use the brief and continue.',
 				attachments: [
 					{
@@ -515,7 +515,7 @@ describe('agent session helpers', () => {
 	});
 
 	it('hides abandoned managed sessions that never produced a real thread', () => {
-		const session: AgentSessionDetail = {
+		const session: AgentThreadDetail = {
 			id: 'session_stale',
 			name: 'Task: Research Kwipoo competitors',
 			cwd: '/tmp/project',
@@ -527,20 +527,20 @@ describe('agent session helpers', () => {
 			createdAt: '2026-03-27T23:47:36.683Z',
 			updatedAt: '2026-03-27T23:47:36.683Z',
 			origin: 'managed',
-			sessionState: 'attention',
+			threadState: 'attention',
 			latestRunStatus: 'failed',
 			hasActiveRun: false,
 			canResume: false,
 			runCount: 1,
 			lastActivityAt: '2026-03-27T23:47:36.683Z',
 			lastActivityLabel: '3d ago',
-			sessionSummary: 'The latest run failed. Check the recent log output.',
+			threadSummary: 'The latest run failed. Check the recent log output.',
 			lastExitCode: -1,
 			runTimeline: [],
 			relatedTasks: [],
 			latestRun: {
 				id: 'run_stale',
-				sessionId: 'session_stale',
+				agentThreadId: 'session_stale',
 				mode: 'start',
 				prompt: 'start work',
 				requestedThreadId: null,
@@ -566,9 +566,9 @@ describe('agent session helpers', () => {
 			runs: []
 		};
 
-		expect(isAbandonedSessionDetail(session)).toBe(true);
+		expect(isAbandonedThreadDetail(session)).toBe(true);
 		expect(
-			isAbandonedSessionDetail({
+			isAbandonedThreadDetail({
 				...session,
 				relatedTasks: [
 					{
@@ -595,7 +595,7 @@ describe('agent session helpers', () => {
 					title: 'Review the output',
 					summary: 'Wrap the task when the session is done.',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'high',
 					status: 'in_progress',
@@ -639,7 +639,7 @@ describe('agent session helpers', () => {
 			approvals: []
 		};
 
-		const next = reconcileControlPlaneSessionState(data, {
+		const next = reconcileControlPlaneThreadState(data, {
 			id: 'session_1',
 			hasActiveRun: false,
 			canResume: true,
@@ -667,7 +667,7 @@ describe('agent session helpers', () => {
 					title: 'Planning work and chunking',
 					summary: 'Collect notes about planning and chunking work.',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'medium',
 					status: 'in_progress',
@@ -711,7 +711,7 @@ describe('agent session helpers', () => {
 			approvals: []
 		};
 
-		const next = reconcileControlPlaneSessionState(data, {
+		const next = reconcileControlPlaneThreadState(data, {
 			id: 'session_1',
 			hasActiveRun: false,
 			canResume: false,
@@ -719,7 +719,7 @@ describe('agent session helpers', () => {
 			lastActivityAt: '2026-03-30T20:15:00.000Z',
 			latestRun: {
 				id: 'run_1',
-				sessionId: 'session_1',
+				agentThreadId: 'session_1',
 				mode: 'start',
 				prompt: 'start work',
 				requestedThreadId: null,
@@ -768,7 +768,7 @@ describe('agent session helpers', () => {
 					title: 'Add target date field',
 					summary: 'Start the task in a fresh thread.',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'medium',
 					status: 'in_progress',
@@ -812,7 +812,7 @@ describe('agent session helpers', () => {
 			approvals: []
 		};
 
-		const next = reconcileControlPlaneSessionState(data, {
+		const next = reconcileControlPlaneThreadState(data, {
 			id: 'session_1',
 			hasActiveRun: false,
 			canResume: false,
@@ -820,7 +820,7 @@ describe('agent session helpers', () => {
 			lastActivityAt: '2026-04-01T16:14:15.900Z',
 			latestRun: {
 				id: 'run_1',
-				sessionId: 'session_1',
+				agentThreadId: 'session_1',
 				mode: 'start',
 				prompt: 'start work',
 				requestedThreadId: null,
@@ -872,7 +872,7 @@ describe('agent session helpers', () => {
 					title: 'Documentation sync',
 					summary: 'Keep the task active while the linked session is still running.',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'medium',
 					status: 'blocked',
@@ -916,7 +916,7 @@ describe('agent session helpers', () => {
 			approvals: []
 		};
 
-		const next = reconcileControlPlaneSessionState(data, {
+		const next = reconcileControlPlaneThreadState(data, {
 			id: 'session_1',
 			hasActiveRun: true,
 			canResume: false,
@@ -924,7 +924,7 @@ describe('agent session helpers', () => {
 			lastActivityAt: '2026-04-01T16:38:00.000Z',
 			latestRun: {
 				id: 'run_1',
-				sessionId: 'session_1',
+				agentThreadId: 'session_1',
 				mode: 'start',
 				prompt: 'start work',
 				requestedThreadId: null,
@@ -985,7 +985,7 @@ describe('agent session helpers', () => {
 					title: 'Address review feedback',
 					summary: 'Resume the linked task thread after review comments.',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'high',
 					status: 'review',
@@ -1056,7 +1056,7 @@ describe('agent session helpers', () => {
 			]
 		};
 
-		const next = reconcileControlPlaneSessionMessage(data, 'session_1', '2026-03-30T20:20:00.000Z');
+		const next = reconcileControlPlaneThreadMessage(data, 'session_1', '2026-03-30T20:20:00.000Z');
 
 		expect(next.tasks[0]).toEqual(
 			expect.objectContaining({

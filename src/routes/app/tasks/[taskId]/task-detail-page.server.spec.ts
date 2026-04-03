@@ -17,7 +17,7 @@ const createRun = vi.hoisted(() =>
 			providerId: string | null;
 			status: string;
 			threadId: string | null;
-			sessionId: string | null;
+			agentThreadId: string | null;
 			promptDigest: string;
 			artifactPaths: string[];
 			summary: string;
@@ -34,7 +34,7 @@ const createRun = vi.hoisted(() =>
 			startedAt: input.startedAt,
 			endedAt: null,
 			threadId: input.threadId,
-			agentThreadId: input.sessionId,
+			agentThreadId: input.agentThreadId,
 			promptDigest: input.promptDigest,
 			artifactPaths: input.artifactPaths,
 			summary: input.summary,
@@ -48,15 +48,15 @@ const projectMatchesPath = vi.hoisted(() => vi.fn(() => true));
 const getWorkspaceExecutionIssue = vi.hoisted(() =>
 	vi.fn<(_: { cwd: string; sandbox: string; scopeLabel?: string }) => string | null>(() => null)
 );
-const getAgentSession = vi.hoisted(() => vi.fn());
-const recoverAgentSession = vi.hoisted(() => vi.fn());
-const sendAgentSessionMessage = vi.hoisted(() => vi.fn());
+const getAgentThread = vi.hoisted(() => vi.fn());
+const recoverAgentThread = vi.hoisted(() => vi.fn());
+const sendAgentThreadMessage = vi.hoisted(() => vi.fn());
 const loadRelevantSelfImprovementKnowledgeItems = vi.hoisted(() =>
 	vi.fn<() => Promise<RetrievedSelfImprovementKnowledgeItem[]>>(async () => [])
 );
-const startAgentSession = vi.hoisted(() =>
+const startAgentThread = vi.hoisted(() =>
 	vi.fn(async () => ({
-		sessionId: 'session_new',
+		agentThreadId: 'session_new',
 		runId: 'run_new'
 	}))
 );
@@ -164,13 +164,13 @@ vi.mock('$lib/server/control-plane', () => ({
 	})
 }));
 
-vi.mock('$lib/server/agent-sessions', () => ({
-	cancelAgentSession: vi.fn(),
-	getAgentSession,
-	listAgentSessions: vi.fn(async () => []),
-	recoverAgentSession,
-	sendAgentSessionMessage,
-	startAgentSession
+vi.mock('$lib/server/agent-threads', () => ({
+	cancelAgentThread: vi.fn(),
+	getAgentThread,
+	listAgentThreads: vi.fn(async () => []),
+	recoverAgentThread,
+	sendAgentThreadMessage,
+	startAgentThread
 }));
 
 vi.mock('$lib/server/task-threads', () => ({
@@ -195,16 +195,16 @@ vi.mock('$lib/server/task-execution-workspace', () => ({
 }));
 
 vi.mock('$lib/task-thread-context', () => ({
-	isActiveTaskThread: vi.fn((thread: { sessionState?: string } | null | undefined) =>
-		Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''))
+	isActiveTaskThread: vi.fn((thread: { threadState?: string } | null | undefined) =>
+		Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.threadState ?? ''))
 	),
 	selectTaskThreadContext: vi.fn(
 		(input: {
-			assignedThread: { id: string; sessionState?: string } | null;
-			latestRunThread: { id: string; sessionState?: string } | null;
+			assignedThread: { id: string; threadState?: string } | null;
+			latestRunThread: { id: string; threadState?: string } | null;
 		}) => {
-			const isActive = (thread: { sessionState?: string } | null | undefined) =>
-				Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.sessionState ?? ''));
+			const isActive = (thread: { threadState?: string } | null | undefined) =>
+				Boolean(thread && ['starting', 'waiting', 'working'].includes(thread.threadState ?? ''));
 			const statusThread =
 				[input.assignedThread, input.latestRunThread].find((thread) => isActive(thread)) ??
 				input.assignedThread ??
@@ -239,17 +239,17 @@ describe('task detail page server actions', () => {
 		projectMatchesPath.mockReturnValue(true);
 		getWorkspaceExecutionIssue.mockReset();
 		getWorkspaceExecutionIssue.mockReturnValue(null);
-		getAgentSession.mockReset();
-		getAgentSession.mockResolvedValue(null);
-		recoverAgentSession.mockReset();
-		sendAgentSessionMessage.mockReset();
+		getAgentThread.mockReset();
+		getAgentThread.mockResolvedValue(null);
+		recoverAgentThread.mockReset();
+		sendAgentThreadMessage.mockReset();
 		loadRelevantSelfImprovementKnowledgeItems.mockReset();
 		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([]);
-		startAgentSession.mockReset();
+		startAgentThread.mockReset();
 		buildTaskThreadPromptMock.mockClear();
 		listInstalledCodexSkills.mockClear();
-		startAgentSession.mockResolvedValue({
-			sessionId: 'session_new',
+		startAgentThread.mockResolvedValue({
+			agentThreadId: 'session_new',
 			runId: 'run_new'
 		});
 		controlPlaneState.current = {
@@ -276,13 +276,13 @@ describe('task detail page server actions', () => {
 				{
 					id: 'role_coordinator',
 					name: 'Coordinator',
-					lane: 'shared',
+					area: 'shared',
 					description: 'Coordinates task execution'
 				},
 				{
 					id: 'role_reviewer',
 					name: 'Reviewer',
-					lane: 'product',
+					area: 'product',
 					description: 'Reviews and governs higher-risk work'
 				}
 			],
@@ -302,7 +302,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'goal_launch',
 					name: 'Improve goal UX',
-					lane: 'product',
+					area: 'product',
 					status: 'running',
 					summary: 'Make goal creation clearer and more useful.',
 					artifactPath: '/tmp/project/agent_output/goals',
@@ -319,7 +319,7 @@ describe('task detail page server actions', () => {
 					title: 'Attach a brief',
 					summary: 'Need source documents',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'ready',
@@ -428,7 +428,7 @@ describe('task detail page server actions', () => {
 					title: 'Unblock API contract',
 					summary: 'Finalize the downstream API shape',
 					projectId: 'project_1',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'high',
 					status: 'ready',
@@ -580,7 +580,7 @@ describe('task detail page server actions', () => {
 			]
 		};
 		projectMatchesPath.mockReturnValue(false);
-		getAgentSession.mockResolvedValue({
+		getAgentThread.mockResolvedValue({
 			id: 'session_stale',
 			name: 'Work thread: Wrong Project',
 			cwd: '/tmp/other-project',
@@ -591,14 +591,14 @@ describe('task detail page server actions', () => {
 			createdAt: '2026-03-30T12:00:00.000Z',
 			updatedAt: '2026-03-30T12:05:00.000Z',
 			origin: 'managed',
-			sessionState: 'ready',
+			threadState: 'ready',
 			latestRunStatus: 'completed',
 			hasActiveRun: false,
 			canResume: true,
 			runCount: 1,
 			lastActivityAt: '2026-03-30T12:05:00.000Z',
 			lastActivityLabel: 'just now',
-			sessionSummary: 'The thread is idle and available for the next instruction.',
+			threadSummary: 'The thread is idle and available for the next instruction.',
 			lastExitCode: 0,
 			runTimeline: [],
 			relatedTasks: [],
@@ -614,8 +614,8 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
-		expect(startAgentSession).toHaveBeenCalledWith(
+		expect(sendAgentThreadMessage).not.toHaveBeenCalled();
+		expect(startAgentThread).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: 'Task thread · Attach a brief · Agent Management System Prototype · task_1',
 				cwd: '/tmp/project',
@@ -634,7 +634,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'launchTaskSession',
 				taskId: 'task_1',
-				sessionId: 'session_new'
+				agentThreadId: 'session_new'
 			})
 		);
 	});
@@ -652,7 +652,7 @@ describe('task detail page server actions', () => {
 				sourceOpportunityId: 'failed_runs:task_1',
 				sourceTaskIds: ['task_1'],
 				sourceRunIds: [],
-				sourceSessionIds: [],
+				sourceThreadIds: [],
 				sourceSignalIds: [],
 				triggerPattern: 'Repeated launch or retry failures for the same task.',
 				recommendedResponse: 'Add a preflight check before retrying the failing step.',
@@ -717,7 +717,7 @@ describe('task detail page server actions', () => {
 				}
 			]
 		};
-		getAgentSession.mockResolvedValue({
+		getAgentThread.mockResolvedValue({
 			id: 'session_previous',
 			name: 'Work thread: Previous Run',
 			cwd: '/tmp/project',
@@ -728,14 +728,14 @@ describe('task detail page server actions', () => {
 			createdAt: '2026-03-30T12:10:00.000Z',
 			updatedAt: '2026-03-30T12:15:00.000Z',
 			origin: 'managed',
-			sessionState: 'ready',
+			threadState: 'ready',
 			latestRunStatus: 'completed',
 			hasActiveRun: false,
 			canResume: true,
 			runCount: 1,
 			lastActivityAt: '2026-03-30T12:15:00.000Z',
 			lastActivityLabel: 'just now',
-			sessionSummary: 'The thread is idle and available for the next instruction.',
+			threadSummary: 'The thread is idle and available for the next instruction.',
 			lastExitCode: 0,
 			runTimeline: [],
 			relatedTasks: [],
@@ -751,8 +751,8 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(sendAgentSessionMessage).toHaveBeenCalledWith('session_previous', 'run the task');
-		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_previous', 'run the task');
+		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				agentThreadId: 'session_previous',
@@ -765,7 +765,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'launchTaskSession',
 				taskId: 'task_1',
-				sessionId: 'session_previous'
+				agentThreadId: 'session_previous'
 			})
 		);
 	});
@@ -811,8 +811,8 @@ describe('task detail page server actions', () => {
 			}
 		});
 		expect(createRun).not.toHaveBeenCalled();
-		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
-		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(sendAgentThreadMessage).not.toHaveBeenCalled();
+		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
 	});
 
@@ -849,7 +849,7 @@ describe('task detail page server actions', () => {
 				}
 			]
 		};
-		getAgentSession.mockResolvedValue({
+		getAgentThread.mockResolvedValue({
 			id: 'session_active',
 			name: 'Task thread continuity',
 			cwd: '/tmp/project',
@@ -860,21 +860,21 @@ describe('task detail page server actions', () => {
 			createdAt: '2026-03-30T11:55:00.000Z',
 			updatedAt: '2026-03-30T12:00:00.000Z',
 			origin: 'managed',
-			sessionState: 'working',
+			threadState: 'working',
 			latestRunStatus: 'running',
 			hasActiveRun: false,
 			canResume: true,
 			runCount: 1,
 			lastActivityAt: '2026-03-30T12:00:00.000Z',
 			lastActivityLabel: '30m ago',
-			sessionSummary: 'Thread appears stalled.',
+			threadSummary: 'Thread appears stalled.',
 			lastExitCode: null,
 			runTimeline: [],
 			relatedTasks: [],
 			latestRun: null,
 			runs: []
 		});
-		recoverAgentSession.mockImplementation(async () => {
+		recoverAgentThread.mockImplementation(async () => {
 			controlPlaneState.current = {
 				...(controlPlaneState.current as ControlPlaneData),
 				tasks: [
@@ -899,7 +899,7 @@ describe('task detail page server actions', () => {
 			};
 
 			return {
-				sessionId: 'session_active',
+				agentThreadId: 'session_active',
 				runId: 'run_active',
 				status: 'failed',
 				signal: null,
@@ -915,9 +915,9 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(recoverAgentSession).toHaveBeenCalledWith('session_active');
-		expect(sendAgentSessionMessage).toHaveBeenCalledWith('session_active', 'run the task');
-		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(recoverAgentThread).toHaveBeenCalledWith('session_active');
+		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_active', 'run the task');
+		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved?.tasks[0]).toEqual(
 			expect.objectContaining({
 				status: 'in_progress',
@@ -931,7 +931,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'recoverTaskSession',
 				taskId: 'task_1',
-				sessionId: 'session_active'
+				agentThreadId: 'session_active'
 			})
 		);
 	});
@@ -962,8 +962,8 @@ describe('task detail page server actions', () => {
 			}
 		});
 		expect(createRun).not.toHaveBeenCalled();
-		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
-		expect(startAgentSession).not.toHaveBeenCalled();
+		expect(sendAgentThreadMessage).not.toHaveBeenCalled();
+		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
 	});
 
@@ -987,8 +987,8 @@ describe('task detail page server actions', () => {
 					'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
 			}
 		});
-		expect(startAgentSession).not.toHaveBeenCalled();
-		expect(sendAgentSessionMessage).not.toHaveBeenCalled();
+		expect(startAgentThread).not.toHaveBeenCalled();
+		expect(sendAgentThreadMessage).not.toHaveBeenCalled();
 		expect(createRun).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
 	});
@@ -1000,7 +1000,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'role_coordinator',
 					name: 'Coordinator',
-					lane: 'shared',
+					area: 'shared',
 					description: 'Coordinates work'
 				}
 			],
@@ -1040,7 +1040,7 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(startAgentSession).toHaveBeenCalledWith(
+		expect(startAgentThread).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'danger-full-access'
 			})
@@ -1061,7 +1061,7 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(startAgentSession).toHaveBeenCalledWith(
+		expect(startAgentThread).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'danger-full-access'
 			})

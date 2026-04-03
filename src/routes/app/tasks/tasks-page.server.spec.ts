@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Project } from '$lib/types/control-plane';
 
 const { mkdir, writeFile } = vi.hoisted(() => ({
@@ -13,11 +13,11 @@ const controlPlaneState = vi.hoisted(() => ({
 }));
 
 const agentSessionState = vi.hoisted(() => ({
-	session: null as AgentSessionDetail | null
+	session: null as AgentThreadDetail | null
 }));
 
 const createRunMock = vi.hoisted(() =>
-	vi.fn((input: { taskId: string; sessionId?: string | null; status?: string }) => ({
+	vi.fn((input: { taskId: string; agentThreadId?: string | null; status?: string }) => ({
 		id: `run_${input.taskId}`,
 		taskId: input.taskId,
 		workerId: null,
@@ -28,7 +28,7 @@ const createRunMock = vi.hoisted(() =>
 		startedAt: '2026-03-31T10:00:00.000Z',
 		endedAt: null,
 		threadId: null,
-		sessionId: input.sessionId ?? null,
+		agentThreadId: input.agentThreadId ?? null,
 		promptDigest: 'digest_create_and_run',
 		artifactPaths: ['/tmp/project/agent_output'],
 		summary: 'Started a new work thread during task creation.',
@@ -55,7 +55,7 @@ const createTaskMock = vi.hoisted(() =>
 			title: input.title,
 			summary: input.summary,
 			projectId: input.projectId,
-			lane: 'product',
+			area: 'product',
 			goalId: input.goalId,
 			priority: 'medium',
 			status: input.status ?? 'ready',
@@ -80,9 +80,9 @@ const createTaskMock = vi.hoisted(() =>
 	)
 );
 
-const startAgentSessionMock = vi.hoisted(() =>
+const startAgentThreadMock = vi.hoisted(() =>
 	vi.fn(async () => ({
-		sessionId: 'session_created',
+		agentThreadId: 'session_created',
 		runId: 'runner_created'
 	}))
 );
@@ -214,12 +214,12 @@ vi.mock('node:fs/promises', () => ({
 	writeFile
 }));
 
-vi.mock('$lib/server/agent-sessions', () => ({
-	cancelAgentSession: vi.fn(),
-	getAgentSession: vi.fn(async () => agentSessionState.session),
-	listAgentSessions: vi.fn(async () => []),
-	sendAgentSessionMessage: vi.fn(),
-	startAgentSession: startAgentSessionMock
+vi.mock('$lib/server/agent-threads', () => ({
+	cancelAgentThread: vi.fn(),
+	getAgentThread: vi.fn(async () => agentSessionState.session),
+	listAgentThreads: vi.fn(async () => []),
+	sendAgentThreadMessage: vi.fn(),
+	startAgentThread: startAgentThreadMock
 }));
 
 vi.mock('$lib/task-thread-context', () => ({
@@ -250,7 +250,7 @@ vi.mock('$lib/server/task-ideation', () => ({
 		(projectName: string) => `Task ideation: ${projectName}`
 	),
 	findProjectForTaskIdeationThread: vi.fn(
-		(_session: AgentSessionDetail, projects: Project[]) => projects[0] ?? null
+		(_session: AgentThreadDetail, projects: Project[]) => projects[0] ?? null
 	),
 	findProjectTaskIdeationThread: vi.fn(),
 	getProjectTaskIdeationWorkspace: vi.fn(),
@@ -270,7 +270,7 @@ describe('tasks page server actions', () => {
 		createRunMock.mockClear();
 		createTaskMock.mockClear();
 		parseIdeationTaskSuggestionsMock.mockClear();
-		startAgentSessionMock.mockClear();
+		startAgentThreadMock.mockClear();
 		getWorkspaceExecutionIssueMock.mockReset();
 		getWorkspaceExecutionIssueMock.mockReturnValue(null);
 		controlPlaneState.current = {
@@ -297,7 +297,7 @@ describe('tasks page server actions', () => {
 				{
 					id: 'role_coordinator',
 					name: 'Coordinator',
-					lane: 'shared',
+					area: 'shared',
 					description: 'Routes work'
 				}
 			],
@@ -317,7 +317,7 @@ describe('tasks page server actions', () => {
 				{
 					id: 'goal_queue_quality',
 					name: 'Reduce task intake friction',
-					lane: 'product',
+					area: 'product',
 					status: 'running',
 					summary: 'Improve task intake and routing quality.',
 					artifactPath: '/tmp/project/goals/queue-quality',
@@ -334,7 +334,7 @@ describe('tasks page server actions', () => {
 					title: 'Show routing defaults beside ideation suggestions',
 					summary: 'Existing task already in queue.',
 					projectId: 'project_ams',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_queue_quality',
 					priority: 'medium',
 					status: 'ready',
@@ -370,14 +370,14 @@ describe('tasks page server actions', () => {
 			createdAt: '2026-03-30T11:00:00.000Z',
 			updatedAt: '2026-03-30T12:00:00.000Z',
 			origin: 'managed',
-			sessionState: 'ready',
+			threadState: 'ready',
 			latestRunStatus: 'completed',
 			hasActiveRun: false,
 			canResume: true,
 			runCount: 1,
 			lastActivityAt: '2026-03-30T12:00:00.000Z',
 			lastActivityLabel: 'just now',
-			sessionSummary: 'Suggested the next tasks.',
+			threadSummary: 'Suggested the next tasks.',
 			lastExitCode: 0,
 			runTimeline: [],
 			relatedTasks: [],
@@ -449,7 +449,7 @@ describe('tasks page server actions', () => {
 				successAction: 'createTask'
 			})
 		);
-		expect(startAgentSessionMock).not.toHaveBeenCalled();
+		expect(startAgentThreadMock).not.toHaveBeenCalled();
 		expect(createRunMock).not.toHaveBeenCalled();
 		expect(createTaskMock).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -604,7 +604,7 @@ describe('tasks page server actions', () => {
 				ok: true,
 				successAction: 'createTaskAndRun',
 				taskId: 'task_create_and_run_from_the_task_form',
-				sessionId: 'session_created'
+				agentThreadId: 'session_created'
 			})
 		);
 		expect(buildTaskThreadPromptMock).toHaveBeenCalledWith(
@@ -617,7 +617,7 @@ describe('tasks page server actions', () => {
 				availableSkillNames: ['skill-installer', 'web-design-guidelines']
 			})
 		);
-		expect(startAgentSessionMock).toHaveBeenCalledWith({
+		expect(startAgentThreadMock).toHaveBeenCalledWith({
 			name: 'Task thread · Create and run from the task form · Agent Management System Prototype · task_create_and_run_from_the_task_form',
 			cwd: '/tmp/project',
 			prompt: 'task prompt',
@@ -634,7 +634,7 @@ describe('tasks page server actions', () => {
 				taskId: 'task_create_and_run_from_the_task_form',
 				providerId: 'provider_local',
 				status: 'running',
-				sessionId: 'session_created',
+				agentThreadId: 'session_created',
 				promptDigest: 'digest_create_and_run',
 				artifactPaths: ['/tmp/project/agent_output']
 			})
@@ -652,7 +652,7 @@ describe('tasks page server actions', () => {
 			expect.objectContaining({
 				id: 'run_task_create_and_run_from_the_task_form',
 				taskId: 'task_create_and_run_from_the_task_form',
-				sessionId: 'session_created'
+				agentThreadId: 'session_created'
 			})
 		);
 	});
@@ -676,7 +676,7 @@ describe('tasks page server actions', () => {
 			})
 		} as never);
 
-		expect(startAgentSessionMock).toHaveBeenCalledWith(
+		expect(startAgentThreadMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'danger-full-access'
 			})
@@ -700,7 +700,7 @@ describe('tasks page server actions', () => {
 			})
 		} as never);
 
-		expect(startAgentSessionMock).toHaveBeenCalledWith(
+		expect(startAgentThreadMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'read-only'
 			})
@@ -732,7 +732,7 @@ describe('tasks page server actions', () => {
 					'Project root cannot be used with the workspace-write sandbox: /tmp/project. Operation not permitted (EPERM).'
 			}
 		});
-		expect(startAgentSessionMock).not.toHaveBeenCalled();
+		expect(startAgentThreadMock).not.toHaveBeenCalled();
 		expect(createRunMock).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
 	});

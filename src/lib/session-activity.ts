@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 
 export const ACTIVE_REFRESH_INTERVAL_MS = 2_000;
 export const ACTIVITY_CLOCK_INTERVAL_MS = 1_000;
@@ -24,7 +24,7 @@ type SessionLiveActivity = {
 	detail: string;
 };
 
-function hasStructuredProgressEvidence(session: AgentSessionDetail) {
+function hasStructuredProgressEvidence(session: AgentThreadDetail) {
 	if (session.latestRun?.lastMessage) {
 		return true;
 	}
@@ -41,7 +41,7 @@ function hasStructuredProgressEvidence(session: AgentSessionDetail) {
 	);
 }
 
-function hasStartupEvidence(session: AgentSessionDetail) {
+function hasStartupEvidence(session: AgentThreadDetail) {
 	if (session.latestRun?.state?.codexThreadId) {
 		return true;
 	}
@@ -362,7 +362,7 @@ function parseLiveActivityFromLogLine(line: string): SessionLiveActivity | null 
 	}
 }
 
-function getLatestLiveActivity(session: AgentSessionDetail): SessionLiveActivity | null {
+function getLatestLiveActivity(session: AgentThreadDetail): SessionLiveActivity | null {
 	const lines = session.latestRun?.logTail ?? [];
 
 	for (const line of [...lines].reverse()) {
@@ -384,13 +384,13 @@ function getLatestLiveActivity(session: AgentSessionDetail): SessionLiveActivity
 }
 
 function getFallbackActivity(
-	session: AgentSessionDetail,
+	session: AgentThreadDetail,
 	options: {
 		isLive: boolean;
 		isRecent: boolean;
 	}
 ): SessionLiveActivity | null {
-	switch (session.sessionState) {
+	switch (session.threadState) {
 		case 'starting':
 			return {
 				label: 'Queueing run',
@@ -419,7 +419,7 @@ function getFallbackActivity(
 	}
 }
 
-export function formatSessionStateLabel(state: AgentSessionDetail['sessionState']) {
+export function formatSessionStateLabel(state: AgentThreadDetail['threadState']) {
 	switch (state) {
 		case 'starting':
 			return 'Starting';
@@ -485,7 +485,7 @@ export function formatActivityAge(iso: string | null, now = Date.now()) {
 }
 
 export function getSessionActivityMeta(
-	session: AgentSessionDetail,
+	session: AgentThreadDetail,
 	now = Date.now()
 ): SessionActivityMeta {
 	const ageMs = getActivityAgeMs(session.lastActivityAt, now);
@@ -496,9 +496,9 @@ export function getSessionActivityMeta(
 		getLatestLiveActivity(session) ?? getFallbackActivity(session, { isLive, isRecent });
 	const activityHeading =
 		activity &&
-		(session.sessionState === 'starting' ||
-			session.sessionState === 'waiting' ||
-			session.sessionState === 'working')
+		(session.threadState === 'starting' ||
+			session.threadState === 'waiting' ||
+			session.threadState === 'working')
 			? isRecent
 				? 'Now'
 				: 'Last signal'
@@ -506,7 +506,7 @@ export function getSessionActivityMeta(
 				? 'Status'
 				: null;
 
-	switch (session.sessionState) {
+	switch (session.threadState) {
 		case 'starting':
 			return {
 				label: isLive ? 'Booting now' : 'Starting',
@@ -563,7 +563,7 @@ export function getSessionActivityMeta(
 			}
 
 			return {
-				label: isLive ? 'Awaiting proof' : formatSessionStateLabel(session.sessionState),
+				label: isLive ? 'Awaiting proof' : formatSessionStateLabel(session.threadState),
 				detail: 'The run is marked active, but only minimal local runner output is visible so far.',
 				ageLabel,
 				tone: 'progress',
@@ -574,7 +574,7 @@ export function getSessionActivityMeta(
 			};
 		case 'ready':
 			return {
-				label: isRecent ? 'Available now' : formatSessionStateLabel(session.sessionState),
+				label: isRecent ? 'Available now' : formatSessionStateLabel(session.threadState),
 				detail: 'The thread is idle and available for the next instruction.',
 				ageLabel,
 				tone: 'ready',
@@ -585,7 +585,7 @@ export function getSessionActivityMeta(
 			};
 		case 'attention':
 			return {
-				label: formatSessionStateLabel(session.sessionState),
+				label: formatSessionStateLabel(session.threadState),
 				detail:
 					session.latestRunStatus === 'canceled'
 						? 'The latest run was canceled before completion.'
@@ -599,7 +599,7 @@ export function getSessionActivityMeta(
 			};
 		case 'unavailable':
 			return {
-				label: formatSessionStateLabel(session.sessionState),
+				label: formatSessionStateLabel(session.threadState),
 				detail: 'This thread finished, but it is not resumable from the manager right now.',
 				ageLabel,
 				tone: 'idle',
@@ -611,7 +611,7 @@ export function getSessionActivityMeta(
 		case 'idle':
 		default:
 			return {
-				label: isRecent ? 'Recently active' : formatSessionStateLabel(session.sessionState),
+				label: isRecent ? 'Recently active' : formatSessionStateLabel(session.threadState),
 				detail: 'No run is currently active in this thread.',
 				ageLabel,
 				tone: 'idle',

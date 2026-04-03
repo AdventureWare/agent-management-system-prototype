@@ -240,7 +240,7 @@ function buildCapturedSuggestionOpportunities(
 			],
 			relatedTaskIds: goal?.taskIds ?? [],
 			relatedRunIds: [],
-			relatedSessionIds: [],
+			relatedThreadIds: [],
 			suggestedTask:
 				project || goal
 					? {
@@ -389,21 +389,21 @@ export async function syncSelfImprovementAnalysis(
 
 export async function loadSelfImprovementSnapshot(input?: {
 	data?: ControlPlaneData;
-	sessions?: Awaited<ReturnType<typeof listAgentThreads>>;
+	threads?: Awaited<ReturnType<typeof listAgentThreads>>;
 	now?: number;
 	projectId?: string | null;
 	goalId?: string | null;
 	trackImpression?: boolean;
 }): Promise<SelfImprovementSnapshot> {
-	const [data, sessions] = await Promise.all([
+	const [data, threads] = await Promise.all([
 		input?.data ? Promise.resolve(input.data) : loadControlPlane(),
-		input?.sessions
-			? Promise.resolve(input.sessions)
+		input?.threads
+			? Promise.resolve(input.threads)
 			: listAgentThreads({ includeCategorization: false })
 	]);
 	const analysis = buildSelfImprovementAnalysis({
 		data,
-		sessions,
+		threads,
 		now: input?.now
 	});
 	const current = await loadSelfImprovementDb();
@@ -415,7 +415,7 @@ export async function loadSelfImprovementSnapshot(input?: {
 	const rankedAnalysis = rankSelfImprovementAnalysis(analysisWithCapturedSuggestions);
 	const signals = buildSelfImprovementFeedbackSignals({
 		data,
-		sessions,
+		threads,
 		now: input?.now
 	});
 	const scopedSnapshot = applySelfImprovementGoalContext(
@@ -802,7 +802,7 @@ function buildKnowledgeItemFromOpportunity(input: {
 		sourceOpportunityId: input.opportunity.id,
 		sourceTaskIds: input.opportunity.relatedTaskIds,
 		sourceRunIds: input.opportunity.relatedRunIds,
-		sourceSessionIds: input.opportunity.relatedSessionIds,
+		sourceThreadIds: input.opportunity.relatedThreadIds,
 		sourceSignalIds: input.signals.map((signal) => signal.id),
 		triggerPattern: suggestedKnowledgeItem.triggerPattern,
 		recommendedResponse: suggestedKnowledgeItem.recommendedResponse,
@@ -907,7 +907,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 		title: opportunity.suggestedTask.title,
 		summary: opportunity.suggestedTask.summary,
 		projectId: taskContext.projectId,
-		lane: 'ops',
+		area: 'ops',
 		goalId: taskContext.goalId,
 		priority: opportunity.suggestedTask.priority,
 		riskLevel: 'medium',

@@ -47,7 +47,7 @@ function readGoalForm(form: FormData) {
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
 		projectIds: parseSelectedIds(form, 'projectIds'),
 		taskIds: parseSelectedIds(form, 'taskIds'),
-		area: parseArea(form.get('area')?.toString() ?? form.get('lane')?.toString() ?? '', 'product'),
+		area: parseArea(form.get('area')?.toString() ?? '', 'product'),
 		status: parseGoalStatus(form.get('status')?.toString() ?? '', 'ready')
 	};
 }

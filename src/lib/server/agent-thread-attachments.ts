@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
-import type { AgentSessionAttachment } from '$lib/types/agent-thread';
+import type { AgentThreadAttachment } from '$lib/types/agent-thread';
 import { sanitizeTaskAttachmentName } from '$lib/server/task-attachments';
 
 const INLINE_ATTACHMENT_EXTENSIONS = new Set([
@@ -29,8 +29,8 @@ const INLINE_ATTACHMENT_EXTENSIONS = new Set([
 const MAX_INLINE_ATTACHMENT_BYTES = 64 * 1024;
 const MAX_INLINE_ATTACHMENT_CHARS = 12_000;
 
-function createSessionAttachmentId() {
-	return `session_attachment_${randomUUID()}`;
+function createThreadAttachmentId() {
+	return `thread_attachment_${randomUUID()}`;
 }
 
 function formatAttachmentSize(sizeBytes: number) {
@@ -69,10 +69,10 @@ function decodeInlineAttachment(buffer: Buffer) {
 		: normalized;
 }
 
-export function buildSessionAttachmentPrompt(input: {
+export function buildThreadAttachmentPrompt(input: {
 	prompt: string;
-	attachments: AgentSessionAttachment[];
-	inlineAttachmentContents: { attachment: AgentSessionAttachment; content: string }[];
+	attachments: AgentThreadAttachment[];
+	inlineAttachmentContents: { attachment: AgentThreadAttachment; content: string }[];
 }) {
 	if (input.attachments.length === 0) {
 		return input.prompt;
@@ -102,24 +102,24 @@ export function buildSessionAttachmentPrompt(input: {
 		.join('\n');
 }
 
-export async function persistSessionAttachments(input: {
+export async function persistThreadAttachments(input: {
 	rootPath: string;
-	sessionId: string;
+	threadId: string;
 	uploads: File[];
 }) {
-	const attachmentDir = resolve(input.rootPath, input.sessionId, 'attachments');
+	const attachmentDir = resolve(input.rootPath, input.threadId, 'attachments');
 
 	await mkdir(attachmentDir, { recursive: true });
 
-	const attachments: AgentSessionAttachment[] = [];
-	const inlineAttachmentContents: { attachment: AgentSessionAttachment; content: string }[] = [];
+	const attachments: AgentThreadAttachment[] = [];
+	const inlineAttachmentContents: { attachment: AgentThreadAttachment; content: string }[] = [];
 
 	for (const upload of input.uploads) {
-		const attachmentId = createSessionAttachmentId();
+		const attachmentId = createThreadAttachmentId();
 		const safeName = sanitizeTaskAttachmentName(upload.name);
 		const attachmentPath = resolve(attachmentDir, `${attachmentId}-${safeName}`);
 		const buffer = Buffer.from(await upload.arrayBuffer());
-		const attachment: AgentSessionAttachment = {
+		const attachment: AgentThreadAttachment = {
 			id: attachmentId,
 			name: upload.name.trim() || safeName,
 			path: attachmentPath,

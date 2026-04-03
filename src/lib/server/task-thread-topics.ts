@@ -247,7 +247,6 @@ type ThreadTopicTask = {
 	goalId?: string | null;
 	goalName?: string | null;
 	area?: Area | null;
-	lane?: Area | null;
 	desiredRole?: string | null;
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
@@ -257,8 +256,6 @@ type ThreadTopicTask = {
 type ThreadTopicInput = {
 	threadName?: string;
 	threadSummary?: string | null;
-	sessionName?: string;
-	sessionSummary?: string | null;
 	runDetails: Array<Pick<AgentRunDetail, 'prompt' | 'lastMessage'>>;
 	relatedTasks: ThreadTopicTask[];
 };
@@ -485,7 +482,7 @@ function formatKeywordTopicLabel(token: string) {
 
 function buildCompactTopicLabels(categorization: ThreadCategorization, maxLabels = 4) {
 	return [
-		...(categorization.areaLabels ?? categorization.laneLabels ?? []).slice(0, 1),
+		...categorization.areaLabels.slice(0, 1),
 		...categorization.focusLabels.slice(0, 2),
 		...categorization.entityLabels.slice(0, 1),
 		...categorization.roleLabels.slice(0, 1),
@@ -523,7 +520,6 @@ function buildCategorizationFromSignals(input: CategorizationSignalState): Threa
 		goalIds: [],
 		goalLabels: [],
 		areaLabels,
-		laneLabels: areaLabels,
 		focusLabels,
 		entityLabels,
 		roleLabels,
@@ -544,7 +540,7 @@ export function normalizeTopicLabel(label: string) {
 }
 
 export function deriveTaskCategorization(
-	task: Pick<Task, 'title' | 'summary' | 'area' | 'lane'> &
+	task: Pick<Task, 'title' | 'summary' | 'area'> &
 		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
 	const signals = accumulateCategorizationSignals(
@@ -552,7 +548,7 @@ export function deriveTaskCategorization(
 			{ text: task.title, weight: 4 },
 			{ text: task.summary, weight: 3 }
 		],
-		[task.area ?? task.lane]
+		[task.area]
 	);
 	accumulateStructuredLabels(signals.roleScores, task.desiredRoleId ? [task.desiredRoleId] : [], 3);
 	accumulateStructuredLabels(signals.capabilityScores, task.requiredCapabilityNames, 3);
@@ -562,7 +558,7 @@ export function deriveTaskCategorization(
 }
 
 export function deriveTaskTopicLabels(
-	task: Pick<Task, 'title' | 'summary' | 'area' | 'lane'> &
+	task: Pick<Task, 'title' | 'summary' | 'area'> &
 		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
 	return deriveTaskCategorization(task).labels;
@@ -570,8 +566,8 @@ export function deriveTaskTopicLabels(
 
 export function deriveThreadCategorization(input: ThreadTopicInput) {
 	const sources: WeightedTextSource[] = [
-		{ text: input.threadName ?? input.sessionName ?? '', weight: 3 },
-		{ text: input.threadSummary ?? input.sessionSummary ?? null, weight: 1 }
+		{ text: input.threadName ?? '', weight: 3 },
+		{ text: input.threadSummary ?? null, weight: 1 }
 	];
 	const areas: Array<Area | null | undefined> = [];
 
@@ -582,7 +578,7 @@ export function deriveThreadCategorization(input: ThreadTopicInput) {
 
 		sources.push({ text: task.title, weight: titleWeight });
 		sources.push({ text: task.summary, weight: summaryWeight });
-		areas.push(task.area ?? task.lane);
+		areas.push(task.area);
 	}
 
 	for (const runDetail of input.runDetails.slice(0, 3)) {

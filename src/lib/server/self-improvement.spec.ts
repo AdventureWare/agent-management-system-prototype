@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import {
 	applySelfImprovementGoalContext,
@@ -9,8 +9,8 @@ import {
 
 function createSession(
 	id: string,
-	overrides: Partial<AgentSessionDetail> = {}
-): AgentSessionDetail {
+	overrides: Partial<AgentThreadDetail> = {}
+): AgentThreadDetail {
 	return {
 		id,
 		name: `Session ${id}`,
@@ -23,14 +23,14 @@ function createSession(
 		updatedAt: '2026-03-31T11:00:00.000Z',
 		origin: 'managed',
 		topicLabels: [],
-		sessionState: 'ready',
+		threadState: 'ready',
 		latestRunStatus: 'idle',
 		hasActiveRun: false,
 		canResume: true,
 		runCount: 1,
 		lastActivityAt: '2026-03-31T11:45:00.000Z',
 		lastActivityLabel: '15m ago',
-		sessionSummary: 'Reusable session context',
+		threadSummary: 'Reusable session context',
 		lastExitCode: null,
 		runTimeline: [],
 		relatedTasks: [],
@@ -65,7 +65,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'role_builder',
 				name: 'Builder',
-				lane: 'product',
+				area: 'product',
 				description: 'Builds product work'
 			}
 		],
@@ -95,7 +95,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'goal_product',
 				name: 'Improve system reliability',
-				lane: 'product',
+				area: 'product',
 				status: 'running',
 				summary: 'Reduce repeated failures and unblock delivery.',
 				artifactPath: '/tmp/project/goals/reliability',
@@ -107,7 +107,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'goal_quality',
 				name: 'Tighten review quality',
-				lane: 'product',
+				area: 'product',
 				status: 'running',
 				summary: 'Reduce repeated review churn.',
 				artifactPath: '/tmp/project/goals/quality',
@@ -119,7 +119,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'goal_inbox',
 				name: 'Grow project planning backlog',
-				lane: 'product',
+				area: 'product',
 				status: 'running',
 				summary: 'Keep the project stocked with concrete next-step tasks.',
 				artifactPath: '/tmp/project/goals/planning',
@@ -152,7 +152,7 @@ function createFixture(): ControlPlaneData {
 				title: 'Repair flaky execution',
 				summary: 'Investigate why repeated runs fail.',
 				projectId: 'project_2',
-				lane: 'product',
+				area: 'product',
 				goalId: 'goal_product',
 				priority: 'high',
 				status: 'in_progress',
@@ -176,7 +176,7 @@ function createFixture(): ControlPlaneData {
 				title: 'Resolve dependency blocker',
 				summary: 'Waiting on prerequisite work.',
 				projectId: 'project_2',
-				lane: 'product',
+				area: 'product',
 				goalId: 'goal_product',
 				priority: 'urgent',
 				status: 'blocked',
@@ -200,7 +200,7 @@ function createFixture(): ControlPlaneData {
 				title: 'Ship schema migration',
 				summary: 'Required prerequisite task.',
 				projectId: 'project_2',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'in_progress',
@@ -224,7 +224,7 @@ function createFixture(): ControlPlaneData {
 				title: 'Address review feedback',
 				summary: 'Incorporate requested changes from review.',
 				projectId: 'project_2',
-				lane: 'product',
+				area: 'product',
 				goalId: 'goal_quality',
 				priority: 'medium',
 				status: 'review',
@@ -248,7 +248,7 @@ function createFixture(): ControlPlaneData {
 				title: 'Continue task thread suggestion flow',
 				summary: 'Pick the most relevant reusable thread.',
 				projectId: 'project_1',
-				lane: 'product',
+				area: 'product',
 				goalId: '',
 				priority: 'medium',
 				status: 'ready',
@@ -369,34 +369,34 @@ describe('buildSelfImprovementAnalysis', () => {
 	it('turns operational signals into concrete improvement opportunities', () => {
 		const report = buildSelfImprovementAnalysis({
 			data: createFixture(),
-			sessions: [
+			threads: [
 				createSession('session_busy', {
 					name: 'Busy failure thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false,
-					sessionSummary: 'Currently stuck retrying the failure path.'
+					threadSummary: 'Currently stuck retrying the failure path.'
 				}),
 				createSession('session_dependency', {
 					name: 'Long running dependency thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false,
 					lastActivityAt: '2026-03-31T02:10:00.000Z',
 					lastActivityLabel: '10h ago',
-					sessionSummary: 'Still looks active but has gone quiet.'
+					threadSummary: 'Still looks active but has gone quiet.'
 				}),
 				createSession('session_review', {
 					cwd: '/tmp/other-project',
 					canResume: false,
 					name: 'Review handoff thread',
-					sessionSummary: 'Contains the latest review-ready work.'
+					threadSummary: 'Contains the latest review-ready work.'
 				}),
 				createSession('session_reuse_candidate', {
 					name: 'Task thread suggestion follow-up',
-					sessionSummary: 'Continue the assignment suggestion flow',
+					threadSummary: 'Continue the assignment suggestion flow',
 					topicLabels: ['Product', 'Coordination', 'Suggestion']
 				})
 			]
@@ -424,7 +424,7 @@ describe('buildSelfImprovementAnalysis', () => {
 				expect.objectContaining({
 					source: 'thread_reuse_gap',
 					category: 'knowledge',
-					relatedSessionIds: expect.arrayContaining(['session_reuse_candidate']),
+					relatedThreadIds: expect.arrayContaining(['session_reuse_candidate']),
 					suggestedKnowledgeItem: expect.objectContaining({
 						triggerPattern: expect.stringContaining('Suggested thread')
 					})
@@ -444,18 +444,18 @@ describe('buildSelfImprovementAnalysis', () => {
 		const fixture = createFixture();
 		const report = buildSelfImprovementAnalysis({
 			data: fixture,
-			sessions: [
+			threads: [
 				createSession('session_busy', {
 					name: 'Busy failure thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false
 				}),
 				createSession('session_dependency', {
 					name: 'Long running dependency thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false,
 					lastActivityAt: '2026-03-31T02:10:00.000Z',
@@ -468,7 +468,7 @@ describe('buildSelfImprovementAnalysis', () => {
 				}),
 				createSession('session_reuse_candidate', {
 					name: 'Task thread suggestion follow-up',
-					sessionSummary: 'Continue the assignment suggestion flow',
+					threadSummary: 'Continue the assignment suggestion flow',
 					topicLabels: ['Product', 'Coordination', 'Suggestion']
 				})
 			]
@@ -500,18 +500,18 @@ describe('buildSelfImprovementAnalysis', () => {
 	it('emits structured feedback signals from the same operational context', () => {
 		const signals = buildSelfImprovementFeedbackSignals({
 			data: createFixture(),
-			sessions: [
+			threads: [
 				createSession('session_busy', {
 					name: 'Busy failure thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false
 				}),
 				createSession('session_dependency', {
 					name: 'Long running dependency thread',
 					cwd: '/tmp/other-project',
-					sessionState: 'working',
+					threadState: 'working',
 					hasActiveRun: true,
 					canResume: false,
 					lastActivityAt: '2026-03-31T02:10:00.000Z',
@@ -524,7 +524,7 @@ describe('buildSelfImprovementAnalysis', () => {
 				}),
 				createSession('session_reuse_candidate', {
 					name: 'Task thread suggestion follow-up',
-					sessionSummary: 'Continue the assignment suggestion flow',
+					threadSummary: 'Continue the assignment suggestion flow',
 					topicLabels: ['Product', 'Coordination', 'Suggestion']
 				})
 			]

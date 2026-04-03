@@ -42,13 +42,13 @@ const STORES = [
 		}
 	},
 	{
-		name: 'agent-sessions',
-		table: 'agent_session_records',
-		jsonFile: 'agent-sessions.json',
-		collections: ['sessions', 'runs'],
+		name: 'agent-threads',
+		table: 'agent_thread_records',
+		jsonFile: 'agent-threads.json',
+		collections: ['threads', 'runs'],
 		createDefault() {
 			return {
-				sessions: [],
+				threads: [],
 				runs: []
 			};
 		}

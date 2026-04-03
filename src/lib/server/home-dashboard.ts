@@ -16,7 +16,7 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 	]);
 	const selfImprovement = await loadSelfImprovementSnapshot({
 		data: controlPlane,
-		sessions: threads
+		threads: threads
 	});
 	const taskMap = new Map(controlPlane.tasks.map((task) => [task.id, task]));
 	const taskWorkItems = buildTaskWorkItems(controlPlane, threads);
@@ -40,9 +40,7 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 
 	return {
 		threads,
-		sessions: threads,
 		threadSummary: summarizeAgentThreads(threads),
-		sessionSummary: summarizeAgentThreads(threads),
 		controlSummary: summarizeControlPlane(controlPlane),
 		taskAttention,
 		staleTaskSummary: summarizeTaskFreshness(taskWorkItems),

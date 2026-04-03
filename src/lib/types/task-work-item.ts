@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { Approval, Review, Run, Task } from '$lib/types/control-plane';
 
 export const TASK_STALE_SIGNAL_KEYS = [
@@ -34,10 +34,10 @@ export type TaskWorkItem = Task & {
 	projectName: string;
 	assigneeName: string;
 	latestRun: Run | null;
-	assignedThread: AgentSessionDetail | null;
-	latestRunThread: AgentSessionDetail | null;
-	statusThread: AgentSessionDetail | null;
-	linkThread: AgentSessionDetail | null;
+	assignedThread: AgentThreadDetail | null;
+	latestRunThread: AgentThreadDetail | null;
+	statusThread: AgentThreadDetail | null;
+	linkThread: AgentThreadDetail | null;
 	linkThreadKind: 'assigned' | 'latest' | null;
 	updatedAtLabel: string;
 	hasUnmetDependencies: boolean;

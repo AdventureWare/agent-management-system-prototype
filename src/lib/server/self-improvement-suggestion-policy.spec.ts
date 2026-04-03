@@ -22,7 +22,7 @@ function createOpportunity(
 		recommendedActions: overrides.recommendedActions ?? ['Do the next thing'],
 		relatedTaskIds: overrides.relatedTaskIds ?? [],
 		relatedRunIds: overrides.relatedRunIds ?? [],
-		relatedSessionIds: overrides.relatedSessionIds ?? [],
+		relatedThreadIds: overrides.relatedThreadIds ?? [],
 		suggestedTask: overrides.suggestedTask ?? null,
 		suggestedKnowledgeItem: overrides.suggestedKnowledgeItem ?? null
 	};
@@ -47,7 +47,7 @@ describe('rankSelfImprovementOpportunities', () => {
 				signals: ['Repeated failures', 'Linked blocker'],
 				relatedTaskIds: ['task_1'],
 				relatedRunIds: ['run_1', 'run_2'],
-				relatedSessionIds: ['session_1'],
+				relatedThreadIds: ['session_1'],
 				suggestedTask: {
 					title: 'Stabilize failing path',
 					summary: 'Add the recovery guard.',

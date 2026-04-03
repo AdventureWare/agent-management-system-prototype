@@ -25,11 +25,11 @@ export const POST = async ({ params, request }) => {
 	}
 
 	try {
-		const result = await sendAgentThreadMessage(params.sessionId, { prompt, attachments });
+		const result = await sendAgentThreadMessage(params.threadId, { prompt, attachments });
 		return json(
 			{
 				...result,
-				threadId: result.sessionId
+				threadId: result.agentThreadId
 			},
 			{ status: 201 }
 		);

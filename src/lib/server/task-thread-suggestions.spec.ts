@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildTaskThreadSuggestions } from './task-thread-suggestions';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { Task } from '$lib/types/control-plane';
 
 function createSession(
 	id: string,
-	overrides: Partial<AgentSessionDetail> = {}
-): AgentSessionDetail {
+	overrides: Partial<AgentThreadDetail> = {}
+): AgentThreadDetail {
 	return {
 		id,
 		name: `Session ${id}`,
@@ -19,14 +19,14 @@ function createSession(
 		updatedAt: '2026-03-31T10:00:00.000Z',
 		origin: 'managed',
 		topicLabels: [],
-		sessionState: 'ready',
+		threadState: 'ready',
 		latestRunStatus: 'idle',
 		hasActiveRun: false,
 		canResume: true,
 		runCount: 1,
 		lastActivityAt: '2026-03-31T10:00:00.000Z',
 		lastActivityLabel: 'just now',
-		sessionSummary: 'Reusable work thread',
+		threadSummary: 'Reusable work thread',
 		lastExitCode: null,
 		runTimeline: [],
 		relatedTasks: [],
@@ -42,7 +42,7 @@ function createTask(overrides: Partial<Task> = {}): Task {
 		title: 'Suggest a relevant thread',
 		summary: 'Continue the assignment suggestion flow for task threads.',
 		projectId: 'project_1',
-		lane: 'product',
+		area: 'product',
 		goalId: '',
 		priority: 'medium',
 		status: 'ready',
@@ -71,17 +71,17 @@ describe('buildTaskThreadSuggestions', () => {
 		const result = buildTaskThreadSuggestions({
 			task: createTask(),
 			assignedThreadId: null,
-			sessions: [
+			threads: [
 				createSession('busy', {
 					name: 'Thread suggestion work',
-					sessionState: 'working',
+					threadState: 'working',
 					canResume: false,
 					hasActiveRun: true,
-					sessionSummary: 'Busy thread already working on assignment ideas'
+					threadSummary: 'Busy thread already working on assignment ideas'
 				}),
 				createSession('relevant', {
 					name: 'Task thread suggestion follow-up',
-					sessionSummary: 'Continue the assignment suggestion flow',
+					threadSummary: 'Continue the assignment suggestion flow',
 					topicLabels: ['Product', 'Coordination', 'Suggestion'],
 					relatedTasks: [
 						{ id: 'task_2', title: 'Task thread continuity', status: 'ready', isPrimary: true }
@@ -89,7 +89,7 @@ describe('buildTaskThreadSuggestions', () => {
 				}),
 				createSession('other', {
 					name: 'General maintenance',
-					sessionSummary: 'Unrelated housekeeping work'
+					threadSummary: 'Unrelated housekeeping work'
 				})
 			]
 		});
@@ -109,16 +109,16 @@ describe('buildTaskThreadSuggestions', () => {
 		const result = buildTaskThreadSuggestions({
 			task: createTask(),
 			assignedThreadId: 'assigned',
-			sessions: [
+			threads: [
 				createSession('assigned', {
 					name: 'Assigned history thread',
-					sessionState: 'unavailable',
+					threadState: 'unavailable',
 					canResume: false,
 					hasActiveRun: false
 				}),
 				createSession('suggested', {
 					name: 'Relevant task thread',
-					sessionSummary: 'Suggest a relevant task thread for assignment',
+					threadSummary: 'Suggest a relevant task thread for assignment',
 					topicLabels: ['Product', 'Coordination', 'Suggestion']
 				})
 			]
@@ -135,7 +135,7 @@ describe('buildTaskThreadSuggestions', () => {
 				summary: 'Expand task attachment tests and improve artifact browser validation.'
 			}),
 			assignedThreadId: null,
-			sessions: [
+			threads: [
 				createSession('generic', {
 					name: 'General product coordination',
 					topicLabels: ['Product', 'Coordination']
@@ -158,7 +158,7 @@ describe('buildTaskThreadSuggestions', () => {
 				summary: 'Match new tasks to reusable work threads and surface context discovery.'
 			}),
 			assignedThreadId: null,
-			sessions: [
+			threads: [
 				createSession('structured', {
 					name: 'Thread assignment follow-up',
 					topicLabels: ['Product', 'Coordination', 'Thread', 'Suggestion'],
@@ -167,7 +167,7 @@ describe('buildTaskThreadSuggestions', () => {
 						projectLabels: [],
 						goalIds: [],
 						goalLabels: [],
-						laneLabels: ['Product'],
+						areaLabels: ['Product'],
 						focusLabels: ['Coordination'],
 						entityLabels: ['Thread'],
 						roleLabels: [],
@@ -203,16 +203,16 @@ describe('buildTaskThreadSuggestions', () => {
 				requiredToolNames: ['xcodebuild']
 			}),
 			assignedThreadId: null,
-			sessions: [
+			threads: [
 				createSession('metadata', {
 					name: 'Implementation follow-up',
-					sessionSummary: 'Continue the execution context.',
+					threadSummary: 'Continue the execution context.',
 					categorization: {
 						projectIds: [],
 						projectLabels: [],
 						goalIds: [],
 						goalLabels: [],
-						laneLabels: ['Product'],
+						areaLabels: ['Product'],
 						focusLabels: ['UI/UX'],
 						entityLabels: ['Task'],
 						roleLabels: ['App Worker'],
@@ -224,7 +224,7 @@ describe('buildTaskThreadSuggestions', () => {
 				}),
 				createSession('generic', {
 					name: 'Implementation follow-up',
-					sessionSummary: 'Continue the execution context.'
+					threadSummary: 'Continue the execution context.'
 				})
 			]
 		});
@@ -249,16 +249,16 @@ describe('buildTaskThreadSuggestions', () => {
 				goalId: 'goal_threads'
 			}),
 			assignedThreadId: null,
-			sessions: [
+			threads: [
 				createSession('scoped', {
 					name: 'Continuation thread',
-					sessionSummary: 'Continue execution.',
+					threadSummary: 'Continue execution.',
 					categorization: {
 						projectIds: ['project_ams'],
 						projectLabels: ['Agent Management System Prototype'],
 						goalIds: ['goal_threads'],
 						goalLabels: ['Improve Thread Reuse'],
-						laneLabels: [],
+						areaLabels: [],
 						focusLabels: [],
 						entityLabels: [],
 						roleLabels: [],
@@ -270,7 +270,7 @@ describe('buildTaskThreadSuggestions', () => {
 				}),
 				createSession('generic', {
 					name: 'Continuation thread',
-					sessionSummary: 'Continue execution.'
+					threadSummary: 'Continue execution.'
 				})
 			]
 		});

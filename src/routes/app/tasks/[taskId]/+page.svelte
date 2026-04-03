@@ -124,7 +124,7 @@
 	function shouldAutoRefreshTaskDetail() {
 		return (
 			data.task.hasActiveRun ||
-			isActiveThreadState(data.task.statusThread?.threadState ?? data.task.statusThread?.sessionState)
+			isActiveThreadState(data.task.statusThread?.threadState ?? data.task.statusThread?.threadState)
 		);
 	}
 
@@ -180,7 +180,7 @@
 		}
 
 		if (data.task.statusThread?.id === data.task.linkThread.id) {
-			switch (data.task.statusThread.threadState ?? data.task.statusThread.sessionState) {
+			switch (data.task.statusThread.threadState ?? data.task.statusThread.threadState) {
 				case 'starting':
 				case 'waiting':
 				case 'working':
@@ -225,7 +225,6 @@
 			projectLabels?: string[];
 			goalLabels?: string[];
 			areaLabels?: string[];
-			laneLabels?: string[];
 			focusLabels?: string[];
 			entityLabels?: string[];
 			roleLabels?: string[];
@@ -244,7 +243,7 @@
 		return [
 			...(match.projectLabels ?? []),
 			...(match.goalLabels ?? []),
-			...(match.areaLabels ?? match.laneLabels ?? []),
+			...(match.areaLabels ?? match.areaLabels ?? []),
 			...(match.focusLabels ?? []),
 			...(match.entityLabels ?? []),
 			...(match.roleLabels ?? []),
@@ -510,7 +509,7 @@
 				{#if data.task.linkThread.id !== data.task.statusThread?.id}
 					<p class="mt-2 text-xs text-slate-500">
 						{formatThreadStateLabel(
-							data.task.linkThread.threadState ?? data.task.linkThread.sessionState ?? 'idle'
+							data.task.linkThread.threadState ?? data.task.linkThread.threadState ?? 'idle'
 						)}
 					</p>
 				{/if}
@@ -1422,7 +1421,7 @@
 											<p class="mt-2 text-xs text-slate-400">
 												{formatThreadStateLabel(
 													data.suggestedThread.threadState ??
-														data.suggestedThread.sessionState ??
+														data.suggestedThread.threadState ??
 														'idle'
 												)} · Available to resume
 											</p>
@@ -1464,7 +1463,7 @@
 											<option value={thread.id} selected={data.task.agentThreadId === thread.id}>
 												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
 												{formatThreadStateLabel(
-													thread.threadState ?? thread.sessionState ?? 'idle'
+													thread.threadState ?? thread.threadState ?? 'idle'
 												)} ·
 												{thread.canResume
 													? 'ready'
@@ -1524,7 +1523,7 @@
 												</div>
 												<p class="mt-1 text-xs text-slate-500">
 													{formatThreadStateLabel(
-														thread.threadState ?? thread.sessionState ?? 'idle'
+														thread.threadState ?? thread.threadState ?? 'idle'
 													)} ·
 													{thread.canResume
 														? 'Can resume'

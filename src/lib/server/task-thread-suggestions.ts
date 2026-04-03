@@ -34,7 +34,6 @@ export type TaskThreadAssignmentCandidate = {
 	categorization?: ThreadCategorization;
 	matchedContext: ThreadCategorizationMatch;
 	threadState: AgentThreadDetail['threadState'];
-	sessionState?: AgentThreadDetail['threadState'];
 	canResume: boolean;
 	hasActiveRun: boolean;
 	relatedTasks: AgentThreadTaskLink[];
@@ -48,11 +47,19 @@ type TaskThreadSuggestionResult = {
 	suggestedThread: TaskThreadAssignmentCandidate | null;
 };
 
+type RankedTaskThreadCandidate = TaskThreadAssignmentCandidate & {
+	score: number;
+	isAssigned: boolean;
+	availableForAssignment: boolean;
+	keywordOverlapScore: number;
+	sharedTopicLabels: string[];
+	thread: AgentThreadDetail;
+};
+
 type BuildTaskThreadSuggestionInput = {
 	task: Task;
 	assignedThreadId: string | null;
-	threads?: AgentThreadDetail[];
-	sessions?: AgentThreadDetail[];
+	threads: AgentThreadDetail[];
 };
 
 function tokenizeSearchText(value: string) {
@@ -68,7 +75,7 @@ function tokenizeSearchText(value: string) {
 }
 
 function buildCandidatePreviewText(thread: AgentThreadDetail) {
-	return thread.latestRun?.lastMessage ?? thread.threadSummary ?? thread.sessionSummary ?? '';
+	return thread.latestRun?.lastMessage ?? thread.threadSummary ?? '';
 }
 
 function getRelatedTaskScore(task: Task, thread: AgentThreadDetail) {
@@ -152,8 +159,8 @@ function getCategorizationOverlap(
 		threadCategorization?.goalLabels ?? []
 	);
 	const areaLabels = collectSharedLabels(
-		taskCategorization.areaLabels ?? taskCategorization.laneLabels ?? [],
-		threadCategorization?.areaLabels ?? threadCategorization?.laneLabels ?? []
+		taskCategorization.areaLabels,
+		threadCategorization?.areaLabels ?? []
 	);
 	const focusLabels = collectSharedLabels(
 		taskCategorization.focusLabels,
@@ -196,7 +203,6 @@ function getCategorizationOverlap(
 		projectLabels,
 		goalLabels,
 		areaLabels,
-		laneLabels: areaLabels,
 		focusLabels,
 		entityLabels,
 		roleLabels,
@@ -226,7 +232,6 @@ function getScopeOverlap(task: Task, thread: AgentThreadDetail): ThreadCategoriz
 		projectLabels,
 		goalLabels,
 		areaLabels: [],
-		laneLabels: [],
 		focusLabels: [],
 		entityLabels: [],
 		roleLabels: [],
@@ -243,8 +248,7 @@ function mergeCategorizationMatches(
 	return {
 		projectLabels: mergeSharedLabels(...matches.map((match) => match.projectLabels)),
 		goalLabels: mergeSharedLabels(...matches.map((match) => match.goalLabels)),
-		areaLabels: mergeSharedLabels(...matches.map((match) => match.areaLabels ?? [])),
-		laneLabels: mergeSharedLabels(...matches.map((match) => match.areaLabels ?? [])),
+		areaLabels: mergeSharedLabels(...matches.map((match) => match.areaLabels)),
 		focusLabels: mergeSharedLabels(...matches.map((match) => match.focusLabels)),
 		entityLabels: mergeSharedLabels(...matches.map((match) => match.entityLabels)),
 		roleLabels: mergeSharedLabels(...matches.map((match) => match.roleLabels)),
@@ -349,7 +353,7 @@ export function buildTaskThreadSuggestions(
 	const taskTokens = tokenizeSearchText(`${input.task.title} ${input.task.summary}`);
 	const taskCategorization = deriveTaskCategorization(input.task);
 	const taskTopicLabels = deriveTaskTopicLabels(input.task);
-	const candidates = (input.threads ?? input.sessions ?? []).map((thread) => {
+	const candidates: RankedTaskThreadCandidate[] = input.threads.map((thread) => {
 		const previewText = buildCandidatePreviewText(thread);
 		const availableScore = thread.canResume && !thread.hasActiveRun ? 100 : 0;
 		const keywordOverlapScore = getKeywordOverlapScore(taskTokens, thread);
@@ -375,7 +379,6 @@ export function buildTaskThreadSuggestions(
 			categorization: thread.categorization,
 			matchedContext: sharedContext,
 			threadState: thread.threadState,
-			sessionState: thread.threadState,
 			canResume: thread.canResume,
 			hasActiveRun: thread.hasActiveRun,
 			relatedTasks: thread.relatedTasks,
@@ -396,7 +399,7 @@ export function buildTaskThreadSuggestions(
 		.at(0);
 
 	const candidateThreads = candidates
-		.map((candidate) => {
+		.map((candidate): TaskThreadAssignmentCandidate & { score: number; isAssigned: boolean } => {
 			const isSuggested = candidate.id === suggestedCandidate?.id;
 
 			return {
@@ -406,7 +409,6 @@ export function buildTaskThreadSuggestions(
 				categorization: candidate.categorization,
 				matchedContext: candidate.matchedContext,
 				threadState: candidate.threadState,
-				sessionState: candidate.threadState,
 				canResume: candidate.canResume,
 				hasActiveRun: candidate.hasActiveRun,
 				relatedTasks: candidate.relatedTasks,

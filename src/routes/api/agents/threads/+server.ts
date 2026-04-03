@@ -37,7 +37,7 @@ export const POST = async ({ request }) => {
 	return json(
 		{
 			...result,
-			threadId: result.sessionId
+			threadId: result.agentThreadId
 		},
 		{ status: 201 }
 	);

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildOntologyV1Snapshot } from './ontology';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
 function buildFixture(): {
 	data: ControlPlaneData;
-	sessions: AgentSessionDetail[];
+	threads: AgentThreadDetail[];
 } {
 	return {
 		data: {
@@ -32,7 +32,7 @@ function buildFixture(): {
 				{
 					id: 'role_app_worker',
 					name: 'App Worker',
-					lane: 'product',
+					area: 'product',
 					description: 'Implements product changes'
 				}
 			],
@@ -53,7 +53,7 @@ function buildFixture(): {
 				{
 					id: 'goal_1',
 					name: 'Improve planning',
-					lane: 'product',
+					area: 'product',
 					status: 'running',
 					summary: 'Make planning less noisy',
 					artifactPath: '/repo',
@@ -93,7 +93,7 @@ function buildFixture(): {
 					title: 'Rework planning model',
 					summary: 'Replace horizon thinking with planning sessions.',
 					projectId: 'project_ams',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_1',
 					priority: 'high',
 					status: 'in_progress',
@@ -176,7 +176,7 @@ function buildFixture(): {
 				}
 			]
 		},
-		sessions: [
+		threads: [
 			{
 				id: 'session_1',
 				name: 'Planning thread',
@@ -199,14 +199,14 @@ function buildFixture(): {
 				updatedAt: '2026-04-01T00:10:00.000Z',
 				origin: 'managed',
 				topicLabels: [],
-				sessionState: 'working',
+				threadState: 'working',
 				latestRunStatus: 'running',
 				hasActiveRun: true,
 				canResume: false,
 				runCount: 1,
 				lastActivityAt: '2026-04-01T00:10:00.000Z',
 				lastActivityLabel: 'just now',
-				sessionSummary: 'Reworking the planning model',
+				threadSummary: 'Reworking the planning model',
 				lastExitCode: null,
 				runTimeline: [],
 				relatedTasks: [

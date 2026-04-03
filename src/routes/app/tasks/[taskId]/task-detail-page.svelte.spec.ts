@@ -79,7 +79,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						depth: 0,
 						parentGoalId: null,
 						status: 'active',
-						lane: 'product'
+						area: 'product'
 					},
 					{
 						id: 'goal_linking',
@@ -88,7 +88,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						depth: 1,
 						parentGoalId: 'goal_launch',
 						status: 'planned',
-						lane: 'product'
+						area: 'product'
 					}
 				],
 				workers: [],
@@ -101,7 +101,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'in_progress',
@@ -228,7 +228,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						depth: 0,
 						parentGoalId: null,
 						status: 'active',
-						lane: 'product'
+						area: 'product'
 					},
 					{
 						id: 'goal_linking',
@@ -237,7 +237,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						depth: 1,
 						parentGoalId: 'goal_launch',
 						status: 'planned',
-						lane: 'product'
+						area: 'product'
 					}
 				],
 				workers: [],
@@ -250,7 +250,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: 'goal_linking',
 					goalName: 'Improve task linking',
 					priority: 'medium',
@@ -331,13 +331,13 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					{
 						id: 'role_coordinator',
 						name: 'Coordinator',
-						lane: 'shared',
+						area: 'shared',
 						description: 'Coordinates execution'
 					},
 					{
 						id: 'role_reviewer',
 						name: 'Reviewer',
-						lane: 'product',
+						area: 'product',
 						description: 'Reviews higher-risk work'
 					}
 				],
@@ -377,7 +377,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'urgent',
 					status: 'blocked',
@@ -485,7 +485,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						'This task intentionally has a long instructions block so the header description needs to stay compact by default. The goal is to preserve scanability for the top of the page while still letting the full brief be expanded on demand when someone actually needs to read every line of the task context before acting. This should be reversible in place with a simple toggle rather than forcing navigation or a separate modal.',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'ready',
@@ -577,7 +577,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'in_progress',
@@ -609,7 +609,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						id: 'session_1',
 						name: 'Task thread continuity',
 						topicLabels: ['Product', 'Coordination', 'Brief'],
-						sessionState: 'ready',
+						threadState: 'ready',
 						canResume: true,
 						hasActiveRun: false,
 						relatedTasks: [],
@@ -622,7 +622,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					id: 'session_1',
 					name: 'Task thread continuity',
 					topicLabels: ['Product', 'Coordination', 'Brief'],
-					sessionState: 'ready',
+					threadState: 'ready',
 					canResume: true,
 					hasActiveRun: false,
 					relatedTasks: [],
@@ -685,7 +685,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'in_progress',
@@ -711,7 +711,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						startedAt: '2026-03-30T11:30:00.000Z',
 						endedAt: null,
 						threadId: 'thread_1',
-						sessionId: 'session_1',
+						agentThreadId: 'session_1',
 						promptDigest: 'digest',
 						artifactPaths: ['/tmp/project/agent_output'],
 						summary: 'Already running.',
@@ -729,7 +729,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 						startedAt: '2026-03-30T11:30:00.000Z',
 						endedAt: null,
 						threadId: 'thread_1',
-						sessionId: 'session_1',
+						agentThreadId: 'session_1',
 						promptDigest: 'digest',
 						artifactPaths: ['/tmp/project/agent_output'],
 						summary: 'Already running.',
@@ -814,7 +814,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					summary: 'Need source documents',
 					projectId: 'project_1',
 					projectName: 'Agent Management System Prototype',
-					lane: 'product',
+					area: 'product',
 					goalId: '',
 					priority: 'medium',
 					status: 'ready',
@@ -846,13 +846,13 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					linkThread: {
 						id: 'session_1',
 						name: 'Thread continuity',
-						sessionState: 'working'
+						threadState: 'working'
 					},
 					linkThreadKind: 'assigned',
 					statusThread: {
 						id: 'session_1',
 						name: 'Thread continuity',
-						sessionState: 'working',
+						threadState: 'working',
 						lastActivityAt: '2026-03-30T12:00:00.000Z'
 					}
 				},

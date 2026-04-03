@@ -4,7 +4,7 @@ This prototype is the start of a small remote-work control plane for Codex.
 
 Current scope:
 
-- server-backed task, run, worker, and thread data in `data/control-plane.json` and `data/agent-sessions.json`
+- server-backed task, run, worker, and thread data in `data/control-plane.json` and `data/agent-threads.json`
 - a task-first operator UI under `/app/*`
 - background Codex thread launching, reuse, and follow-up prompts
 - run history, prompt digests, logs, artifacts, and last-message capture
@@ -63,7 +63,7 @@ Legacy JSON fallback:
 export APP_STORAGE_BACKEND=json
 ```
 
-By default, the prototype now uses `data/app.sqlite` for the control-plane store, app-managed agent sessions, and self-improvement data. Set `APP_STORAGE_BACKEND=json` only if you need to temporarily fall back to the legacy JSON files.
+By default, the prototype now uses `data/app.sqlite` for the control-plane store, app-managed agent threads, and self-improvement data. Set `APP_STORAGE_BACKEND=json` only if you need to temporarily fall back to the legacy JSON files.
 
 Database helpers:
 
@@ -106,12 +106,12 @@ If `CODEX_BIN` is not set, the prototype uses `codex` from `PATH`.
 
 Thread records live in:
 
-- `data/agent-sessions.json`
-- `data/agent-sessions/<threadId>/runs/<runId>/`
+- `data/agent-threads.json`
+- `data/agent-threads/<threadId>/runs/<runId>/`
 
 The runner script is:
 
-- `scripts/agent-session-runner.mjs`
+- `scripts/agent-thread-runner.mjs`
 
 ## Recommended next steps
 

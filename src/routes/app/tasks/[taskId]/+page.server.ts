@@ -647,7 +647,7 @@ async function launchTaskFromPlan(
 			model: null
 		});
 
-		agentThreadId = session.sessionId;
+		agentThreadId = session.agentThreadId;
 		codexThreadId = null;
 	}
 
@@ -804,7 +804,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const { candidateThreads, suggestedThread } = buildTaskThreadSuggestions({
 		task,
 		assignedThreadId: assignedThread?.id ?? null,
-		sessions: threadScopedSessions
+		threads: threadScopedSessions
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
 	const stalledRecovery = buildStalledRecoveryState({
@@ -1307,7 +1307,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'launchTaskSession',
 			taskId: params.taskId,
-			sessionId: launchedSessionId
+			threadId: launchedSessionId
 		};
 	},
 
@@ -1423,7 +1423,7 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'recoverTaskSession',
 			taskId: params.taskId,
-			sessionId: launchedSessionId
+			threadId: launchedSessionId
 		};
 	},
 
@@ -1677,7 +1677,7 @@ export const actions: Actions = {
 			return fail(404, { message: 'Task not found.' });
 		}
 
-		const relatedSessionIds = [
+		const relatedThreadIds = [
 			...new Set(
 				current.runs
 					.filter((run) => run.taskId === params.taskId)
@@ -1686,7 +1686,7 @@ export const actions: Actions = {
 			)
 		];
 
-		await Promise.all(relatedSessionIds.map((threadId) => cancelAgentThread(threadId)));
+		await Promise.all(relatedThreadIds.map((threadId) => cancelAgentThread(threadId)));
 		await updateControlPlane((data) => removeTaskFromControlPlane(data, params.taskId));
 
 		throw redirect(303, '/app/tasks?deleted=1');

@@ -3,8 +3,7 @@ export type ThreadCategorization = {
 	projectLabels: string[];
 	goalIds: string[];
 	goalLabels: string[];
-	areaLabels?: string[];
-	laneLabels?: string[];
+	areaLabels: string[];
 	focusLabels: string[];
 	entityLabels: string[];
 	roleLabels: string[];
@@ -17,8 +16,7 @@ export type ThreadCategorization = {
 export type ThreadCategorizationMatch = {
 	projectLabels: string[];
 	goalLabels: string[];
-	areaLabels?: string[];
-	laneLabels?: string[];
+	areaLabels: string[];
 	focusLabels: string[];
 	entityLabels: string[];
 	roleLabels: string[];

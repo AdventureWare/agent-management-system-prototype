@@ -32,7 +32,7 @@
 	let isUpdatingArchive = $state(false);
 	let now = $state(Date.now());
 	let sessions = $state.raw<AgentThreadDetail[]>([]);
-	let selectedSessionIds = $state.raw<string[]>([]);
+	let selectedThreadIds = $state.raw<string[]>([]);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
@@ -52,13 +52,13 @@
 			return [
 				session.name,
 				session.cwd,
-				session.sessionState,
-				formatThreadStateLabel(session.sessionState),
+				session.threadState,
+				formatThreadStateLabel(session.threadState),
 				session.latestRunStatus,
 				(session.topicLabels ?? []).join(' '),
 				(session.categorization?.projectLabels ?? []).join(' '),
 				(session.categorization?.goalLabels ?? []).join(' '),
-				(session.categorization?.laneLabels ?? []).join(' '),
+				(session.categorization?.areaLabels ?? []).join(' '),
 				(session.categorization?.focusLabels ?? []).join(' '),
 				(session.categorization?.entityLabels ?? []).join(' '),
 				(session.categorization?.roleLabels ?? []).join(' '),
@@ -80,38 +80,38 @@
 		filteredSessions.filter((session) => Boolean(session.archivedAt))
 	);
 	let activeSessions = $derived(
-		unarchivedSessions.filter((session) => isActiveSessionState(session.sessionState))
+		unarchivedSessions.filter((session) => isActiveSessionState(session.threadState))
 	);
 	let historicalSessions = $derived(
-		unarchivedSessions.filter((session) => !isActiveSessionState(session.sessionState))
+		unarchivedSessions.filter((session) => !isActiveSessionState(session.threadState))
 	);
 	let activeCount = $derived(
-		sessions.filter((session) => !session.archivedAt && isActiveSessionState(session.sessionState))
+		sessions.filter((session) => !session.archivedAt && isActiveSessionState(session.threadState))
 			.length
 	);
 	let availableCount = $derived(
-		sessions.filter((session) => !session.archivedAt && session.sessionState === 'ready').length
+		sessions.filter((session) => !session.archivedAt && session.threadState === 'ready').length
 	);
 	let inactiveCount = $derived(
 		sessions.filter(
 			(session) =>
 				!session.archivedAt &&
-				(session.sessionState === 'unavailable' || session.sessionState === 'idle')
+				(session.threadState === 'unavailable' || session.threadState === 'idle')
 		).length
 	);
 	let attentionCount = $derived(
-		sessions.filter((session) => !session.archivedAt && session.sessionState === 'attention').length
+		sessions.filter((session) => !session.archivedAt && session.threadState === 'attention').length
 	);
 	let archivedCount = $derived(sessions.filter((session) => Boolean(session.archivedAt)).length);
-	let selectedSessions = $derived.by(() =>
-		sessions.filter((session) => selectedSessionIds.includes(session.id))
+	let selectedThreads = $derived.by(() =>
+		sessions.filter((session) => selectedThreadIds.includes(session.id))
 	);
 	let selectedArchivedCount = $derived(
-		selectedSessions.filter((session) => Boolean(session.archivedAt)).length
+		selectedThreads.filter((session) => Boolean(session.archivedAt)).length
 	);
-	let selectedUnarchivedCount = $derived(selectedSessions.length - selectedArchivedCount);
+	let selectedUnarchivedCount = $derived(selectedThreads.length - selectedArchivedCount);
 	let selectedAction = $derived.by(() => {
-		if (selectedSessionIds.length === 0) {
+		if (selectedThreadIds.length === 0) {
 			return null;
 		}
 
@@ -127,18 +127,18 @@
 	});
 
 	$effect(() => {
-		const nextSelectedSessionIds = selectedSessionIds.filter((sessionId) =>
-			sessions.some((session) => session.id === sessionId)
+		const nextSelectedThreadIds = selectedThreadIds.filter((threadId) =>
+			sessions.some((session) => session.id === threadId)
 		);
 
 		if (
-			nextSelectedSessionIds.length === selectedSessionIds.length &&
-			nextSelectedSessionIds.every((sessionId, index) => sessionId === selectedSessionIds[index])
+			nextSelectedThreadIds.length === selectedThreadIds.length &&
+			nextSelectedThreadIds.every((threadId, index) => threadId === selectedThreadIds[index])
 		) {
 			return;
 		}
 
-		selectedSessionIds = nextSelectedSessionIds;
+		selectedThreadIds = nextSelectedThreadIds;
 	});
 
 	$effect(() => {
@@ -173,7 +173,7 @@
 		};
 	});
 
-	function isActiveSessionState(state: AgentThreadDetail['sessionState']) {
+	function isActiveSessionState(state: AgentThreadDetail['threadState']) {
 		return state === 'starting' || state === 'waiting' || state === 'working';
 	}
 
@@ -206,23 +206,23 @@
 	}
 
 	async function updateArchiveState(archived: boolean) {
-		if (isUpdatingArchive || selectedSessionIds.length === 0) {
+		if (isUpdatingArchive || selectedThreadIds.length === 0) {
 			return;
 		}
 
-		const sessionIds = [...selectedSessionIds];
+		const threadIds = [...selectedThreadIds];
 		isUpdatingArchive = true;
 
 		try {
-			const updatedSessionIds = await updateAgentThreadArchiveState(sessionIds, archived);
+			const updatedThreadIds = await updateAgentThreadArchiveState(threadIds, archived);
 			await loadSessions();
-			selectedSessionIds = [];
+			selectedThreadIds = [];
 			pageNotice = {
 				tone: 'success',
 				message:
-					updatedSessionIds.length === 1
+					updatedThreadIds.length === 1
 						? `${archived ? 'Archived' : 'Unarchived'} 1 thread.`
-						: `${archived ? 'Archived' : 'Unarchived'} ${updatedSessionIds.length} threads.`
+						: `${archived ? 'Archived' : 'Unarchived'} ${updatedThreadIds.length} threads.`
 			};
 		} catch (err) {
 			pageNotice = {
@@ -235,7 +235,7 @@
 	}
 
 	function clearSelection() {
-		selectedSessionIds = [];
+		selectedThreadIds = [];
 	}
 
 	function handleShowArchivedChange(checked: boolean) {
@@ -245,25 +245,25 @@
 			return;
 		}
 
-		selectedSessionIds = selectedSessionIds.filter((sessionId) => {
-			const session = sessions.find((candidate) => candidate.id === sessionId);
+		selectedThreadIds = selectedThreadIds.filter((threadId) => {
+			const session = sessions.find((candidate) => candidate.id === threadId);
 			return !session?.archivedAt;
 		});
 	}
 
-	function isSessionSelected(sessionId: string) {
-		return selectedSessionIds.includes(sessionId);
+	function isThreadSelected(threadId: string) {
+		return selectedThreadIds.includes(threadId);
 	}
 
-	function toggleSessionSelection(sessionId: string, checked: boolean) {
+	function toggleThreadSelection(threadId: string, checked: boolean) {
 		if (checked) {
-			selectedSessionIds = isSessionSelected(sessionId)
-				? selectedSessionIds
-				: [...selectedSessionIds, sessionId];
+			selectedThreadIds = isThreadSelected(threadId)
+				? selectedThreadIds
+				: [...selectedThreadIds, threadId];
 			return;
 		}
 
-		selectedSessionIds = selectedSessionIds.filter((candidate) => candidate !== sessionId);
+		selectedThreadIds = selectedThreadIds.filter((candidate) => candidate !== threadId);
 	}
 
 	function setSelectionForRows(rows: AgentThreadDetail[], checked: boolean) {
@@ -271,19 +271,19 @@
 		const rowIdSet = new Set(rowIds);
 
 		if (checked) {
-			selectedSessionIds = [...new Set([...selectedSessionIds, ...rowIds])];
+			selectedThreadIds = [...new Set([...selectedThreadIds, ...rowIds])];
 			return;
 		}
 
-		selectedSessionIds = selectedSessionIds.filter((sessionId) => !rowIdSet.has(sessionId));
+		selectedThreadIds = selectedThreadIds.filter((threadId) => !rowIdSet.has(threadId));
 	}
 
 	function areAllRowsSelected(rows: AgentThreadDetail[]) {
-		return rows.length > 0 && rows.every((session) => isSessionSelected(session.id));
+		return rows.length > 0 && rows.every((session) => isThreadSelected(session.id));
 	}
 
 	function selectedRowCount(rows: AgentThreadDetail[]) {
-		return rows.filter((session) => isSessionSelected(session.id)).length;
+		return rows.filter((session) => isThreadSelected(session.id)).length;
 	}
 
 	function formatTimestamp(iso: string | null) {
@@ -294,7 +294,7 @@
 		return timestampFormatter.format(new Date(iso));
 	}
 
-	function sessionStatusClass(state: AgentThreadDetail['sessionState']) {
+	function sessionStatusClass(state: AgentThreadDetail['threadState']) {
 		switch (state) {
 			case 'working':
 				return 'border border-emerald-800/70 bg-emerald-950/50 text-emerald-300';
@@ -405,7 +405,7 @@
 					<tr
 						class={[
 							'bg-slate-950/30 transition hover:bg-slate-900/60',
-							isSessionSelected(session.id) ? 'bg-slate-900/80' : ''
+							isThreadSelected(session.id) ? 'bg-slate-900/80' : ''
 						]}
 					>
 						<td class="px-3 py-3 align-top">
@@ -413,10 +413,10 @@
 								<input
 									aria-label={`Select thread ${session.name}`}
 									type="checkbox"
-									checked={isSessionSelected(session.id)}
+									checked={isThreadSelected(session.id)}
 									onchange={(event) => {
 										if (event.currentTarget instanceof HTMLInputElement) {
-											toggleSessionSelection(session.id, event.currentTarget.checked);
+											toggleThreadSelection(session.id, event.currentTarget.checked);
 										}
 									}}
 								/>
@@ -480,9 +480,9 @@
 						<td class="px-3 py-3 align-top">
 							<div class="space-y-2">
 								<span
-									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState)}`}
 								>
-									{formatThreadStateLabel(session.sessionState)}
+									{formatThreadStateLabel(session.threadState)}
 								</span>
 								<ThreadActivityIndicator {now} thread={session} compact />
 								<p class="text-xs text-slate-500">Latest run {session.latestRunStatus}</p>
@@ -625,9 +625,9 @@
 			</div>
 		</CollectionToolbar>
 
-		{#if selectedSessionIds.length > 0}
+		{#if selectedThreadIds.length > 0}
 			<SelectionActionBar
-				title={`${selectedSessionIds.length} ${selectedSessionIds.length === 1 ? 'thread' : 'threads'} selected`}
+				title={`${selectedThreadIds.length} ${selectedThreadIds.length === 1 ? 'thread' : 'threads'} selected`}
 				description={selectedAction === 'archive'
 					? 'Archive the selected threads to hide them from the default registry view.'
 					: selectedAction === 'unarchive'

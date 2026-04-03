@@ -74,17 +74,16 @@ export function summarizeOntologyV1Gaps(
 export function buildOntologyV1Snapshot(input: {
 	data: ControlPlaneData;
 	threads?: AgentThreadDetail[];
-	sessions?: AgentThreadDetail[];
 }): OntologyV1Snapshot {
 	const { data } = input;
-	const threads = input.threads ?? input.sessions ?? [];
+	const threads = input.threads ?? [];
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 
 	const roles: OntologyRole[] = data.roles.map((role) => ({
 		id: role.id,
 		name: role.name,
 		description: role.description,
-		area: role.area ?? role.lane
+		area: role.area
 	}));
 
 	const actors: OntologyActor[] = data.workers.map((worker) => {
@@ -308,9 +307,9 @@ export function buildOntologyV1Snapshot(input: {
 			id: thread.id,
 			name: thread.name,
 			externalThreadId: thread.threadId,
-			state: thread.threadState ?? thread.sessionState ?? 'unknown',
+			state: thread.threadState ?? thread.threadState ?? 'unknown',
 			sandbox: thread.sandbox,
-			threadSummary: thread.threadSummary ?? thread.sessionSummary ?? '',
+			threadSummary: thread.threadSummary ?? thread.threadSummary ?? '',
 			taskIds: [...(threadTaskIds.get(thread.id) ?? new Set<string>())],
 			workAttemptIds: workAttemptIdsByThread.get(thread.id) ?? [],
 			contextResourceIds: contextIdsByThread.get(thread.id) ?? []

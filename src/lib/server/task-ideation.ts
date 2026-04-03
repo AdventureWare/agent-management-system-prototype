@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import {
 	TASK_STATUS_OPTIONS,
 	formatTaskStatusLabel,
@@ -70,12 +70,12 @@ export function getProjectTaskIdeationWorkspace(project: Project) {
 
 export function findProjectTaskIdeationThread(
 	project: Project,
-	sessions: AgentSessionDetail[]
-): AgentSessionDetail | null {
+	threads: AgentThreadDetail[]
+): AgentThreadDetail | null {
 	const expectedName = buildProjectTaskIdeationThreadName(project.name);
 
 	return (
-		[...sessions]
+		[...threads]
 			.filter(
 				(session) => session.name === expectedName && projectMatchesPath(project, session.cwd)
 			)
@@ -84,7 +84,7 @@ export function findProjectTaskIdeationThread(
 }
 
 export function findProjectForTaskIdeationThread(
-	session: Pick<AgentSessionDetail, 'name' | 'cwd'>,
+	session: Pick<AgentThreadDetail, 'name' | 'cwd'>,
 	projects: Project[]
 ): Project | null {
 	return (

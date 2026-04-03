@@ -1,7 +1,6 @@
 import type { AgentSandbox } from '$lib/types/agent-thread';
 
 export const AREA_OPTIONS = ['product', 'growth', 'ops'] as const;
-export const LANE_OPTIONS = AREA_OPTIONS;
 export const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const;
 export const TASK_STATUS_OPTIONS = [
 	'in_draft',
@@ -55,7 +54,6 @@ export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'cus
 export const PLANNING_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'] as const;
 
 export type Area = (typeof AREA_OPTIONS)[number];
-export type Lane = Area;
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
 export type TaskStatus = (typeof TASK_STATUS_OPTIONS)[number];
 export type TaskRiskLevel = (typeof TASK_RISK_LEVEL_OPTIONS)[number];
@@ -334,16 +332,14 @@ export type Provider = {
 export type Role = {
 	id: string;
 	name: string;
-	area?: Area | 'shared';
-	lane: Lane | 'shared';
+	area: Area | 'shared';
 	description: string;
 };
 
 export type Goal = {
 	id: string;
 	name: string;
-	area?: Area;
-	lane: Lane;
+	area: Area;
 	status: GoalStatus;
 	summary: string;
 	artifactPath: string;
@@ -393,8 +389,7 @@ export type Task = {
 	title: string;
 	summary: string;
 	projectId: string;
-	area?: Area;
-	lane: Lane;
+	area: Area;
 	goalId: string;
 	priority: Priority;
 	status: TaskStatus;

@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { buildCodexArgs } from './agent-session-runner-args.mjs';
+import { buildCodexArgs } from './agent-thread-runner-args.mjs';
 
 const configPath = process.argv[2];
 

@@ -53,11 +53,11 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					startedAt: '2026-03-30T12:01:00.000Z',
 					endedAt: '2026-03-30T12:05:00.000Z',
 					threadId: 'thread_1',
-					sessionId: 'session_1',
-					sessionName: 'Task thread',
-					sessionState: 'attention',
+					agentThreadId: 'session_1',
+					threadName: 'Task thread',
+					threadState: 'attention',
 					sessionArchivedAt: null,
-					sessionSummary: 'The thread needs a decision.',
+					threadSummary: 'The thread needs a decision.',
 					sessionCanResume: true,
 					sessionHasActiveRun: false,
 					promptDigest: 'digest: add runs index and detail',
@@ -83,7 +83,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 				},
 				session: {
 					id: 'session_1',
-					sessionState: 'attention',
+					threadState: 'attention',
 					canResume: true
 				},
 				relatedTaskRuns: []

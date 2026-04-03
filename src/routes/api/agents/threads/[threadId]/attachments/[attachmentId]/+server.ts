@@ -3,7 +3,7 @@ import { createArtifactDownloadResponse } from '$lib/server/artifact-browser';
 import { getAgentThread } from '$lib/server/agent-threads';
 
 export const GET = async ({ params }) => {
-	const session = await getAgentThread(params.sessionId);
+	const session = await getAgentThread(params.threadId);
 
 	if (!session) {
 		throw error(404, 'Thread not found.');

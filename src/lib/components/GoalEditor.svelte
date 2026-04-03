@@ -24,7 +24,6 @@
 		projectIds?: string[];
 		taskIds?: string[];
 		area?: string;
-		lane?: string;
 		status?: string;
 	};
 
@@ -137,7 +136,7 @@
 			goalId: values.goalId ?? '',
 			name: values.name ?? '',
 			summary: values.summary ?? '',
-			area: values.area ?? values.lane ?? 'product',
+			area: values.area ?? 'product',
 			status: values.status ?? 'ready',
 			successSignal: values.successSignal ?? '',
 			targetDate: values.targetDate ?? '',
@@ -154,7 +153,7 @@
 		lastValuesKey = nextValuesKey;
 		name = values.name ?? '';
 		summary = values.summary ?? '';
-		area = values.area ?? values.lane ?? 'product';
+		area = values.area ?? 'product';
 		status = values.status ?? 'ready';
 		successSignal = values.successSignal ?? '';
 		targetDate = values.targetDate ?? '';
@@ -188,7 +187,7 @@
 			parentGoalId: values.parentGoalId ?? '',
 			projectIds: values.projectIds ?? [],
 			taskIds: values.taskIds ?? [],
-			area: values.area ?? values.lane ?? '',
+			area: values.area ?? '',
 			status: values.status ?? ''
 		});
 
@@ -202,7 +201,7 @@
 		if (savedDraft) {
 			name = savedDraft.name ?? '';
 			summary = savedDraft.summary ?? '';
-			area = savedDraft.area ?? savedDraft.lane ?? 'product';
+			area = savedDraft.area ?? 'product';
 			status = savedDraft.status ?? 'ready';
 			successSignal = savedDraft.successSignal ?? '';
 			targetDate = savedDraft.targetDate ?? '';

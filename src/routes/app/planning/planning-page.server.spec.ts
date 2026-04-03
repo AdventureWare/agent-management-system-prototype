@@ -93,7 +93,7 @@ describe('planning page server actions', () => {
 				{
 					id: 'goal_1',
 					name: 'Tighten planning',
-					lane: 'product',
+					area: 'product',
 					status: 'running',
 					summary: 'Reduce planning noise.',
 					artifactPath: '/tmp/project/agent_output',

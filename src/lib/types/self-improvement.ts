@@ -161,7 +161,7 @@ export type SelfImprovementOpportunity = {
 	recommendedActions: string[];
 	relatedTaskIds: string[];
 	relatedRunIds: string[];
-	relatedSessionIds: string[];
+	relatedThreadIds: string[];
 	rankingPolicyVersion?: string | null;
 	rankingScore?: number | null;
 	rankingReasons?: string[];
@@ -224,7 +224,7 @@ export type SelfImprovementFeedbackSignal = {
 	taskId: string | null;
 	runId: string | null;
 	reviewId: string | null;
-	sessionId: string | null;
+	threadId: string | null;
 	title: string;
 	summary: string;
 };
@@ -245,7 +245,7 @@ export type SelfImprovementKnowledgeItem = {
 	sourceOpportunityId: string;
 	sourceTaskIds: string[];
 	sourceRunIds: string[];
-	sourceSessionIds: string[];
+	sourceThreadIds: string[];
 	sourceSignalIds: string[];
 	triggerPattern: string;
 	recommendedResponse: string;

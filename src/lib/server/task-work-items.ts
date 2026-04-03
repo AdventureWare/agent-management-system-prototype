@@ -1,6 +1,6 @@
 import { formatActivityAge } from '$lib/session-activity';
 import { isActiveTaskThread } from '$lib/task-thread-context';
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Run, RunStatus, Task } from '$lib/types/control-plane';
 import type { TaskFreshness, TaskFreshnessSummary, TaskWorkItem } from '$lib/types/task-work-item';
 import {
@@ -51,7 +51,7 @@ function getRunActivityAt(run: Run | null) {
 export function buildTaskFreshness(input: {
 	task: Task;
 	latestRun: Run | null;
-	statusThread: AgentSessionDetail | null;
+	statusThread: AgentThreadDetail | null;
 	now?: number;
 }): TaskFreshness {
 	const now = input.now ?? Date.now();
@@ -124,23 +124,23 @@ export function summarizeTaskFreshness(
 
 export function buildTaskWorkItems(
 	data: ControlPlaneData,
-	sessions: AgentSessionDetail[],
+	threads: AgentThreadDetail[],
 	options: { now?: number } = {}
 ): TaskWorkItem[] {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
 	const runMap = new Map(data.runs.map((run) => [run.id, run]));
-	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 
 	return [...data.tasks]
 		.map((task) => {
 			const project = projectMap.get(task.projectId) ?? null;
 			const latestRun = task.latestRunId ? (runMap.get(task.latestRunId) ?? null) : null;
 			const assignedThread = task.agentThreadId
-				? (sessionMap.get(task.agentThreadId) ?? null)
+				? (threadMap.get(task.agentThreadId) ?? null)
 				: null;
 			const latestRunThread = latestRun?.agentThreadId
-				? (sessionMap.get(latestRun.agentThreadId) ?? null)
+				? (threadMap.get(latestRun.agentThreadId) ?? null)
 				: null;
 			const threadContext = selectProjectTaskThreadContext(project, {
 				assignedThread,

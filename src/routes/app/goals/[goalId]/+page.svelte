@@ -26,7 +26,6 @@
 		projectIds?: string[];
 		taskIds?: string[];
 		area?: string;
-		lane?: string;
 		status?: string;
 	};
 
@@ -146,7 +145,7 @@
 						parentGoalId: formValues?.parentGoalId ?? data.goal.parentGoalId ?? '',
 						projectIds: formValues?.projectIds ?? data.linkedProjects.map((project) => project.id),
 						taskIds: formValues?.taskIds ?? data.relatedTasks.map((task) => task.id),
-						area: formValues?.area ?? formValues?.lane ?? data.goal.area,
+						area: formValues?.area ?? data.goal.area,
 						status: formValues?.status ?? data.goal.status
 					}}
 				/>

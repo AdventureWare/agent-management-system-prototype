@@ -19,7 +19,7 @@ export type TaskThreadSelection = TaskThreadSelectionInput & {
 
 export function isActiveTaskThread(thread: AgentThreadDetail | null | undefined) {
 	return Boolean(
-		thread && ACTIVE_TASK_THREAD_STATES.has(thread.threadState ?? thread.sessionState ?? 'idle')
+		thread && ACTIVE_TASK_THREAD_STATES.has(thread.threadState ?? thread.threadState ?? 'idle')
 	);
 }
 

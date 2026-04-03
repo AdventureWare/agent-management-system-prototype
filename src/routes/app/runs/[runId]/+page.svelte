@@ -362,7 +362,7 @@
 							</p>
 							<p class="mt-2 text-sm text-white">
 								{formatThreadStateLabel(
-									data.thread.threadState ?? data.thread.sessionState ?? 'idle'
+									data.thread.threadState ?? data.thread.threadState ?? 'idle'
 								)}
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
