@@ -5,7 +5,7 @@
 </script>
 
 <ThreadDetailPanel
-	thread={data.session}
+	thread={data.thread}
 	sandboxOptions={data.sandboxOptions}
 	taskResponseAction={data.taskResponseAction}
 	responseContextArtifacts={data.responseContextArtifacts}

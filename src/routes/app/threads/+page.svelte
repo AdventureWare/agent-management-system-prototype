@@ -23,7 +23,7 @@
 	type ArchiveAction = 'archive' | 'unarchive';
 
 	let { data } = $props<{
-		data: { threads?: AgentThreadDetail[]; sessions?: AgentThreadDetail[] };
+		data: { threads?: AgentThreadDetail[] };
 	}>();
 	let query = $state('');
 	let autoRefresh = $state(true);
@@ -123,7 +123,7 @@
 	});
 
 	$effect(() => {
-		sessions = data.threads ?? data.sessions ?? [];
+		sessions = data.threads ?? [];
 	});
 
 	$effect(() => {

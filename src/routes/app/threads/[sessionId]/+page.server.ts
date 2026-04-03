@@ -364,26 +364,26 @@ function reopenTasksForThreadRetry(input: {
 
 export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
-	const [data, session] = await Promise.all([
+	const [data, thread] = await Promise.all([
 		controlPlanePromise,
 		getAgentThread(params.sessionId, { controlPlane: controlPlanePromise })
 	]);
 
-	if (!session) {
+	if (!thread) {
 		throw error(404, 'Thread not found.');
 	}
 
 	return {
-		session,
+		thread,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		taskResponseAction: buildTaskResponseAction({
 			sessionId: params.sessionId,
-			session,
+			session: thread,
 			data
 		}),
 		responseContextArtifacts: buildSessionResponseContextArtifacts({
 			sessionId: params.sessionId,
-			session,
+			session: thread,
 			data
 		})
 	};

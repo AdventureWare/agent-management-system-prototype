@@ -5,7 +5,6 @@ export const load: PageServerLoad = async () => {
 	const threads = await listAgentThreads({ includeArchived: true });
 
 	return {
-		threads,
-		sessions: threads
+		threads
 	};
 };

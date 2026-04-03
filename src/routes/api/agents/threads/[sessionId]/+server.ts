@@ -8,5 +8,5 @@ export const GET = async ({ params }) => {
 		return json({ error: 'Thread not found.' }, { status: 404 });
 	}
 
-	return json({ thread, session: thread });
+	return json({ thread });
 };

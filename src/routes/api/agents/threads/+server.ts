@@ -6,10 +6,7 @@ export const GET = async ({ url }) => {
 		includeArchived: url.searchParams.get('includeArchived') === '1'
 	});
 
-	return json({
-		threads,
-		sessions: threads
-	});
+	return json({ threads });
 };
 
 export const POST = async ({ request }) => {
