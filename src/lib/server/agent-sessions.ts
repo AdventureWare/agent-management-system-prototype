@@ -241,16 +241,25 @@ export function parseAgentSandbox(value: string | null | undefined, fallback: Ag
 }
 
 type TaskContext = {
-	tasks: Array<{
-		id: string;
-		title: string;
-		summary: string;
-		lane: Lane;
-		status: string;
-		projectName: string | null;
-		threadSessionId: string | null;
-	}>;
-	runs: Array<{ taskId: string; sessionId: string | null }>;
+	tasks: TaskContextTask[];
+	tasksById: Map<string, TaskContextTask>;
+	relatedTaskLinksBySessionId: Map<string, AgentSessionTaskLink[]>;
+};
+
+type TaskContextTask = {
+	id: string;
+	title: string;
+	summary: string;
+	projectId: string;
+	lane: Lane;
+	goalId: string;
+	goalName: string | null;
+	status: TaskStatus;
+	projectName: string | null;
+	desiredRole: string | null;
+	requiredCapabilityNames: string[];
+	requiredToolNames: string[];
+	threadSessionId: string | null;
 };
 
 type NativeCodexThread = {
@@ -1219,29 +1228,7 @@ function buildRelatedTaskLinks(
 	sessionId: string,
 	taskContext: TaskContext
 ): AgentSessionTaskLink[] {
-	const relatedTaskIds = new Set(
-		taskContext.runs
-			.filter((run) => run.sessionId === sessionId)
-			.map((run) => run.taskId)
-			.filter(Boolean)
-	);
-	const links = taskContext.tasks
-		.filter((task) => task.threadSessionId === sessionId || relatedTaskIds.has(task.id))
-		.map((task) => ({
-			id: task.id,
-			title: task.title,
-			status: task.status,
-			isPrimary: task.threadSessionId === sessionId
-		}))
-		.sort((left, right) => {
-			if (left.isPrimary !== right.isPrimary) {
-				return left.isPrimary ? -1 : 1;
-			}
-
-			return left.title.localeCompare(right.title);
-		});
-
-	return links;
+	return taskContext.relatedTaskLinksBySessionId.get(sessionId) ?? [];
 }
 
 function buildStandardizedManagedSessionName(
@@ -1249,11 +1236,9 @@ function buildStandardizedManagedSessionName(
 	taskContext: TaskContext,
 	relatedTasks: AgentSessionTaskLink[]
 ) {
+	const primaryRelatedTask = relatedTasks.find((task) => task.isPrimary) ?? relatedTasks[0] ?? null;
 	const primaryTask =
-		taskContext.tasks.find((task) => task.threadSessionId === session.id) ??
-		(relatedTasks[0]
-			? (taskContext.tasks.find((task) => task.id === relatedTasks[0]?.id) ?? null)
-			: null);
+		(primaryRelatedTask ? (taskContext.tasksById.get(primaryRelatedTask.id) ?? null) : null);
 
 	return resolveTaskThreadName({
 		currentName: session.name,
@@ -1282,14 +1267,29 @@ function finalizeSessionDetail(input: {
 		input.origin === 'managed'
 			? buildStandardizedManagedSessionName(input.session, input.taskContext, relatedTasks)
 			: input.session.name;
-	const relatedTaskDetails = input.taskContext.tasks
-		.filter((task) => relatedTasks.some((relatedTask) => relatedTask.id === task.id))
-		.map((task) => ({
-			title: task.title,
-			summary: task.summary,
-			lane: task.lane,
-			isPrimary: task.threadSessionId === input.session.id
-		}));
+	const relatedTaskDetails = relatedTasks
+		.map((relatedTask) => {
+			const task = input.taskContext.tasksById.get(relatedTask.id);
+
+			if (!task) {
+				return null;
+			}
+
+			return {
+				title: task.title,
+				summary: task.summary,
+				projectId: task.projectId,
+				projectName: task.projectName,
+				goalId: task.goalId,
+				goalName: task.goalName,
+				lane: task.lane,
+				desiredRole: task.desiredRole,
+				requiredCapabilityNames: task.requiredCapabilityNames,
+				requiredToolNames: task.requiredToolNames,
+				isPrimary: relatedTask.isPrimary
+			};
+		})
+		.filter((task): task is NonNullable<typeof task> => Boolean(task));
 	const sessionState = getSessionState({
 		latestRunStatus,
 		canResume,
@@ -1446,22 +1446,95 @@ async function buildExternalSessionDetail(
 
 function buildTaskContextFromControlPlane(controlPlane: ControlPlaneData): TaskContext {
 	const projectNames = new Map(controlPlane.projects.map((project) => [project.id, project.name]));
+	const goalNames = new Map(controlPlane.goals.map((goal) => [goal.id, goal.name]));
+	const roleNames = new Map(controlPlane.roles.map((role) => [role.id, role.name]));
+	const tasks: TaskContextTask[] = controlPlane.tasks.map((task) => ({
+		id: task.id,
+		title: task.title,
+		summary: task.summary,
+		projectId: task.projectId,
+		lane: task.lane,
+		goalId: task.goalId,
+		goalName: goalNames.get(task.goalId) ?? null,
+		status: task.status,
+		projectName: projectNames.get(task.projectId) ?? null,
+		desiredRole: roleNames.get(task.desiredRoleId) ?? task.desiredRoleId ?? null,
+		requiredCapabilityNames: [...(task.requiredCapabilityNames ?? [])],
+		requiredToolNames: [...(task.requiredToolNames ?? [])],
+		threadSessionId: task.threadSessionId
+	}));
+	const tasksById = new Map<string, TaskContextTask>(tasks.map((task) => [task.id, task]));
+	const relatedTaskIdsBySessionId = new Map<string, Set<string>>();
+
+	for (const task of tasks) {
+		if (!task.threadSessionId) {
+			continue;
+		}
+
+		const relatedTaskIds = relatedTaskIdsBySessionId.get(task.threadSessionId) ?? new Set<string>();
+		relatedTaskIds.add(task.id);
+		relatedTaskIdsBySessionId.set(task.threadSessionId, relatedTaskIds);
+	}
+
+	for (const run of controlPlane.runs) {
+		if (!run.sessionId) {
+			continue;
+		}
+
+		const relatedTaskIds = relatedTaskIdsBySessionId.get(run.sessionId) ?? new Set<string>();
+		relatedTaskIds.add(run.taskId);
+		relatedTaskIdsBySessionId.set(run.sessionId, relatedTaskIds);
+	}
+
+	const relatedTaskLinksBySessionId = new Map<string, AgentSessionTaskLink[]>();
+
+	for (const [sessionId, relatedTaskIds] of relatedTaskIdsBySessionId) {
+		const links = [...relatedTaskIds]
+			.map((taskId) => tasksById.get(taskId) ?? null)
+			.filter((task): task is TaskContextTask => Boolean(task))
+			.map((task) => ({
+				id: task.id,
+				title: task.title,
+				status: task.status,
+				isPrimary: task.threadSessionId === sessionId
+			}))
+			.sort((left, right) => {
+				if (left.isPrimary !== right.isPrimary) {
+					return left.isPrimary ? -1 : 1;
+				}
+
+				return left.title.localeCompare(right.title);
+			});
+
+		relatedTaskLinksBySessionId.set(sessionId, links);
+	}
 
 	return {
-		tasks: controlPlane.tasks.map((task) => ({
-			id: task.id,
-			title: task.title,
-			summary: task.summary,
-			lane: task.lane,
-			status: task.status,
-			projectName: projectNames.get(task.projectId) ?? null,
-			threadSessionId: task.threadSessionId
-		})),
-		runs: controlPlane.runs.map((run) => ({
-			taskId: run.taskId,
-			sessionId: run.sessionId
-		}))
+		tasks,
+		tasksById,
+		relatedTaskLinksBySessionId
 	};
+}
+
+function groupRunsBySessionId(runs: AgentRun[]) {
+	const runsBySessionId = new Map<string, AgentRun[]>();
+
+	for (const run of runs) {
+		if (!run.sessionId) {
+			continue;
+		}
+
+		const existingRuns = runsBySessionId.get(run.sessionId);
+
+		if (existingRuns) {
+			existingRuns.push(run);
+			continue;
+		}
+
+		runsBySessionId.set(run.sessionId, [run]);
+	}
+
+	return runsBySessionId;
 }
 
 type SessionLifecycleUpdate = {
@@ -1831,14 +1904,24 @@ async function reconcileTaskStateFromSessionDetails(
 	};
 }
 
-export async function listAgentSessions(options: { includeArchived?: boolean } = {}) {
+export async function listAgentSessions(
+	options: {
+		includeArchived?: boolean;
+		controlPlane?: ControlPlaneData | Promise<ControlPlaneData>;
+	} = {}
+) {
 	const db = await loadAgentSessionsDb();
+	const controlPlanePromise = options.controlPlane
+		? Promise.resolve(options.controlPlane)
+		: loadControlPlane();
 	const [controlPlane, nativeThreads] = await Promise.all([
-		loadControlPlane(),
+		controlPlanePromise,
 		listNativeCodexThreads()
 	]);
 	const taskContext = buildTaskContextFromControlPlane(controlPlane);
 	const nativeThreadsById = new Map(nativeThreads.map((thread) => [thread.id, thread]));
+	const runsBySessionId = groupRunsBySessionId(db.runs);
+	const existingSessionIds = new Set(db.sessions.map((session) => session.id));
 	const managedThreadIds = new Set(
 		db.sessions
 			.map((session) => session.threadId)
@@ -1847,7 +1930,7 @@ export async function listAgentSessions(options: { includeArchived?: boolean } =
 	const details = await Promise.all([
 		...db.sessions.map((session) => {
 			const nativeThread = nativeThreadsById.get(session.id);
-			const runs = db.runs.filter((run) => run.sessionId === session.id);
+			const runs = runsBySessionId.get(session.id) ?? [];
 
 			if (nativeThread && session.id === nativeThread.id) {
 				return buildExternalSessionListDetail(nativeThread, runs, taskContext);
@@ -1858,7 +1941,7 @@ export async function listAgentSessions(options: { includeArchived?: boolean } =
 		...nativeThreads
 			.filter(
 				(thread) =>
-					!db.sessions.some((session) => session.id === thread.id) &&
+					!existingSessionIds.has(thread.id) &&
 					!managedThreadIds.has(thread.id)
 			)
 			.map((thread) => buildExternalSessionListDetail(thread, [], taskContext))
@@ -1887,11 +1970,18 @@ export function summarizeAgentSessions(sessions: AgentSessionDetail[]) {
 	};
 }
 
-export async function getAgentSession(sessionId: string) {
+export async function getAgentSession(
+	sessionId: string,
+	options: { controlPlane?: ControlPlaneData | Promise<ControlPlaneData> } = {}
+) {
 	const db = await loadAgentSessionsDb();
 	const session = db.sessions.find((candidate) => candidate.id === sessionId) ?? null;
+	const sessionRuns = groupRunsBySessionId(db.runs).get(sessionId) ?? [];
+	const controlPlanePromise = options.controlPlane
+		? Promise.resolve(options.controlPlane)
+		: loadControlPlane();
 	const [controlPlane, nativeThread] = await Promise.all([
-		loadControlPlane(),
+		controlPlanePromise,
 		getNativeCodexThread(sessionId)
 	]);
 	const taskContext = buildTaskContextFromControlPlane(controlPlane);
@@ -1908,22 +1998,12 @@ export async function getAgentSession(sessionId: string) {
 
 	if (session && nativeThread && session.id === nativeThread.id) {
 		return finalizeSingleDetail(
-			await buildExternalSessionDetail(
-				nativeThread,
-				db.runs.filter((run) => run.sessionId === session.id),
-				taskContext
-			)
+			await buildExternalSessionDetail(nativeThread, sessionRuns, taskContext)
 		);
 	}
 
 	if (session) {
-		return finalizeSingleDetail(
-			await buildSessionDetail(
-				session,
-				db.runs.filter((run) => run.sessionId === session.id),
-				taskContext
-			)
-		);
+		return finalizeSingleDetail(await buildSessionDetail(session, sessionRuns, taskContext));
 	}
 
 	if (!nativeThread) {

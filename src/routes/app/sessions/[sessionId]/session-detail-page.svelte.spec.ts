@@ -8,6 +8,7 @@ import type {
 	AgentTimelineStep
 } from '$lib/types/agent-session';
 
+const projectRoot = process.cwd();
 const timeline: AgentTimelineStep[] = [
 	{
 		key: 'submitted',
@@ -222,7 +223,7 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(
 				page
-					.getByTestId('session-detail-panel')
+					.getByTestId('thread-detail-panel')
 					.getByText('Follow-up response from the agent.')
 					.first()
 			)
@@ -245,7 +246,10 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		const initialRunCard = page.getByTestId('conversation-run-run-initial');
 
 		await expect
-			.element(initialRunCard.getByText(/without hiding the final clue for older turns\./i))
+			.element(initialRunCard.getByRole('button', { name: 'Expand full text' }))
+			.toBeVisible();
+		await expect
+			.element(initialRunCard.getByRole('button', { name: 'Collapse full text' }))
 			.not.toBeInTheDocument();
 		await initialRunCard.getByRole('button', { name: 'Expand full text' }).click();
 		await expect
@@ -270,7 +274,7 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(
 				page
-					.getByTestId('session-detail-panel')
+					.getByTestId('thread-detail-panel')
 					.getByText(
 						/Initial response with the older run sentinel that should only be visible in the selected run detail after choosing the first turn\./i
 					)
@@ -339,5 +343,105 @@ describe('/app/sessions/[sessionId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Move latest request to new thread' }))
 			.toBeEnabled();
+	});
+
+	it('renders structured instruction and response text as readable blocks', async () => {
+		const structuredRun = createRun({
+			id: 'run-structured',
+			prompt: `## Last instruction
+
+1. Audit the current layout
+2. Reformat the message blocks
+
+- Preserve hierarchy
+- Keep the compact preview intact
+
+\`\`\`ts
+const showPreview = true;
+\`\`\``,
+			lastMessage: `**Response**
+
+- Tightened spacing between sections
+- Grouped follow-up details into lists
+- Updated [ThreadMessageContent.svelte](${projectRoot}/src/lib/components/ThreadMessageContent.svelte#L1)
+- Saved artifact at ${projectRoot}/README.md
+
+1. Kept the newest response pinned
+2. Made older turns easier to inspect
+
+\`\`\`ts
+const improvedReadability = true;
+\`\`\``
+		});
+		const session: AgentSessionDetail = {
+			id: 'session-structured',
+			name: 'Structured content thread',
+			cwd: '/tmp/project',
+			sandbox: 'workspace-write',
+			model: 'gpt-5.4',
+			origin: 'external',
+			threadId: 'thread-structured',
+			attachments: [],
+			archivedAt: null,
+			createdAt: '2026-03-27T12:00:00.000Z',
+			updatedAt: '2026-03-27T12:05:00.000Z',
+			sessionState: 'ready',
+			latestRunStatus: 'completed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-27T12:05:00.000Z',
+			lastActivityLabel: 'moments ago',
+			sessionSummary: 'Structured text should render as scannable content blocks.',
+			lastExitCode: 0,
+			runTimeline: timeline,
+			relatedTasks: [],
+			latestRun: structuredRun,
+			runs: [structuredRun]
+		};
+
+		render(Page, {
+			form: null as never,
+			data: {
+				session,
+				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				taskResponseAction: null
+			} as never
+		});
+
+		await page.getByRole('button', { name: 'Expand instruction' }).click();
+
+		await expect.element(page.getByText('Last instruction')).toBeVisible();
+		await expect
+			.element(page.getByRole('listitem', { name: /Audit the current layout/i }))
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('listitem', { name: /Preserve hierarchy/i }).first())
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('listitem', { name: /Tightened spacing between sections/i }))
+			.toBeVisible();
+		await expect.element(page.getByText('Referenced files and links')).toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: 'ThreadMessageContent.svelte' }))
+			.toHaveAttribute(
+				'href',
+				`/api/artifacts/file?path=${encodeURIComponent(
+					`${projectRoot}/src/lib/components/ThreadMessageContent.svelte`
+				)}`
+			);
+		await expect
+			.element(page.getByRole('link', { name: 'README.md' }))
+			.toHaveAttribute(
+				'href',
+				`/api/artifacts/file?path=${encodeURIComponent(`${projectRoot}/README.md`)}`
+			);
+		await expect
+			.element(page.getByRole('listitem', { name: /Kept the newest response pinned/i }))
+			.toBeVisible();
+		await expect
+			.element(page.getByText(`${projectRoot}/src/lib/components/ThreadMessageContent.svelte#L1`))
+			.not.toBeInTheDocument();
+		await expect.element(page.getByText('const improvedReadability = true;')).toBeVisible();
 	});
 });

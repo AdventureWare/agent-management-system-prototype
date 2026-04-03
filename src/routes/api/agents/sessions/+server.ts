@@ -1,15 +1,14 @@
 import { json } from '@sveltejs/kit';
-import {
-	listAgentSessions,
-	parseAgentSandbox,
-	startAgentSession
-} from '$lib/server/agent-sessions';
+import { listAgentThreads, parseAgentSandbox, startAgentThread } from '$lib/server/agent-threads';
 
 export const GET = async ({ url }) => {
+	const threads = await listAgentThreads({
+		includeArchived: url.searchParams.get('includeArchived') === '1'
+	});
+
 	return json({
-		sessions: await listAgentSessions({
-			includeArchived: url.searchParams.get('includeArchived') === '1'
-		})
+		threads,
+		sessions: threads
 	});
 };
 
@@ -30,7 +29,7 @@ export const POST = async ({ request }) => {
 		return json({ error: 'name, cwd, and prompt are required.' }, { status: 400 });
 	}
 
-	const result = await startAgentSession({
+	const result = await startAgentThread({
 		name,
 		cwd,
 		prompt,
@@ -38,5 +37,11 @@ export const POST = async ({ request }) => {
 		model: body.model?.trim() || null
 	});
 
-	return json(result, { status: 201 });
+	return json(
+		{
+			...result,
+			threadId: result.sessionId
+		},
+		{ status: 201 }
+	);
 };

@@ -283,7 +283,7 @@
 									{#if run.sessionId}
 										<a
 											class="text-sky-300 transition hover:text-sky-200"
-											href={resolve(`/app/sessions/${run.sessionId}`)}
+											href={resolve(`/app/threads/${run.sessionId}`)}
 										>
 											Open thread
 										</a>

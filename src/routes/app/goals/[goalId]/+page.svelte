@@ -25,6 +25,7 @@
 		parentGoalId?: string;
 		projectIds?: string[];
 		taskIds?: string[];
+		area?: string;
 		lane?: string;
 		status?: string;
 	};
@@ -128,7 +129,7 @@
 					description="This is the canonical goal management surface. Refine the wording with the coach, then update parent/subgoal structure, project context, and task links here."
 					folderOptions={data.folderOptions}
 					heading="Edit goal"
-					laneOptions={data.laneOptions}
+					areaOptions={data.areaOptions}
 					parentGoalOptions={data.parentGoalOptions}
 					projectOptions={data.projectOptions}
 					showIdField
@@ -145,7 +146,7 @@
 						parentGoalId: formValues?.parentGoalId ?? data.goal.parentGoalId ?? '',
 						projectIds: formValues?.projectIds ?? data.linkedProjects.map((project) => project.id),
 						taskIds: formValues?.taskIds ?? data.relatedTasks.map((task) => task.id),
-						lane: formValues?.lane ?? data.goal.lane,
+						area: formValues?.area ?? formValues?.lane ?? data.goal.area ?? data.goal.lane,
 						status: formValues?.status ?? data.goal.status
 					}}
 				/>

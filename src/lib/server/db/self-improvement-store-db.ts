@@ -2,6 +2,8 @@ import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
 import type {
 	SelfImprovementCapturedSuggestion,
+	SelfImprovementSuggestionDecision,
+	SelfImprovementSuggestionImpression,
 	SelfImprovementKnowledgeItem,
 	SelfImprovementOpportunityRecord,
 	TrackedSelfImprovementFeedbackSignal
@@ -12,13 +14,17 @@ export type SelfImprovementStoreDb = {
 	signals: TrackedSelfImprovementFeedbackSignal[];
 	knowledgeItems: SelfImprovementKnowledgeItem[];
 	capturedSuggestions: SelfImprovementCapturedSuggestion[];
+	impressions: SelfImprovementSuggestionImpression[];
+	decisions: SelfImprovementSuggestionDecision[];
 };
 
 const SELF_IMPROVEMENT_COLLECTIONS = [
 	'records',
 	'signals',
 	'knowledgeItems',
-	'capturedSuggestions'
+	'capturedSuggestions',
+	'impressions',
+	'decisions'
 ] as const satisfies Array<keyof SelfImprovementStoreDb>;
 
 type SelfImprovementCollection = (typeof SELF_IMPROVEMENT_COLLECTIONS)[number];
@@ -26,7 +32,9 @@ type SelfImprovementRecordPayload =
 	| SelfImprovementOpportunityRecord
 	| TrackedSelfImprovementFeedbackSignal
 	| SelfImprovementKnowledgeItem
-	| SelfImprovementCapturedSuggestion;
+	| SelfImprovementCapturedSuggestion
+	| SelfImprovementSuggestionImpression
+	| SelfImprovementSuggestionDecision;
 type SelfImprovementEntryRow = {
 	collection: SelfImprovementCollection;
 	id: string;
@@ -39,7 +47,9 @@ function emptySelfImprovementDb(): SelfImprovementStoreDb {
 		records: [],
 		signals: [],
 		knowledgeItems: [],
-		capturedSuggestions: []
+		capturedSuggestions: [],
+		impressions: [],
+		decisions: []
 	};
 }
 

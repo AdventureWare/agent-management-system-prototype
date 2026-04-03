@@ -272,7 +272,20 @@ describe('task detail page server actions', () => {
 					notes: ''
 				}
 			],
-			roles: [],
+			roles: [
+				{
+					id: 'role_coordinator',
+					name: 'Coordinator',
+					lane: 'shared',
+					description: 'Coordinates task execution'
+				},
+				{
+					id: 'role_reviewer',
+					name: 'Reviewer',
+					lane: 'product',
+					description: 'Reviews and governs higher-risk work'
+				}
+			],
 			projects: [
 				{
 					id: 'project_1',
@@ -403,6 +416,94 @@ describe('task detail page server actions', () => {
 				summary: expect.stringContaining('linked the task to goal "Improve goal UX"')
 			})
 		);
+	});
+
+	it('updates routing and governance fields from the detail form', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				...(controlPlaneState.current as ControlPlaneData).tasks,
+				{
+					id: 'task_2',
+					title: 'Unblock API contract',
+					summary: 'Finalize the downstream API shape',
+					projectId: 'project_1',
+					lane: 'product',
+					goalId: '',
+					priority: 'high',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					threadSessionId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					targetDate: null,
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('name', 'Attach a brief');
+		form.set('instructions', 'Need source documents');
+		form.set('projectId', 'project_1');
+		form.set('priority', 'urgent');
+		form.set('riskLevel', 'high');
+		form.set('approvalMode', 'before_apply');
+		form.set('requiresReview', 'false');
+		form.set('desiredRoleId', 'role_reviewer');
+		form.set('blockedReason', 'Waiting on API contract');
+		form.set('dependencyTaskSelection', 'true');
+		form.append('dependencyTaskIds', 'task_2');
+
+		const result = await actions.updateTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'updateTask',
+				taskId: 'task_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				priority: 'urgent',
+				riskLevel: 'high',
+				approvalMode: 'before_apply',
+				requiresReview: false,
+				desiredRoleId: 'role_reviewer',
+				blockedReason: 'Waiting on API contract',
+				dependencyTaskIds: ['task_2']
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_plan_updated',
+				summary: expect.stringContaining('set priority to Urgent')
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]?.summary).toContain(
+			'set approval mode to Before Apply'
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]?.summary).toContain(
+			'set desired role to Reviewer'
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]?.summary).toContain('"Unblock API contract"');
 	});
 
 	it('rejects an invalid task target date from the detail form', async () => {

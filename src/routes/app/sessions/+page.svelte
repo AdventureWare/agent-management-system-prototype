@@ -52,9 +52,14 @@
 				formatThreadStateLabel(session.sessionState),
 				session.latestRunStatus,
 				(session.topicLabels ?? []).join(' '),
+				(session.categorization?.projectLabels ?? []).join(' '),
+				(session.categorization?.goalLabels ?? []).join(' '),
 				(session.categorization?.laneLabels ?? []).join(' '),
 				(session.categorization?.focusLabels ?? []).join(' '),
 				(session.categorization?.entityLabels ?? []).join(' '),
+				(session.categorization?.roleLabels ?? []).join(' '),
+				(session.categorization?.capabilityLabels ?? []).join(' '),
+				(session.categorization?.toolLabels ?? []).join(' '),
 				(session.categorization?.keywordLabels ?? []).join(' '),
 				session.threadId ?? '',
 				session.relatedTasks.map((task) => task.title).join(' '),
@@ -138,6 +143,10 @@
 		}
 
 		const intervalId = window.setInterval(() => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
 			void refreshSessions();
 		}, ACTIVE_REFRESH_INTERVAL_MS);
 
@@ -148,6 +157,10 @@
 
 	$effect(() => {
 		const intervalId = window.setInterval(() => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
 			now = Date.now();
 		}, ACTIVITY_CLOCK_INTERVAL_MS);
 
@@ -410,7 +423,7 @@
 						>
 							<a
 								class="block rounded-lg text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
-								href={resolve(`/app/sessions/${session.id}`)}
+								href={resolve(`/app/threads/${session.id}`)}
 								aria-label={`View thread details for ${session.name}`}
 							>
 								<div class="ui-clamp-5 font-medium text-white">
@@ -500,7 +513,7 @@
 							<p class="ui-clamp-5 max-w-80 text-sm text-slate-300">{session.cwd}</p>
 						</td>
 						<td class="px-3 py-3 align-top">
-							<AppButton href={resolve(`/app/sessions/${session.id}`)} size="sm" variant="accent">
+							<AppButton href={resolve(`/app/threads/${session.id}`)} size="sm" variant="accent">
 								View thread
 							</AppButton>
 						</td>

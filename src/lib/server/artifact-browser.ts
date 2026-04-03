@@ -61,6 +61,27 @@ async function inspectArtifactPath(path: string) {
 	}
 }
 
+export async function inspectArtifactPathStatus(pathInput: string) {
+	const path = normalizePathInput(pathInput);
+
+	if (!path) {
+		throw new Error('Path is required.');
+	}
+
+	if (!isAbsolute(path)) {
+		throw new Error('Use an absolute path.');
+	}
+
+	const inspection = await inspectArtifactPath(path);
+
+	return {
+		path,
+		exists: inspection.exists,
+		kind: inspection.kind,
+		sizeBytes: inspection.sizeBytes
+	} as const;
+}
+
 async function buildKnownOutput(input: ArtifactKnownOutputInput): Promise<ArtifactKnownOutput> {
 	const path = normalizePathInput(input.path);
 
@@ -239,6 +260,7 @@ export async function createArtifactDownloadResponse(input: {
 	path: string;
 	name?: string;
 	contentType?: string;
+	disposition?: 'attachment' | 'inline';
 }) {
 	const path = normalizePathInput(input.path);
 
@@ -264,12 +286,58 @@ export async function createArtifactDownloadResponse(input: {
 
 	const payload = await readFile(path);
 	const encodedName = encodeURIComponent(input.name || basename(path));
+	const contentType = input.contentType || inferArtifactContentType(path);
+	const disposition = input.disposition ?? 'attachment';
 
 	return new Response(payload, {
 		headers: {
-			'content-type': input.contentType || 'application/octet-stream',
+			'content-type': contentType,
 			'content-length': String(payload.byteLength),
-			'content-disposition': `attachment; filename*=UTF-8''${encodedName}`
+			'content-disposition': `${disposition}; filename*=UTF-8''${encodedName}`
 		}
 	});
+}
+
+function inferArtifactContentType(path: string) {
+	const extension = extname(path).slice(1).toLowerCase();
+
+	switch (extension) {
+		case 'md':
+		case 'markdown':
+			return 'text/markdown; charset=utf-8';
+		case 'txt':
+		case 'log':
+		case 'yml':
+		case 'yaml':
+		case 'svelte':
+		case 'ts':
+		case 'tsx':
+		case 'js':
+		case 'jsx':
+		case 'json':
+		case 'css':
+		case 'html':
+		case 'xml':
+		case 'sh':
+			return extension === 'json'
+				? 'application/json; charset=utf-8'
+				: extension === 'html'
+					? 'text/html; charset=utf-8'
+					: 'text/plain; charset=utf-8';
+		case 'png':
+			return 'image/png';
+		case 'jpg':
+		case 'jpeg':
+			return 'image/jpeg';
+		case 'gif':
+			return 'image/gif';
+		case 'webp':
+			return 'image/webp';
+		case 'svg':
+			return 'image/svg+xml';
+		case 'pdf':
+			return 'application/pdf';
+		default:
+			return 'application/octet-stream';
+	}
 }

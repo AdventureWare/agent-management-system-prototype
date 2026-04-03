@@ -14,11 +14,11 @@ import {
 	wouldCreateGoalCycle
 } from '$lib/server/goal-relationships';
 import { normalizePathInput } from '$lib/server/path-tools';
-import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
+import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	loadControlPlane,
+	parseArea,
 	parseGoalStatus,
-	parseLane,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -48,7 +48,7 @@ function readGoalForm(form: FormData) {
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
 		projectIds: parseSelectedIds(form, 'projectIds'),
 		taskIds: parseSelectedIds(form, 'taskIds'),
-		lane: parseLane(form.get('lane')?.toString() ?? '', 'product'),
+		area: parseArea(form.get('area')?.toString() ?? form.get('lane')?.toString() ?? '', 'product'),
 		status: parseGoalStatus(form.get('status')?.toString() ?? '', 'ready')
 	};
 }
@@ -199,7 +199,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			linkedProjectCount: linkedProjects.length,
 			childGoalCount: childGoals.length
 		},
-		laneOptions: LANE_OPTIONS,
+		areaOptions: AREA_OPTIONS,
 		statusOptions: GOAL_STATUS_OPTIONS,
 		folderOptions: await loadFolderPickerOptions(),
 		...buildGoalOptions(data, goal.id)
@@ -277,7 +277,8 @@ export const actions: Actions = {
 						successSignal: values.successSignal,
 						targetDate: values.targetDate || null,
 						artifactPath,
-						lane: values.lane,
+						area: values.area,
+						lane: values.area,
 						status: values.status
 					};
 				})

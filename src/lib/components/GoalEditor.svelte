@@ -23,6 +23,7 @@
 		parentGoalId?: string;
 		projectIds?: string[];
 		taskIds?: string[];
+		area?: string;
 		lane?: string;
 		status?: string;
 	};
@@ -80,7 +81,7 @@
 		description,
 		values = {},
 		folderOptions,
-		laneOptions,
+		areaOptions,
 		statusOptions,
 		parentGoalOptions,
 		projectOptions,
@@ -95,7 +96,7 @@
 		description: string;
 		values?: GoalFormValues;
 		folderOptions: FolderOption[];
-		laneOptions: readonly string[];
+		areaOptions: readonly string[];
 		statusOptions: readonly string[];
 		parentGoalOptions: ParentGoalOption[];
 		projectOptions: ProjectOption[];
@@ -108,7 +109,7 @@
 	let draftReady = $state(false);
 	let name = $state('');
 	let summary = $state('');
-	let lane = $state('product');
+	let area = $state('product');
 	let status = $state('ready');
 	let successSignal = $state('');
 	let targetDate = $state('');
@@ -136,7 +137,7 @@
 			goalId: values.goalId ?? '',
 			name: values.name ?? '',
 			summary: values.summary ?? '',
-			lane: values.lane ?? 'product',
+			area: values.area ?? values.lane ?? 'product',
 			status: values.status ?? 'ready',
 			successSignal: values.successSignal ?? '',
 			targetDate: values.targetDate ?? '',
@@ -153,7 +154,7 @@
 		lastValuesKey = nextValuesKey;
 		name = values.name ?? '';
 		summary = values.summary ?? '';
-		lane = values.lane ?? 'product';
+		area = values.area ?? values.lane ?? 'product';
 		status = values.status ?? 'ready';
 		successSignal = values.successSignal ?? '';
 		targetDate = values.targetDate ?? '';
@@ -187,7 +188,7 @@
 			parentGoalId: values.parentGoalId ?? '',
 			projectIds: values.projectIds ?? [],
 			taskIds: values.taskIds ?? [],
-			lane: values.lane ?? '',
+			area: values.area ?? values.lane ?? '',
 			status: values.status ?? ''
 		});
 
@@ -201,7 +202,7 @@
 		if (savedDraft) {
 			name = savedDraft.name ?? '';
 			summary = savedDraft.summary ?? '';
-			lane = savedDraft.lane ?? 'product';
+			area = savedDraft.area ?? savedDraft.lane ?? 'product';
 			status = savedDraft.status ?? 'ready';
 			successSignal = savedDraft.successSignal ?? '';
 			targetDate = savedDraft.targetDate ?? '';
@@ -222,7 +223,7 @@
 		writeFormDraft(draftStorageKey, {
 			name,
 			summary,
-			lane: lane === 'product' ? '' : lane,
+			area: area === 'product' ? '' : area,
 			status: status === 'ready' ? '' : status,
 			successSignal,
 			targetDate,
@@ -406,7 +407,7 @@
 			'This goal is specific enough to save. Use the relationship section only if the goal already needs linked context.'
 	);
 	let laneExample = $derived.by(() => {
-		switch (lane) {
+		switch (area) {
 			case 'growth':
 				return {
 					name: 'Increase qualified project intake from existing operator workflows',
@@ -668,9 +669,9 @@
 				<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Area</span>
-						<select bind:value={lane} class="select text-white" name="lane">
-							{#each laneOptions as lane (lane)}
-								<option value={lane}>{lane}</option>
+						<select bind:value={area} class="select text-white" name="area">
+							{#each areaOptions as areaOption (areaOption)}
+								<option value={areaOption}>{areaOption}</option>
 							{/each}
 						</select>
 					</label>
@@ -767,7 +768,7 @@
 				</div>
 
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-					<p class="text-sm font-medium text-slate-100">Example for the {lane} area</p>
+					<p class="text-sm font-medium text-slate-100">Example for the {area} area</p>
 					<p class="mt-2 text-xs text-slate-500">Name</p>
 					<p class="mt-1 text-sm text-slate-200">{laneExample.name}</p>
 					<p class="mt-3 text-xs text-slate-500">Summary</p>

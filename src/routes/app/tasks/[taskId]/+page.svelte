@@ -11,11 +11,16 @@
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import {
+		PRIORITY_OPTIONS,
+		TASK_APPROVAL_MODE_OPTIONS,
+		TASK_RISK_LEVEL_OPTIONS,
 		approvalStatusToneClass,
+		formatPriorityLabel,
 		formatDecisionTypeLabel,
 		formatReviewStatusLabel,
 		formatRunStatusLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		reviewStatusToneClass,
 		runStatusToneClass,
@@ -127,9 +132,14 @@
 
 	function matchedContextSummary(thread: {
 		matchedContext?: {
+			projectLabels?: string[];
+			goalLabels?: string[];
 			laneLabels?: string[];
 			focusLabels?: string[];
 			entityLabels?: string[];
+			roleLabels?: string[];
+			capabilityLabels?: string[];
+			toolLabels?: string[];
 			keywordLabels?: string[];
 			labels?: string[];
 		};
@@ -141,9 +151,14 @@
 		}
 
 		return [
+			...(match.projectLabels ?? []),
+			...(match.goalLabels ?? []),
 			...(match.laneLabels ?? []),
 			...(match.focusLabels ?? []),
 			...(match.entityLabels ?? []),
+			...(match.roleLabels ?? []),
+			...(match.capabilityLabels ?? []),
+			...(match.toolLabels ?? []),
 			...(match.keywordLabels ?? [])
 		].filter(
 			(label, index, labels) =>
@@ -261,7 +276,7 @@
 				</AppButton>
 				{#if data.task.linkThread}
 					<AppButton
-						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 						variant="accent"
 						reserveLabel="Open assigned thread"
 					>
@@ -319,7 +334,7 @@
 		<DetailFactCard
 			label="Assignee"
 			value={data.task.assigneeName}
-			detail={`Desired role: ${data.task.desiredRoleId || 'Not set'}`}
+			detail={`Desired role: ${data.task.desiredRoleName || data.task.desiredRoleId || 'Not set'}`}
 			class="card border border-slate-800 bg-slate-950/70 p-4"
 			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
 			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
@@ -353,7 +368,7 @@
 			{#if data.task.linkThread}
 				<div class="mt-1 flex flex-wrap items-center gap-3">
 					<AppButton
-						href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+						href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 						size="sm"
 						variant="accent"
 						reserveLabel="Open assigned thread"
@@ -458,7 +473,7 @@
 		>
 			Task queued in its work thread.
 			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+				<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
 					Open thread details
 				</a>
 				to review the queued work.
@@ -471,7 +486,7 @@
 		>
 			Recovered the stalled run and queued fresh work.
 			{#if form?.sessionId}
-				<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+				<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
 					Open thread details
 				</a>
 				to review the recovered work.
@@ -511,7 +526,7 @@
 					{#if taskHasActiveRun && data.task.linkThread}
 						<a
 							class="inline-flex items-center justify-center rounded-full border border-sky-800/60 px-4 py-2 text-sm font-medium text-sky-200 transition hover:border-sky-500/60 hover:text-sky-100"
-							href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+							href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 						>
 							{threadActionLabel() || 'Open current work thread'}
 						</a>
@@ -749,6 +764,153 @@
 				</section>
 
 				<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
+					<input type="hidden" name="dependencyTaskSelection" value="true" />
+
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+							Routing and governance
+						</p>
+						<h3 class="text-lg font-semibold text-white">Queue priority, gates, and blockers</h3>
+						<p class="text-sm text-slate-400">
+							Use the detail page to manage the full task model without bloating the quick-create
+							flow.
+						</p>
+					</div>
+
+					<div class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
+							<select class="select text-white" name="priority">
+								{#each PRIORITY_OPTIONS as priority (priority)}
+									<option value={priority} selected={data.task.priority === priority}>
+										{formatPriorityLabel(priority)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span>
+							<select class="select text-white" name="riskLevel">
+								{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
+									<option value={riskLevel} selected={data.task.riskLevel === riskLevel}>
+										{formatTaskRiskLevelLabel(riskLevel)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Approval mode</span>
+							<select class="select text-white" name="approvalMode">
+								{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
+									<option value={approvalMode} selected={data.task.approvalMode === approvalMode}>
+										{formatTaskApprovalModeLabel(approvalMode)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Requires review</span>
+							<select class="select text-white" name="requiresReview">
+								<option value="true" selected={data.task.requiresReview}>Yes</option>
+								<option value="false" selected={!data.task.requiresReview}>No</option>
+							</select>
+						</label>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span>
+							<select class="select text-white" name="desiredRoleId">
+								<option value="" selected={!data.task.desiredRoleId}>No role preference</option>
+								{#if data.task.desiredRoleId && !(data.roles ?? []).some((role) => role.id === data.task.desiredRoleId)}
+									<option value={data.task.desiredRoleId} selected>
+										{data.task.desiredRoleName || data.task.desiredRoleId} (missing role)
+									</option>
+								{/if}
+								{#each data.roles ?? [] as role (role.id)}
+									<option value={role.id} selected={data.task.desiredRoleId === role.id}>
+										{role.name}
+									</option>
+								{/each}
+							</select>
+							<p class="mt-2 text-xs text-slate-500">
+								Use this when the task should route toward a role even before a worker is assigned.
+							</p>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Blocked reason</span>
+							<textarea
+								class="textarea min-h-28 text-white"
+								name="blockedReason"
+								placeholder="Document the blocker, missing approval, or dependency holding this task."
+								>{data.task.blockedReason}</textarea
+							>
+							<p class="mt-2 text-xs text-slate-500">
+								Record the current blocker explicitly instead of relying on status alone.
+							</p>
+						</label>
+					</div>
+
+					<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-3">
+							<div>
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Dependencies
+								</p>
+								<p class="mt-2 text-sm text-slate-400">
+									Select the tasks that must be unblocked or completed before this one can move.
+								</p>
+							</div>
+							<span
+								class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+							>
+								{data.dependencyTasks.length} selected
+							</span>
+						</div>
+
+						{#if (data.availableDependencyTasks ?? []).length === 0}
+							<p class="mt-4 text-sm text-slate-500">
+								No other tasks are available to use as dependencies yet.
+							</p>
+						{:else}
+							<div class="mt-4 grid gap-3 xl:grid-cols-2">
+								{#each data.availableDependencyTasks ?? [] as dependency (dependency.id)}
+									<label
+										class={`rounded-2xl border p-3 transition ${
+											dependency.isSelected
+												? 'border-sky-800/70 bg-sky-950/20'
+												: 'border-slate-800 bg-slate-900/60'
+										}`}
+									>
+										<div class="flex items-start gap-3">
+											<input
+												checked={dependency.isSelected}
+												class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+												name="dependencyTaskIds"
+												type="checkbox"
+												value={dependency.id}
+											/>
+											<div class="min-w-0">
+												<p class="ui-wrap-anywhere text-sm font-medium text-white">
+													{dependency.title}
+												</p>
+												<p class="mt-1 text-xs text-slate-400">
+													{dependency.projectName} · {formatTaskStatusLabel(dependency.status)}
+												</p>
+											</div>
+										</div>
+									</label>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</section>
+
+				<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
 					<div class="space-y-2">
 						<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
 							Task metadata
@@ -772,6 +934,29 @@
 							class="rounded-2xl p-4 text-sm text-slate-300"
 							valueClass="ui-wrap-anywhere mt-2 text-sm text-slate-300"
 						/>
+					</div>
+
+					<div class="mt-4 grid gap-4 sm:grid-cols-2">
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Routing summary
+							</p>
+							<div class="mt-3 space-y-2 text-sm text-slate-300">
+								<p>Priority: {formatPriorityLabel(data.task.priority)}</p>
+								<p>Risk level: {formatTaskRiskLevelLabel(data.task.riskLevel)}</p>
+								<p>Approval mode: {formatTaskApprovalModeLabel(data.task.approvalMode)}</p>
+								<p>Requires review: {data.task.requiresReview ? 'Yes' : 'No'}</p>
+							</div>
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Desired role
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{data.task.desiredRoleName || data.task.desiredRoleId || 'No role preference'}
+							</p>
+						</div>
 					</div>
 
 					<div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1131,7 +1316,7 @@
 											</form>
 											<a
 												class="text-sm text-sky-300 transition hover:text-sky-200"
-												href={resolve(`/app/sessions/${data.suggestedThread.id}`)}
+												href={resolve(`/app/threads/${data.suggestedThread.id}`)}
 											>
 												Open thread
 											</a>
@@ -1176,7 +1361,7 @@
 									{#if data.task.linkThread}
 										<a
 											class="text-sm text-sky-300 transition hover:text-sky-200"
-											href={resolve(`/app/sessions/${data.task.linkThread.id}`)}
+											href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 										>
 											{threadActionLabel()}
 										</a>
@@ -1190,7 +1375,7 @@
 										<div class="relative rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 											<a
 												class="absolute top-4 right-4 text-sm text-sky-300 transition hover:text-sky-200"
-												href={resolve(`/app/sessions/${thread.id}`)}
+												href={resolve(`/app/threads/${thread.id}`)}
 											>
 												Open thread
 											</a>
@@ -1351,7 +1536,7 @@
 													{#if run.sessionId}
 														<a
 															class="ui-wrap-inline mt-2 text-sm text-sky-300 transition hover:text-sky-200"
-															href={resolve(`/app/sessions/${run.sessionId}`)}
+															href={resolve(`/app/threads/${run.sessionId}`)}
 														>
 															{run.threadId || run.sessionId}
 														</a>
@@ -1496,6 +1681,22 @@
 							<div class="mt-5 space-y-4">
 								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+										Routing summary
+									</p>
+									<div class="mt-3 space-y-2 text-sm text-white">
+										<p>Priority: {formatPriorityLabel(data.task.priority)}</p>
+										<p>Risk level: {formatTaskRiskLevelLabel(data.task.riskLevel)}</p>
+										<p>Approval mode: {formatTaskApprovalModeLabel(data.task.approvalMode)}</p>
+										<p>Requires review: {data.task.requiresReview ? 'Yes' : 'No'}</p>
+										<p>
+											Desired role:
+											{data.task.desiredRoleName || data.task.desiredRoleId || 'No role preference'}
+										</p>
+									</div>
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 										Goal link
 									</p>
 									{#if data.task.goalId}
@@ -1517,6 +1718,49 @@
 									<p class="mt-2 text-sm text-white">
 										{data.task.blockedReason || 'No blocker recorded'}
 									</p>
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Dependencies
+											</p>
+											<p class="mt-2 text-sm text-white">
+												Tasks this work item depends on before it can move cleanly.
+											</p>
+										</div>
+										<span
+											class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+										>
+											{data.dependencyTasks.length}
+										</span>
+									</div>
+
+									{#if data.dependencyTasks.length === 0}
+										<p class="mt-4 text-sm text-slate-400">No dependencies recorded.</p>
+									{:else}
+										<div class="mt-4 space-y-3">
+											{#each data.dependencyTasks as dependency (dependency.id)}
+												<div class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+													<div class="flex flex-wrap items-center justify-between gap-3">
+														<a
+															class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+															href={resolve(`/app/tasks/${dependency.id}`)}
+														>
+															{dependency.title}
+														</a>
+														<span
+															class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(dependency.status)}`}
+														>
+															{formatTaskStatusLabel(dependency.status)}
+														</span>
+													</div>
+													<p class="mt-2 text-xs text-slate-500">{dependency.projectName}</p>
+												</div>
+											{/each}
+										</div>
+									{/if}
 								</div>
 
 								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">

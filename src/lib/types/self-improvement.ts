@@ -24,6 +24,34 @@ export const SELF_IMPROVEMENT_KNOWLEDGE_STATUS_OPTIONS = [
 	'published',
 	'archived'
 ] as const;
+export const SELF_IMPROVEMENT_DECISION_TYPE_OPTIONS = [
+	'accepted',
+	'dismissed',
+	'reopened',
+	'task_created',
+	'knowledge_item_created'
+] as const;
+export const SELF_IMPROVEMENT_DECISION_REASON_OPTIONS = [
+	'accepted_for_follow_up',
+	'accepted_for_knowledge',
+	'duplicate',
+	'wrong_scope',
+	'bad_timing',
+	'low_value',
+	'low_confidence',
+	'already_captured',
+	'reopened',
+	'other'
+] as const;
+export const SELF_IMPROVEMENT_DISMISSAL_REASON_OPTIONS = [
+	'duplicate',
+	'wrong_scope',
+	'bad_timing',
+	'low_value',
+	'low_confidence',
+	'already_captured',
+	'other'
+] as const;
 export const SELF_IMPROVEMENT_SIGNAL_TYPE_OPTIONS = [
 	'run_failure',
 	'task_blocked',
@@ -39,6 +67,10 @@ export type SelfImprovementConfidence = (typeof SELF_IMPROVEMENT_CONFIDENCE_OPTI
 export type SelfImprovementStatus = (typeof SELF_IMPROVEMENT_STATUS_OPTIONS)[number];
 export type SelfImprovementKnowledgeStatus =
 	(typeof SELF_IMPROVEMENT_KNOWLEDGE_STATUS_OPTIONS)[number];
+export type SelfImprovementDecisionType =
+	(typeof SELF_IMPROVEMENT_DECISION_TYPE_OPTIONS)[number];
+export type SelfImprovementDecisionReason =
+	(typeof SELF_IMPROVEMENT_DECISION_REASON_OPTIONS)[number];
 export type SelfImprovementSignalType = (typeof SELF_IMPROVEMENT_SIGNAL_TYPE_OPTIONS)[number];
 
 function formatEnumLabel(value: string) {
@@ -55,6 +87,10 @@ export function formatSelfImprovementStatusLabel(status: string) {
 
 export function formatSelfImprovementKnowledgeStatusLabel(status: string) {
 	return formatEnumLabel(status);
+}
+
+export function formatSelfImprovementDecisionReasonLabel(reason: string) {
+	return formatEnumLabel(reason);
 }
 
 export function formatSelfImprovementSignalTypeLabel(signalType: string) {
@@ -126,6 +162,9 @@ export type SelfImprovementOpportunity = {
 	relatedTaskIds: string[];
 	relatedRunIds: string[];
 	relatedSessionIds: string[];
+	rankingPolicyVersion?: string | null;
+	rankingScore?: number | null;
+	rankingReasons?: string[];
 	suggestedTask: SelfImprovementTaskDraft | null;
 	suggestedKnowledgeItem: SelfImprovementKnowledgeDraft | null;
 };
@@ -242,8 +281,34 @@ export type SelfImprovementKnowledgeSummary = {
 	byCategory: Record<SelfImprovementCategory, number>;
 };
 
+export type SelfImprovementSuggestionImpression = {
+	id: string;
+	createdAt: string;
+	projectId: string | null;
+	goalId: string | null;
+	policyVersion: string | null;
+	itemCount: number;
+	items: Array<{
+		opportunityId: string;
+		rank: number;
+		score: number | null;
+	}>;
+};
+
+export type SelfImprovementSuggestionDecision = {
+	id: string;
+	opportunityId: string;
+	impressionId: string | null;
+	decisionType: SelfImprovementDecisionType;
+	reason: SelfImprovementDecisionReason | null;
+	summary: string;
+	statusAfterDecision: SelfImprovementStatus;
+	createdAt: string;
+};
+
 export type SelfImprovementSnapshot = {
 	generatedAt: string;
+	latestImpressionId: string | null;
 	summary: SelfImprovementSnapshotSummary;
 	opportunities: TrackedSelfImprovementOpportunity[];
 	signalSummary: SelfImprovementSignalSummary;

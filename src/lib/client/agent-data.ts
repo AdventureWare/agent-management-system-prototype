@@ -1,6 +1,7 @@
 import type { AgentSessionDetail, AgentThreadDetail } from '$lib/types/agent-session';
 import type {
 	SelfImprovementCategory,
+	SelfImprovementDecisionReason,
 	SelfImprovementSeverity,
 	SelfImprovementKnowledgeStatus,
 	SelfImprovementSnapshot,
@@ -22,42 +23,47 @@ async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
 
 export async function fetchAgentSessions(options: { includeArchived?: boolean } = {}) {
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
-	const payload = await fetchJson<{ sessions: AgentSessionDetail[] }>(
-		`/api/agents/sessions${includeArchived}`,
-		'Could not refresh threads.'
-	);
+	const payload = await fetchJson<{
+		threads?: AgentSessionDetail[];
+		sessions?: AgentSessionDetail[];
+	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
 
-	return payload.sessions;
+	return payload.threads ?? payload.sessions ?? [];
 }
 
 export async function fetchAgentThreads(options: { includeArchived?: boolean } = {}) {
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
-	const payload = await fetchJson<{ sessions: AgentThreadDetail[] }>(
-		`/api/agents/sessions${includeArchived}`,
-		'Could not refresh threads.'
-	);
+	const payload = await fetchJson<{
+		threads?: AgentThreadDetail[];
+		sessions?: AgentThreadDetail[];
+	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
 
-	return payload.sessions;
+	return payload.threads ?? payload.sessions ?? [];
 }
 
 export async function updateAgentSessionArchiveState(sessionIds: string[], archived: boolean) {
-	const response = await fetch('/api/agents/sessions/archive', {
+	const response = await fetch('/api/agents/threads/archive', {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json'
 		},
 		body: JSON.stringify({
+			threadIds: sessionIds,
 			sessionIds,
 			archived
 		})
 	});
-	const payload = (await response.json()) as { error?: string; updatedSessionIds?: string[] };
+	const payload = (await response.json()) as {
+		error?: string;
+		updatedThreadIds?: string[];
+		updatedSessionIds?: string[];
+	};
 
 	if (!response.ok) {
 		throw new Error(payload.error ?? 'Could not update thread archive state.');
 	}
 
-	return payload.updatedSessionIds ?? [];
+	return payload.updatedThreadIds ?? payload.updatedSessionIds ?? [];
 }
 
 export async function updateAgentThreadArchiveState(threadIds: string[], archived: boolean) {
@@ -65,7 +71,7 @@ export async function updateAgentThreadArchiveState(threadIds: string[], archive
 }
 
 export async function fetchAgentSession(sessionId: string) {
-	const response = await fetch(`/api/agents/sessions/${sessionId}`, {
+	const response = await fetch(`/api/agents/threads/${sessionId}`, {
 		cache: 'no-store'
 	});
 
@@ -77,12 +83,21 @@ export async function fetchAgentSession(sessionId: string) {
 		throw new Error('Could not refresh the thread.');
 	}
 
-	const payload = (await response.json()) as { session: AgentSessionDetail };
-	return payload.session;
+	const payload = (await response.json()) as {
+		thread?: AgentSessionDetail;
+		session?: AgentSessionDetail;
+	};
+	const session = payload.thread ?? payload.session;
+
+	if (!session) {
+		throw new Error('Could not refresh the thread.');
+	}
+
+	return session;
 }
 
 export async function fetchAgentThread(threadId: string) {
-	const response = await fetch(`/api/agents/sessions/${threadId}`, {
+	const response = await fetch(`/api/agents/threads/${threadId}`, {
 		cache: 'no-store'
 	});
 
@@ -94,8 +109,17 @@ export async function fetchAgentThread(threadId: string) {
 		throw new Error('Could not refresh the thread.');
 	}
 
-	const payload = (await response.json()) as { session: AgentThreadDetail };
-	return payload.session;
+	const payload = (await response.json()) as {
+		thread?: AgentThreadDetail;
+		session?: AgentThreadDetail;
+	};
+	const thread = payload.thread ?? payload.session;
+
+	if (!thread) {
+		throw new Error('Could not refresh the thread.');
+	}
+
+	return thread;
 }
 
 export function fetchHomeDashboard() {
@@ -127,7 +151,11 @@ export function fetchSelfImprovementSnapshot(
 export async function updateSelfImprovementOpportunityStatus(
 	opportunityId: string,
 	status: SelfImprovementStatus,
-	decisionSummary?: string
+	options: {
+		decisionSummary?: string;
+		decisionReason?: SelfImprovementDecisionReason | null;
+		impressionId?: string | null;
+	} = {}
 ) {
 	const response = await fetch(`/api/improvement/opportunities/${opportunityId}/status`, {
 		method: 'POST',
@@ -136,7 +164,9 @@ export async function updateSelfImprovementOpportunityStatus(
 		},
 		body: JSON.stringify({
 			status,
-			decisionSummary
+			decisionSummary: options.decisionSummary,
+			decisionReason: options.decisionReason ?? null,
+			impressionId: options.impressionId ?? null
 		})
 	});
 	const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -178,6 +208,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 	options: {
 		projectId?: string | null;
 		goalId?: string | null;
+		impressionId?: string | null;
 	} = {}
 ) {
 	const response = await fetch(`/api/improvement/opportunities/${opportunityId}/create-task`, {
@@ -187,7 +218,8 @@ export async function createTaskFromSelfImprovementOpportunity(
 		},
 		body: JSON.stringify({
 			projectId: options.projectId ?? null,
-			goalId: options.goalId ?? null
+			goalId: options.goalId ?? null,
+			impressionId: options.impressionId ?? null
 		})
 	});
 	const payload = (await response.json().catch(() => ({}))) as {
@@ -206,6 +238,7 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 	opportunityId: string,
 	options: {
 		goalId?: string | null;
+		impressionId?: string | null;
 	} = {}
 ) {
 	const response = await fetch(
@@ -216,7 +249,8 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 				'content-type': 'application/json'
 			},
 			body: JSON.stringify({
-				goalId: options.goalId ?? null
+				goalId: options.goalId ?? null,
+				impressionId: options.impressionId ?? null
 			})
 		}
 	);

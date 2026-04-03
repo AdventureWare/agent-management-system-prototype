@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
-	LANE_OPTIONS,
+	AREA_OPTIONS,
 	PRIORITY_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
@@ -88,7 +88,7 @@ function readTaskForm(form: FormData) {
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
 		targetDate: form.get('targetDate')?.toString().trim() ?? '',
 		goalId: form.get('goalId')?.toString().trim() ?? '',
-		lane: parseOption(LANE_OPTIONS, form.get('lane'), 'product'),
+		lane: parseOption(AREA_OPTIONS, form.get('area') ?? form.get('lane'), 'product'),
 		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
 		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
@@ -296,7 +296,11 @@ function readCreateTaskPrefill(url: URL) {
 			return value && isValidDate(value) ? value : '';
 		})(),
 		goalId: url.searchParams.get('goalId')?.trim() ?? '',
-		lane: parseOption(LANE_OPTIONS, url.searchParams.get('lane'), 'product'),
+		lane: parseOption(
+			AREA_OPTIONS,
+			url.searchParams.get('area') ?? url.searchParams.get('lane'),
+			'product'
+		),
 		priority: parseOption(PRIORITY_OPTIONS, url.searchParams.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, url.searchParams.get('riskLevel'), 'medium'),
 		approvalMode: parseOption(
@@ -312,8 +316,11 @@ function readCreateTaskPrefill(url: URL) {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const sessions = await listAgentSessions({ includeArchived: true });
-	const data = await loadControlPlane();
+	const controlPlanePromise = loadControlPlane();
+	const [data, sessions] = await Promise.all([
+		controlPlanePromise,
+		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+	]);
 	const defaultDraftRole = getDefaultDraftRole(data);
 	const taskWorkItems = buildTaskWorkItems(data, sessions);
 	const ideationReviews = [...data.projects]

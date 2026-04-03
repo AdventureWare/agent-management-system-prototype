@@ -159,7 +159,14 @@ type WeightedTextSource = {
 type ThreadTopicTask = {
 	title: string;
 	summary?: string | null;
+	projectId?: string | null;
+	projectName?: string | null;
+	goalId?: string | null;
+	goalName?: string | null;
 	lane?: Lane | null;
+	desiredRole?: string | null;
+	requiredCapabilityNames?: string[];
+	requiredToolNames?: string[];
 	isPrimary?: boolean;
 };
 
@@ -174,7 +181,25 @@ type CategorizationSignalState = {
 	laneScores: Map<string, number>;
 	focusScores: Map<string, number>;
 	entityScores: Map<string, number>;
+	roleScores: Map<string, number>;
+	capabilityScores: Map<string, number>;
+	toolScores: Map<string, number>;
 	keywordScores: Map<string, number>;
+};
+
+const LABEL_OVERRIDES: Record<string, string> = {
+	api: 'API',
+	ci: 'CI',
+	codex: 'Codex',
+	github: 'GitHub',
+	ios: 'iOS',
+	mcp: 'MCP',
+	openai: 'OpenAI',
+	swiftui: 'SwiftUI',
+	sveltekit: 'SvelteKit',
+	ui: 'UI',
+	ux: 'UX',
+	xcodebuild: 'Xcodebuild'
 };
 
 function tokenizeTopicText(value: string) {
@@ -183,6 +208,37 @@ function tokenizeTopicText(value: string) {
 		.split(/[^a-z0-9]+/g)
 		.map((token) => token.trim())
 		.filter(Boolean);
+}
+
+function formatStructuredLabel(value: string) {
+	const normalized = value
+		.trim()
+		.replace(/^role[_-]+/i, '')
+		.replace(/[_-]+/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.toLowerCase();
+
+	if (!normalized) {
+		return '';
+	}
+
+	return normalized
+		.split(' ')
+		.map((token) => LABEL_OVERRIDES[token] ?? `${token.charAt(0).toUpperCase()}${token.slice(1)}`)
+		.join(' ');
+}
+
+function accumulateStructuredLabels(
+	scores: Map<string, number>,
+	values: string[] | null | undefined,
+	weight: number
+) {
+	for (const value of new Set(
+		(values ?? []).map((candidate) => formatStructuredLabel(candidate)).filter(Boolean)
+	)) {
+		scores.set(value, (scores.get(value) ?? 0) + weight);
+	}
 }
 
 function accumulateProfileScores(
@@ -216,6 +272,9 @@ function accumulateCategorizationSignals(
 	const laneScores = new Map<string, number>();
 	const focusScores = new Map<string, number>();
 	const entityScores = new Map<string, number>();
+	const roleScores = new Map<string, number>();
+	const capabilityScores = new Map<string, number>();
+	const toolScores = new Map<string, number>();
 	const keywordScores = new Map<string, number>();
 
 	for (const lane of lanes) {
@@ -268,6 +327,9 @@ function accumulateCategorizationSignals(
 		laneScores,
 		focusScores,
 		entityScores,
+		roleScores,
+		capabilityScores,
+		toolScores,
 		keywordScores
 	};
 }
@@ -282,6 +344,46 @@ function compareScoredEntries(left: [string, number], right: [string, number]) {
 
 function selectLabels(scores: Map<string, number>, maxCount: number) {
 	return [...scores.entries()].sort(compareScoredEntries).slice(0, maxCount).map(([label]) => label);
+}
+
+function selectPrimaryFirstLabels(
+	relatedTasks: ThreadTopicTask[],
+	options: {
+		idSelector: (task: ThreadTopicTask) => string | null | undefined;
+		labelSelector: (task: ThreadTopicTask) => string | null | undefined;
+		maxCount: number;
+	}
+) {
+	return relatedTasks
+		.filter((task) => Boolean(options.idSelector(task)) && Boolean(options.labelSelector(task)?.trim()))
+		.sort((left, right) => {
+			if (Boolean(left.isPrimary) !== Boolean(right.isPrimary)) {
+				return left.isPrimary ? -1 : 1;
+			}
+
+			return (options.labelSelector(left) ?? '').localeCompare(options.labelSelector(right) ?? '');
+		})
+		.map((task) => options.labelSelector(task)?.trim() ?? '')
+		.filter(
+			(label, index, labels) =>
+				Boolean(label) &&
+				labels.findIndex((candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)) ===
+					index
+		)
+		.slice(0, options.maxCount);
+}
+
+function collectUniqueIds(
+	relatedTasks: ThreadTopicTask[],
+	selector: (task: ThreadTopicTask) => string | null | undefined
+) {
+	return [
+		...new Set(
+			relatedTasks
+				.map((task) => selector(task)?.trim() ?? '')
+				.filter(Boolean)
+		)
+	];
 }
 
 function formatKeywordTopicLabel(token: string) {
@@ -300,6 +402,9 @@ function buildCompactTopicLabels(categorization: ThreadCategorization, maxLabels
 		...categorization.laneLabels.slice(0, 1),
 		...categorization.focusLabels.slice(0, 2),
 		...categorization.entityLabels.slice(0, 1),
+		...categorization.roleLabels.slice(0, 1),
+		...categorization.capabilityLabels.slice(0, 1),
+		...categorization.toolLabels.slice(0, 1),
 		...categorization.keywordLabels.slice(0, 2)
 	].slice(0, maxLabels);
 }
@@ -308,20 +413,37 @@ function buildCategorizationFromSignals(input: CategorizationSignalState): Threa
 	const laneLabels = selectLabels(input.laneScores, 1);
 	const focusLabels = selectLabels(input.focusScores, 3);
 	const entityLabels = selectLabels(input.entityScores, 3);
+	const roleLabels = selectLabels(input.roleScores, 2);
+	const capabilityLabels = selectLabels(input.capabilityScores, 3);
+	const toolLabels = selectLabels(input.toolScores, 3);
 	const keywordLabels = selectLabels(input.keywordScores, 4)
 		.map((token) => formatKeywordTopicLabel(token))
 		.filter((label) => {
 			const normalized = normalizeTopicLabel(label);
 
-			return ![...laneLabels, ...focusLabels, ...entityLabels].some(
+			return ![
+				...laneLabels,
+				...focusLabels,
+				...entityLabels,
+				...roleLabels,
+				...capabilityLabels,
+				...toolLabels
+			].some(
 				(existing) => normalizeTopicLabel(existing) === normalized
 			);
 		});
 
 	const categorization = {
+		projectIds: [],
+		projectLabels: [],
+		goalIds: [],
+		goalLabels: [],
 		laneLabels,
 		focusLabels,
 		entityLabels,
+		roleLabels,
+		capabilityLabels,
+		toolLabels,
 		keywordLabels,
 		labels: []
 	} satisfies ThreadCategorization;
@@ -337,23 +459,30 @@ export function normalizeTopicLabel(label: string) {
 }
 
 export function deriveTaskCategorization(
-	task: Pick<Task, 'title' | 'summary' | 'lane' | 'requiredCapabilityNames' | 'requiredToolNames'>
+	task: Pick<Task, 'title' | 'summary' | 'lane'> &
+		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
-	const { laneScores, focusScores, entityScores, keywordScores } = accumulateCategorizationSignals(
+	const signals = accumulateCategorizationSignals(
 		[
 			{ text: task.title, weight: 4 },
-			{ text: task.summary, weight: 3 },
-			{ text: task.requiredCapabilityNames?.join(' '), weight: 2 },
-			{ text: task.requiredToolNames?.join(' '), weight: 2 }
+			{ text: task.summary, weight: 3 }
 		],
 		[task.lane]
 	);
+	accumulateStructuredLabels(
+		signals.roleScores,
+		task.desiredRoleId ? [task.desiredRoleId] : [],
+		3
+	);
+	accumulateStructuredLabels(signals.capabilityScores, task.requiredCapabilityNames, 3);
+	accumulateStructuredLabels(signals.toolScores, task.requiredToolNames, 3);
 
-	return buildCategorizationFromSignals({ laneScores, focusScores, entityScores, keywordScores });
+	return buildCategorizationFromSignals(signals);
 }
 
 export function deriveTaskTopicLabels(
-	task: Pick<Task, 'title' | 'summary' | 'lane' | 'requiredCapabilityNames' | 'requiredToolNames'>
+	task: Pick<Task, 'title' | 'summary' | 'lane'> &
+		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
 	return deriveTaskCategorization(task).labels;
 }
@@ -368,6 +497,7 @@ export function deriveThreadCategorization(input: ThreadTopicInput) {
 	for (const task of input.relatedTasks) {
 		const titleWeight = task.isPrimary ? 5 : 3;
 		const summaryWeight = task.isPrimary ? 3 : 2;
+		const structuredWeight = task.isPrimary ? 4 : 2;
 
 		sources.push({ text: task.title, weight: titleWeight });
 		sources.push({ text: task.summary, weight: summaryWeight });
@@ -378,8 +508,40 @@ export function deriveThreadCategorization(input: ThreadTopicInput) {
 		sources.push({ text: runDetail.prompt, weight: 2 });
 		sources.push({ text: runDetail.lastMessage, weight: 2 });
 	}
+	const signals = accumulateCategorizationSignals(sources, lanes);
+	const projectLabels = selectPrimaryFirstLabels(input.relatedTasks, {
+		idSelector: (task) => task.projectId,
+		labelSelector: (task) => task.projectName,
+		maxCount: 2
+	});
+	const goalLabels = selectPrimaryFirstLabels(input.relatedTasks, {
+		idSelector: (task) => task.goalId,
+		labelSelector: (task) => task.goalName,
+		maxCount: 3
+	});
 
-	return buildCategorizationFromSignals(accumulateCategorizationSignals(sources, lanes));
+	for (const task of input.relatedTasks) {
+		const structuredWeight = task.isPrimary ? 4 : 2;
+		accumulateStructuredLabels(
+			signals.roleScores,
+			task.desiredRole ? [task.desiredRole] : [],
+			structuredWeight
+		);
+		accumulateStructuredLabels(
+			signals.capabilityScores,
+			task.requiredCapabilityNames,
+			structuredWeight
+		);
+		accumulateStructuredLabels(signals.toolScores, task.requiredToolNames, structuredWeight);
+	}
+
+	return {
+		...buildCategorizationFromSignals(signals),
+		projectIds: collectUniqueIds(input.relatedTasks, (task) => task.projectId),
+		projectLabels,
+		goalIds: collectUniqueIds(input.relatedTasks, (task) => task.goalId),
+		goalLabels
+	};
 }
 
 export function deriveThreadTopicLabels(input: ThreadTopicInput) {

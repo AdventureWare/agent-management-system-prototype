@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { sendAgentSessionMessage } from '$lib/server/agent-sessions';
+import { sendAgentThreadMessage } from '$lib/server/agent-threads';
 
 export const POST = async ({ params, request }) => {
 	const contentType = request.headers.get('content-type') ?? '';
@@ -25,11 +25,17 @@ export const POST = async ({ params, request }) => {
 	}
 
 	try {
-		const result = await sendAgentSessionMessage(params.sessionId, { prompt, attachments });
-		return json(result, { status: 201 });
+		const result = await sendAgentThreadMessage(params.sessionId, { prompt, attachments });
+		return json(
+			{
+				...result,
+				threadId: result.sessionId
+			},
+			{ status: 201 }
+		);
 	} catch (err) {
 		return json(
-			{ error: err instanceof Error ? err.message : 'Could not queue session message.' },
+			{ error: err instanceof Error ? err.message : 'Could not queue thread message.' },
 			{ status: 400 }
 		);
 	}

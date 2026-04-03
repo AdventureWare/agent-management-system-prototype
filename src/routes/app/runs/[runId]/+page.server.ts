@@ -6,8 +6,11 @@ import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const sessions = await listAgentSessions({ includeArchived: true });
-	const data = await loadControlPlane();
+	const controlPlanePromise = loadControlPlane();
+	const [data, sessions] = await Promise.all([
+		controlPlanePromise,
+		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+	]);
 	const runs = buildRunRecords(data, sessions);
 	const run = runs.find((candidate) => candidate.id === params.runId) ?? null;
 

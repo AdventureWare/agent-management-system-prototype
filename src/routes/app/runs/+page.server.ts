@@ -5,8 +5,11 @@ import { buildRunRecords } from '$lib/server/run-records';
 import { RUN_STATUS_OPTIONS } from '$lib/types/control-plane';
 
 export const load: PageServerLoad = async () => {
-	const sessions = await listAgentSessions({ includeArchived: true });
-	const data = await loadControlPlane();
+	const controlPlanePromise = loadControlPlane();
+	const [data, sessions] = await Promise.all([
+		controlPlanePromise,
+		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+	]);
 	const taskIdsWithRuns = new Set(data.runs.map((run) => run.taskId));
 	const workerIdsWithRuns = new Set(
 		data.runs

@@ -294,6 +294,152 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		);
 	});
 
+	it('renders the full routing and governance editor on the detail form', async () => {
+		render(Page, {
+			form: {} as never,
+			data: {
+				availableSkills: {
+					totalCount: 0,
+					globalCount: 0,
+					projectCount: 0,
+					previewSkills: []
+				},
+				attachmentRoot: '/tmp/project/agent_output',
+				artifactBrowser: {
+					rootPath: '/tmp/project/agent_output',
+					rootKind: 'directory',
+					browsePath: '/tmp/project/agent_output',
+					inspectingParentDirectory: false,
+					directoryEntries: [],
+					directoryEntriesTruncated: false,
+					knownOutputs: [],
+					errorMessage: ''
+				},
+				project: {
+					id: 'project_1',
+					name: 'Agent Management System Prototype',
+					summary: 'Primary app project',
+					projectRootFolder: '/tmp/project',
+					defaultArtifactRoot: '/tmp/project/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
+				},
+				projects: [],
+				goals: [],
+				roles: [
+					{
+						id: 'role_coordinator',
+						name: 'Coordinator',
+						lane: 'shared',
+						description: 'Coordinates execution'
+					},
+					{
+						id: 'role_reviewer',
+						name: 'Reviewer',
+						lane: 'product',
+						description: 'Reviews higher-risk work'
+					}
+				],
+				workers: [],
+				statusOptions: TASK_STATUS_OPTIONS,
+				relatedRuns: [],
+				dependencyTasks: [
+					{
+						id: 'task_dep_1',
+						title: 'Finalize API contract',
+						status: 'blocked',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype'
+					}
+				],
+				availableDependencyTasks: [
+					{
+						id: 'task_dep_1',
+						title: 'Finalize API contract',
+						status: 'blocked',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						isSelected: true
+					},
+					{
+						id: 'task_dep_2',
+						title: 'Ship docs update',
+						status: 'ready',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						isSelected: false
+					}
+				],
+				task: {
+					id: 'task_1',
+					title: 'Attach a brief',
+					summary: 'Need source documents',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					lane: 'product',
+					goalId: '',
+					priority: 'urgent',
+					status: 'blocked',
+					riskLevel: 'high',
+					approvalMode: 'before_apply',
+					requiresReview: false,
+					desiredRoleId: 'role_reviewer',
+					desiredRoleName: 'Reviewer',
+					assigneeWorkerId: null,
+					assigneeName: 'Unassigned',
+					threadSessionId: null,
+					blockedReason: 'Waiting on API contract',
+					dependencyTaskIds: ['task_dep_1'],
+					runCount: 0,
+					latestRunId: null,
+					latestRun: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T11:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z',
+					updatedAtLabel: 'just now',
+					openReview: null,
+					pendingApproval: null,
+					linkThread: null,
+					linkThreadKind: 'assigned',
+					statusThread: null
+				},
+				candidateThreads: [],
+				suggestedThread: null
+			} as never
+		});
+
+		expect(document.body.textContent).toContain('Queue priority, gates, and blockers');
+		expect(
+			(document.querySelector('select[name="priority"]') as HTMLSelectElement | null)?.value
+		).toBe('urgent');
+		expect(
+			(document.querySelector('select[name="riskLevel"]') as HTMLSelectElement | null)?.value
+		).toBe('high');
+		expect(
+			(document.querySelector('select[name="approvalMode"]') as HTMLSelectElement | null)?.value
+		).toBe('before_apply');
+		expect(
+			(document.querySelector('select[name="requiresReview"]') as HTMLSelectElement | null)?.value
+		).toBe('false');
+		expect(
+			(document.querySelector('select[name="desiredRoleId"]') as HTMLSelectElement | null)?.value
+		).toBe('role_reviewer');
+		expect(
+			(document.querySelector('textarea[name="blockedReason"]') as HTMLTextAreaElement | null)
+				?.value
+		).toBe('Waiting on API contract');
+		expect(
+			(
+				document.querySelector(
+					'input[name="dependencyTaskIds"][value="task_dep_1"]'
+				) as HTMLInputElement | null
+			)?.checked
+		).toBe(true);
+		expect(document.body.textContent).toContain('Finalize API contract');
+	});
+
 	it('clamps long title and instructions at the top of the page until expanded', async () => {
 		render(Page, {
 			form: {} as never,

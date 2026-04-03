@@ -23,6 +23,7 @@ describe('task thread topics', () => {
 				title: 'Improve thread assignment suggestions',
 				summary: 'Match new tasks to reusable work threads and surface better context.',
 				lane: 'product',
+				desiredRoleId: 'role_coordinator',
 				requiredCapabilityNames: ['assignment'],
 				requiredToolNames: ['context']
 			})
@@ -30,6 +31,9 @@ describe('task thread topics', () => {
 			laneLabels: ['Product'],
 			focusLabels: expect.arrayContaining(['Coordination']),
 			entityLabels: expect.arrayContaining(['Thread']),
+			roleLabels: expect.arrayContaining(['Coordinator']),
+			capabilityLabels: expect.arrayContaining(['Assignment']),
+			toolLabels: expect.arrayContaining(['Context']),
 			keywordLabels: expect.arrayContaining(['Suggestion'])
 		});
 	});
@@ -72,15 +76,29 @@ describe('task thread topics', () => {
 					{
 						title: 'Improve thread assignment suggestions',
 						summary: 'Match new tasks to reusable work threads.',
+						projectId: 'project_ams',
+						projectName: 'Agent Management System Prototype',
+						goalId: 'goal_threads',
+						goalName: 'Improve Thread Reuse',
 						lane: 'product',
+						desiredRole: 'Coordinator',
+						requiredCapabilityNames: ['assignment'],
+						requiredToolNames: ['context'],
 						isPrimary: true
 					}
 				]
 			})
 		).toMatchObject({
+			projectIds: ['project_ams'],
+			projectLabels: ['Agent Management System Prototype'],
+			goalIds: ['goal_threads'],
+			goalLabels: ['Improve Thread Reuse'],
 			laneLabels: ['Product'],
 			focusLabels: expect.arrayContaining(['Coordination']),
 			entityLabels: expect.arrayContaining(['Thread']),
+			roleLabels: expect.arrayContaining(['Coordinator']),
+			capabilityLabels: expect.arrayContaining(['Assignment']),
+			toolLabels: expect.arrayContaining(['Context']),
 			keywordLabels: expect.arrayContaining(['Suggestion'])
 		});
 	});

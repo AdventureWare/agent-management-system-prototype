@@ -295,7 +295,7 @@
 											{#if run.sessionId}
 												<a
 													class="ui-wrap-inline text-sky-300 transition hover:text-sky-200"
-													href={resolve(`/app/sessions/${run.sessionId}`)}
+													href={resolve(`/app/threads/${run.sessionId}`)}
 												>
 													{run.sessionName || run.sessionId}
 												</a>

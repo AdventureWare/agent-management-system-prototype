@@ -32,7 +32,7 @@
 			</a>
 			<a
 				class="rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-100"
-				href={resolve('/app/sessions')}
+				href={resolve('/app/threads')}
 			>
 				Open threads
 			</a>
@@ -122,7 +122,7 @@
 							<span
 								class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300 uppercase"
 							>
-								Area · {goal.lane}
+								Area · {goal.area ?? goal.lane}
 							</span>
 						</div>
 						<p class="mt-2 text-sm text-slate-300">{goal.summary}</p>

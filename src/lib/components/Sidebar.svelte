@@ -25,7 +25,7 @@
 		home: LayoutDashboardIcon,
 		improvements: LightbulbIcon,
 		tasks: ListTodoIcon,
-		sessions: MessagesSquareIcon,
+		threads: MessagesSquareIcon,
 		runs: ActivityIcon,
 		projects: FolderOpenIcon,
 		goals: TargetIcon,
@@ -75,9 +75,7 @@
 <div
 	class="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_minmax(0,1fr)]"
 >
-	<header
-		class="z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden"
-	>
+	<header class="z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden">
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
 			<div class="min-w-0">
 				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">Agent Ops</p>
@@ -139,6 +137,7 @@
 								<a
 									class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 transition hover:border-slate-700 hover:text-white"
 									href={resolve(link.href)}
+									data-sveltekit-preload-data="hover"
 									onclick={closeMobileNav}
 								>
 									<Icon class="size-4" />
@@ -189,7 +188,7 @@
 				<Navigation.Menu>
 					{#each section.links as link (link.href)}
 						{@const Icon = iconByLinkId[link.id]}
-						<Navigation.TriggerAnchor href={resolve(link.href)}>
+						<Navigation.TriggerAnchor href={resolve(link.href)} data-sveltekit-preload-data="hover">
 							<Icon class={layoutRail ? 'size-5' : 'size-4'} />
 							<Navigation.TriggerText>{link.label}</Navigation.TriggerText>
 						</Navigation.TriggerAnchor>

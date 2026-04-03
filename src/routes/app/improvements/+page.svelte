@@ -14,16 +14,19 @@
 	} from '$lib/client/agent-data';
 	import {
 		SELF_IMPROVEMENT_CATEGORY_OPTIONS,
+		SELF_IMPROVEMENT_DISMISSAL_REASON_OPTIONS,
 		SELF_IMPROVEMENT_SEVERITY_OPTIONS,
 		SELF_IMPROVEMENT_SOURCE_OPTIONS,
 		SELF_IMPROVEMENT_STATUS_OPTIONS,
 		formatSelfImprovementCategoryLabel,
+		formatSelfImprovementDecisionReasonLabel,
 		formatSelfImprovementKnowledgeStatusLabel,
 		formatSelfImprovementSignalTypeLabel,
 		formatSelfImprovementStatusLabel,
 		selfImprovementKnowledgeStatusToneClass,
 		selfImprovementSeverityToneClass,
 		selfImprovementStatusToneClass,
+		type SelfImprovementDecisionReason,
 		type SelfImprovementKnowledgeStatus,
 		type SelfImprovementSnapshot,
 		type SelfImprovementStatus,
@@ -56,6 +59,9 @@
 	let actionNotice = $state<string | null>(null);
 	let pendingOpportunityIds = $state.raw<string[]>([]);
 	let pendingKnowledgeItemIds = $state.raw<string[]>([]);
+	let dismissalReasonByOpportunityId = $state.raw<
+		Record<string, SelfImprovementDecisionReason>
+	>({});
 	let searchQuery = $state('');
 	let statusFilter = $state<'all' | SelfImprovementStatus>('open');
 	let categoryFilter = $state<'all' | (typeof SELF_IMPROVEMENT_CATEGORY_OPTIONS)[number]>('all');
@@ -140,6 +146,17 @@
 
 	function opportunityNeedsManualAcceptance(opportunity: TrackedSelfImprovementOpportunity) {
 		return !opportunity.suggestedTask && !opportunity.suggestedKnowledgeItem;
+	}
+
+	function getDismissalReason(opportunityId: string): SelfImprovementDecisionReason {
+		return dismissalReasonByOpportunityId[opportunityId] ?? 'other';
+	}
+
+	function updateDismissalReason(opportunityId: string, reason: string) {
+		dismissalReasonByOpportunityId = {
+			...dismissalReasonByOpportunityId,
+			[opportunityId]: reason as SelfImprovementDecisionReason
+		};
 	}
 
 	function normalizeProjectScope(projectId: string) {
@@ -231,7 +248,15 @@
 
 	async function updateOpportunityStatus(opportunityId: string, status: SelfImprovementStatus) {
 		await runOpportunityAction(opportunityId, async () => {
-			await updateSelfImprovementOpportunityStatus(opportunityId, status);
+			await updateSelfImprovementOpportunityStatus(opportunityId, status, {
+				decisionReason:
+					status === 'dismissed'
+						? getDismissalReason(opportunityId)
+						: status === 'open'
+							? 'reopened'
+							: null,
+				impressionId: snapshot.latestImpressionId
+			});
 		});
 	}
 
@@ -239,7 +264,8 @@
 		const taskId = await runOpportunityAction(opportunityId, async () => {
 			return createTaskFromSelfImprovementOpportunity(opportunityId, {
 				projectId: normalizeProjectScope(activeProjectId),
-				goalId: normalizeGoalScope(activeGoalId)
+				goalId: normalizeGoalScope(activeGoalId),
+				impressionId: snapshot.latestImpressionId
 			});
 		});
 
@@ -251,7 +277,8 @@
 	async function createKnowledgeDraft(opportunityId: string) {
 		const knowledgeItemId = await runOpportunityAction(opportunityId, async () => {
 			return createKnowledgeItemFromSelfImprovementOpportunity(opportunityId, {
-				goalId: normalizeGoalScope(activeGoalId)
+				goalId: normalizeGoalScope(activeGoalId),
+				impressionId: snapshot.latestImpressionId
 			});
 		});
 
@@ -768,6 +795,13 @@
 							<div class="min-w-0 flex-1 space-y-3">
 								<div class="flex flex-wrap items-center gap-2">
 									<h3 class="text-lg font-semibold text-white">{opportunity.title}</h3>
+									{#if opportunity.rankingScore !== null && opportunity.rankingScore !== undefined}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200"
+										>
+											Score {opportunity.rankingScore}
+										</span>
+									{/if}
 									<span
 										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${selfImprovementSeverityToneClass(opportunity.severity)}`}
 									>
@@ -822,6 +856,19 @@
 									</div>
 								</div>
 
+								{#if opportunity.rankingReasons && opportunity.rankingReasons.length > 0}
+									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+										<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-400 uppercase">
+											Why it ranked here
+										</p>
+										<ul class="mt-2 space-y-2 text-sm text-slate-300">
+											{#each opportunity.rankingReasons as rankingReason (rankingReason)}
+												<li>{rankingReason}</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+
 								{#if opportunity.createdTaskId}
 									<p class="text-sm text-sky-200">
 										Linked follow-up task: {opportunity.createdTaskTitle ??
@@ -871,6 +918,21 @@
 												{/each}
 											</ul>
 										</div>
+
+										{#if opportunity.rankingReasons && opportunity.rankingReasons.length > 0}
+											<div class="space-y-2 lg:col-span-2">
+												<p
+													class="text-[11px] font-semibold tracking-[0.16em] text-slate-400 uppercase"
+												>
+													Ranking rationale
+												</p>
+												<ul class="space-y-2 text-sm text-slate-300">
+													{#each opportunity.rankingReasons as rankingReason (rankingReason)}
+														<li>{rankingReason}</li>
+													{/each}
+												</ul>
+											</div>
+										{/if}
 									</div>
 								</details>
 							</div>
@@ -930,6 +992,27 @@
 								{/if}
 
 								{#if opportunity.status !== 'dismissed'}
+									<label class="block">
+										<span class="mb-2 block text-xs font-medium tracking-[0.12em] text-slate-400 uppercase">
+											Dismiss reason
+										</span>
+										<select
+											class="select text-white"
+											value={getDismissalReason(opportunity.id)}
+											onchange={(event) => {
+												updateDismissalReason(
+													opportunity.id,
+													(event.currentTarget as HTMLSelectElement).value
+												);
+											}}
+										>
+											{#each SELF_IMPROVEMENT_DISMISSAL_REASON_OPTIONS as reason (reason)}
+												<option value={reason}>
+													{formatSelfImprovementDecisionReasonLabel(reason)}
+												</option>
+											{/each}
+										</select>
+									</label>
 									<button
 										class="btn border border-slate-700 bg-slate-950 font-semibold text-slate-200 disabled:opacity-60"
 										type="button"

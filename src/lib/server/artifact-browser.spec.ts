@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildArtifactBrowser } from './artifact-browser';
+import { buildArtifactBrowser, inspectArtifactPathStatus } from './artifact-browser';
 
 let tempPaths: string[] = [];
 
@@ -58,5 +58,26 @@ describe('buildArtifactBrowser', () => {
 				exists: true
 			})
 		);
+	});
+
+	it('reports whether an artifact path exists on disk', async () => {
+		const tempRoot = await createTempDir();
+		const outputPath = join(tempRoot, 'summary.md');
+
+		await writeFile(outputPath, '# Summary');
+
+		await expect(inspectArtifactPathStatus(outputPath)).resolves.toEqual({
+			path: outputPath,
+			exists: true,
+			kind: 'file',
+			sizeBytes: 9
+		});
+
+		await expect(inspectArtifactPathStatus(join(tempRoot, 'missing.md'))).resolves.toEqual({
+			path: join(tempRoot, 'missing.md'),
+			exists: false,
+			kind: 'other',
+			sizeBytes: null
+		});
 	});
 });

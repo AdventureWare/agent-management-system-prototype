@@ -11,9 +11,9 @@ import { normalizePathInput } from '$lib/server/path-tools';
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-session';
 import {
 	APPROVAL_STATUS_OPTIONS,
+	AREA_OPTIONS,
 	DECISION_TYPE_OPTIONS,
 	GOAL_STATUS_OPTIONS,
-	LANE_OPTIONS,
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
 	PROVIDER_SETUP_STATUS_OPTIONS,
@@ -28,6 +28,7 @@ import {
 	normalizeTaskStatus,
 	type Approval,
 	type ApprovalStatus,
+	type Area,
 	type ControlPlaneData,
 	type Decision,
 	type DecisionType,
@@ -42,6 +43,7 @@ import {
 	type ProviderSetupStatus,
 	type Project,
 	type Priority,
+	type Role,
 	type Review,
 	type ReviewStatus,
 	type Run,
@@ -58,8 +60,8 @@ import {
 
 const DATA_FILE = resolve(process.cwd(), 'data', 'control-plane.json');
 
-function isLane(value: string): value is Lane {
-	return LANE_OPTIONS.includes(value as Lane);
+function isArea(value: string): value is Area {
+	return AREA_OPTIONS.includes(value as Area);
 }
 
 function isPriority(value: string): value is Priority {
@@ -177,6 +179,7 @@ type LegacyWorker = Partial<Worker> & {
 };
 
 type LegacyGoal = Partial<Goal> & {
+	area?: unknown;
 	successSignal?: unknown;
 	parentGoalId?: unknown;
 	projectIds?: unknown;
@@ -187,11 +190,37 @@ type LegacyGoal = Partial<Goal> & {
 };
 
 type LegacyTask = Partial<Task> & {
+	area?: unknown;
 	projectId?: unknown;
 	attachments?: unknown;
 	estimateHours?: unknown;
 	targetDate?: unknown;
 };
+
+type LegacyRole = Partial<Role> & {
+	area?: unknown;
+};
+
+function resolveLegacyArea(value: { area?: unknown; lane?: unknown }, fallback: Area): Area {
+	const candidate =
+		typeof value.area === 'string' ? value.area : typeof value.lane === 'string' ? value.lane : '';
+
+	return isArea(candidate) ? candidate : fallback;
+}
+
+function normalizeRole(role: LegacyRole): Role {
+	const areaValue =
+		typeof role.area === 'string' ? role.area : typeof role.lane === 'string' ? role.lane : '';
+	const area: Role['lane'] = areaValue === 'shared' || isArea(areaValue) ? areaValue : 'shared';
+
+	return {
+		id: typeof role.id === 'string' ? role.id : `role_${randomUUID()}`,
+		name: typeof role.name === 'string' ? role.name : '',
+		area,
+		lane: area,
+		description: typeof role.description === 'string' ? role.description : ''
+	};
+}
 
 type LegacyRun = Partial<Run> & {
 	artifactPaths?: unknown;
@@ -404,14 +433,15 @@ function normalizeWorker(worker: LegacyWorker): Worker {
 }
 
 function normalizeGoal(goal: LegacyGoal): Goal {
-	const laneValue = typeof goal.lane === 'string' ? goal.lane : '';
+	const area = resolveLegacyArea(goal, 'product');
 	const statusValue = typeof goal.status === 'string' ? goal.status : '';
 
 	return {
 		id: typeof goal.id === 'string' ? goal.id : createGoalId(),
 		name: typeof goal.name === 'string' ? goal.name : '',
 		summary: typeof goal.summary === 'string' ? goal.summary : '',
-		lane: isLane(laneValue) ? laneValue : 'product',
+		area,
+		lane: area,
 		status: isGoalStatus(statusValue) ? statusValue : 'ready',
 		artifactPath: normalizePathInput(
 			typeof goal.artifactPath === 'string' ? goal.artifactPath : ''
@@ -672,7 +702,6 @@ function normalizeTaskAttachment(attachment: LegacyTaskAttachment): TaskAttachme
 }
 
 function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task {
-	const laneValue = task.lane;
 	const priorityValue = task.priority;
 	const statusValue = task.status;
 	const riskLevelValue = task.riskLevel;
@@ -681,7 +710,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		.filter((run) => run.taskId === task.id)
 		.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
-	const lane: Lane = typeof laneValue === 'string' && isLane(laneValue) ? laneValue : 'product';
+	const area = resolveLegacyArea(task, 'product');
 	const priority: Priority =
 		typeof priorityValue === 'string' && isPriority(priorityValue) ? priorityValue : 'medium';
 	const status = typeof statusValue === 'string' ? normalizeTaskStatus(statusValue) : null;
@@ -698,7 +727,8 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		title: typeof task.title === 'string' ? task.title : '',
 		summary: typeof task.summary === 'string' ? task.summary : '',
 		projectId: inferTaskProjectId(task, projects),
-		lane,
+		area,
+		lane: area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
 		priority,
 		status: status ?? 'ready',
@@ -910,7 +940,9 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 	return syncGovernanceQueues(
 		syncTaskExecutionState({
 			providers,
-			roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+			roles: Array.isArray(parsed.roles)
+				? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
+				: [],
 			projects,
 			goals: Array.isArray(parsed.goals)
 				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
@@ -1091,8 +1123,12 @@ export function createWorkerId() {
 	return `worker_${randomUUID()}`;
 }
 
+export function parseArea(value: string, fallback: Area): Area {
+	return isArea(value) ? value : fallback;
+}
+
 export function parseLane(value: string, fallback: Lane): Lane {
-	return isLane(value) ? value : fallback;
+	return parseArea(value, fallback);
 }
 
 export function parsePriority(value: string, fallback: Priority): Priority {
@@ -1188,7 +1224,8 @@ export function createProvider(input: {
 export function createGoal(input: {
 	name: string;
 	summary: string;
-	lane: Lane;
+	area?: Area;
+	lane?: Lane;
 	status: GoalStatus;
 	artifactPath: string;
 	successSignal?: string;
@@ -1199,11 +1236,14 @@ export function createGoal(input: {
 	planningPriority?: number;
 	confidence?: PlanningConfidence;
 }): Goal {
+	const area = input.area ?? input.lane ?? 'product';
+
 	return {
 		id: createGoalId(),
 		name: input.name,
 		summary: input.summary,
-		lane: input.lane,
+		area,
+		lane: area,
 		status: input.status,
 		artifactPath: normalizePathInput(input.artifactPath),
 		successSignal: input.successSignal ?? '',
@@ -1270,7 +1310,8 @@ export function createTask(input: {
 	title: string;
 	summary: string;
 	projectId: string;
-	lane: Lane;
+	area?: Area;
+	lane?: Lane;
 	goalId: string;
 	priority: Priority;
 	riskLevel: TaskRiskLevel;
@@ -1290,13 +1331,15 @@ export function createTask(input: {
 	attachments?: TaskAttachment[];
 }): Task {
 	const now = new Date().toISOString();
+	const area = input.area ?? input.lane ?? 'product';
 
 	return {
 		id: createTaskId(),
 		title: input.title,
 		summary: input.summary,
 		projectId: input.projectId,
-		lane: input.lane,
+		area,
+		lane: area,
 		goalId: input.goalId,
 		priority: input.priority,
 		status: input.status ?? 'ready',

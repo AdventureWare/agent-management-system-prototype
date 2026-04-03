@@ -12,6 +12,10 @@ import {
 } from '$lib/server/db/self-improvement-store-db';
 import { getGoalScopeProjectIds, getGoalScopeTaskIds } from '$lib/server/goal-relationships';
 import {
+	SELF_IMPROVEMENT_SUGGESTION_POLICY_VERSION,
+	rankSelfImprovementAnalysis
+} from '$lib/server/self-improvement-suggestion-policy';
+import {
 	applySelfImprovementGoalContext,
 	buildSelfImprovementAnalysis,
 	buildSelfImprovementFeedbackSignals,
@@ -26,10 +30,14 @@ import type { ControlPlaneData } from '$lib/types/control-plane';
 import type {
 	SelfImprovementAnalysis,
 	SelfImprovementCapturedSuggestion,
+	SelfImprovementDecisionReason,
+	SelfImprovementDecisionType,
 	SelfImprovementFeedbackSignal,
 	SelfImprovementKnowledgeItem,
 	SelfImprovementKnowledgeStatus,
 	SelfImprovementOpportunityRecord,
+	SelfImprovementSuggestionDecision,
+	SelfImprovementSuggestionImpression,
 	TrackedSelfImprovementOpportunity,
 	TrackedSelfImprovementFeedbackSignal,
 	SelfImprovementSnapshot,
@@ -45,7 +53,9 @@ function defaultDb(): SelfImprovementDb {
 		records: [],
 		signals: [],
 		knowledgeItems: [],
-		capturedSuggestions: []
+		capturedSuggestions: [],
+		impressions: [],
+		decisions: []
 	};
 }
 
@@ -105,6 +115,18 @@ function normalizeSelfImprovementDb(parsed: Partial<SelfImprovementDb>): SelfImp
 			? parsed.capturedSuggestions.filter(
 					(suggestion): suggestion is SelfImprovementCapturedSuggestion =>
 						Boolean(suggestion) && typeof suggestion === 'object'
+				)
+			: [],
+		impressions: Array.isArray(parsed.impressions)
+			? parsed.impressions.filter(
+					(impression): impression is SelfImprovementSuggestionImpression =>
+						Boolean(impression) && typeof impression === 'object'
+				)
+			: [],
+		decisions: Array.isArray(parsed.decisions)
+			? parsed.decisions.filter(
+					(decision): decision is SelfImprovementSuggestionDecision =>
+						Boolean(decision) && typeof decision === 'object'
 				)
 			: []
 	};
@@ -300,6 +322,7 @@ export function mergeSelfImprovementSnapshot(
 
 	return {
 		generatedAt: analysis.generatedAt,
+		latestImpressionId: null,
 		summary: {
 			...analysis.summary,
 			openCount,
@@ -356,7 +379,9 @@ export async function syncSelfImprovementAnalysis(
 		records: nextRecords,
 		signals: nextSignals,
 		knowledgeItems: current.knowledgeItems,
-		capturedSuggestions: current.capturedSuggestions
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: current.impressions,
+		decisions: current.decisions
 	});
 
 	return mergeSelfImprovementSnapshot(analysis, nextRecords, nextSignals, current.knowledgeItems);
@@ -368,6 +393,7 @@ export async function loadSelfImprovementSnapshot(input?: {
 	now?: number;
 	projectId?: string | null;
 	goalId?: string | null;
+	trackImpression?: boolean;
 }): Promise<SelfImprovementSnapshot> {
 	const [data, sessions] = await Promise.all([
 		input?.data ? Promise.resolve(input.data) : loadControlPlane(),
@@ -384,15 +410,15 @@ export async function loadSelfImprovementSnapshot(input?: {
 		data,
 		current.capturedSuggestions
 	);
+	const rankedAnalysis = rankSelfImprovementAnalysis(analysisWithCapturedSuggestions);
 	const signals = buildSelfImprovementFeedbackSignals({
 		data,
 		sessions,
 		now: input?.now
 	});
-
-	return applySelfImprovementGoalContext(
+	const scopedSnapshot = applySelfImprovementGoalContext(
 		filterSelfImprovementSnapshot(
-			await syncSelfImprovementAnalysis(analysisWithCapturedSuggestions, signals),
+			await syncSelfImprovementAnalysis(rankedAnalysis, signals),
 			{
 				projectId: input?.projectId ?? null,
 				goalId: input?.goalId ?? null,
@@ -404,12 +430,143 @@ export async function loadSelfImprovementSnapshot(input?: {
 			goalId: input?.goalId ?? null
 		}
 	);
+
+	if (!input?.trackImpression) {
+		return scopedSnapshot;
+	}
+
+	const impression = await appendSelfImprovementSuggestionImpression({
+		snapshot: scopedSnapshot,
+		projectId: input.projectId ?? null,
+		goalId: input.goalId ?? null
+	});
+
+	return {
+		...scopedSnapshot,
+		latestImpressionId: impression?.id ?? null
+	};
+}
+
+function deriveDecisionTypeFromStatus(status: SelfImprovementStatus): SelfImprovementDecisionType {
+	switch (status) {
+		case 'accepted':
+			return 'accepted';
+		case 'dismissed':
+			return 'dismissed';
+		case 'open':
+		default:
+			return 'reopened';
+	}
+}
+
+function buildDefaultDecisionSummary(input: {
+	status: SelfImprovementStatus;
+	decisionType: SelfImprovementDecisionType;
+	reason: SelfImprovementDecisionReason | null;
+}) {
+	if (input.decisionType === 'task_created') {
+		return 'Accepted and converted into a follow-up task.';
+	}
+
+	if (input.decisionType === 'knowledge_item_created') {
+		return 'Accepted and captured as a reusable saved lesson.';
+	}
+
+	if (input.status === 'dismissed') {
+		return input.reason
+			? `Dismissed with reason: ${input.reason.replaceAll('_', ' ')}.`
+			: 'Dismissed from the current queue.';
+	}
+
+	if (input.status === 'accepted') {
+		return 'Accepted for follow-up.';
+	}
+
+	return 'Reopened for further review.';
+}
+
+async function appendSelfImprovementSuggestionDecision(input: {
+	opportunityId: string;
+	impressionId?: string | null;
+	statusAfterDecision: SelfImprovementStatus;
+	decisionType: SelfImprovementDecisionType;
+	reason?: SelfImprovementDecisionReason | null;
+	summary: string;
+	createdAt: string;
+}) {
+	const current = await loadSelfImprovementDb();
+	const decision: SelfImprovementSuggestionDecision = {
+		id: randomUUID(),
+		opportunityId: input.opportunityId,
+		impressionId: input.impressionId ?? null,
+		decisionType: input.decisionType,
+		reason: input.reason ?? null,
+		summary: input.summary,
+		statusAfterDecision: input.statusAfterDecision,
+		createdAt: input.createdAt
+	};
+
+	await saveSelfImprovementDb({
+		records: current.records,
+		signals: current.signals,
+		knowledgeItems: current.knowledgeItems,
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: current.impressions,
+		decisions: [decision, ...current.decisions]
+	});
+
+	return decision;
+}
+
+async function appendSelfImprovementSuggestionImpression(input: {
+	snapshot: SelfImprovementSnapshot;
+	projectId?: string | null;
+	goalId?: string | null;
+}) {
+	const openOpportunities = input.snapshot.opportunities.filter(
+		(opportunity) => opportunity.status === 'open'
+	);
+
+	if (openOpportunities.length === 0) {
+		return null;
+	}
+
+	const current = await loadSelfImprovementDb();
+	const createdAt = new Date().toISOString();
+	const impression: SelfImprovementSuggestionImpression = {
+		id: randomUUID(),
+		createdAt,
+		projectId: input.projectId ?? null,
+		goalId: input.goalId ?? null,
+		policyVersion:
+			openOpportunities[0]?.rankingPolicyVersion ?? SELF_IMPROVEMENT_SUGGESTION_POLICY_VERSION,
+		itemCount: openOpportunities.length,
+		items: openOpportunities.map((opportunity, index) => ({
+			opportunityId: opportunity.id,
+			rank: index + 1,
+			score: opportunity.rankingScore ?? null
+		}))
+	};
+
+	await saveSelfImprovementDb({
+		records: current.records,
+		signals: current.signals,
+		knowledgeItems: current.knowledgeItems,
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: [impression, ...current.impressions],
+		decisions: current.decisions
+	});
+
+	return impression;
 }
 
 export async function setSelfImprovementOpportunityStatus(input: {
 	opportunityId: string;
 	status: SelfImprovementStatus;
 	decisionSummary?: string;
+	decisionType?: SelfImprovementDecisionType;
+	decisionReason?: SelfImprovementDecisionReason | null;
+	impressionId?: string | null;
 	createdTaskId?: string | null;
 	createdTaskTitle?: string | null;
 	createdKnowledgeItemId?: string | null;
@@ -420,6 +577,14 @@ export async function setSelfImprovementOpportunityStatus(input: {
 	const existingRecord =
 		current.records.find((record) => record.id === input.opportunityId) ??
 		createDefaultRecord(input.opportunityId, now);
+	const decisionType = input.decisionType ?? deriveDecisionTypeFromStatus(input.status);
+	const decisionSummary =
+		input.decisionSummary ??
+		buildDefaultDecisionSummary({
+			status: input.status,
+			decisionType,
+			reason: input.decisionReason ?? null
+		});
 	const nextRecord: SelfImprovementOpportunityRecord = {
 		...existingRecord,
 		status: input.status,
@@ -430,7 +595,7 @@ export async function setSelfImprovementOpportunityStatus(input: {
 			input.status === 'dismissed'
 				? (existingRecord.dismissedAt ?? now)
 				: existingRecord.dismissedAt,
-		decisionSummary: input.decisionSummary ?? existingRecord.decisionSummary,
+		decisionSummary,
 		createdTaskId:
 			input.createdTaskId === undefined ? existingRecord.createdTaskId : input.createdTaskId,
 		createdTaskTitle:
@@ -454,7 +619,19 @@ export async function setSelfImprovementOpportunityStatus(input: {
 		records: nextRecords,
 		signals: current.signals,
 		knowledgeItems: current.knowledgeItems,
-		capturedSuggestions: current.capturedSuggestions
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: current.impressions,
+		decisions: current.decisions
+	});
+
+	await appendSelfImprovementSuggestionDecision({
+		opportunityId: input.opportunityId,
+		impressionId: input.impressionId ?? null,
+		statusAfterDecision: input.status,
+		decisionType,
+		reason: input.decisionReason ?? null,
+		summary: decisionSummary,
+		createdAt: now
 	});
 
 	return nextRecord;
@@ -486,7 +663,9 @@ export async function createCapturedSelfImprovementSuggestion(input: {
 		records: current.records,
 		signals: current.signals,
 		knowledgeItems: current.knowledgeItems,
-		capturedSuggestions: [nextSuggestion, ...current.capturedSuggestions]
+		capturedSuggestions: [nextSuggestion, ...current.capturedSuggestions],
+		impressions: current.impressions,
+		decisions: current.decisions
 	});
 
 	return nextSuggestion;
@@ -557,6 +736,7 @@ export function filterSelfImprovementSnapshot(
 
 	return {
 		...snapshot,
+		latestImpressionId: snapshot.latestImpressionId,
 		summary: {
 			totalCount: opportunities.length,
 			highSeverityCount: opportunities.filter((opportunity) => opportunity.severity === 'high')
@@ -684,6 +864,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 	options: {
 		projectId?: string | null;
 		goalId?: string | null;
+		impressionId?: string | null;
 	} = {}
 ) {
 	const [data, db] = await Promise.all([loadControlPlane(), loadSelfImprovementDb()]);
@@ -746,7 +927,10 @@ export async function createTaskFromSelfImprovementOpportunity(
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,
 		status: 'accepted',
+		decisionType: 'task_created',
+		decisionReason: 'accepted_for_follow_up',
 		decisionSummary: opportunity.decisionSummary || 'Accepted and converted into a follow-up task.',
+		impressionId: options.impressionId ?? null,
 		createdTaskId: createdTask.id,
 		createdTaskTitle: createdTask.title
 	});
@@ -758,6 +942,7 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 	opportunityId: string,
 	options: {
 		goalId?: string | null;
+		impressionId?: string | null;
 	} = {}
 ) {
 	const [data, db] = await Promise.all([loadControlPlane(), loadSelfImprovementDb()]);
@@ -790,14 +975,19 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 		records: db.records,
 		signals: db.signals,
 		knowledgeItems: [knowledgeItem, ...db.knowledgeItems],
-		capturedSuggestions: db.capturedSuggestions
+		capturedSuggestions: db.capturedSuggestions,
+		impressions: db.impressions,
+		decisions: db.decisions
 	});
 
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,
 		status: 'accepted',
+		decisionType: 'knowledge_item_created',
+		decisionReason: 'accepted_for_knowledge',
 		decisionSummary:
 			opportunity.decisionSummary || 'Accepted and captured as a reusable saved lesson.',
+		impressionId: options.impressionId ?? null,
 		createdKnowledgeItemId: knowledgeItem.id,
 		createdKnowledgeItemTitle: knowledgeItem.title
 	});
@@ -835,7 +1025,9 @@ export async function setSelfImprovementKnowledgeItemStatus(input: {
 		records: current.records,
 		signals: current.signals,
 		knowledgeItems: nextKnowledgeItems,
-		capturedSuggestions: current.capturedSuggestions
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: current.impressions,
+		decisions: current.decisions
 	});
 
 	return nextItem;

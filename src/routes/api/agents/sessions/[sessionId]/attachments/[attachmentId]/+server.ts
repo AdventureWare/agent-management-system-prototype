@@ -1,12 +1,12 @@
 import { error } from '@sveltejs/kit';
 import { createArtifactDownloadResponse } from '$lib/server/artifact-browser';
-import { getAgentSession } from '$lib/server/agent-sessions';
+import { getAgentThread } from '$lib/server/agent-threads';
 
 export const GET = async ({ params }) => {
-	const session = await getAgentSession(params.sessionId);
+	const session = await getAgentThread(params.sessionId);
 
 	if (!session) {
-		throw error(404, 'Session not found.');
+		throw error(404, 'Thread not found.');
 	}
 
 	const attachment = (session.attachments ?? []).find(

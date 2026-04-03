@@ -5,6 +5,7 @@ export const POST = async ({ params, request }) => {
 	const opportunityId = params.opportunityId?.trim() ?? '';
 	const payload = (await request.json().catch(() => ({}))) as {
 		goalId?: string | null;
+		impressionId?: string | null;
 	};
 
 	if (!opportunityId) {
@@ -12,7 +13,8 @@ export const POST = async ({ params, request }) => {
 	}
 
 	const knowledgeItem = await createKnowledgeItemFromSelfImprovementOpportunity(opportunityId, {
-		goalId: payload.goalId?.trim() || null
+		goalId: payload.goalId?.trim() || null,
+		impressionId: payload.impressionId?.trim() || null
 	});
 
 	if (!knowledgeItem) {

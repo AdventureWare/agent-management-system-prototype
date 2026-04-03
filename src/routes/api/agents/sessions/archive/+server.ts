@@ -1,20 +1,26 @@
 import { json } from '@sveltejs/kit';
-import { setAgentSessionsArchived } from '$lib/server/agent-sessions';
+import { setAgentThreadsArchived } from '$lib/server/agent-threads';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
+		threadIds?: unknown;
 		sessionIds?: unknown;
 		archived?: boolean;
 	};
-	const sessionIds = Array.isArray(body.sessionIds)
-		? body.sessionIds.filter((sessionId): sessionId is string => typeof sessionId === 'string')
-		: [];
+	const threadIds = Array.isArray(body.threadIds)
+		? body.threadIds.filter((threadId): threadId is string => typeof threadId === 'string')
+		: Array.isArray(body.sessionIds)
+			? body.sessionIds.filter((sessionId): sessionId is string => typeof sessionId === 'string')
+			: [];
 
-	if (sessionIds.length === 0) {
-		return json({ error: 'At least one session id is required.' }, { status: 400 });
+	if (threadIds.length === 0) {
+		return json({ error: 'At least one thread id is required.' }, { status: 400 });
 	}
 
+	const updatedThreadIds = await setAgentThreadsArchived(threadIds, body.archived !== false);
+
 	return json({
-		updatedSessionIds: await setAgentSessionsArchived(sessionIds, body.archived !== false)
+		updatedThreadIds,
+		updatedSessionIds: updatedThreadIds
 	});
 };

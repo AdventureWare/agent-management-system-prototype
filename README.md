@@ -10,7 +10,7 @@ Current scope:
 - run history, prompt digests, logs, artifacts, and last-message capture
 - supporting control-plane directories for projects, goals, planning windows, workers, roles, and providers
 - self-improvement opportunity analysis from tasks, runs, reviews, and thread state
-- session APIs under `/api/agents/sessions/*`
+- thread APIs under `/api/agents/threads/*` with session aliases kept for compatibility
 
 ## Why this slice exists
 
@@ -20,7 +20,7 @@ The immediate problem is not advanced orchestration. It is having one shared pla
 - start a background Codex run on your laptop
 - see how many runs are active or finished
 - inspect logs and the last agent message
-- send a follow-up prompt into the same session later
+- send a follow-up prompt into the same thread later
 
 That gives you the first useful "work while I am away" loop before adding auth, queueing, or richer orchestration.
 
@@ -30,7 +30,7 @@ The current center of gravity is:
 
 - `Tasks`: the main work queue and launch point
 - `Runs`: the execution ledger
-- `Threads` (stored as sessions): the resumable Codex context container
+- `Threads`: the resumable Codex context container
 
 The rest of the top-level surfaces are real, but mostly play supporting roles today:
 
@@ -73,9 +73,9 @@ npm run db:import-json
 npm run db:export-json
 ```
 
-## Codex sessions
+## Codex threads
 
-The first session layer uses discrete background Codex runs:
+The first thread layer uses discrete background Codex runs:
 
 - start a run with `codex exec --json`
 - capture the discovered `thread_id`
@@ -85,15 +85,15 @@ This is not a browser-hosted live terminal. It is a resumable run queue with log
 
 UI:
 
-- `/app/sessions`
+- `/app/threads`
 
 API:
 
-- `GET /api/agents/sessions`
-- `POST /api/agents/sessions`
-- `GET /api/agents/sessions/:sessionId`
-- `POST /api/agents/sessions/:sessionId/messages`
-- `POST /api/agents/sessions/:sessionId/cancel`
+- `GET /api/agents/threads`
+- `POST /api/agents/threads`
+- `GET /api/agents/threads/:sessionId`
+- `POST /api/agents/threads/:sessionId/messages`
+- `POST /api/agents/threads/:sessionId/cancel`
 - `GET /api/improvement/opportunities`
 
 Environment:
@@ -104,7 +104,7 @@ export CODEX_BIN="$(which codex)"
 
 If `CODEX_BIN` is not set, the prototype uses `codex` from `PATH`.
 
-Session data lives in:
+Thread data lives in:
 
 - `data/agent-sessions.json`
 - `data/agent-sessions/<sessionId>/runs/<runId>/`
@@ -116,8 +116,8 @@ The runner script is:
 ## Recommended next steps
 
 1. Add user authentication before exposing this publicly.
-2. Add live session streaming or websocket updates instead of pure polling.
-3. Add a very small task inbox so tasks launch sessions automatically.
+2. Add live thread streaming or websocket updates instead of pure polling.
+3. Add a very small task inbox so tasks launch threads automatically.
 4. Add deployment or secure remote access so the laptop-hosted app is reachable when you are away.
 
 ## Product docs

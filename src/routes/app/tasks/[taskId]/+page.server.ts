@@ -1,12 +1,21 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
+	PRIORITY_OPTIONS,
+	TASK_APPROVAL_MODE_OPTIONS,
+	TASK_RISK_LEVEL_OPTIONS,
 	TASK_STATUS_OPTIONS,
+	formatPriorityLabel,
+	formatTaskApprovalModeLabel,
+	formatTaskRiskLevelLabel,
 	formatTaskStatusLabel,
 	type Goal,
+	type Priority,
 	type Project,
 	type Run,
-	type Task
+	type Task,
+	type TaskApprovalMode,
+	type TaskRiskLevel
 } from '$lib/types/control-plane';
 import {
 	createDecision,
@@ -59,6 +68,39 @@ class TaskActionError extends Error {
 }
 
 function readTaskForm(form: FormData) {
+	const parseOption = <T extends readonly string[]>(
+		options: T,
+		value: FormDataEntryValue | null,
+		fallback: T[number]
+	): T[number] => {
+		const normalized = value?.toString().trim() ?? '';
+		return options.includes(normalized as T[number]) ? (normalized as T[number]) : fallback;
+	};
+	const parseBoolean = (value: FormDataEntryValue | null, fallback: boolean) => {
+		const normalized = value?.toString().trim().toLowerCase() ?? '';
+
+		if (normalized === 'true') {
+			return true;
+		}
+
+		if (normalized === 'false') {
+			return false;
+		}
+
+		return fallback;
+	};
+	const parseNameList = (value: FormDataEntryValue | null) => [
+		...new Set(
+			(value?.toString() ?? '')
+				.split(',')
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+		)
+	];
+	const parseIdList = (values: FormDataEntryValue[]) => [
+		...new Set(values.map((value) => value.toString().trim()).filter(Boolean))
+	];
+
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
@@ -66,21 +108,27 @@ function readTaskForm(form: FormData) {
 		goalId: form.get('goalId')?.toString().trim() ?? '',
 		hasGoalId: form.has('goalId'),
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
-		requiredCapabilityNames:
-			form
-				.get('requiredCapabilityNames')
-				?.toString()
-				.split(',')
-				.map((value) => value.trim())
-				.filter(Boolean) ?? [],
-		requiredToolNames:
-			form
-				.get('requiredToolNames')
-				?.toString()
-				.split(',')
-				.map((value) => value.trim())
-				.filter(Boolean) ?? [],
-		targetDate: form.get('targetDate')?.toString().trim() ?? ''
+		hasAssigneeWorkerId: form.has('assigneeWorkerId'),
+		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
+		hasPriority: form.has('priority'),
+		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
+		hasRiskLevel: form.has('riskLevel'),
+		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
+		hasApprovalMode: form.has('approvalMode'),
+		requiresReview: parseBoolean(form.get('requiresReview'), true),
+		hasRequiresReview: form.has('requiresReview'),
+		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
+		hasDesiredRoleId: form.has('desiredRoleId'),
+		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
+		hasRequiredCapabilityNames: form.has('requiredCapabilityNames'),
+		requiredToolNames: parseNameList(form.get('requiredToolNames')),
+		hasRequiredToolNames: form.has('requiredToolNames'),
+		blockedReason: form.get('blockedReason')?.toString().trim() ?? '',
+		hasBlockedReason: form.has('blockedReason'),
+		dependencyTaskIds: parseIdList(form.getAll('dependencyTaskIds')),
+		hasDependencyTaskSelection: form.has('dependencyTaskSelection'),
+		targetDate: form.get('targetDate')?.toString().trim() ?? '',
+		hasTargetDate: form.has('targetDate')
 	};
 }
 
@@ -96,6 +144,14 @@ function formatDecisionDate(value: string | null) {
 	return value ? value : 'clear the target date';
 }
 
+function joinQuotedLabels(labels: string[]) {
+	return labels.map((label) => `"${label}"`).join(', ');
+}
+
+function normalizeIdList(values: string[]) {
+	return [...new Set(values.filter(Boolean))].sort();
+}
+
 function buildTaskPlanDecisionSummary(input: {
 	task: Task;
 	nextTitle: string;
@@ -106,8 +162,19 @@ function buildTaskPlanDecisionSummary(input: {
 	currentGoalName: string | null;
 	nextStatus: Task['status'];
 	nextAssigneeWorker: { id: string; name: string } | null;
+	nextPriority: Priority;
+	nextRiskLevel: TaskRiskLevel;
+	nextApprovalMode: TaskApprovalMode;
+	nextRequiresReview: boolean;
+	nextDesiredRoleId: string;
+	nextDesiredRoleName: string | null;
+	currentDesiredRoleName: string | null;
 	nextRequiredCapabilityNames: string[];
 	nextRequiredToolNames: string[];
+	nextBlockedReason: string;
+	nextDependencyTaskIds: string[];
+	nextDependencyTaskTitles: string[];
+	currentDependencyTaskTitles: string[];
 	nextTargetDate: string | null;
 }) {
 	const changes: string[] = [];
@@ -115,6 +182,8 @@ function buildTaskPlanDecisionSummary(input: {
 	const nextCapabilityNames = [...input.nextRequiredCapabilityNames].sort();
 	const currentToolNames = [...(input.task.requiredToolNames ?? [])].sort();
 	const nextToolNames = [...input.nextRequiredToolNames].sort();
+	const currentDependencyIds = normalizeIdList(input.task.dependencyTaskIds ?? []);
+	const nextDependencyIds = normalizeIdList(input.nextDependencyTaskIds);
 
 	if (input.nextTitle !== input.task.title) {
 		changes.push(`renamed the task to "${input.nextTitle}"`);
@@ -150,6 +219,34 @@ function buildTaskPlanDecisionSummary(input: {
 		);
 	}
 
+	if (input.nextPriority !== input.task.priority) {
+		changes.push(`set priority to ${formatPriorityLabel(input.nextPriority)}`);
+	}
+
+	if (input.nextRiskLevel !== input.task.riskLevel) {
+		changes.push(`set risk level to ${formatTaskRiskLevelLabel(input.nextRiskLevel)}`);
+	}
+
+	if (input.nextApprovalMode !== input.task.approvalMode) {
+		changes.push(`set approval mode to ${formatTaskApprovalModeLabel(input.nextApprovalMode)}`);
+	}
+
+	if (input.nextRequiresReview !== input.task.requiresReview) {
+		changes.push(
+			input.nextRequiresReview ? 'required review before completion' : 'made review optional'
+		);
+	}
+
+	if (input.nextDesiredRoleId !== input.task.desiredRoleId) {
+		changes.push(
+			input.nextDesiredRoleId
+				? `set desired role to ${input.nextDesiredRoleName ?? input.nextDesiredRoleId}`
+				: input.task.desiredRoleId
+					? `cleared the desired role from ${input.currentDesiredRoleName ?? input.task.desiredRoleId}`
+					: 'cleared the desired role'
+		);
+	}
+
 	if (currentCapabilityNames.join('|') !== nextCapabilityNames.join('|')) {
 		changes.push(
 			nextCapabilityNames.length > 0
@@ -163,6 +260,24 @@ function buildTaskPlanDecisionSummary(input: {
 			nextToolNames.length > 0
 				? `set required tools to ${nextToolNames.join(', ')}`
 				: 'cleared required tools'
+		);
+	}
+
+	if (input.nextBlockedReason !== input.task.blockedReason) {
+		changes.push(
+			input.nextBlockedReason
+				? `updated the blocked reason to "${input.nextBlockedReason}"`
+				: 'cleared the blocked reason'
+		);
+	}
+
+	if (currentDependencyIds.join('|') !== nextDependencyIds.join('|')) {
+		changes.push(
+			nextDependencyIds.length > 0
+				? `set dependencies to ${joinQuotedLabels(input.nextDependencyTaskTitles)}`
+				: input.task.dependencyTaskIds.length > 0
+					? `cleared dependencies from ${joinQuotedLabels(input.currentDependencyTaskTitles)}`
+					: 'cleared dependencies'
 		);
 	}
 
@@ -329,18 +444,43 @@ async function buildTaskLaunchPlan(
 	const effectiveName = input.name || task.title;
 	const effectiveInstructions = input.instructions || task.summary;
 	const effectiveProjectId = input.projectId || task.projectId;
+	const effectivePriority = input.hasPriority ? input.priority : task.priority;
+	const effectiveRiskLevel = input.hasRiskLevel ? input.riskLevel : task.riskLevel;
+	const effectiveApprovalMode = input.hasApprovalMode ? input.approvalMode : task.approvalMode;
+	const effectiveRequiresReview = input.hasRequiresReview
+		? input.requiresReview
+		: task.requiresReview;
 	const selectedGoal = input.goalId
 		? (current.goals.find((candidate) => candidate.id === input.goalId) ?? null)
 		: null;
 	const effectiveGoalId = input.hasGoalId ? (selectedGoal?.id ?? '') : task.goalId;
+	const selectedDesiredRole = input.desiredRoleId
+		? (current.roles.find((candidate) => candidate.id === input.desiredRoleId) ?? null)
+		: null;
+	const effectiveDesiredRoleId =
+		input.hasDesiredRoleId && (input.desiredRoleId === '' || selectedDesiredRole)
+			? input.desiredRoleId
+			: task.desiredRoleId;
 	const assigneeWorker = input.assigneeWorkerId
 		? current.workers.find((candidate) => candidate.id === input.assigneeWorkerId)
 		: null;
 	const effectiveWorker =
-		assigneeWorker ??
+		(input.hasAssigneeWorkerId ? assigneeWorker : null) ??
 		(task.assigneeWorkerId
 			? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
 			: null);
+	const effectiveRequiredCapabilityNames = input.hasRequiredCapabilityNames
+		? input.requiredCapabilityNames
+		: (task.requiredCapabilityNames ?? []);
+	const effectiveRequiredToolNames = input.hasRequiredToolNames
+		? input.requiredToolNames
+		: (task.requiredToolNames ?? []);
+	const effectiveDependencyTaskIds = input.hasDependencyTaskSelection
+		? input.dependencyTaskIds
+		: task.dependencyTaskIds;
+	const effectiveTargetDate = input.hasTargetDate
+		? input.targetDate || null
+		: (task.targetDate ?? null);
 	const project = current.projects.find((candidate) => candidate.id === effectiveProjectId);
 
 	if (!project) {
@@ -353,6 +493,24 @@ async function buildTaskLaunchPlan(
 
 	if (input.assigneeWorkerId && !assigneeWorker) {
 		throw new TaskActionError(400, 'Worker not found.');
+	}
+
+	if (input.hasDesiredRoleId && input.desiredRoleId && !selectedDesiredRole) {
+		throw new TaskActionError(400, 'Desired role not found.');
+	}
+
+	const invalidDependencyIds = effectiveDependencyTaskIds.filter(
+		(dependencyTaskId) =>
+			dependencyTaskId === task.id ||
+			!current.tasks.some((candidate) => candidate.id === dependencyTaskId)
+	);
+
+	if (invalidDependencyIds.length > 0) {
+		throw new TaskActionError(400, 'One or more selected dependencies are no longer available.');
+	}
+
+	if (effectiveTargetDate && !isValidDate(effectiveTargetDate)) {
+		throw new TaskActionError(400, 'Target date must use YYYY-MM-DD format.');
 	}
 
 	if (!project.projectRootFolder) {
@@ -433,8 +591,17 @@ async function buildTaskLaunchPlan(
 		effectiveGoalId,
 		effectiveName,
 		effectiveInstructions,
+		effectivePriority,
+		effectiveRiskLevel,
+		effectiveApprovalMode,
+		effectiveRequiresReview,
+		effectiveDesiredRoleId,
 		assigneeWorker,
 		effectiveWorker,
+		effectiveRequiredCapabilityNames,
+		effectiveRequiredToolNames,
+		effectiveDependencyTaskIds,
+		effectiveTargetDate,
 		provider,
 		prompt,
 		retrievedKnowledgeItems: taskKnowledge,
@@ -519,7 +686,16 @@ async function launchTaskFromPlan(
 						projectId: plan.project.id,
 						goalId: plan.effectiveGoalId,
 						assigneeWorkerId: plan.assigneeWorker?.id ?? candidate.assigneeWorkerId,
-						desiredRoleId: plan.assigneeWorker?.roleId ?? candidate.desiredRoleId,
+						priority: plan.effectivePriority,
+						riskLevel: plan.effectiveRiskLevel,
+						approvalMode: plan.effectiveApprovalMode,
+						requiresReview: plan.effectiveRequiresReview,
+						desiredRoleId: plan.effectiveDesiredRoleId,
+						requiredCapabilityNames: plan.effectiveRequiredCapabilityNames,
+						requiredToolNames: plan.effectiveRequiredToolNames,
+						blockedReason: '',
+						dependencyTaskIds: plan.effectiveDependencyTaskIds,
+						targetDate: plan.effectiveTargetDate,
 						threadSessionId: sessionId,
 						artifactPath:
 							candidate.artifactPath ||
@@ -527,7 +703,6 @@ async function launchTaskFromPlan(
 							plan.project.projectRootFolder ||
 							'',
 						status: 'in_progress',
-						blockedReason: '',
 						updatedAt: now
 					}
 				: candidate
@@ -540,8 +715,11 @@ async function launchTaskFromPlan(
 }
 
 export const load: PageServerLoad = async ({ params }) => {
-	const sessions = await listAgentSessions({ includeArchived: true });
-	const data = await loadControlPlane();
+	const controlPlanePromise = loadControlPlane();
+	const [data, sessions] = await Promise.all([
+		controlPlanePromise,
+		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+	]);
 	const task = data.tasks.find((candidate) => candidate.id === params.taskId);
 
 	if (!task) {
@@ -552,6 +730,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
+	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const dependencyTaskIds = new Set(task.dependencyTaskIds);
 	const relatedRuns = data.runs
 		.filter((run) => run.taskId === task.id)
@@ -571,9 +750,30 @@ export const load: PageServerLoad = async ({ params }) => {
 		.map((dependency) => ({
 			id: dependency.id,
 			title: dependency.title,
-			status: dependency.status
+			status: dependency.status,
+			projectId: dependency.projectId,
+			projectName: projectMap.get(dependency.projectId)?.name ?? 'No project'
 		}))
 		.sort((a, b) => a.title.localeCompare(b.title));
+	const availableDependencyTasks = data.tasks
+		.filter((candidate) => candidate.id !== task.id)
+		.map((candidate) => ({
+			id: candidate.id,
+			title: candidate.title,
+			status: candidate.status,
+			projectId: candidate.projectId,
+			projectName: projectMap.get(candidate.projectId)?.name ?? 'No project',
+			isSelected: dependencyTaskIds.has(candidate.id)
+		}))
+		.sort((left, right) => {
+			if (left.isSelected !== right.isSelected) {
+				return left.isSelected ? -1 : 1;
+			}
+
+			const projectComparison = left.projectName.localeCompare(right.projectName);
+
+			return projectComparison !== 0 ? projectComparison : left.title.localeCompare(right.title);
+		});
 	const openReview = getOpenReviewForTask(data, task.id);
 	const pendingApproval = getPendingApprovalForTask(data, task.id);
 	const project = projectMap.get(task.projectId) ?? null;
@@ -606,7 +806,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		sessions: threadScopedSessions
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
-	const retrievedKnowledgeItems = await loadTaskRetrievedKnowledge(task, project);
 	const stalledRecovery = buildStalledRecoveryState({
 		task,
 		activeRun,
@@ -628,12 +827,27 @@ export const load: PageServerLoad = async ({ params }) => {
 			suggestion.providerId,
 		isCurrentAssignee: suggestion.workerId === task.assigneeWorkerId
 	}));
+	const [retrievedKnowledgeItems, artifactBrowser] = await Promise.all([
+		loadTaskRetrievedKnowledge(task, project),
+		buildArtifactBrowser({
+			rootPath: artifactRoot,
+			knownOutputs: task.attachments.map((attachment) => ({
+				label: attachment.name,
+				path: attachment.path,
+				href: `/api/tasks/${task.id}/attachments/${attachment.id}`,
+				description: `Attached task file${attachment.contentType ? ` · ${attachment.contentType}` : ''}`
+			}))
+		})
+	]);
 
 	return {
 		task: {
 			...task,
 			projectName: projectMap.get(task.projectId)?.name ?? 'No project',
 			goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : '',
+			desiredRoleName: task.desiredRoleId
+				? (roleMap.get(task.desiredRoleId)?.name ?? task.desiredRoleId)
+				: '',
 			assigneeName: task.assigneeWorkerId
 				? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
 				: 'Unassigned',
@@ -653,25 +867,19 @@ export const load: PageServerLoad = async ({ params }) => {
 			projectCount: availableSkills.filter((skill) => skill.project).length,
 			previewSkills: availableSkills.slice(0, 8)
 		},
-		artifactBrowser: await buildArtifactBrowser({
-			rootPath: artifactRoot,
-			knownOutputs: task.attachments.map((attachment) => ({
-				label: attachment.name,
-				path: attachment.path,
-				href: `/api/tasks/${task.id}/attachments/${attachment.id}`,
-				description: `Attached task file${attachment.contentType ? ` · ${attachment.contentType}` : ''}`
-			}))
-		}),
+		artifactBrowser,
 		project,
 		retrievedKnowledgeItems,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		goals: buildTaskGoalOptions(data.goals),
+		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		assignmentSuggestions,
 		recentDecisions,
 		statusOptions: TASK_STATUS_OPTIONS,
 		relatedRuns,
 		dependencyTasks,
+		availableDependencyTasks,
 		candidateThreads,
 		suggestedThread
 	};
@@ -686,10 +894,29 @@ export const actions: Actions = {
 			instructions,
 			projectId,
 			goalId,
+			hasGoalId,
 			assigneeWorkerId,
+			hasAssigneeWorkerId,
+			priority,
+			hasPriority,
+			riskLevel,
+			hasRiskLevel,
+			approvalMode,
+			hasApprovalMode,
+			requiresReview,
+			hasRequiresReview,
+			desiredRoleId,
+			hasDesiredRoleId,
 			requiredCapabilityNames,
+			hasRequiredCapabilityNames,
 			requiredToolNames,
-			targetDate
+			hasRequiredToolNames,
+			blockedReason,
+			hasBlockedReason,
+			dependencyTaskIds,
+			hasDependencyTaskSelection,
+			targetDate,
+			hasTargetDate
 		} = readTaskForm(form);
 
 		if (!name || !instructions || !projectId) {
@@ -710,6 +937,9 @@ export const actions: Actions = {
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
+		const desiredRole = desiredRoleId
+			? (current.roles.find((candidate) => candidate.id === desiredRoleId) ?? null)
+			: null;
 
 		if (!project) {
 			return fail(400, { message: 'Project not found.' });
@@ -729,14 +959,52 @@ export const actions: Actions = {
 			return fail(404, { message: 'Task not found.' });
 		}
 
+		if (
+			hasDesiredRoleId &&
+			desiredRoleId &&
+			!desiredRole &&
+			desiredRoleId !== existingTask.desiredRoleId
+		) {
+			return fail(400, { message: 'Desired role not found.' });
+		}
+
+		const invalidDependencyTaskIds = dependencyTaskIds.filter(
+			(dependencyTaskId) =>
+				dependencyTaskId === params.taskId ||
+				!current.tasks.some((candidate) => candidate.id === dependencyTaskId)
+		);
+
+		if (invalidDependencyTaskIds.length > 0) {
+			return fail(400, { message: 'One or more selected dependencies are no longer available.' });
+		}
+
 		const nextTitle = name;
 		const nextInstructions = instructions;
-		const nextGoalId = goal?.id ?? '';
+		const nextGoalId = hasGoalId ? (goal?.id ?? '') : existingTask.goalId;
 		const nextStatus = status;
-		const nextAssigneeWorker = assigneeWorker ?? null;
-		const nextRequiredCapabilityNames = requiredCapabilityNames;
-		const nextRequiredToolNames = requiredToolNames;
-		const nextTargetDate = targetDate || null;
+		const nextAssigneeWorker = hasAssigneeWorkerId
+			? (assigneeWorker ?? null)
+			: existingTask.assigneeWorkerId
+				? (current.workers.find((candidate) => candidate.id === existingTask.assigneeWorkerId) ??
+					null)
+				: null;
+		const nextPriority = hasPriority ? priority : existingTask.priority;
+		const nextRiskLevel = hasRiskLevel ? riskLevel : existingTask.riskLevel;
+		const nextApprovalMode = hasApprovalMode ? approvalMode : existingTask.approvalMode;
+		const nextRequiresReview = hasRequiresReview ? requiresReview : existingTask.requiresReview;
+		const nextDesiredRoleId = hasDesiredRoleId ? desiredRoleId : existingTask.desiredRoleId;
+		const nextRequiredCapabilityNames = hasRequiredCapabilityNames
+			? requiredCapabilityNames
+			: (existingTask.requiredCapabilityNames ?? []);
+		const nextRequiredToolNames = hasRequiredToolNames
+			? requiredToolNames
+			: (existingTask.requiredToolNames ?? []);
+		const nextBlockedReason = hasBlockedReason ? blockedReason : existingTask.blockedReason;
+		const nextDependencyTaskIds = hasDependencyTaskSelection
+			? dependencyTaskIds
+			: existingTask.dependencyTaskIds;
+		const nextTargetDate = hasTargetDate ? targetDate || null : (existingTask.targetDate ?? null);
+		const dependencyTaskNameMap = new Map(current.tasks.map((task) => [task.id, task.title]));
 		const decisionSummary = buildTaskPlanDecisionSummary({
 			task: existingTask,
 			nextTitle,
@@ -749,8 +1017,29 @@ export const actions: Actions = {
 				: null,
 			nextStatus,
 			nextAssigneeWorker,
+			nextPriority,
+			nextRiskLevel,
+			nextApprovalMode,
+			nextRequiresReview,
+			nextDesiredRoleId,
+			nextDesiredRoleName: nextDesiredRoleId
+				? (current.roles.find((candidate) => candidate.id === nextDesiredRoleId)?.name ??
+					nextDesiredRoleId)
+				: null,
+			currentDesiredRoleName: existingTask.desiredRoleId
+				? (current.roles.find((candidate) => candidate.id === existingTask.desiredRoleId)?.name ??
+					existingTask.desiredRoleId)
+				: null,
 			nextRequiredCapabilityNames,
 			nextRequiredToolNames,
+			nextBlockedReason,
+			nextDependencyTaskIds,
+			nextDependencyTaskTitles: normalizeIdList(nextDependencyTaskIds).map(
+				(dependencyTaskId) => dependencyTaskNameMap.get(dependencyTaskId) ?? dependencyTaskId
+			),
+			currentDependencyTaskTitles: normalizeIdList(existingTask.dependencyTaskIds ?? []).map(
+				(dependencyTaskId) => dependencyTaskNameMap.get(dependencyTaskId) ?? dependencyTaskId
+			),
 			nextTargetDate
 		});
 		const now = new Date().toISOString();
@@ -773,9 +1062,15 @@ export const actions: Actions = {
 					goalId: nextGoalId,
 					status: nextStatus,
 					assigneeWorkerId: nextAssigneeWorker?.id ?? null,
-					desiredRoleId: nextAssigneeWorker?.roleId ?? task.desiredRoleId,
+					priority: nextPriority,
+					riskLevel: nextRiskLevel,
+					approvalMode: nextApprovalMode,
+					requiresReview: nextRequiresReview,
+					desiredRoleId: nextDesiredRoleId,
 					requiredCapabilityNames: nextRequiredCapabilityNames,
 					requiredToolNames: nextRequiredToolNames,
+					blockedReason: nextBlockedReason,
+					dependencyTaskIds: nextDependencyTaskIds,
 					targetDate: nextTargetDate,
 					artifactPath:
 						task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',

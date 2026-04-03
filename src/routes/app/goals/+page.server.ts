@@ -13,12 +13,12 @@ import {
 	suggestGoalArtifactPath
 } from '$lib/server/goal-relationships';
 import { normalizePathInput } from '$lib/server/path-tools';
-import { GOAL_STATUS_OPTIONS, LANE_OPTIONS } from '$lib/types/control-plane';
+import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createGoal,
 	loadControlPlane,
+	parseArea,
 	parseGoalStatus,
-	parseLane,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -47,7 +47,7 @@ function readGoalForm(form: FormData) {
 		parentGoalId: form.get('parentGoalId')?.toString().trim() ?? '',
 		projectIds: parseSelectedIds(form, 'projectIds'),
 		taskIds: parseSelectedIds(form, 'taskIds'),
-		lane: parseLane(form.get('lane')?.toString() ?? '', 'product'),
+		area: parseArea(form.get('area')?.toString() ?? form.get('lane')?.toString() ?? '', 'product'),
 		status: parseGoalStatus(form.get('status')?.toString() ?? '', 'ready')
 	};
 }
@@ -156,7 +156,7 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		goals,
-		laneOptions: LANE_OPTIONS,
+		areaOptions: AREA_OPTIONS,
 		statusOptions: GOAL_STATUS_OPTIONS,
 		folderOptions: await loadFolderPickerOptions(),
 		...buildGoalOptions(data)
@@ -219,7 +219,7 @@ export const actions: Actions = {
 				projectIds: values.projectIds,
 				taskIds: values.taskIds,
 				targetDate: values.targetDate || null,
-				lane: values.lane,
+				area: values.area,
 				status: values.status
 			});
 

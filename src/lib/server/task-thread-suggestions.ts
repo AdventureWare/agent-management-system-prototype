@@ -122,11 +122,26 @@ function collectSharedLabels(left: string[], right: string[]) {
 	return left.filter((label) => rightLabels.has(normalizeTopicLabel(label)));
 }
 
+function mergeSharedLabels(...labelGroups: string[][]) {
+	return labelGroups
+		.flat()
+		.filter(
+			(label, index, labels) =>
+				labels.findIndex((candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)) ===
+				index
+		);
+}
+
 function getCategorizationOverlap(
 	taskCategorization: ThreadCategorization,
 	session: AgentSessionDetail
 ): ThreadCategorizationMatch {
 	const sessionCategorization = session.categorization;
+	const projectLabels = collectSharedLabels(
+		taskCategorization.projectLabels,
+		sessionCategorization?.projectLabels ?? []
+	);
+	const goalLabels = collectSharedLabels(taskCategorization.goalLabels, sessionCategorization?.goalLabels ?? []);
 	const laneLabels = collectSharedLabels(taskCategorization.laneLabels, sessionCategorization?.laneLabels ?? []);
 	const focusLabels = collectSharedLabels(
 		taskCategorization.focusLabels,
@@ -136,36 +151,99 @@ function getCategorizationOverlap(
 		taskCategorization.entityLabels,
 		sessionCategorization?.entityLabels ?? []
 	);
+	const roleLabels = collectSharedLabels(taskCategorization.roleLabels, sessionCategorization?.roleLabels ?? []);
+	const capabilityLabels = collectSharedLabels(
+		taskCategorization.capabilityLabels,
+		sessionCategorization?.capabilityLabels ?? []
+	);
+	const toolLabels = collectSharedLabels(taskCategorization.toolLabels, sessionCategorization?.toolLabels ?? []);
 	const keywordLabels = collectSharedLabels(
 		taskCategorization.keywordLabels,
 		sessionCategorization?.keywordLabels ?? []
 	);
-	const labels = [
-		...laneLabels,
-		...focusLabels,
-		...entityLabels,
-		...keywordLabels,
-		...getSharedTopicLabels(taskCategorization.labels, session)
-	].filter(
-		(label, index, labels) =>
-			labels.findIndex((candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)) ===
-			index
-	);
-
-	return {
+	const labels = mergeSharedLabels(
+		projectLabels,
+		goalLabels,
 		laneLabels,
 		focusLabels,
 		entityLabels,
+		roleLabels,
+		capabilityLabels,
+		toolLabels,
+		keywordLabels,
+		getSharedTopicLabels(taskCategorization.labels, session)
+	);
+
+	return {
+		projectLabels,
+		goalLabels,
+		laneLabels,
+		focusLabels,
+		entityLabels,
+		roleLabels,
+		capabilityLabels,
+		toolLabels,
 		keywordLabels,
 		labels
 	};
 }
 
+function getScopeOverlap(task: Task, session: AgentSessionDetail): ThreadCategorizationMatch {
+	const sessionCategorization = session.categorization;
+	const projectLabels =
+		task.projectId &&
+		sessionCategorization?.projectIds.includes(task.projectId) &&
+		sessionCategorization.projectLabels.length > 0
+			? sessionCategorization.projectLabels
+			: [];
+	const goalLabels =
+		task.goalId &&
+		sessionCategorization?.goalIds.includes(task.goalId) &&
+		sessionCategorization.goalLabels.length > 0
+			? sessionCategorization.goalLabels
+			: [];
+
+	return {
+		projectLabels,
+		goalLabels,
+		laneLabels: [],
+		focusLabels: [],
+		entityLabels: [],
+		roleLabels: [],
+		capabilityLabels: [],
+		toolLabels: [],
+		keywordLabels: [],
+		labels: mergeSharedLabels(projectLabels, goalLabels)
+	};
+}
+
+function mergeCategorizationMatches(
+	...matches: ThreadCategorizationMatch[]
+): ThreadCategorizationMatch {
+	return {
+		projectLabels: mergeSharedLabels(...matches.map((match) => match.projectLabels)),
+		goalLabels: mergeSharedLabels(...matches.map((match) => match.goalLabels)),
+		laneLabels: mergeSharedLabels(...matches.map((match) => match.laneLabels)),
+		focusLabels: mergeSharedLabels(...matches.map((match) => match.focusLabels)),
+		entityLabels: mergeSharedLabels(...matches.map((match) => match.entityLabels)),
+		roleLabels: mergeSharedLabels(...matches.map((match) => match.roleLabels)),
+		capabilityLabels: mergeSharedLabels(...matches.map((match) => match.capabilityLabels)),
+		toolLabels: mergeSharedLabels(...matches.map((match) => match.toolLabels)),
+		keywordLabels: mergeSharedLabels(...matches.map((match) => match.keywordLabels)),
+		labels: mergeSharedLabels(...matches.map((match) => match.labels))
+	};
+}
+
 function getCategorizationScore(match: ThreadCategorizationMatch) {
 	return (
+		match.projectLabels.length * 18 +
+		match.goalLabels.length * 26 +
 		match.laneLabels.length * 18 +
 		match.focusLabels.length * 16 +
 		match.entityLabels.length * 14 +
+		match.roleLabels.length * 14 +
+		match.capabilityLabels.length * 12 +
+		match.toolLabels.length * 12 +
 		match.keywordLabels.length * 10
 	);
 }
@@ -188,12 +266,21 @@ function buildSuggestionReason(
 		return 'Linked to a dependency for this task and available to continue the work.';
 	}
 
-		const overlapParts = [
-			sharedContext.laneLabels.length > 0 ? `area ${sharedContext.laneLabels.join(', ')}` : null,
+	const overlapParts = [
+		sharedContext.goalLabels.length > 0 ? `goal ${sharedContext.goalLabels.join(', ')}` : null,
+		sharedContext.projectLabels.length > 0
+			? `project ${sharedContext.projectLabels.join(', ')}`
+			: null,
+		sharedContext.laneLabels.length > 0 ? `area ${sharedContext.laneLabels.join(', ')}` : null,
 		sharedContext.focusLabels.length > 0 ? `focus ${sharedContext.focusLabels.join(', ')}` : null,
 		sharedContext.entityLabels.length > 0
 			? `context ${sharedContext.entityLabels.join(', ')}`
 			: null,
+		sharedContext.roleLabels.length > 0 ? `role ${sharedContext.roleLabels.join(', ')}` : null,
+		sharedContext.capabilityLabels.length > 0
+			? `capabilities ${sharedContext.capabilityLabels.join(', ')}`
+			: null,
+		sharedContext.toolLabels.length > 0 ? `tools ${sharedContext.toolLabels.join(', ')}` : null,
 		sharedContext.keywordLabels.length > 0
 			? `terms ${sharedContext.keywordLabels.join(', ')}`
 			: null
@@ -243,7 +330,10 @@ export function buildTaskThreadSuggestions(
 		const previewText = buildCandidatePreviewText(session);
 		const availableScore = session.canResume && !session.hasActiveRun ? 100 : 0;
 		const keywordOverlapScore = getKeywordOverlapScore(taskTokens, session);
-		const sharedContext = getCategorizationOverlap(taskCategorization, session);
+		const sharedContext = mergeCategorizationMatches(
+			getCategorizationOverlap(taskCategorization, session),
+			getScopeOverlap(input.task, session)
+		);
 		const sharedTopicLabels = sharedContext.labels.length
 			? sharedContext.labels
 			: getSharedTopicLabels(taskTopicLabels, session);

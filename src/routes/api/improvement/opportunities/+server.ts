@@ -17,7 +17,8 @@ export const GET = async ({ url }) => {
 	return json(
 		await loadSelfImprovementSnapshot({
 			projectId,
-			goalId
+			goalId,
+			trackImpression: true
 		})
 	);
 };

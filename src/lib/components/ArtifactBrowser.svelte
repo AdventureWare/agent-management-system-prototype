@@ -45,6 +45,10 @@
 		return resolve(`/api/artifacts/file?path=${encodeURIComponent(path)}`);
 	}
 
+	function browseHref(path: string) {
+		return resolve(`/app/artifacts?path=${encodeURIComponent(path)}`);
+	}
+
 	function itemHref(item: ArtifactKnownOutput | ArtifactDirectoryEntry) {
 		if (item.kind !== 'file') {
 			return null;
@@ -146,6 +150,13 @@
 								>
 									Download
 								</a>
+							{:else if output.kind === 'directory' && output.exists}
+								<a
+									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+									href={browseHref(output.path)}
+								>
+									Browse
+								</a>
 							{/if}
 						</div>
 					</div>
@@ -191,6 +202,13 @@
 									href={itemHref(entry) || undefined}
 								>
 									Download
+								</a>
+							{:else if entry.kind === 'directory'}
+								<a
+									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+									href={browseHref(entry.path)}
+								>
+									Browse
 								</a>
 							{/if}
 						</div>

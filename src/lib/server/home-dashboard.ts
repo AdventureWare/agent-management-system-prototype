@@ -9,8 +9,11 @@ import {
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
-	const sessions = await listAgentSessions();
-	const controlPlane = await loadControlPlane();
+	const controlPlanePromise = loadControlPlane();
+	const [controlPlane, sessions] = await Promise.all([
+		controlPlanePromise,
+		listAgentSessions({ controlPlane: controlPlanePromise })
+	]);
 	const selfImprovement = await loadSelfImprovementSnapshot({
 		data: controlPlane,
 		sessions

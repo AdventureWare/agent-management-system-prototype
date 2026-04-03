@@ -85,7 +85,7 @@
 			{#if data.run.sessionId}
 				<a
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-					href={resolve(`/app/sessions/${data.run.sessionId}`)}
+					href={resolve(`/app/threads/${data.run.sessionId}`)}
 				>
 					{data.run.sessionName ?? data.run.sessionId}
 				</a>
@@ -248,7 +248,7 @@
 						{#if data.run.sessionId}
 							<a
 								class="ui-wrap-inline mt-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
-								href={resolve(`/app/sessions/${data.run.sessionId}`)}
+								href={resolve(`/app/threads/${data.run.sessionId}`)}
 							>
 								{data.run.sessionName ?? data.run.sessionId}
 							</a>

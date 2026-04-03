@@ -143,7 +143,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	})
 }));
 
-import { actions } from './+page.server';
+import { actions, load } from './+page.server';
 
 describe('session detail page server actions', () => {
 	beforeEach(() => {
@@ -736,6 +736,56 @@ describe('session detail page server actions', () => {
 				decisionType: 'task_recovered',
 				summary: expect.stringContaining('session_replacement')
 			})
+		);
+	});
+
+	it('returns task resource context artifacts for the response panel', async () => {
+		controlPlaneState.current = {
+			...controlPlaneState.current!,
+			tasks: [
+				{
+					...controlPlaneState.current!.tasks[0],
+					attachments: [
+						{
+							id: 'attachment_1',
+							name: 'response-summary.md',
+							path: '/tmp/project/agent_output/task-attachments/task_1/response-summary.md',
+							contentType: 'text/markdown',
+							sizeBytes: 320,
+							attachedAt: '2026-03-31T11:10:00.000Z'
+						}
+					]
+				}
+			]
+		};
+
+		const result = await load({
+			params: { sessionId: 'session_1' }
+		} as never);
+
+		expect(result).toBeTruthy();
+
+		if (!result) {
+			throw new Error('Expected load result.');
+		}
+
+		expect(result.responseContextArtifacts).toEqual(
+			expect.arrayContaining([
+				{
+					path: '/tmp/project/agent_output',
+					label: 'Approve thread output',
+					href: '/app/tasks/task_1#resources',
+					sourceLabel: 'Task outputs',
+					actionLabel: 'Open task'
+				},
+				{
+					path: '/tmp/project/agent_output/task-attachments/task_1/response-summary.md',
+					label: 'response-summary.md',
+					href: '/app/tasks/task_1#resources',
+					sourceLabel: 'Task attachment',
+					actionLabel: 'Open task'
+				}
+			])
 		);
 	});
 });

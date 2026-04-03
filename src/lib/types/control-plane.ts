@@ -1,6 +1,7 @@
 import type { AgentSandbox } from '$lib/types/agent-session';
 
-export const LANE_OPTIONS = ['product', 'growth', 'ops'] as const;
+export const AREA_OPTIONS = ['product', 'growth', 'ops'] as const;
+export const LANE_OPTIONS = AREA_OPTIONS;
 export const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const;
 export const TASK_STATUS_OPTIONS = [
 	'in_draft',
@@ -53,7 +54,8 @@ export const PROVIDER_SETUP_STATUS_OPTIONS = ['connected', 'needs_setup', 'plann
 export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'custom'] as const;
 export const PLANNING_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'] as const;
 
-export type Lane = (typeof LANE_OPTIONS)[number];
+export type Area = (typeof AREA_OPTIONS)[number];
+export type Lane = Area;
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
 export type TaskStatus = (typeof TASK_STATUS_OPTIONS)[number];
 export type TaskRiskLevel = (typeof TASK_RISK_LEVEL_OPTIONS)[number];
@@ -162,6 +164,14 @@ export function formatTaskApprovalModeLabel(mode: string): string {
 		default:
 			return formatEnumLabel(mode);
 	}
+}
+
+export function formatPriorityLabel(priority: string): string {
+	return formatEnumLabel(priority);
+}
+
+export function formatTaskRiskLevelLabel(riskLevel: string): string {
+	return formatEnumLabel(riskLevel);
 }
 
 export function formatRunStatusLabel(status: string): string {
@@ -324,6 +334,7 @@ export type Provider = {
 export type Role = {
 	id: string;
 	name: string;
+	area?: Area | 'shared';
 	lane: Lane | 'shared';
 	description: string;
 };
@@ -331,6 +342,7 @@ export type Role = {
 export type Goal = {
 	id: string;
 	name: string;
+	area?: Area;
 	lane: Lane;
 	status: GoalStatus;
 	summary: string;
@@ -381,6 +393,7 @@ export type Task = {
 	title: string;
 	summary: string;
 	projectId: string;
+	area?: Area;
 	lane: Lane;
 	goalId: string;
 	priority: Priority;

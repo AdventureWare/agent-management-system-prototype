@@ -45,6 +45,14 @@ type SessionTaskResponseAction = {
 	disabledReason: string;
 };
 
+type SessionResponseContextArtifact = {
+	path: string;
+	label: string;
+	href: string;
+	sourceLabel: string;
+	actionLabel: string;
+};
+
 function updateLatestRunForTask(runId: string | null, summary: string) {
 	const now = new Date().toISOString();
 
@@ -165,6 +173,56 @@ function buildTaskResponseAction(input: {
 		helperText,
 		disabledReason
 	};
+}
+
+function buildSessionResponseContextArtifacts(input: {
+	sessionId: string;
+	session: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>;
+	data: ControlPlaneData;
+}) {
+	const tasksById = new Map(input.data.tasks.map((task) => [task.id, task]));
+	const relatedTaskIds = [
+		resolveSessionTask(input.data, input.sessionId)?.id ?? null,
+		...input.session.relatedTasks.map((task) => task.id)
+	].filter((taskId, index, taskIds): taskId is string => Boolean(taskId) && taskIds.indexOf(taskId) === index);
+
+	const contextArtifacts = relatedTaskIds.flatMap((taskId): SessionResponseContextArtifact[] => {
+		const task = tasksById.get(taskId);
+
+		if (!task) {
+			return [];
+		}
+
+		const taskHref = `/app/tasks/${task.id}#resources`;
+		const artifacts: SessionResponseContextArtifact[] = [];
+
+		if (task.artifactPath.trim().length > 0) {
+			artifacts.push({
+				path: task.artifactPath,
+				label: task.title,
+				href: taskHref,
+				sourceLabel: 'Task outputs',
+				actionLabel: 'Open task'
+			});
+		}
+
+		for (const attachment of task.attachments) {
+			artifacts.push({
+				path: attachment.path,
+				label: attachment.name,
+				href: taskHref,
+				sourceLabel: 'Task attachment',
+				actionLabel: 'Open task'
+			});
+		}
+
+		return artifacts;
+	});
+
+	return contextArtifacts.filter(
+		(artifact, index, artifacts) =>
+			artifacts.findIndex((candidate) => candidate.path === artifact.path) === index
+	);
 }
 
 function getLatestThreadPrompt(session: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>) {
@@ -305,7 +363,11 @@ function reopenTasksForThreadRetry(input: {
 }
 
 export const load: PageServerLoad = async ({ params }) => {
-	const [session, data] = await Promise.all([getAgentThread(params.sessionId), loadControlPlane()]);
+	const controlPlanePromise = loadControlPlane();
+	const [data, session] = await Promise.all([
+		controlPlanePromise,
+		getAgentThread(params.sessionId, { controlPlane: controlPlanePromise })
+	]);
 
 	if (!session) {
 		throw error(404, 'Thread not found.');
@@ -315,6 +377,11 @@ export const load: PageServerLoad = async ({ params }) => {
 		session,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		taskResponseAction: buildTaskResponseAction({
+			sessionId: params.sessionId,
+			session,
+			data
+		}),
+		responseContextArtifacts: buildSessionResponseContextArtifacts({
 			sessionId: params.sessionId,
 			session,
 			data

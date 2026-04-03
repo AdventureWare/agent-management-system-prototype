@@ -2,7 +2,7 @@ export type AppNavigationLinkId =
 	| 'home'
 	| 'improvements'
 	| 'tasks'
-	| 'sessions'
+	| 'threads'
 	| 'runs'
 	| 'projects'
 	| 'goals'
@@ -15,7 +15,7 @@ export type AppNavigationRoute =
 	| '/app/home'
 	| '/app/improvements'
 	| '/app/tasks'
-	| '/app/sessions'
+	| '/app/threads'
 	| '/app/runs'
 	| '/app/projects'
 	| '/app/goals'
@@ -53,7 +53,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		description: 'Queue, continuity, and execution',
 		links: [
 			{ id: 'tasks', label: 'Tasks', href: '/app/tasks' },
-			{ id: 'sessions', label: 'Threads', href: '/app/sessions' },
+			{ id: 'threads', label: 'Threads', href: '/app/threads' },
 			{ id: 'runs', label: 'Runs', href: '/app/runs' }
 		]
 	},

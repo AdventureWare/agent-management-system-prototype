@@ -194,6 +194,10 @@
 		}
 
 		const intervalId = window.setInterval(() => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
 			void refreshDashboard();
 		}, 10000);
 
@@ -307,7 +311,7 @@
 			</button>
 			<a
 				class="w-full rounded-2xl border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sky-200 transition hover:border-sky-700 hover:text-white sm:w-auto sm:rounded-full"
-				href={resolve('/app/sessions')}
+				href={resolve('/app/threads')}
 			>
 				Open detailed thread controls
 			</a>
@@ -852,7 +856,7 @@
 						{#each availableSessions as session (session.id)}
 							<a
 								class="block rounded-xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-slate-700"
-								href={resolve('/app/sessions')}
+								href={resolve('/app/threads')}
 							>
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div class="min-w-0">

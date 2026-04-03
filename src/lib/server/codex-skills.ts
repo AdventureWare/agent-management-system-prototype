@@ -10,6 +10,20 @@ export type InstalledCodexSkill = {
 	sourceLabel: string;
 };
 
+type SkillMetadata = {
+	id: string;
+	description: string;
+};
+
+const SKILL_METADATA_CACHE_TTL_MS = 10_000;
+const skillMetadataCache = new Map<
+	string,
+	{
+		expiresAt: number;
+		skills: SkillMetadata[];
+	}
+>();
+
 function parseYamlScalar(frontmatter: string, field: 'name' | 'description') {
 	const match = frontmatter.match(new RegExp(`^${field}:\\s*(.+)$`, 'm'));
 	const rawValue = match?.[1]?.trim() ?? '';
@@ -62,6 +76,31 @@ function listSkillFiles(root: string) {
 	}
 }
 
+function listSkillMetadata(root: string) {
+	if (!root || !existsSync(root)) {
+		skillMetadataCache.delete(root);
+		return [];
+	}
+
+	const now = Date.now();
+	const cached = skillMetadataCache.get(root);
+
+	if (cached && cached.expiresAt > now) {
+		return cached.skills;
+	}
+
+	const skills = listSkillFiles(root)
+		.map((skillFilePath) => readSkillMetadata(skillFilePath))
+		.filter((metadata): metadata is SkillMetadata => Boolean(metadata?.id));
+
+	skillMetadataCache.set(root, {
+		expiresAt: now + SKILL_METADATA_CACHE_TTL_MS,
+		skills
+	});
+
+	return skills;
+}
+
 export function listInstalledCodexSkills(
 	cwd: string | null | undefined,
 	codexHome = process.env.CODEX_HOME?.trim() || resolve(homedir(), '.codex')
@@ -86,13 +125,7 @@ export function listInstalledCodexSkills(
 	];
 
 	for (const source of sources) {
-		for (const skillFilePath of listSkillFiles(source.root)) {
-			const metadata = readSkillMetadata(skillFilePath);
-
-			if (!metadata?.id) {
-				continue;
-			}
-
+		for (const metadata of listSkillMetadata(source.root)) {
 			const existing = skillMap.get(metadata.id);
 
 			if (existing) {

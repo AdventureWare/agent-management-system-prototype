@@ -8,6 +8,7 @@
 	thread={data.session}
 	sandboxOptions={data.sandboxOptions}
 	taskResponseAction={data.taskResponseAction}
+	responseContextArtifacts={data.responseContextArtifacts}
 	{form}
-	backHref="/app/sessions"
+	backHref="/app/threads"
 />

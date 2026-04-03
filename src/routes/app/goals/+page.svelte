@@ -369,7 +369,7 @@
 							{formatDateLabel(goal.targetDate)}
 						</td>
 						<td class="px-4 py-4 text-xs font-semibold tracking-[0.18em] text-sky-300 uppercase">
-							{goal.lane}
+							{goal.area ?? goal.lane}
 						</td>
 						<td class="px-4 py-4 text-sm text-slate-300">{goal.parentGoalName || 'Top level'}</td>
 						<td class="px-4 py-4 text-sm text-slate-300">
@@ -409,7 +409,7 @@
 				description="Outcome first, relationships second. Use the built-in coach if you need help wording the goal, then keep the workspace blank if linked context already tells the system where it should live."
 				folderOptions={data.folderOptions}
 				heading="Create goal"
-				laneOptions={data.laneOptions}
+				areaOptions={data.areaOptions}
 				parentGoalOptions={data.parentGoalOptions}
 				projectOptions={data.projectOptions}
 				statusOptions={data.statusOptions}

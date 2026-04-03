@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
-import { getAgentSession } from '$lib/server/agent-sessions';
+import { getAgentThread } from '$lib/server/agent-threads';
 
 export const GET = async ({ params }) => {
-	const session = await getAgentSession(params.sessionId);
+	const thread = await getAgentThread(params.sessionId);
 
-	if (!session) {
-		return json({ error: 'Session not found.' }, { status: 404 });
+	if (!thread) {
+		return json({ error: 'Thread not found.' }, { status: 404 });
 	}
 
-	return json({ session });
+	return json({ thread, session: thread });
 };

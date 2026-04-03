@@ -6,6 +6,7 @@ export const POST = async ({ params, request }) => {
 	const payload = (await request.json().catch(() => ({}))) as {
 		projectId?: string | null;
 		goalId?: string | null;
+		impressionId?: string | null;
 	};
 
 	if (!opportunityId) {
@@ -14,7 +15,8 @@ export const POST = async ({ params, request }) => {
 
 	const task = await createTaskFromSelfImprovementOpportunity(opportunityId, {
 		projectId: payload.projectId?.trim() || null,
-		goalId: payload.goalId?.trim() || null
+		goalId: payload.goalId?.trim() || null,
+		impressionId: payload.impressionId?.trim() || null
 	});
 
 	if (!task) {

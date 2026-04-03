@@ -50,6 +50,8 @@ function createTask(overrides: Partial<Task> = {}): Task {
 		approvalMode: 'none',
 		requiresReview: true,
 		desiredRoleId: 'role_coordinator',
+		requiredCapabilityNames: [],
+		requiredToolNames: [],
 		assigneeWorkerId: null,
 		threadSessionId: null,
 		blockedReason: '',
@@ -161,9 +163,16 @@ describe('buildTaskThreadSuggestions', () => {
 					name: 'Thread assignment follow-up',
 					topicLabels: ['Product', 'Coordination', 'Thread', 'Suggestion'],
 					categorization: {
+						projectIds: [],
+						projectLabels: [],
+						goalIds: [],
+						goalLabels: [],
 						laneLabels: ['Product'],
 						focusLabels: ['Coordination'],
 						entityLabels: ['Thread'],
+						roleLabels: [],
+						capabilityLabels: [],
+						toolLabels: [],
 						keywordLabels: ['Suggestion'],
 						labels: ['Product', 'Coordination', 'Thread', 'Suggestion']
 					}
@@ -182,5 +191,98 @@ describe('buildTaskThreadSuggestions', () => {
 		expect(result.suggestedThread?.suggestionReason).toContain("Matches this task's");
 		expect(result.suggestedThread?.suggestionReason).toContain('area Product');
 		expect(result.suggestedThread?.suggestionReason).toContain('focus Coordination');
+	});
+
+	it('matches reusable threads on role, capability, and tool metadata even when text is generic', () => {
+		const result = buildTaskThreadSuggestions({
+			task: createTask({
+				title: 'Ship the implementation pass',
+				summary: 'Continue the work with the right execution context.',
+				desiredRoleId: 'role_app_worker',
+				requiredCapabilityNames: ['ios', 'swiftui'],
+				requiredToolNames: ['xcodebuild']
+			}),
+			assignedThreadId: null,
+			sessions: [
+				createSession('metadata', {
+					name: 'Implementation follow-up',
+					sessionSummary: 'Continue the execution context.',
+					categorization: {
+						projectIds: [],
+						projectLabels: [],
+						goalIds: [],
+						goalLabels: [],
+						laneLabels: ['Product'],
+						focusLabels: ['UI/UX'],
+						entityLabels: ['Task'],
+						roleLabels: ['App Worker'],
+						capabilityLabels: ['iOS', 'SwiftUI'],
+						toolLabels: ['Xcodebuild'],
+						keywordLabels: [],
+						labels: ['Product', 'UI/UX', 'Task', 'App Worker']
+					}
+				}),
+				createSession('generic', {
+					name: 'Implementation follow-up',
+					sessionSummary: 'Continue the execution context.'
+				})
+			]
+		});
+
+		expect(result.suggestedThread?.id).toBe('metadata');
+		expect(result.suggestedThread?.matchedContext.roleLabels).toEqual(['App Worker']);
+		expect(result.suggestedThread?.matchedContext.capabilityLabels).toEqual(
+			expect.arrayContaining(['iOS', 'SwiftUI'])
+		);
+		expect(result.suggestedThread?.matchedContext.toolLabels).toEqual(['Xcodebuild']);
+		expect(result.suggestedThread?.suggestionReason).toContain('role App Worker');
+		expect(result.suggestedThread?.suggestionReason).toContain('capabilities iOS, SwiftUI');
+		expect(result.suggestedThread?.suggestionReason).toContain('tools Xcodebuild');
+	});
+
+	it('prefers threads that share project and goal scope even when text is generic', () => {
+		const result = buildTaskThreadSuggestions({
+			task: createTask({
+				title: 'Continue execution',
+				summary: 'Pick the best existing thread.',
+				projectId: 'project_ams',
+				goalId: 'goal_threads'
+			}),
+			assignedThreadId: null,
+			sessions: [
+				createSession('scoped', {
+					name: 'Continuation thread',
+					sessionSummary: 'Continue execution.',
+					categorization: {
+						projectIds: ['project_ams'],
+						projectLabels: ['Agent Management System Prototype'],
+						goalIds: ['goal_threads'],
+						goalLabels: ['Improve Thread Reuse'],
+						laneLabels: [],
+						focusLabels: [],
+						entityLabels: [],
+						roleLabels: [],
+						capabilityLabels: [],
+						toolLabels: [],
+						keywordLabels: [],
+						labels: []
+					}
+				}),
+				createSession('generic', {
+					name: 'Continuation thread',
+					sessionSummary: 'Continue execution.'
+				})
+			]
+		});
+
+		expect(result.suggestedThread?.id).toBe('scoped');
+		expect(result.suggestedThread?.matchedContext.projectLabels).toEqual([
+			'Agent Management System Prototype'
+		]);
+		expect(result.suggestedThread?.matchedContext.goalLabels).toEqual(['Improve Thread Reuse']);
+		expect(result.suggestedThread?.suggestionReason).toContain('goal Improve Thread Reuse');
+		expect(result.suggestedThread?.suggestionReason).toContain(
+			'project Agent Management System Prototype'
+		);
 	});
 });

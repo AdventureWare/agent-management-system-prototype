@@ -69,7 +69,8 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		snapshot: await loadSelfImprovementSnapshot({
-			data: controlPlane
+			data: controlPlane,
+			trackImpression: true
 		}),
 		projects: [...controlPlane.projects]
 			.map((project) => ({

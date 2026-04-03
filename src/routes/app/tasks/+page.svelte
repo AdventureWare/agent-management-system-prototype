@@ -671,7 +671,7 @@
 								</AppButton>
 								{#if task.linkThread}
 									<AppButton
-										href={resolve(`/app/sessions/${task.linkThread.id}`)}
+										href={resolve(`/app/threads/${task.linkThread.id}`)}
 										size="sm"
 										variant="accent"
 										reserveLabel="Open assigned thread"
@@ -730,7 +730,7 @@
 						: ` ${createdAttachmentCount} attachments saved with it.`}
 				{/if}
 				{#if form?.sessionId}
-					<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+					<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
 						Open thread details
 					</a>
 					to follow the run.
@@ -755,7 +755,7 @@
 			>
 				Task ideation queued for {form?.projectName?.toString() || 'the selected project'}.
 				{#if form?.sessionId}
-					<a class="underline" href={resolve(`/app/sessions/${form.sessionId.toString()}`)}>
+					<a class="underline" href={resolve(`/app/threads/${form.sessionId.toString()}`)}>
 						Open thread details
 					</a>
 					to review the suggested tasks.
@@ -1077,7 +1077,7 @@
 													</div>
 													<a
 														class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-														href={resolve(`/app/sessions/${review.sessionId}`)}
+														href={resolve(`/app/threads/${review.sessionId}`)}
 													>
 														Open thread
 													</a>
@@ -1217,7 +1217,7 @@
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
-					<input type="hidden" name="lane" value={createTaskLane} />
+					<input type="hidden" name="area" value={createTaskLane} />
 					<input type="hidden" name="priority" value={createTaskPriority} />
 					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
 					<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />
@@ -1257,11 +1257,7 @@
 
 							<label class="block">
 								<span class="mb-2 block text-sm font-medium text-slate-200">Goal</span>
-								<select
-									bind:value={createTaskGoalId}
-									class="select text-white"
-									name="goalId"
-								>
+								<select bind:value={createTaskGoalId} class="select text-white" name="goalId">
 									<option value="">No goal linked</option>
 									{#each data.goals as goal (goal.id)}
 										<option value={goal.id}>{goal.label}</option>
