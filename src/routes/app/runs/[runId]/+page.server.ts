@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { listAgentSessions } from '$lib/server/agent-sessions';
+import { listAgentSessions } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';

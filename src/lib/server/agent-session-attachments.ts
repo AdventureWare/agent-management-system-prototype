@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
-import type { AgentSessionAttachment } from '$lib/types/agent-session';
+import type { AgentSessionAttachment } from '$lib/types/agent-thread';
 import { sanitizeTaskAttachmentName } from '$lib/server/task-attachments';
 
 const INLINE_ATTACHMENT_EXTENSIONS = new Set([

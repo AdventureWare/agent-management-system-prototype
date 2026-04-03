@@ -14,7 +14,7 @@ export const AGENT_RUN_STATUS_OPTIONS = [
 	'canceled'
 ] as const;
 
-export const AGENT_SESSION_STATE_OPTIONS = [
+export const AGENT_THREAD_STATE_OPTIONS = [
 	'idle',
 	'starting',
 	'waiting',
@@ -23,33 +23,38 @@ export const AGENT_SESSION_STATE_OPTIONS = [
 	'attention',
 	'unavailable'
 ] as const;
+export const AGENT_SESSION_STATE_OPTIONS = AGENT_THREAD_STATE_OPTIONS;
 
 export type AgentSandbox = (typeof AGENT_SANDBOX_OPTIONS)[number];
 export type AgentRunStatus = (typeof AGENT_RUN_STATUS_OPTIONS)[number];
-export type AgentSessionState = (typeof AGENT_SESSION_STATE_OPTIONS)[number];
-export type AgentSessionOrigin = 'managed' | 'external';
+export type AgentThreadState = (typeof AGENT_THREAD_STATE_OPTIONS)[number];
+export type AgentThreadOrigin = 'managed' | 'external';
+export type AgentSessionState = AgentThreadState;
+export type AgentSessionOrigin = AgentThreadOrigin;
 
-export type AgentSession = {
+export type AgentThread = {
 	id: string;
 	name: string;
 	cwd: string;
 	sandbox: AgentSandbox;
 	model: string | null;
 	threadId: string | null;
-	attachments?: AgentSessionAttachment[];
+	attachments?: AgentThreadAttachment[];
 	archivedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
 };
+export type AgentSession = AgentThread;
 
-export type AgentSessionTaskLink = {
+export type AgentThreadTaskLink = {
 	id: string;
 	title: string;
 	status: string;
 	isPrimary: boolean;
 };
+export type AgentSessionTaskLink = AgentThreadTaskLink;
 
-export type AgentSessionAttachment = {
+export type AgentThreadAttachment = {
 	id: string;
 	name: string;
 	path: string;
@@ -57,6 +62,7 @@ export type AgentSessionAttachment = {
 	sizeBytes: number;
 	attachedAt: string;
 };
+export type AgentSessionAttachment = AgentThreadAttachment;
 
 export type AgentRun = {
 	id: string;
@@ -82,9 +88,12 @@ export type AgentRunState = {
 	codexThreadId: string | null;
 };
 
-export type AgentSessionsDb = {
-	sessions: AgentSession[];
+export type AgentThreadsDb = {
+	threads?: AgentThread[];
 	runs: AgentRun[];
+};
+export type AgentSessionsDb = AgentThreadsDb & {
+	sessions: AgentThread[];
 };
 
 export type AgentRunDetail = AgentRun & {
@@ -102,30 +111,25 @@ export type AgentTimelineStep = {
 	timestamp: string | null;
 };
 
-export type AgentSessionDetail = AgentSession & {
-	origin: AgentSessionOrigin;
+export type AgentThreadDetail = AgentThread & {
+	origin: AgentThreadOrigin;
 	threadId: string | null;
 	topicLabels?: string[];
 	categorization?: ThreadCategorization;
-	sessionState: AgentSessionState;
+	threadState?: AgentThreadState;
+	sessionState?: AgentThreadState;
 	latestRunStatus: AgentRunStatus | 'idle';
 	hasActiveRun: boolean;
 	canResume: boolean;
 	runCount: number;
 	lastActivityAt: string | null;
 	lastActivityLabel: string;
-	sessionSummary: string;
+	threadSummary?: string;
+	sessionSummary?: string;
 	lastExitCode: number | null;
 	runTimeline: AgentTimelineStep[];
-	relatedTasks: AgentSessionTaskLink[];
+	relatedTasks: AgentThreadTaskLink[];
 	latestRun: AgentRunDetail | null;
 	runs: AgentRunDetail[];
 };
-
-export type AgentThreadState = AgentSessionState;
-export type AgentThreadOrigin = AgentSessionOrigin;
-export type AgentThread = AgentSession;
-export type AgentThreadTaskLink = AgentSessionTaskLink;
-export type AgentThreadAttachment = AgentSessionAttachment;
-export type AgentThreadDetail = AgentSessionDetail;
-export type AgentThreadsDb = AgentSessionsDb;
+export type AgentSessionDetail = AgentThreadDetail;

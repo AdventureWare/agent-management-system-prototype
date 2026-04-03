@@ -36,9 +36,9 @@ import {
 	type AgentSessionOrigin,
 	type AgentTimelineStep,
 	type AgentSessionsDb
-} from '$lib/types/agent-session';
+} from '$lib/types/agent-thread';
 import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
-import type { ControlPlaneData, Lane, RunStatus, TaskStatus } from '$lib/types/control-plane';
+import type { Area, ControlPlaneData, RunStatus, TaskStatus } from '$lib/types/control-plane';
 
 const AGENT_SESSIONS_DB_FILE = resolve(process.cwd(), 'data', 'agent-sessions.json');
 const AGENT_SESSIONS_ROOT = resolve(process.cwd(), 'data', 'agent-sessions');
@@ -53,6 +53,7 @@ const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
 
 function defaultDb(): AgentSessionsDb {
 	return {
+		threads: [],
 		sessions: [],
 		runs: []
 	};
@@ -76,76 +77,75 @@ async function ensureAgentSessionsDb() {
 }
 
 function normalizeAgentSessionsDb(parsed: Partial<AgentSessionsDb>): AgentSessionsDb {
-	return {
-		sessions: Array.isArray(parsed.sessions)
+	const storedThreads = Array.isArray(parsed.threads)
+		? parsed.threads
+		: Array.isArray(parsed.sessions)
 			? parsed.sessions
-					.filter((session) => Boolean(session) && typeof session === 'object')
-					.map((session) => {
-						const candidate = session as Partial<AgentSession>;
+			: [];
 
-						return {
-							...candidate,
-							id: typeof candidate.id === 'string' ? candidate.id : createSessionId(),
-							name: typeof candidate.name === 'string' ? candidate.name : 'Untitled session',
-							cwd: typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '',
-							sandbox: parseAgentSandbox(candidate.sandbox, 'workspace-write'),
-							model:
-								typeof candidate.model === 'string' && candidate.model.trim()
-									? candidate.model
-									: null,
-							threadId:
-								typeof candidate.threadId === 'string' && candidate.threadId.trim()
-									? candidate.threadId
-									: null,
-							attachments: Array.isArray(candidate.attachments)
-								? candidate.attachments
-										.filter((attachment) => Boolean(attachment) && typeof attachment === 'object')
-										.map((attachment) => {
-											const item = attachment as Partial<AgentSessionAttachment>;
+	return {
+		threads: storedThreads
+			.filter((session) => Boolean(session) && typeof session === 'object')
+			.map((session) => {
+				const candidate = session as Partial<AgentSession>;
 
-											return {
-												id:
-													typeof item.id === 'string' && item.id.trim()
-														? item.id
-														: `session_attachment_${randomUUID()}`,
-												name:
-													typeof item.name === 'string' && item.name.trim()
-														? item.name
-														: 'Attachment',
-												path: typeof item.path === 'string' ? normalizePathInput(item.path) : '',
-												contentType:
-													typeof item.contentType === 'string' && item.contentType.trim()
-														? item.contentType
-														: 'application/octet-stream',
-												sizeBytes:
-													typeof item.sizeBytes === 'number' &&
-													Number.isFinite(item.sizeBytes) &&
-													item.sizeBytes >= 0
-														? item.sizeBytes
-														: 0,
-												attachedAt:
-													typeof item.attachedAt === 'string' && item.attachedAt.trim()
-														? item.attachedAt
-														: new Date().toISOString()
-											};
-										})
-										.filter((attachment) => attachment.path.length > 0)
-								: [],
-							archivedAt:
-								typeof candidate.archivedAt === 'string' && candidate.archivedAt.trim()
-									? candidate.archivedAt
-									: null,
-							createdAt:
-								typeof candidate.createdAt === 'string'
-									? candidate.createdAt
-									: new Date().toISOString(),
-							updatedAt:
-								typeof candidate.updatedAt === 'string'
-									? candidate.updatedAt
-									: new Date().toISOString()
-						};
-					})
-			: [],
+				return {
+					...candidate,
+					id: typeof candidate.id === 'string' ? candidate.id : createSessionId(),
+					name: typeof candidate.name === 'string' ? candidate.name : 'Untitled session',
+					cwd: typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '',
+					sandbox: parseAgentSandbox(candidate.sandbox, 'workspace-write'),
+					model:
+						typeof candidate.model === 'string' && candidate.model.trim() ? candidate.model : null,
+					threadId:
+						typeof candidate.threadId === 'string' && candidate.threadId.trim()
+							? candidate.threadId
+							: null,
+					attachments: Array.isArray(candidate.attachments)
+						? candidate.attachments
+								.filter((attachment) => Boolean(attachment) && typeof attachment === 'object')
+								.map((attachment) => {
+									const item = attachment as Partial<AgentSessionAttachment>;
+
+									return {
+										id:
+											typeof item.id === 'string' && item.id.trim()
+												? item.id
+												: `session_attachment_${randomUUID()}`,
+										name:
+											typeof item.name === 'string' && item.name.trim() ? item.name : 'Attachment',
+										path: typeof item.path === 'string' ? normalizePathInput(item.path) : '',
+										contentType:
+											typeof item.contentType === 'string' && item.contentType.trim()
+												? item.contentType
+												: 'application/octet-stream',
+										sizeBytes:
+											typeof item.sizeBytes === 'number' &&
+											Number.isFinite(item.sizeBytes) &&
+											item.sizeBytes >= 0
+												? item.sizeBytes
+												: 0,
+										attachedAt:
+											typeof item.attachedAt === 'string' && item.attachedAt.trim()
+												? item.attachedAt
+												: new Date().toISOString()
+									};
+								})
+								.filter((attachment) => attachment.path.length > 0)
+						: [],
+					archivedAt:
+						typeof candidate.archivedAt === 'string' && candidate.archivedAt.trim()
+							? candidate.archivedAt
+							: null,
+					createdAt:
+						typeof candidate.createdAt === 'string'
+							? candidate.createdAt
+							: new Date().toISOString(),
+					updatedAt:
+						typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString()
+				};
+			}),
+		sessions: storedThreads,
 		runs: Array.isArray(parsed.runs) ? parsed.runs : []
 	};
 }
@@ -251,7 +251,7 @@ type TaskContextTask = {
 	title: string;
 	summary: string;
 	projectId: string;
-	lane: Lane;
+	area: Area;
 	goalId: string;
 	goalName: string | null;
 	status: TaskStatus;
@@ -1237,8 +1237,9 @@ function buildStandardizedManagedSessionName(
 	relatedTasks: AgentSessionTaskLink[]
 ) {
 	const primaryRelatedTask = relatedTasks.find((task) => task.isPrimary) ?? relatedTasks[0] ?? null;
-	const primaryTask =
-		(primaryRelatedTask ? (taskContext.tasksById.get(primaryRelatedTask.id) ?? null) : null);
+	const primaryTask = primaryRelatedTask
+		? (taskContext.tasksById.get(primaryRelatedTask.id) ?? null)
+		: null;
 
 	return resolveTaskThreadName({
 		currentName: session.name,
@@ -1251,6 +1252,7 @@ function buildStandardizedManagedSessionName(
 function finalizeSessionDetail(input: {
 	session: AgentSession;
 	runDetails: AgentRunDetail[];
+	runCount?: number;
 	taskContext: TaskContext;
 	origin: AgentSessionOrigin;
 	sessionSummaryOverride?: string | null;
@@ -1282,7 +1284,7 @@ function finalizeSessionDetail(input: {
 				projectName: task.projectName,
 				goalId: task.goalId,
 				goalName: task.goalName,
-				lane: task.lane,
+				area: task.area,
 				desiredRole: task.desiredRole,
 				requiredCapabilityNames: task.requiredCapabilityNames,
 				requiredToolNames: task.requiredToolNames,
@@ -1308,8 +1310,8 @@ function finalizeSessionDetail(input: {
 			threadId
 		});
 	const categorization = deriveThreadCategorization({
-		sessionName: name,
-		sessionSummary,
+		threadName: name,
+		threadSummary: sessionSummary,
 		runDetails: input.runDetails.map((run) => ({
 			prompt: run.prompt,
 			lastMessage: run.lastMessage
@@ -1325,13 +1327,15 @@ function finalizeSessionDetail(input: {
 		threadId,
 		topicLabels: categorization.labels,
 		categorization,
+		threadState: sessionState,
 		sessionState,
 		latestRunStatus,
 		hasActiveRun: hasActive,
 		canResume,
-		runCount: input.runDetails.length,
+		runCount: input.runCount ?? input.runDetails.length,
 		lastActivityAt,
 		lastActivityLabel: formatRelativeTime(lastActivityAt),
+		threadSummary: sessionSummary,
 		sessionSummary,
 		lastExitCode,
 		runTimeline: buildRunTimeline({
@@ -1371,6 +1375,28 @@ export function isAbandonedSessionDetail(detail: AgentSessionDetail) {
 	return !latestRun.state?.codexThreadId;
 }
 
+async function buildLatestRunDetails(runs: AgentRun[]) {
+	const latestRuns = [...runs].sort(compareByCreatedAtDesc).slice(0, 1);
+
+	return Promise.all(latestRuns.map((run) => buildRunDetail(run)));
+}
+
+async function buildManagedSessionListDetail(
+	session: AgentSession,
+	runs: AgentRun[],
+	taskContext: TaskContext
+) {
+	const runDetails = await buildLatestRunDetails(runs);
+
+	return finalizeSessionDetail({
+		session,
+		runDetails,
+		runCount: runs.length,
+		taskContext,
+		origin: 'managed'
+	});
+}
+
 async function buildSessionDetail(
 	session: AgentSession,
 	runs: AgentRun[],
@@ -1394,13 +1420,12 @@ async function buildExternalSessionListDetail(
 	taskContext: TaskContext
 ) {
 	if (runs.length > 0) {
-		const runDetails = await Promise.all(
-			[...runs].sort(compareByCreatedAtDesc).map((run) => buildRunDetail(run))
-		);
+		const runDetails = await buildLatestRunDetails(runs);
 
 		return finalizeSessionDetail({
 			session: materializeNativeSession(thread),
 			runDetails,
+			runCount: runs.length,
 			taskContext,
 			origin: 'external'
 		});
@@ -1453,7 +1478,7 @@ function buildTaskContextFromControlPlane(controlPlane: ControlPlaneData): TaskC
 		title: task.title,
 		summary: task.summary,
 		projectId: task.projectId,
-		lane: task.lane,
+		area: task.area ?? task.lane ?? 'product',
 		goalId: task.goalId,
 		goalName: goalNames.get(task.goalId) ?? null,
 		status: task.status,
@@ -1936,14 +1961,10 @@ export async function listAgentSessions(
 				return buildExternalSessionListDetail(nativeThread, runs, taskContext);
 			}
 
-			return buildSessionDetail(session, runs, taskContext);
+			return buildManagedSessionListDetail(session, runs, taskContext);
 		}),
 		...nativeThreads
-			.filter(
-				(thread) =>
-					!existingSessionIds.has(thread.id) &&
-					!managedThreadIds.has(thread.id)
-			)
+			.filter((thread) => !existingSessionIds.has(thread.id) && !managedThreadIds.has(thread.id))
 			.map((thread) => buildExternalSessionListDetail(thread, [], taskContext))
 	]);
 	const reconciled = await reconcileTaskStateFromSessionDetails(details, controlPlane);
@@ -1957,16 +1978,19 @@ export async function listAgentSessions(
 }
 
 export function summarizeAgentSessions(sessions: AgentSessionDetail[]) {
+	const stateFor = (session: AgentSessionDetail) =>
+		session.threadState ?? session.sessionState ?? 'idle';
+
 	return {
 		totalCount: sessions.length,
 		activeCount: sessions.filter((session) =>
-			['starting', 'waiting', 'working'].includes(session.sessionState)
+			['starting', 'waiting', 'working'].includes(stateFor(session))
 		).length,
-		readyCount: sessions.filter((session) => session.sessionState === 'ready').length,
+		readyCount: sessions.filter((session) => stateFor(session) === 'ready').length,
 		unavailableCount: sessions.filter((session) =>
-			['unavailable', 'idle'].includes(session.sessionState)
+			['unavailable', 'idle'].includes(stateFor(session))
 		).length,
-		attentionCount: sessions.filter((session) => session.sessionState === 'attention').length
+		attentionCount: sessions.filter((session) => stateFor(session) === 'attention').length
 	};
 }
 
@@ -2418,6 +2442,7 @@ export async function cancelAgentSession(sessionId: string) {
 
 export const loadAgentThreadsDb = loadAgentSessionsDb;
 export const listAgentThreads = listAgentSessions;
+export const summarizeAgentThreads = summarizeAgentSessions;
 export const getAgentThread = getAgentSession;
 export const startAgentThread = startAgentSession;
 export const sendAgentThreadMessage = sendAgentSessionMessage;

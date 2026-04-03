@@ -1,5 +1,5 @@
 import { formatActivityAge } from '$lib/session-activity';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Run } from '$lib/types/control-plane';
 import { formatRelativeTime } from '$lib/server/control-plane';
 
@@ -9,27 +9,24 @@ export type RunRecord = Run & {
 	taskProjectName: string;
 	workerName: string;
 	providerName: string;
-	sessionName: string | null;
-	sessionState: AgentSessionDetail['sessionState'] | null;
-	sessionArchivedAt: string | null;
-	sessionSummary: string | null;
-	sessionCanResume: boolean;
-	sessionHasActiveRun: boolean;
+	threadName: string | null;
+	threadState: AgentThreadDetail['threadState'] | null;
+	threadArchivedAt: string | null;
+	threadSummary: string | null;
+	threadCanResume: boolean;
+	threadHasActiveRun: boolean;
 	createdAtLabel: string;
 	updatedAtLabel: string;
 	heartbeatAgeLabel: string;
 	isHeartbeatStale: boolean;
 };
 
-export function buildRunRecords(
-	data: ControlPlaneData,
-	sessions: AgentSessionDetail[]
-): RunRecord[] {
+export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDetail[]): RunRecord[] {
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
-	const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 	const staleHeartbeatCutoffMs = 5 * 60 * 1000;
 
 	return [...data.runs]
@@ -38,7 +35,7 @@ export function buildRunRecords(
 			const project = task ? (projectMap.get(task.projectId) ?? null) : null;
 			const worker = run.workerId ? (workerMap.get(run.workerId) ?? null) : null;
 			const provider = run.providerId ? (providerMap.get(run.providerId) ?? null) : null;
-			const session = run.sessionId ? (sessionMap.get(run.sessionId) ?? null) : null;
+			const thread = run.sessionId ? (threadMap.get(run.sessionId) ?? null) : null;
 			const heartbeatAgeMs = run.lastHeartbeatAt
 				? Math.max(0, Date.now() - Date.parse(run.lastHeartbeatAt))
 				: null;
@@ -50,12 +47,12 @@ export function buildRunRecords(
 				taskProjectName: project?.name ?? 'Unknown project',
 				workerName: worker?.name ?? 'Unassigned',
 				providerName: provider?.name ?? 'No provider',
-				sessionName: session?.name ?? null,
-				sessionState: session?.sessionState ?? null,
-				sessionArchivedAt: session?.archivedAt ?? null,
-				sessionSummary: session?.sessionSummary ?? null,
-				sessionCanResume: session?.canResume ?? false,
-				sessionHasActiveRun: session?.hasActiveRun ?? false,
+				threadName: thread?.name ?? null,
+				threadState: thread?.threadState ?? thread?.sessionState ?? null,
+				threadArchivedAt: thread?.archivedAt ?? null,
+				threadSummary: thread?.threadSummary ?? thread?.sessionSummary ?? null,
+				threadCanResume: thread?.canResume ?? false,
+				threadHasActiveRun: thread?.hasActiveRun ?? false,
 				createdAtLabel: formatRelativeTime(run.createdAt),
 				updatedAtLabel: formatRelativeTime(run.updatedAt),
 				heartbeatAgeLabel: formatActivityAge(run.lastHeartbeatAt),

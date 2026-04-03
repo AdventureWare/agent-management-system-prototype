@@ -1,6 +1,6 @@
-import type { AgentRunDetail } from '$lib/types/agent-session';
+import type { AgentRunDetail } from '$lib/types/agent-thread';
 import type { ThreadCategorization } from '$lib/types/thread-categorization';
-import type { Lane, Task } from '$lib/types/control-plane';
+import type { Area, Task } from '$lib/types/control-plane';
 
 const TOPIC_STOP_WORDS = new Set<string>([
 	'a',
@@ -55,23 +55,76 @@ const TOPIC_STOP_WORDS = new Set<string>([
 const FOCUS_PROFILES = [
 	{
 		label: 'Planning',
-		keywords: ['brief', 'goal', 'ideation', 'plan', 'planning', 'proposal', 'roadmap', 'scope', 'spec']
+		keywords: [
+			'brief',
+			'goal',
+			'ideation',
+			'plan',
+			'planning',
+			'proposal',
+			'roadmap',
+			'scope',
+			'spec'
+		]
 	},
 	{
 		label: 'Coordination',
-		keywords: ['assign', 'assignment', 'coordination', 'manager', 'orchestration', 'queue', 'routing', 'worker', 'workflow']
+		keywords: [
+			'assign',
+			'assignment',
+			'coordination',
+			'manager',
+			'orchestration',
+			'queue',
+			'routing',
+			'worker',
+			'workflow'
+		]
 	},
 	{
 		label: 'UI/UX',
-		keywords: ['component', 'css', 'design', 'frontend', 'interface', 'layout', 'page', 'style', 'svelte', 'ux', 'ui']
+		keywords: [
+			'component',
+			'css',
+			'design',
+			'frontend',
+			'interface',
+			'layout',
+			'page',
+			'style',
+			'svelte',
+			'ux',
+			'ui'
+		]
 	},
 	{
 		label: 'Backend/API',
-		keywords: ['api', 'auth', 'backend', 'endpoint', 'handler', 'request', 'response', 'route', 'server']
+		keywords: [
+			'api',
+			'auth',
+			'backend',
+			'endpoint',
+			'handler',
+			'request',
+			'response',
+			'route',
+			'server'
+		]
 	},
 	{
 		label: 'Data',
-		keywords: ['database', 'json', 'metadata', 'migration', 'model', 'persist', 'persistence', 'schema', 'state', 'storage']
+		keywords: [
+			'database',
+			'json',
+			'metadata',
+			'migration',
+			'model',
+			'persist',
+			'persistence',
+			'schema',
+			'state',
+			'storage'
+		]
 	},
 	{
 		label: 'Testing',
@@ -83,15 +136,45 @@ const FOCUS_PROFILES = [
 	},
 	{
 		label: 'Operations',
-		keywords: ['build', 'ci', 'deploy', 'environment', 'heartbeat', 'infra', 'log', 'monitoring', 'runtime']
+		keywords: [
+			'build',
+			'ci',
+			'deploy',
+			'environment',
+			'heartbeat',
+			'infra',
+			'log',
+			'monitoring',
+			'runtime'
+		]
 	},
 	{
 		label: 'Research',
-		keywords: ['analyze', 'audit', 'compare', 'discover', 'evaluate', 'investigate', 'research', 'review']
+		keywords: [
+			'analyze',
+			'audit',
+			'compare',
+			'discover',
+			'evaluate',
+			'investigate',
+			'research',
+			'review'
+		]
 	},
 	{
 		label: 'Integrations',
-		keywords: ['connector', 'github', 'integration', 'linear', 'mcp', 'oauth', 'openai', 'plugin', 'slack', 'vercel']
+		keywords: [
+			'connector',
+			'github',
+			'integration',
+			'linear',
+			'mcp',
+			'oauth',
+			'openai',
+			'plugin',
+			'slack',
+			'vercel'
+		]
 	}
 ] as const;
 
@@ -145,7 +228,7 @@ const ENTITY_PROFILES = [
 const FOCUS_KEYWORDS = new Set<string>(FOCUS_PROFILES.flatMap((profile) => profile.keywords));
 const ENTITY_KEYWORDS = new Set<string>(ENTITY_PROFILES.flatMap((profile) => profile.keywords));
 
-const LANE_TOPIC_LABELS: Record<Lane, string> = {
+const AREA_TOPIC_LABELS: Record<Area, string> = {
 	product: 'Product',
 	growth: 'Growth',
 	ops: 'Operations'
@@ -163,7 +246,8 @@ type ThreadTopicTask = {
 	projectName?: string | null;
 	goalId?: string | null;
 	goalName?: string | null;
-	lane?: Lane | null;
+	area?: Area | null;
+	lane?: Area | null;
 	desiredRole?: string | null;
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
@@ -171,14 +255,16 @@ type ThreadTopicTask = {
 };
 
 type ThreadTopicInput = {
-	sessionName: string;
-	sessionSummary: string | null;
+	threadName?: string;
+	threadSummary?: string | null;
+	sessionName?: string;
+	sessionSummary?: string | null;
 	runDetails: Array<Pick<AgentRunDetail, 'prompt' | 'lastMessage'>>;
 	relatedTasks: ThreadTopicTask[];
 };
 
 type CategorizationSignalState = {
-	laneScores: Map<string, number>;
+	areaScores: Map<string, number>;
 	focusScores: Map<string, number>;
 	entityScores: Map<string, number>;
 	roleScores: Map<string, number>;
@@ -267,9 +353,9 @@ function accumulateProfileScores(
 
 function accumulateCategorizationSignals(
 	sources: WeightedTextSource[],
-	lanes: Array<Lane | null | undefined>
+	areas: Array<Area | null | undefined>
 ): CategorizationSignalState {
-	const laneScores = new Map<string, number>();
+	const areaScores = new Map<string, number>();
 	const focusScores = new Map<string, number>();
 	const entityScores = new Map<string, number>();
 	const roleScores = new Map<string, number>();
@@ -277,13 +363,13 @@ function accumulateCategorizationSignals(
 	const toolScores = new Map<string, number>();
 	const keywordScores = new Map<string, number>();
 
-	for (const lane of lanes) {
-		if (!lane) {
+	for (const area of areas) {
+		if (!area) {
 			continue;
 		}
 
-		const label = LANE_TOPIC_LABELS[lane];
-		laneScores.set(label, (laneScores.get(label) ?? 0) + 6);
+		const label = AREA_TOPIC_LABELS[area];
+		areaScores.set(label, (areaScores.get(label) ?? 0) + 6);
 	}
 
 	for (const source of sources) {
@@ -324,7 +410,7 @@ function accumulateCategorizationSignals(
 	}
 
 	return {
-		laneScores,
+		areaScores,
 		focusScores,
 		entityScores,
 		roleScores,
@@ -343,7 +429,10 @@ function compareScoredEntries(left: [string, number], right: [string, number]) {
 }
 
 function selectLabels(scores: Map<string, number>, maxCount: number) {
-	return [...scores.entries()].sort(compareScoredEntries).slice(0, maxCount).map(([label]) => label);
+	return [...scores.entries()]
+		.sort(compareScoredEntries)
+		.slice(0, maxCount)
+		.map(([label]) => label);
 }
 
 function selectPrimaryFirstLabels(
@@ -355,7 +444,9 @@ function selectPrimaryFirstLabels(
 	}
 ) {
 	return relatedTasks
-		.filter((task) => Boolean(options.idSelector(task)) && Boolean(options.labelSelector(task)?.trim()))
+		.filter(
+			(task) => Boolean(options.idSelector(task)) && Boolean(options.labelSelector(task)?.trim())
+		)
 		.sort((left, right) => {
 			if (Boolean(left.isPrimary) !== Boolean(right.isPrimary)) {
 				return left.isPrimary ? -1 : 1;
@@ -367,8 +458,9 @@ function selectPrimaryFirstLabels(
 		.filter(
 			(label, index, labels) =>
 				Boolean(label) &&
-				labels.findIndex((candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)) ===
-					index
+				labels.findIndex(
+					(candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)
+				) === index
 		)
 		.slice(0, options.maxCount);
 }
@@ -377,13 +469,7 @@ function collectUniqueIds(
 	relatedTasks: ThreadTopicTask[],
 	selector: (task: ThreadTopicTask) => string | null | undefined
 ) {
-	return [
-		...new Set(
-			relatedTasks
-				.map((task) => selector(task)?.trim() ?? '')
-				.filter(Boolean)
-		)
-	];
+	return [...new Set(relatedTasks.map((task) => selector(task)?.trim() ?? '').filter(Boolean))];
 }
 
 function formatKeywordTopicLabel(token: string) {
@@ -399,7 +485,7 @@ function formatKeywordTopicLabel(token: string) {
 
 function buildCompactTopicLabels(categorization: ThreadCategorization, maxLabels = 4) {
 	return [
-		...categorization.laneLabels.slice(0, 1),
+		...(categorization.areaLabels ?? categorization.laneLabels ?? []).slice(0, 1),
 		...categorization.focusLabels.slice(0, 2),
 		...categorization.entityLabels.slice(0, 1),
 		...categorization.roleLabels.slice(0, 1),
@@ -410,7 +496,7 @@ function buildCompactTopicLabels(categorization: ThreadCategorization, maxLabels
 }
 
 function buildCategorizationFromSignals(input: CategorizationSignalState): ThreadCategorization {
-	const laneLabels = selectLabels(input.laneScores, 1);
+	const areaLabels = selectLabels(input.areaScores, 1);
 	const focusLabels = selectLabels(input.focusScores, 3);
 	const entityLabels = selectLabels(input.entityScores, 3);
 	const roleLabels = selectLabels(input.roleScores, 2);
@@ -422,15 +508,13 @@ function buildCategorizationFromSignals(input: CategorizationSignalState): Threa
 			const normalized = normalizeTopicLabel(label);
 
 			return ![
-				...laneLabels,
+				...areaLabels,
 				...focusLabels,
 				...entityLabels,
 				...roleLabels,
 				...capabilityLabels,
 				...toolLabels
-			].some(
-				(existing) => normalizeTopicLabel(existing) === normalized
-			);
+			].some((existing) => normalizeTopicLabel(existing) === normalized);
 		});
 
 	const categorization = {
@@ -438,7 +522,8 @@ function buildCategorizationFromSignals(input: CategorizationSignalState): Threa
 		projectLabels: [],
 		goalIds: [],
 		goalLabels: [],
-		laneLabels,
+		areaLabels,
+		laneLabels: areaLabels,
 		focusLabels,
 		entityLabels,
 		roleLabels,
@@ -459,7 +544,7 @@ export function normalizeTopicLabel(label: string) {
 }
 
 export function deriveTaskCategorization(
-	task: Pick<Task, 'title' | 'summary' | 'lane'> &
+	task: Pick<Task, 'title' | 'summary' | 'area' | 'lane'> &
 		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
 	const signals = accumulateCategorizationSignals(
@@ -467,13 +552,9 @@ export function deriveTaskCategorization(
 			{ text: task.title, weight: 4 },
 			{ text: task.summary, weight: 3 }
 		],
-		[task.lane]
+		[task.area ?? task.lane]
 	);
-	accumulateStructuredLabels(
-		signals.roleScores,
-		task.desiredRoleId ? [task.desiredRoleId] : [],
-		3
-	);
+	accumulateStructuredLabels(signals.roleScores, task.desiredRoleId ? [task.desiredRoleId] : [], 3);
 	accumulateStructuredLabels(signals.capabilityScores, task.requiredCapabilityNames, 3);
 	accumulateStructuredLabels(signals.toolScores, task.requiredToolNames, 3);
 
@@ -481,7 +562,7 @@ export function deriveTaskCategorization(
 }
 
 export function deriveTaskTopicLabels(
-	task: Pick<Task, 'title' | 'summary' | 'lane'> &
+	task: Pick<Task, 'title' | 'summary' | 'area' | 'lane'> &
 		Partial<Pick<Task, 'desiredRoleId' | 'requiredCapabilityNames' | 'requiredToolNames'>>
 ) {
 	return deriveTaskCategorization(task).labels;
@@ -489,10 +570,10 @@ export function deriveTaskTopicLabels(
 
 export function deriveThreadCategorization(input: ThreadTopicInput) {
 	const sources: WeightedTextSource[] = [
-		{ text: input.sessionName, weight: 3 },
-		{ text: input.sessionSummary, weight: 1 }
+		{ text: input.threadName ?? input.sessionName ?? '', weight: 3 },
+		{ text: input.threadSummary ?? input.sessionSummary ?? null, weight: 1 }
 	];
-	const lanes: Array<Lane | null | undefined> = [];
+	const areas: Array<Area | null | undefined> = [];
 
 	for (const task of input.relatedTasks) {
 		const titleWeight = task.isPrimary ? 5 : 3;
@@ -501,14 +582,14 @@ export function deriveThreadCategorization(input: ThreadTopicInput) {
 
 		sources.push({ text: task.title, weight: titleWeight });
 		sources.push({ text: task.summary, weight: summaryWeight });
-		lanes.push(task.lane);
+		areas.push(task.area ?? task.lane);
 	}
 
 	for (const runDetail of input.runDetails.slice(0, 3)) {
 		sources.push({ text: runDetail.prompt, weight: 2 });
 		sources.push({ text: runDetail.lastMessage, weight: 2 });
 	}
-	const signals = accumulateCategorizationSignals(sources, lanes);
+	const signals = accumulateCategorizationSignals(sources, areas);
 	const projectLabels = selectPrimaryFirstLabels(input.relatedTasks, {
 		idSelector: (task) => task.projectId,
 		labelSelector: (task) => task.projectName,

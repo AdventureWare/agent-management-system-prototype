@@ -25,7 +25,8 @@
 		formatTaskStatusLabel,
 		reviewStatusToneClass
 	} from '$lib/types/control-plane';
-	import type { AgentRunDetail, AgentRunStatus, AgentThreadDetail } from '$lib/types/agent-session';
+	import type { AgentRunDetail, AgentRunStatus, AgentThreadDetail } from '$lib/types/agent-thread';
+	import { tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	type TaskResponseAction = {
@@ -34,7 +35,7 @@
 		taskProjectId: string;
 		taskStatus: string;
 		taskGoalId: string;
-		taskLane: string;
+		taskArea: string;
 		taskPriority: string;
 		taskRiskLevel: string;
 		taskApprovalMode: string;
@@ -355,7 +356,10 @@
 		return [
 			{ label: 'Projects', values: detail.categorization.projectLabels },
 			{ label: 'Goals', values: detail.categorization.goalLabels },
-			{ label: 'Area', values: detail.categorization.laneLabels },
+			{
+				label: 'Area',
+				values: detail.categorization.areaLabels ?? detail.categorization.laneLabels ?? []
+			},
 			{ label: 'Focus', values: detail.categorization.focusLabels },
 			{ label: 'Context', values: detail.categorization.entityLabels },
 			{ label: 'Role', values: detail.categorization.roleLabels },
@@ -415,6 +419,40 @@
 		}
 
 		replaceFollowUpAttachmentFiles(nextFiles);
+	}
+
+	async function attachReferencedArtifactToFollowUp(input: { path: string; label: string }) {
+		if (!session?.canResume || sendState?.status === 'sending') {
+			return;
+		}
+
+		selectedSidebarView = 'follow_up';
+		await tick();
+
+		const response = await fetch(
+			resolve(`/api/artifacts/file?path=${encodeURIComponent(input.path)}`)
+		);
+
+		if (!response.ok) {
+			throw new Error('Could not load the referenced file.');
+		}
+
+		const blob = await response.blob();
+		const contentType =
+			response.headers.get('content-type')?.split(';')[0]?.trim() ||
+			blob.type ||
+			'application/octet-stream';
+		const fileName = input.path.split('/').pop() || input.label || 'attachment';
+		const attachment = new File([blob], fileName, {
+			type: contentType,
+			lastModified: 0
+		});
+
+		mergeFollowUpAttachmentFiles([attachment]);
+		pageNotice = {
+			tone: 'success',
+			message: `${fileName} added to the follow-up attachments.`
+		};
 	}
 
 	function clearPendingFollowUpAttachments() {
@@ -673,9 +711,9 @@
 
 	function describeSessionState(detail: AgentThreadDetail): SessionStateDescriptor {
 		return {
-			label: formatThreadStateLabel(detail.sessionState),
-			detail: detail.sessionSummary,
-			className: sessionStatusClass(detail.sessionState)
+			label: formatThreadStateLabel(detail.threadState ?? detail.sessionState ?? 'idle'),
+			detail: detail.threadSummary ?? detail.sessionSummary ?? '',
+			className: sessionStatusClass(detail.threadState ?? detail.sessionState ?? 'idle')
 		};
 	}
 
@@ -1243,6 +1281,7 @@
 													text={responseText(latestContextRun)}
 													showReferenceSummary={true}
 													contextArtifacts={combinedResponseContextArtifacts}
+													onAttachArtifact={attachReferencedArtifactToFollowUp}
 												/>
 											</div>
 											<div
@@ -1447,6 +1486,7 @@
 											text={responseText(selectedHistoricalRun)}
 											showReferenceSummary={true}
 											contextArtifacts={combinedResponseContextArtifacts}
+											onAttachArtifact={attachReferencedArtifactToFollowUp}
 										/>
 									</div>
 								</div>
@@ -1750,7 +1790,7 @@
 
 								<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 									<AppButton
-										class="w-full sm:w-auto"
+										class="w-full justify-center sm:w-[15.5rem]"
 										form="thread-follow-up-form"
 										type="submit"
 										variant="primary"
@@ -1779,7 +1819,7 @@
 										/>
 										{#if taskResponseAction}
 											<input type="hidden" name="goalId" value={taskResponseAction.taskGoalId} />
-											<input type="hidden" name="lane" value={taskResponseAction.taskLane} />
+											<input type="hidden" name="area" value={taskResponseAction.taskArea} />
 											<input
 												type="hidden"
 												name="priority"

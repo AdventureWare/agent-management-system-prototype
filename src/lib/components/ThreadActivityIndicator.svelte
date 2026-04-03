@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentThreadDetail } from '$lib/types/agent-session';
+	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import { getThreadActivityMeta } from '$lib/thread-activity';
 
 	let {

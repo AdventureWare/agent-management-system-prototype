@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createTask, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
-import { listAgentSessions } from '$lib/server/agent-sessions';
+import { listAgentSessions } from '$lib/server/agent-threads';
 import {
 	isSelfImprovementSqliteEmpty,
 	loadSelfImprovementFromSqlite,

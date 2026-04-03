@@ -1,6 +1,6 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
-import type { AgentRun, AgentSession, AgentSessionsDb } from '$lib/types/agent-session';
+import type { AgentRun, AgentSession, AgentSessionsDb } from '$lib/types/agent-thread';
 
 const AGENT_SESSION_COLLECTIONS = ['sessions', 'runs'] as const satisfies Array<
 	keyof AgentSessionsDb
@@ -17,6 +17,7 @@ type AgentSessionRecordRow = {
 
 function emptyAgentSessionsDb(): AgentSessionsDb {
 	return {
+		threads: [],
 		sessions: [],
 		runs: []
 	};
@@ -60,6 +61,8 @@ export function loadAgentSessionsFromSqlite(): AgentSessionsDb {
 			collection.push(JSON.parse(row.payload) as AgentSessionRecordPayload);
 		}
 
+		data.threads = data.sessions;
+
 		return data;
 	} finally {
 		db.close();
@@ -83,7 +86,10 @@ export function saveAgentSessionsToSqlite(data: AgentSessionsDb) {
 			);
 
 			for (const collection of AGENT_SESSION_COLLECTIONS) {
-				const records = input[collection] ?? [];
+				const records =
+					collection === 'sessions'
+						? (input.threads ?? input.sessions ?? [])
+						: (input[collection] ?? []);
 
 				for (const [position, record] of records.entries()) {
 					insertRecord.run(collection, record.id, position, JSON.stringify(record));

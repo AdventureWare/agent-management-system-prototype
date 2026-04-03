@@ -1,7 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
-import { parseAgentSandbox } from '$lib/server/agent-sessions';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
+import { parseAgentSandbox } from '$lib/server/agent-threads';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput } from '$lib/server/path-tools';
 import {

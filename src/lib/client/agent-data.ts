@@ -1,4 +1,4 @@
-import type { AgentSessionDetail, AgentThreadDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type {
 	SelfImprovementCategory,
 	SelfImprovementDecisionReason,
@@ -24,8 +24,8 @@ async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
 export async function fetchAgentSessions(options: { includeArchived?: boolean } = {}) {
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
 	const payload = await fetchJson<{
-		threads?: AgentSessionDetail[];
-		sessions?: AgentSessionDetail[];
+		threads?: AgentThreadDetail[];
+		sessions?: AgentThreadDetail[];
 	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
 
 	return payload.threads ?? payload.sessions ?? [];
@@ -84,16 +84,16 @@ export async function fetchAgentSession(sessionId: string) {
 	}
 
 	const payload = (await response.json()) as {
-		thread?: AgentSessionDetail;
-		session?: AgentSessionDetail;
+		thread?: AgentThreadDetail;
+		session?: AgentThreadDetail;
 	};
-	const session = payload.thread ?? payload.session;
+	const thread = payload.thread ?? payload.session;
 
-	if (!session) {
+	if (!thread) {
 		throw new Error('Could not refresh the thread.');
 	}
 
-	return session;
+	return thread;
 }
 
 export async function fetchAgentThread(threadId: string) {

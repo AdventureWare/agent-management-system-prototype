@@ -66,7 +66,7 @@
 			run.workerName,
 			run.providerName,
 			run.sessionId ?? '',
-			run.sessionName ?? '',
+			run.threadName ?? '',
 			run.threadId ?? '',
 			run.promptDigest,
 			run.summary,
@@ -297,7 +297,7 @@
 													class="ui-wrap-inline text-sky-300 transition hover:text-sky-200"
 													href={resolve(`/app/threads/${run.sessionId}`)}
 												>
-													{run.sessionName || run.sessionId}
+													{run.threadName || run.sessionId}
 												</a>
 											{:else}
 												<p>No managed thread record</p>

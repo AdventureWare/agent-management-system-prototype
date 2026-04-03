@@ -367,7 +367,10 @@
 					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
-					lane: form.lane?.toString() ?? 'product',
+					area:
+						('area' in form ? form.area?.toString() : undefined) ??
+						form.lane?.toString() ??
+						'product',
 					priority: form.priority?.toString() ?? 'medium',
 					riskLevel: form.riskLevel?.toString() ?? 'medium',
 					approvalMode: form.approvalMode?.toString() ?? 'none',
@@ -392,7 +395,7 @@
 					assigneeWorkerId: '',
 					targetDate: '',
 					goalId: '',
-					lane: 'product',
+					area: 'product',
 					priority: 'medium',
 					riskLevel: 'medium',
 					approvalMode: 'none',
@@ -409,7 +412,7 @@
 	let createTaskAssigneeWorkerId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
-	let createTaskLane = $state('product');
+	let createTaskArea = $state('product');
 	let createTaskPriority = $state('medium');
 	let createTaskRiskLevel = $state('medium');
 	let createTaskApprovalMode = $state('none');
@@ -430,7 +433,8 @@
 		createTaskAssigneeWorkerId = prefill?.assigneeWorkerId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
-		createTaskLane = prefill?.lane ?? 'product';
+		createTaskArea =
+			(prefill as { area?: string } | null | undefined)?.area ?? prefill?.lane ?? 'product';
 		createTaskPriority = prefill?.priority ?? 'medium';
 		createTaskRiskLevel = prefill?.riskLevel ?? 'medium';
 		createTaskApprovalMode = prefill?.approvalMode ?? 'none';
@@ -442,7 +446,7 @@
 
 	function resetCreateTaskMetadata() {
 		createTaskGoalId = '';
-		createTaskLane = 'product';
+		createTaskArea = 'product';
 		createTaskPriority = 'medium';
 		createTaskRiskLevel = 'medium';
 		createTaskApprovalMode = 'none';
@@ -458,7 +462,7 @@
 			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
-			createTaskLane = createTaskFormValues.lane;
+			createTaskArea = createTaskFormValues.area;
 			createTaskPriority = createTaskFormValues.priority;
 			createTaskRiskLevel = createTaskFormValues.riskLevel;
 			createTaskApprovalMode = createTaskFormValues.approvalMode;
@@ -1217,7 +1221,7 @@
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
-					<input type="hidden" name="area" value={createTaskLane} />
+					<input type="hidden" name="area" value={createTaskArea} />
 					<input type="hidden" name="priority" value={createTaskPriority} />
 					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
 					<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />

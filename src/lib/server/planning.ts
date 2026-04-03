@@ -17,7 +17,7 @@ type PlanningGoalSummary = {
 	name: string;
 	status: Goal['status'];
 	summary: string;
-	lane: Goal['lane'];
+	area: Goal['area'];
 	confidence: NonNullable<Goal['confidence']>;
 	planningPriority: number;
 	targetDate: string | null;
@@ -270,7 +270,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				name: goal.name,
 				status: goal.status,
 				summary: goal.summary,
-				lane: goal.lane,
+				area: goal.area,
 				confidence: goal.confidence ?? 'medium',
 				planningPriority: goal.planningPriority ?? 0,
 				targetDate: goal.targetDate ?? null,

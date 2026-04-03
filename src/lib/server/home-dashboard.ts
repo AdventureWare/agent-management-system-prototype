@@ -1,4 +1,4 @@
-import { listAgentSessions, summarizeAgentSessions } from '$lib/server/agent-sessions';
+import { listAgentThreads, summarizeAgentThreads } from '$lib/server/agent-threads';
 import { loadControlPlane, summarizeControlPlane } from '$lib/server/control-plane';
 import { loadSelfImprovementSnapshot } from '$lib/server/self-improvement-store';
 import {
@@ -10,16 +10,16 @@ import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 	const controlPlanePromise = loadControlPlane();
-	const [controlPlane, sessions] = await Promise.all([
+	const [controlPlane, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentSessions({ controlPlane: controlPlanePromise })
+		listAgentThreads({ controlPlane: controlPlanePromise })
 	]);
 	const selfImprovement = await loadSelfImprovementSnapshot({
 		data: controlPlane,
-		sessions
+		sessions: threads
 	});
 	const taskMap = new Map(controlPlane.tasks.map((task) => [task.id, task]));
-	const taskWorkItems = buildTaskWorkItems(controlPlane, sessions);
+	const taskWorkItems = buildTaskWorkItems(controlPlane, threads);
 	const dashboardTasks = taskWorkItems.map((task) => ({
 		...task,
 		goalName: controlPlane.goals.find((goal) => goal.id === task.goalId)?.name ?? 'Unknown goal',
@@ -39,8 +39,10 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 		.slice(0, 6);
 
 	return {
-		sessions,
-		sessionSummary: summarizeAgentSessions(sessions),
+		threads,
+		sessions: threads,
+		threadSummary: summarizeAgentThreads(threads),
+		sessionSummary: summarizeAgentThreads(threads),
 		controlSummary: summarizeControlPlane(controlPlane),
 		taskAttention,
 		staleTaskSummary: summarizeTaskFreshness(taskWorkItems),

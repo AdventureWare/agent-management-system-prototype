@@ -1,6 +1,9 @@
-import type { AgentSessionDetail, AgentSessionTaskLink } from '$lib/types/agent-session';
+import type { AgentThreadDetail, AgentThreadTaskLink } from '$lib/types/agent-thread';
 import type { Task } from '$lib/types/control-plane';
-import type { ThreadCategorization, ThreadCategorizationMatch } from '$lib/types/thread-categorization';
+import type {
+	ThreadCategorization,
+	ThreadCategorizationMatch
+} from '$lib/types/thread-categorization';
 import {
 	deriveTaskCategorization,
 	deriveTaskTopicLabels,
@@ -30,10 +33,11 @@ export type TaskThreadAssignmentCandidate = {
 	topicLabels: string[];
 	categorization?: ThreadCategorization;
 	matchedContext: ThreadCategorizationMatch;
-	sessionState: AgentSessionDetail['sessionState'];
+	threadState: AgentThreadDetail['threadState'];
+	sessionState?: AgentThreadDetail['threadState'];
 	canResume: boolean;
 	hasActiveRun: boolean;
-	relatedTasks: AgentSessionTaskLink[];
+	relatedTasks: AgentThreadTaskLink[];
 	previewText: string;
 	isSuggested: boolean;
 	suggestionReason: string | null;
@@ -47,7 +51,8 @@ type TaskThreadSuggestionResult = {
 type BuildTaskThreadSuggestionInput = {
 	task: Task;
 	assignedThreadId: string | null;
-	sessions: AgentSessionDetail[];
+	threads?: AgentThreadDetail[];
+	sessions?: AgentThreadDetail[];
 };
 
 function tokenizeSearchText(value: string) {
@@ -62,12 +67,12 @@ function tokenizeSearchText(value: string) {
 	];
 }
 
-function buildCandidatePreviewText(session: AgentSessionDetail) {
-	return session.latestRun?.lastMessage ?? session.sessionSummary;
+function buildCandidatePreviewText(thread: AgentThreadDetail) {
+	return thread.latestRun?.lastMessage ?? thread.threadSummary ?? thread.sessionSummary ?? '';
 }
 
-function getRelatedTaskScore(task: Task, session: AgentSessionDetail) {
-	const relatedTaskIds = new Set(session.relatedTasks.map((relatedTask) => relatedTask.id));
+function getRelatedTaskScore(task: Task, thread: AgentThreadDetail) {
+	const relatedTaskIds = new Set(thread.relatedTasks.map((relatedTask) => relatedTask.id));
 
 	if (relatedTaskIds.has(task.id)) {
 		return 70;
@@ -77,11 +82,11 @@ function getRelatedTaskScore(task: Task, session: AgentSessionDetail) {
 		relatedTaskIds.has(dependencyId)
 	).length;
 
-	return dependencyMatches > 0 ? dependencyMatches * 35 : session.relatedTasks.length > 0 ? 8 : 0;
+	return dependencyMatches > 0 ? dependencyMatches * 35 : thread.relatedTasks.length > 0 ? 8 : 0;
 }
 
-function getThreadStateScore(session: AgentSessionDetail) {
-	switch (session.sessionState) {
+function getThreadStateScore(thread: AgentThreadDetail) {
+	switch (thread.threadState) {
 		case 'ready':
 			return 18;
 		case 'idle':
@@ -93,28 +98,28 @@ function getThreadStateScore(session: AgentSessionDetail) {
 	}
 }
 
-function getKeywordOverlapScore(taskTokens: string[], session: AgentSessionDetail) {
+function getKeywordOverlapScore(taskTokens: string[], thread: AgentThreadDetail) {
 	if (taskTokens.length === 0) {
 		return 0;
 	}
 
-	const sessionTokens = new Set(
+	const threadTokens = new Set(
 		tokenizeSearchText(
 			[
-				session.name,
-				buildCandidatePreviewText(session),
-				...session.relatedTasks.map((relatedTask) => relatedTask.title)
+				thread.name,
+				buildCandidatePreviewText(thread),
+				...thread.relatedTasks.map((relatedTask) => relatedTask.title)
 			].join(' ')
 		)
 	);
 
-	return taskTokens.filter((token) => sessionTokens.has(token)).length * 10;
+	return taskTokens.filter((token) => threadTokens.has(token)).length * 10;
 }
 
-function getSharedTopicLabels(taskTopicLabels: string[], session: AgentSessionDetail) {
-	const sessionTopicLabels = new Set((session.topicLabels ?? []).map(normalizeTopicLabel));
+function getSharedTopicLabels(taskTopicLabels: string[], thread: AgentThreadDetail) {
+	const threadTopicLabels = new Set((thread.topicLabels ?? []).map(normalizeTopicLabel));
 
-	return taskTopicLabels.filter((label) => sessionTopicLabels.has(normalizeTopicLabel(label)));
+	return taskTopicLabels.filter((label) => threadTopicLabels.has(normalizeTopicLabel(label)));
 }
 
 function collectSharedLabels(left: string[], right: string[]) {
@@ -127,57 +132,71 @@ function mergeSharedLabels(...labelGroups: string[][]) {
 		.flat()
 		.filter(
 			(label, index, labels) =>
-				labels.findIndex((candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)) ===
-				index
+				labels.findIndex(
+					(candidate) => normalizeTopicLabel(candidate) === normalizeTopicLabel(label)
+				) === index
 		);
 }
 
 function getCategorizationOverlap(
 	taskCategorization: ThreadCategorization,
-	session: AgentSessionDetail
+	thread: AgentThreadDetail
 ): ThreadCategorizationMatch {
-	const sessionCategorization = session.categorization;
+	const threadCategorization = thread.categorization;
 	const projectLabels = collectSharedLabels(
 		taskCategorization.projectLabels,
-		sessionCategorization?.projectLabels ?? []
+		threadCategorization?.projectLabels ?? []
 	);
-	const goalLabels = collectSharedLabels(taskCategorization.goalLabels, sessionCategorization?.goalLabels ?? []);
-	const laneLabels = collectSharedLabels(taskCategorization.laneLabels, sessionCategorization?.laneLabels ?? []);
+	const goalLabels = collectSharedLabels(
+		taskCategorization.goalLabels,
+		threadCategorization?.goalLabels ?? []
+	);
+	const areaLabels = collectSharedLabels(
+		taskCategorization.areaLabels ?? taskCategorization.laneLabels ?? [],
+		threadCategorization?.areaLabels ?? threadCategorization?.laneLabels ?? []
+	);
 	const focusLabels = collectSharedLabels(
 		taskCategorization.focusLabels,
-		sessionCategorization?.focusLabels ?? []
+		threadCategorization?.focusLabels ?? []
 	);
 	const entityLabels = collectSharedLabels(
 		taskCategorization.entityLabels,
-		sessionCategorization?.entityLabels ?? []
+		threadCategorization?.entityLabels ?? []
 	);
-	const roleLabels = collectSharedLabels(taskCategorization.roleLabels, sessionCategorization?.roleLabels ?? []);
+	const roleLabels = collectSharedLabels(
+		taskCategorization.roleLabels,
+		threadCategorization?.roleLabels ?? []
+	);
 	const capabilityLabels = collectSharedLabels(
 		taskCategorization.capabilityLabels,
-		sessionCategorization?.capabilityLabels ?? []
+		threadCategorization?.capabilityLabels ?? []
 	);
-	const toolLabels = collectSharedLabels(taskCategorization.toolLabels, sessionCategorization?.toolLabels ?? []);
+	const toolLabels = collectSharedLabels(
+		taskCategorization.toolLabels,
+		threadCategorization?.toolLabels ?? []
+	);
 	const keywordLabels = collectSharedLabels(
 		taskCategorization.keywordLabels,
-		sessionCategorization?.keywordLabels ?? []
+		threadCategorization?.keywordLabels ?? []
 	);
 	const labels = mergeSharedLabels(
 		projectLabels,
 		goalLabels,
-		laneLabels,
+		areaLabels,
 		focusLabels,
 		entityLabels,
 		roleLabels,
 		capabilityLabels,
 		toolLabels,
 		keywordLabels,
-		getSharedTopicLabels(taskCategorization.labels, session)
+		getSharedTopicLabels(taskCategorization.labels, thread)
 	);
 
 	return {
 		projectLabels,
 		goalLabels,
-		laneLabels,
+		areaLabels,
+		laneLabels: areaLabels,
 		focusLabels,
 		entityLabels,
 		roleLabels,
@@ -188,24 +207,25 @@ function getCategorizationOverlap(
 	};
 }
 
-function getScopeOverlap(task: Task, session: AgentSessionDetail): ThreadCategorizationMatch {
-	const sessionCategorization = session.categorization;
+function getScopeOverlap(task: Task, thread: AgentThreadDetail): ThreadCategorizationMatch {
+	const threadCategorization = thread.categorization;
 	const projectLabels =
 		task.projectId &&
-		sessionCategorization?.projectIds.includes(task.projectId) &&
-		sessionCategorization.projectLabels.length > 0
-			? sessionCategorization.projectLabels
+		threadCategorization?.projectIds.includes(task.projectId) &&
+		threadCategorization.projectLabels.length > 0
+			? threadCategorization.projectLabels
 			: [];
 	const goalLabels =
 		task.goalId &&
-		sessionCategorization?.goalIds.includes(task.goalId) &&
-		sessionCategorization.goalLabels.length > 0
-			? sessionCategorization.goalLabels
+		threadCategorization?.goalIds.includes(task.goalId) &&
+		threadCategorization.goalLabels.length > 0
+			? threadCategorization.goalLabels
 			: [];
 
 	return {
 		projectLabels,
 		goalLabels,
+		areaLabels: [],
 		laneLabels: [],
 		focusLabels: [],
 		entityLabels: [],
@@ -223,7 +243,8 @@ function mergeCategorizationMatches(
 	return {
 		projectLabels: mergeSharedLabels(...matches.map((match) => match.projectLabels)),
 		goalLabels: mergeSharedLabels(...matches.map((match) => match.goalLabels)),
-		laneLabels: mergeSharedLabels(...matches.map((match) => match.laneLabels)),
+		areaLabels: mergeSharedLabels(...matches.map((match) => match.areaLabels ?? [])),
+		laneLabels: mergeSharedLabels(...matches.map((match) => match.areaLabels ?? [])),
 		focusLabels: mergeSharedLabels(...matches.map((match) => match.focusLabels)),
 		entityLabels: mergeSharedLabels(...matches.map((match) => match.entityLabels)),
 		roleLabels: mergeSharedLabels(...matches.map((match) => match.roleLabels)),
@@ -238,7 +259,7 @@ function getCategorizationScore(match: ThreadCategorizationMatch) {
 	return (
 		match.projectLabels.length * 18 +
 		match.goalLabels.length * 26 +
-		match.laneLabels.length * 18 +
+		(match.areaLabels ?? []).length * 18 +
 		match.focusLabels.length * 16 +
 		match.entityLabels.length * 14 +
 		match.roleLabels.length * 14 +
@@ -250,17 +271,17 @@ function getCategorizationScore(match: ThreadCategorizationMatch) {
 
 function buildSuggestionReason(
 	task: Task,
-	session: AgentSessionDetail,
+	thread: AgentThreadDetail,
 	keywordOverlapScore: number,
 	sharedContext: ThreadCategorizationMatch
 ) {
-	if (session.relatedTasks.some((relatedTask) => relatedTask.id === task.id)) {
+	if (thread.relatedTasks.some((relatedTask) => relatedTask.id === task.id)) {
 		return 'Already linked to this task and available for follow-up.';
 	}
 
 	if (
 		task.dependencyTaskIds.some((dependencyId) =>
-			session.relatedTasks.some((relatedTask) => relatedTask.id === dependencyId)
+			thread.relatedTasks.some((relatedTask) => relatedTask.id === dependencyId)
 		)
 	) {
 		return 'Linked to a dependency for this task and available to continue the work.';
@@ -271,7 +292,9 @@ function buildSuggestionReason(
 		sharedContext.projectLabels.length > 0
 			? `project ${sharedContext.projectLabels.join(', ')}`
 			: null,
-		sharedContext.laneLabels.length > 0 ? `area ${sharedContext.laneLabels.join(', ')}` : null,
+		(sharedContext.areaLabels ?? []).length > 0
+			? `area ${(sharedContext.areaLabels ?? []).join(', ')}`
+			: null,
 		sharedContext.focusLabels.length > 0 ? `focus ${sharedContext.focusLabels.join(', ')}` : null,
 		sharedContext.entityLabels.length > 0
 			? `context ${sharedContext.entityLabels.join(', ')}`
@@ -298,7 +321,7 @@ function buildSuggestionReason(
 		return 'Matches this task topic and is available for follow-up.';
 	}
 
-	if (session.relatedTasks.length > 0) {
+	if (thread.relatedTasks.length > 0) {
 		return 'Already carries nearby task context and is available to continue the work.';
 	}
 
@@ -326,44 +349,45 @@ export function buildTaskThreadSuggestions(
 	const taskTokens = tokenizeSearchText(`${input.task.title} ${input.task.summary}`);
 	const taskCategorization = deriveTaskCategorization(input.task);
 	const taskTopicLabels = deriveTaskTopicLabels(input.task);
-	const candidates = input.sessions.map((session) => {
-		const previewText = buildCandidatePreviewText(session);
-		const availableScore = session.canResume && !session.hasActiveRun ? 100 : 0;
-		const keywordOverlapScore = getKeywordOverlapScore(taskTokens, session);
+	const candidates = (input.threads ?? input.sessions ?? []).map((thread) => {
+		const previewText = buildCandidatePreviewText(thread);
+		const availableScore = thread.canResume && !thread.hasActiveRun ? 100 : 0;
+		const keywordOverlapScore = getKeywordOverlapScore(taskTokens, thread);
 		const sharedContext = mergeCategorizationMatches(
-			getCategorizationOverlap(taskCategorization, session),
-			getScopeOverlap(input.task, session)
+			getCategorizationOverlap(taskCategorization, thread),
+			getScopeOverlap(input.task, thread)
 		);
 		const sharedTopicLabels = sharedContext.labels.length
 			? sharedContext.labels
-			: getSharedTopicLabels(taskTopicLabels, session);
+			: getSharedTopicLabels(taskTopicLabels, thread);
 		const score =
 			availableScore +
-			getThreadStateScore(session) +
-			getRelatedTaskScore(input.task, session) +
+			getThreadStateScore(thread) +
+			getRelatedTaskScore(input.task, thread) +
 			getCategorizationScore(sharedContext) +
 			sharedTopicLabels.length * 6 +
 			keywordOverlapScore;
 
 		return {
-			id: session.id,
-			name: session.name,
-			topicLabels: session.topicLabels ?? [],
-			categorization: session.categorization,
+			id: thread.id,
+			name: thread.name,
+			topicLabels: thread.topicLabels ?? [],
+			categorization: thread.categorization,
 			matchedContext: sharedContext,
-			sessionState: session.sessionState,
-			canResume: session.canResume,
-			hasActiveRun: session.hasActiveRun,
-			relatedTasks: session.relatedTasks,
+			threadState: thread.threadState,
+			sessionState: thread.threadState,
+			canResume: thread.canResume,
+			hasActiveRun: thread.hasActiveRun,
+			relatedTasks: thread.relatedTasks,
 			previewText,
 			isSuggested: false,
 			suggestionReason: null,
 			score,
-			isAssigned: session.id === input.assignedThreadId,
-			availableForAssignment: session.canResume && !session.hasActiveRun,
+			isAssigned: thread.id === input.assignedThreadId,
+			availableForAssignment: thread.canResume && !thread.hasActiveRun,
 			keywordOverlapScore,
 			sharedTopicLabels,
-			session
+			thread
 		};
 	});
 	const suggestedCandidate = [...candidates]
@@ -381,19 +405,20 @@ export function buildTaskThreadSuggestions(
 				topicLabels: candidate.topicLabels,
 				categorization: candidate.categorization,
 				matchedContext: candidate.matchedContext,
-				sessionState: candidate.sessionState,
+				threadState: candidate.threadState,
+				sessionState: candidate.threadState,
 				canResume: candidate.canResume,
 				hasActiveRun: candidate.hasActiveRun,
 				relatedTasks: candidate.relatedTasks,
 				previewText: candidate.previewText,
 				isSuggested,
 				suggestionReason: isSuggested
-						? buildSuggestionReason(
-								input.task,
-								candidate.session,
-								candidate.keywordOverlapScore,
-								candidate.matchedContext
-							)
+					? buildSuggestionReason(
+							input.task,
+							candidate.thread,
+							candidate.keywordOverlapScore,
+							candidate.matchedContext
+						)
 					: null,
 				score: candidate.score,
 				isAssigned: candidate.isAssigned

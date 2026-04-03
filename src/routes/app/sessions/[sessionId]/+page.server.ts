@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import {
 	getAgentThread,
 	parseAgentSandbox,
@@ -28,7 +28,7 @@ type SessionTaskResponseAction = {
 	taskProjectId: string;
 	taskStatus: Task['status'];
 	taskGoalId: string;
-	taskLane: Task['lane'];
+	taskArea: NonNullable<Task['area'] | Task['lane']>;
 	taskPriority: Task['priority'];
 	taskRiskLevel: Task['riskLevel'];
 	taskApprovalMode: Task['approvalMode'];
@@ -157,7 +157,7 @@ function buildTaskResponseAction(input: {
 		taskProjectId: task.projectId,
 		taskStatus: task.status,
 		taskGoalId: task.goalId,
-		taskLane: task.lane,
+		taskArea: task.area ?? task.lane ?? 'product',
 		taskPriority: task.priority,
 		taskRiskLevel: task.riskLevel,
 		taskApprovalMode: task.approvalMode,

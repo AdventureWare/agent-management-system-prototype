@@ -1,6 +1,6 @@
 import { formatActivityAge } from '$lib/session-activity';
 import { isActiveTaskThread } from '$lib/task-thread-context';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Run, RunStatus, Task } from '$lib/types/control-plane';
 import type { TaskFreshness, TaskFreshnessSummary, TaskWorkItem } from '$lib/types/task-work-item';
 import {

@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import type { AgentSandbox } from '$lib/types/agent-session';
+import type { AgentSandbox } from '$lib/types/agent-thread';
 
 type WorkspaceCheckInput = {
 	cwd: string;

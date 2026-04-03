@@ -1,17 +1,18 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type {
 	SelfImprovementSnapshotSummary,
 	TrackedSelfImprovementOpportunity
 } from '$lib/types/self-improvement';
 import type { TaskFreshnessSummary, TaskWorkItem } from '$lib/types/task-work-item';
 
-export type AgentSessionSummary = {
+export type AgentThreadSummary = {
 	totalCount: number;
 	activeCount: number;
 	readyCount: number;
 	unavailableCount: number;
 	attentionCount: number;
 };
+export type AgentSessionSummary = AgentThreadSummary;
 
 export type ControlSummary = {
 	taskCount: number;
@@ -40,8 +41,10 @@ export type DashboardTaskAttentionItem = TaskWorkItem & {
 };
 
 export type HomeDashboardData = {
-	sessions: AgentSessionDetail[];
-	sessionSummary: AgentSessionSummary;
+	threads: AgentThreadDetail[];
+	sessions?: AgentThreadDetail[];
+	threadSummary: AgentThreadSummary;
+	sessionSummary?: AgentThreadSummary;
 	controlSummary: ControlSummary;
 	taskAttention: DashboardTaskAttentionItem[];
 	staleTaskSummary: TaskFreshnessSummary;

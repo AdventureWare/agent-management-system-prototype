@@ -1,4 +1,4 @@
-import type { AgentSandbox } from '$lib/types/agent-session';
+import type { AgentSandbox } from '$lib/types/agent-thread';
 
 export const AREA_OPTIONS = ['product', 'growth', 'ops'] as const;
 export const LANE_OPTIONS = AREA_OPTIONS;

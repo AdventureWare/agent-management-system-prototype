@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 import {
 	TASK_STATUS_OPTIONS,
 	formatTaskStatusLabel,

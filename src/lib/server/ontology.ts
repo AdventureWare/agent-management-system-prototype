@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Provider, Worker } from '$lib/types/control-plane';
 import type {
 	OntologyActor,
@@ -73,17 +73,18 @@ export function summarizeOntologyV1Gaps(
 
 export function buildOntologyV1Snapshot(input: {
 	data: ControlPlaneData;
-	sessions?: AgentSessionDetail[];
+	threads?: AgentThreadDetail[];
+	sessions?: AgentThreadDetail[];
 }): OntologyV1Snapshot {
 	const { data } = input;
-	const sessions = input.sessions ?? [];
+	const threads = input.threads ?? input.sessions ?? [];
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 
 	const roles: OntologyRole[] = data.roles.map((role) => ({
 		id: role.id,
 		name: role.name,
 		description: role.description,
-		lane: role.lane
+		area: role.area ?? role.lane
 	}));
 
 	const actors: OntologyActor[] = data.workers.map((worker) => {
@@ -196,10 +197,10 @@ export function buildOntologyV1Snapshot(input: {
 		contextIdsByTask.set(task.id, taskContextIds);
 	}
 
-	for (const session of sessions) {
+	for (const thread of threads) {
 		const threadContextIds: string[] = [];
 
-		for (const attachment of session.attachments ?? []) {
+		for (const attachment of thread.attachments ?? []) {
 			const id = `context_thread_attachment_${attachment.id}`;
 			contextResources.push({
 				id,
@@ -208,12 +209,12 @@ export function buildOntologyV1Snapshot(input: {
 				contentType: attachment.contentType,
 				source: 'thread_attachment',
 				taskId: null,
-				threadId: session.id
+				threadId: thread.id
 			});
 			threadContextIds.push(id);
 		}
 
-		contextIdsByThread.set(session.id, threadContextIds);
+		contextIdsByThread.set(thread.id, threadContextIds);
 	}
 
 	const artifacts: OntologyArtifact[] = [];
@@ -280,39 +281,39 @@ export function buildOntologyV1Snapshot(input: {
 		}
 	}
 
-	const sessionTaskIds = new Map<string, Set<string>>();
+	const threadTaskIds = new Map<string, Set<string>>();
 
 	for (const task of data.tasks) {
 		if (!task.threadSessionId) {
 			continue;
 		}
 
-		const taskIds = sessionTaskIds.get(task.threadSessionId) ?? new Set<string>();
+		const taskIds = threadTaskIds.get(task.threadSessionId) ?? new Set<string>();
 		taskIds.add(task.id);
-		sessionTaskIds.set(task.threadSessionId, taskIds);
+		threadTaskIds.set(task.threadSessionId, taskIds);
 	}
 
-	for (const session of sessions) {
-		const taskIds = sessionTaskIds.get(session.id) ?? new Set<string>();
+	for (const thread of threads) {
+		const taskIds = threadTaskIds.get(thread.id) ?? new Set<string>();
 
-		for (const relatedTask of session.relatedTasks ?? []) {
+		for (const relatedTask of thread.relatedTasks ?? []) {
 			taskIds.add(relatedTask.id);
 		}
 
-		sessionTaskIds.set(session.id, taskIds);
+		threadTaskIds.set(thread.id, taskIds);
 	}
 
-	const threads: OntologyThread[] = sessions.map(
-		(session): OntologyThread => ({
-			id: session.id,
-			name: session.name,
-			externalThreadId: session.threadId,
-			state: session.sessionState,
-			sandbox: session.sandbox,
-			sessionSummary: session.sessionSummary,
-			taskIds: [...(sessionTaskIds.get(session.id) ?? new Set<string>())],
-			workAttemptIds: workAttemptIdsByThread.get(session.id) ?? [],
-			contextResourceIds: contextIdsByThread.get(session.id) ?? []
+	const ontologyThreads: OntologyThread[] = threads.map(
+		(thread): OntologyThread => ({
+			id: thread.id,
+			name: thread.name,
+			externalThreadId: thread.threadId,
+			state: thread.threadState ?? thread.sessionState ?? 'unknown',
+			sandbox: thread.sandbox,
+			threadSummary: thread.threadSummary ?? thread.sessionSummary ?? '',
+			taskIds: [...(threadTaskIds.get(thread.id) ?? new Set<string>())],
+			workAttemptIds: workAttemptIdsByThread.get(thread.id) ?? [],
+			contextResourceIds: contextIdsByThread.get(thread.id) ?? []
 		})
 	);
 
@@ -411,7 +412,7 @@ export function buildOntologyV1Snapshot(input: {
 		goals,
 		tasks,
 		workAttempts,
-		threads,
+		threads: ontologyThreads,
 		artifacts,
 		contextResources,
 		actors,

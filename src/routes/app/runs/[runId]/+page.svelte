@@ -55,9 +55,8 @@
 				>
 					{formatRunStatusLabel(data.run.status)}
 				</span>
-				{#if data.run.sessionState}
-					<span class="text-sm text-slate-400">{formatThreadStateLabel(data.run.sessionState)}</span
-					>
+				{#if data.run.threadState}
+					<span class="text-sm text-slate-400">{formatThreadStateLabel(data.run.threadState)}</span>
 				{/if}
 			</div>
 		</article>
@@ -87,11 +86,11 @@
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
 					href={resolve(`/app/threads/${data.run.sessionId}`)}
 				>
-					{data.run.sessionName ?? data.run.sessionId}
+					{data.run.threadName ?? data.run.sessionId}
 				</a>
 				<p class="mt-2 text-sm text-slate-400">
-					{data.run.sessionState ? formatThreadStateLabel(data.run.sessionState) : 'Unknown state'}
-					{#if data.run.sessionArchivedAt}
+					{data.run.threadState ? formatThreadStateLabel(data.run.threadState) : 'Unknown state'}
+					{#if data.run.threadArchivedAt}
 						• archived{/if}
 				</p>
 			{:else}
@@ -250,7 +249,7 @@
 								class="ui-wrap-inline mt-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
 								href={resolve(`/app/threads/${data.run.sessionId}`)}
 							>
-								{data.run.sessionName ?? data.run.sessionId}
+								{data.run.threadName ?? data.run.sessionId}
 							</a>
 						{:else}
 							<p class="mt-2 text-sm text-white">No thread record linked</p>
@@ -272,7 +271,7 @@
 								Thread status
 							</p>
 							<p class="mt-2 text-sm text-white">
-								{formatThreadStateLabel(data.session.sessionState)}
+								{formatThreadStateLabel(data.session.threadState ?? data.session.sessionState)}
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
 								{data.session.canResume

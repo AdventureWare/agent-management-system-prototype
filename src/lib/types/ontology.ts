@@ -9,7 +9,7 @@ import type {
 	TaskStatus,
 	WorkerStatus
 } from '$lib/types/control-plane';
-import type { AgentSandbox, AgentSessionState } from '$lib/types/agent-session';
+import type { AgentSandbox, AgentThreadState } from '$lib/types/agent-thread';
 
 export type OntologyActorKind = 'human' | 'ai' | 'unknown';
 export type OntologyWorkAttemptKind = 'run' | 'human_work_session';
@@ -75,9 +75,9 @@ export type OntologyThread = {
 	id: string;
 	name: string;
 	externalThreadId: string | null;
-	state: AgentSessionState | 'unknown';
+	state: AgentThreadState | 'unknown';
 	sandbox: AgentSandbox | null;
-	sessionSummary: string;
+	threadSummary: string;
 	taskIds: string[];
 	workAttemptIds: string[];
 	contextResourceIds: string[];
@@ -126,7 +126,7 @@ export type OntologyRole = {
 	id: string;
 	name: string;
 	description: string;
-	lane: string;
+	area: string;
 };
 
 export type OntologyCapability = {

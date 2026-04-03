@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 
 export const ACTIVE_REFRESH_INTERVAL_MS = 4_000;
 export const ACTIVITY_CLOCK_INTERVAL_MS = 1_000;

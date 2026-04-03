@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import type { AgentSandbox } from '$lib/types/agent-session';
+import type { AgentSandbox } from '$lib/types/agent-thread';
 import {
 	createWorker,
 	loadControlPlane,
@@ -13,7 +13,7 @@ import {
 	hashWorkerToken,
 	toPublicWorker
 } from '$lib/server/worker-api';
-import { parseAgentSandbox } from '$lib/server/agent-sessions';
+import { parseAgentSandbox } from '$lib/server/agent-threads';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {

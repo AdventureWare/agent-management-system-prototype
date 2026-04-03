@@ -8,7 +8,7 @@ import {
 	saveControlPlaneToSqlite
 } from '$lib/server/db/control-plane-store';
 import { normalizePathInput } from '$lib/server/path-tools';
-import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-session';
+import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
 import {
 	APPROVAL_STATUS_OPTIONS,
 	AREA_OPTIONS,

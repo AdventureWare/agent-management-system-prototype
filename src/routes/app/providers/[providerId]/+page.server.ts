@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import {
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
@@ -14,7 +14,7 @@ import {
 	parseProviderSetupStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
-import { parseAgentSandbox } from '$lib/server/agent-sessions';
+import { parseAgentSandbox } from '$lib/server/agent-threads';
 
 function parseListField(value: FormDataEntryValue | null) {
 	return (

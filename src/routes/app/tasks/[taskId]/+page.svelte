@@ -134,6 +134,7 @@
 		matchedContext?: {
 			projectLabels?: string[];
 			goalLabels?: string[];
+			areaLabels?: string[];
 			laneLabels?: string[];
 			focusLabels?: string[];
 			entityLabels?: string[];
@@ -153,7 +154,7 @@
 		return [
 			...(match.projectLabels ?? []),
 			...(match.goalLabels ?? []),
-			...(match.laneLabels ?? []),
+			...(match.areaLabels ?? match.laneLabels ?? []),
 			...(match.focusLabels ?? []),
 			...(match.entityLabels ?? []),
 			...(match.roleLabels ?? []),

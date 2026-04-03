@@ -8,7 +8,7 @@
 		updateSelfImprovementOpportunityStatus
 	} from '$lib/client/agent-data';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
-	import type { AgentThreadDetail } from '$lib/types/agent-session';
+	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import {
 		formatTaskApprovalModeLabel,
 		formatTaskStatusLabel,
@@ -30,22 +30,28 @@
 	let refreshedDashboard = $state.raw<HomeDashboardData | null>(null);
 	let refreshError = $state<string | null>(null);
 	let dashboard: HomeDashboardData = $derived(refreshedDashboard ?? data);
+	let dashboardThreads = $derived(dashboard.threads ?? dashboard.sessions ?? []);
+	let dashboardThreadSummary = $derived(dashboard.threadSummary ?? dashboard.sessionSummary);
 
 	let activeSessions = $derived(
-		dashboard.sessions.filter(
+		dashboardThreads.filter(
 			(session: AgentThreadDetail) =>
-				session.sessionState === 'starting' ||
-				session.sessionState === 'waiting' ||
-				session.sessionState === 'working'
+				(session.threadState ?? session.sessionState) === 'starting' ||
+				(session.threadState ?? session.sessionState) === 'waiting' ||
+				(session.threadState ?? session.sessionState) === 'working'
 		)
 	);
 	let attentionSessions = $derived(
-		dashboard.sessions.filter((session: AgentThreadDetail) => session.sessionState === 'attention')
+		dashboardThreads.filter(
+			(session: AgentThreadDetail) => (session.threadState ?? session.sessionState) === 'attention'
+		)
 	);
 	let availableSessions = $derived(
-		dashboard.sessions.filter((session: AgentThreadDetail) => session.sessionState === 'ready')
+		dashboardThreads.filter(
+			(session: AgentThreadDetail) => (session.threadState ?? session.sessionState) === 'ready'
+		)
 	);
-	let latestSessions = $derived(dashboard.sessions.slice(0, 5));
+	let latestSessions = $derived(dashboardThreads.slice(0, 5));
 	let blockedTasks = $derived(
 		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.status === 'blocked')
 	);
@@ -366,27 +372,33 @@
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Active</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.activeCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboardThreadSummary?.activeCount ?? 0}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Available</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.readyCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboardThreadSummary?.readyCount ?? 0}
+			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Needs attention</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.sessionSummary.attentionCount}
+				{dashboardThreadSummary?.attentionCount ?? 0}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">History only / idle</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.sessionSummary.unavailableCount}
+				{dashboardThreadSummary?.unavailableCount ?? 0}
 			</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Total threads</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{dashboard.sessionSummary.totalCount}</p>
+			<p class="mt-2 text-3xl font-semibold text-white">
+				{dashboardThreadSummary?.totalCount ?? 0}
+			</p>
 		</div>
 	</div>
 

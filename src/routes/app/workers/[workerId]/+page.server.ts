@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-session';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import { WORKER_LOCATION_OPTIONS, WORKER_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	formatRelativeTime,
@@ -9,7 +9,7 @@ import {
 	parseWorkerStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
-import { parseAgentSandbox } from '$lib/server/agent-sessions';
+import { parseAgentSandbox } from '$lib/server/agent-threads';
 
 function readThreadSandboxOverride(value: FormDataEntryValue | null) {
 	const raw = value?.toString().trim() ?? '';

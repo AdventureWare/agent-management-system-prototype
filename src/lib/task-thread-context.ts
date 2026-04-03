@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 
 const ACTIVE_TASK_THREAD_STATES = new Set<AgentSessionDetail['sessionState']>([
 	'starting',

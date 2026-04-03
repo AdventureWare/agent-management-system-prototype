@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { listAgentSessions } from '$lib/server/agent-sessions';
+import { listAgentSessions } from '$lib/server/agent-threads';
 import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 import { RUN_STATUS_OPTIONS } from '$lib/types/control-plane';

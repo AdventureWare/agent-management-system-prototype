@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { selectTaskThreadContext } from '$lib/task-thread-context';
 import { projectMatchesPath } from '$lib/server/control-plane';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 import type { Project } from '$lib/types/control-plane';
 
 type TaskThreadInput = {

@@ -16,12 +16,14 @@
 		formatThreadStateLabel
 	} from '$lib/thread-activity';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
-	import type { AgentThreadDetail } from '$lib/types/agent-session';
+	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import { fade } from 'svelte/transition';
 
 	type ArchiveAction = 'archive' | 'unarchive';
 
-	let { data } = $props<{ data: { sessions: AgentThreadDetail[] } }>();
+	let { data } = $props<{
+		data: { threads?: AgentThreadDetail[]; sessions?: AgentThreadDetail[] };
+	}>();
 	let query = $state('');
 	let autoRefresh = $state(true);
 	let showArchived = $state(false);
@@ -119,7 +121,7 @@
 	});
 
 	$effect(() => {
-		sessions = data.sessions;
+		sessions = data.threads ?? data.sessions ?? [];
 	});
 
 	$effect(() => {

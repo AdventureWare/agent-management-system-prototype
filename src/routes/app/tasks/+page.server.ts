@@ -24,7 +24,7 @@ import {
 	listAgentSessions,
 	sendAgentSessionMessage,
 	startAgentSession
-} from '$lib/server/agent-sessions';
+} from '$lib/server/agent-threads';
 import {
 	buildPromptDigest,
 	buildTaskThreadName,
@@ -190,7 +190,7 @@ function buildTaskGoalOptions(goals: Goal[]) {
 		depth: number;
 		parentGoalId: string | null;
 		status: Goal['status'];
-		lane: Goal['lane'];
+		area: Goal['area'];
 	}> = [];
 	const visitedGoalIds = new Set<string>();
 
@@ -208,7 +208,7 @@ function buildTaskGoalOptions(goals: Goal[]) {
 				depth,
 				parentGoalId: goal.parentGoalId ?? null,
 				status: goal.status,
-				lane: goal.lane
+				area: goal.area
 			});
 			visitChildren(goal.id, depth + 1);
 		}
@@ -228,7 +228,7 @@ function buildTaskGoalOptions(goals: Goal[]) {
 			depth: 0,
 			parentGoalId: goal.parentGoalId ?? null,
 			status: goal.status,
-			lane: goal.lane
+			area: goal.area
 		});
 		visitChildren(goal.id, 1);
 	}

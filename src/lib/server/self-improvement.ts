@@ -10,7 +10,7 @@ import {
 	getGoalScopeProjectIds,
 	getGoalScopeTaskIds
 } from '$lib/server/goal-relationships';
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Goal, Project, Review, Run, Task } from '$lib/types/control-plane';
 import {
 	SELF_IMPROVEMENT_CATEGORY_OPTIONS,

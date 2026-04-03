@@ -1,4 +1,4 @@
-import type { AgentSessionDetail } from '$lib/types/agent-session';
+import type { AgentSessionDetail } from '$lib/types/agent-thread';
 import type { Approval, Review, Run, Task } from '$lib/types/control-plane';
 
 export const TASK_STALE_SIGNAL_KEYS = [

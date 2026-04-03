@@ -43,12 +43,14 @@
 		text,
 		tone = 'default',
 		showReferenceSummary = false,
-		contextArtifacts = []
+		contextArtifacts = [],
+		onAttachArtifact = undefined
 	} = $props<{
 		text: string | null | undefined;
 		tone?: 'default' | 'muted';
 		showReferenceSummary?: boolean;
 		contextArtifacts?: ContextArtifactReference[];
+		onAttachArtifact?: ((artifact: { path: string; label: string }) => Promise<void> | void) | undefined;
 	}>();
 
 	const codeFencePattern = /^\s*```([\w+-]+)?\s*$/;
@@ -94,6 +96,12 @@
 				)
 			)
 	);
+	let copiedArtifactPath = $state<string | null>(null);
+	let attachActionState = $state<{
+		path: string;
+		status: 'loading' | 'success' | 'error';
+		message: string;
+	} | null>(null);
 
 	$effect(() => {
 		text;
@@ -715,6 +723,56 @@
 		return canOpenArtifactReference(path) && artifactPreviewKind(path) !== null;
 	}
 
+	function canCopyArtifactPath() {
+		return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+	}
+
+	async function copyArtifactPath(path: string) {
+		if (!canCopyArtifactPath()) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(path);
+			copiedArtifactPath = path;
+
+			window.setTimeout(() => {
+				if (copiedArtifactPath === path) {
+					copiedArtifactPath = null;
+				}
+			}, 1600);
+		} catch {
+			copiedArtifactPath = null;
+		}
+	}
+
+	async function attachArtifactToFollowUp(path: string, label: string) {
+		if (!onAttachArtifact) {
+			return;
+		}
+
+		attachActionState = {
+			path,
+			status: 'loading',
+			message: ''
+		};
+
+		try {
+			await onAttachArtifact({ path, label });
+			attachActionState = {
+				path,
+				status: 'success',
+				message: ''
+			};
+		} catch (error) {
+			attachActionState = {
+				path,
+				status: 'error',
+				message: error instanceof Error ? error.message : 'Could not attach file.'
+			};
+		}
+	}
+
 	async function openArtifactPreview(reference: string, label: string) {
 		const path = trimLocalPathFragment(reference);
 		const kind = artifactPreviewKind(path);
@@ -1013,7 +1071,41 @@
 													{context.actionLabel ?? 'Jump'}
 												</a>
 											{/if}
+											{#if canCopyArtifactPath()}
+												<button
+													type="button"
+													class="rounded-full border border-slate-700 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
+													onclick={() => {
+														void copyArtifactPath(reference.path);
+													}}
+												>
+													{copiedArtifactPath === reference.path ? 'Copied' : 'Copy path'}
+												</button>
+											{/if}
 											{#if canOpenArtifactReference(reference.path)}
+												{#if onAttachArtifact}
+													<button
+														type="button"
+														class="rounded-full border border-violet-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100"
+														disabled={attachActionState?.path === reference.path && attachActionState.status === 'loading'}
+														onclick={() => {
+															void attachArtifactToFollowUp(reference.path, reference.label);
+														}}
+														title={attachActionState?.path === reference.path && attachActionState.status === 'error'
+															? attachActionState.message
+															: undefined}
+													>
+														{attachActionState?.path === reference.path && attachActionState.status === 'loading'
+															? 'Attaching'
+															: attachActionState?.path === reference.path &&
+																	attachActionState.status === 'success'
+																? 'Attached'
+																: attachActionState?.path === reference.path &&
+																		attachActionState.status === 'error'
+																	? 'Retry attach'
+																	: 'Attach'}
+													</button>
+												{/if}
 												{#if canPreviewArtifactReference(reference.path)}
 													<button
 														type="button"
