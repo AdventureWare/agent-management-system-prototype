@@ -217,8 +217,12 @@
 			...(task.requiredToolNames ?? []),
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
 			task.statusThread?.name ?? '',
-			task.statusThread?.sessionState ?? '',
-			task.statusThread ? formatThreadStateLabel(task.statusThread.sessionState) : '',
+			task.statusThread?.threadState ?? task.statusThread?.sessionState ?? '',
+			task.statusThread
+				? formatThreadStateLabel(
+						task.statusThread.threadState ?? task.statusThread.sessionState ?? 'idle'
+					)
+				: '',
 			...task.freshness.staleSignals
 		]
 			.join(' ')
@@ -272,7 +276,7 @@
 		}
 
 		if (task.statusThread?.id === task.linkThread.id) {
-			switch (task.statusThread.sessionState) {
+			switch (task.statusThread.threadState ?? task.statusThread.sessionState) {
 				case 'starting':
 				case 'waiting':
 				case 'working':

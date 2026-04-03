@@ -1,20 +1,18 @@
 import type { PageServerLoad } from './$types';
-import { listAgentSessions } from '$lib/server/agent-threads';
+import { listAgentThreads } from '$lib/server/agent-threads';
 import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 import { RUN_STATUS_OPTIONS } from '$lib/types/control-plane';
 
 export const load: PageServerLoad = async () => {
 	const controlPlanePromise = loadControlPlane();
-	const [data, sessions] = await Promise.all([
+	const [data, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
 	]);
 	const taskIdsWithRuns = new Set(data.runs.map((run) => run.taskId));
 	const workerIdsWithRuns = new Set(
-		data.runs
-			.map((run) => run.workerId)
-			.filter((workerId): workerId is string => Boolean(workerId))
+		data.runs.map((run) => run.workerId).filter((workerId): workerId is string => Boolean(workerId))
 	);
 	const providerIdsWithRuns = new Set(
 		data.runs
@@ -23,7 +21,7 @@ export const load: PageServerLoad = async () => {
 	);
 
 	return {
-		runs: buildRunRecords(data, sessions),
+		runs: buildRunRecords(data, threads),
 		statusOptions: RUN_STATUS_OPTIONS,
 		tasks: [...data.tasks]
 			.filter((task) => taskIdsWithRuns.has(task.id))

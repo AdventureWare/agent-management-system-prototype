@@ -225,7 +225,7 @@
 	let needsRecovery = $derived.by(
 		() =>
 			Boolean(session?.latestRun) &&
-			(session?.hasActiveRun || session?.sessionState === 'attention')
+			(session?.hasActiveRun || (session?.threadState ?? session?.sessionState) === 'attention')
 	);
 	let canRecoverInPlace = $derived.by(() => {
 		if (!session?.latestRun) {
@@ -879,7 +879,7 @@
 			focusTask ? `Current task context: ${focusTask.title}` : '',
 			latestContextRun
 				? `Latest response summary:\n${compactText(responseText(latestContextRun), 420)}`
-				: (session?.sessionSummary ?? '')
+				: (session?.threadSummary ?? session?.sessionSummary ?? '')
 		].filter(Boolean);
 
 		return sections.join('\n\n');
@@ -953,7 +953,7 @@
 		</div>
 
 		<p class="ui-wrap-anywhere text-sm text-slate-300">
-			{sessionState?.detail ?? detail.sessionSummary}
+			{sessionState?.detail ?? detail.threadSummary ?? detail.sessionSummary}
 		</p>
 		{#if uniqueTopicLabels(detail.topicLabels).length > 0}
 			<div class="flex flex-wrap gap-2">
@@ -1066,7 +1066,7 @@
 				backLabel="Back to threads"
 				eyebrow="Thread detail"
 				title={session.name}
-				description={session.sessionSummary}
+				description={session.threadSummary ?? session.sessionSummary}
 			>
 				{#snippet actions()}
 					<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -1098,9 +1098,9 @@
 					<div class="space-y-4">
 						<div class="flex flex-wrap items-center gap-2">
 							<span
-								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.sessionState)}`}
+								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.sessionState ?? 'idle')}`}
 							>
-								{formatThreadStateLabel(session!.sessionState)}
+								{formatThreadStateLabel(session!.threadState ?? session!.sessionState ?? 'idle')}
 							</span>
 							<span
 								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session!.latestRunStatus)}`}
@@ -1312,14 +1312,14 @@
 								<div class="min-w-0">
 									<p class="text-sm font-medium text-white">Relevant context</p>
 									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-										{session.sessionSummary}
+										{session.threadSummary ?? session.sessionSummary}
 									</p>
 								</div>
 								<div class="flex min-w-0 flex-wrap items-center gap-2">
 									<span
-										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.sessionState)}`}
+										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState ?? session.sessionState ?? 'idle')}`}
 									>
-										{formatThreadStateLabel(session.sessionState)}
+										{formatThreadStateLabel(session.threadState ?? session.sessionState ?? 'idle')}
 									</span>
 									<span
 										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session.latestRunStatus)}`}

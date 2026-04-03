@@ -369,7 +369,7 @@
 							{formatDateLabel(goal.targetDate)}
 						</td>
 						<td class="px-4 py-4 text-xs font-semibold tracking-[0.18em] text-sky-300 uppercase">
-							{goal.area ?? goal.lane}
+							{goal.area}
 						</td>
 						<td class="px-4 py-4 text-sm text-slate-300">{goal.parentGoalName || 'Top level'}</td>
 						<td class="px-4 py-4 text-sm text-slate-300">

@@ -1,24 +1,26 @@
-import type { AgentSessionDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 
-const ACTIVE_TASK_THREAD_STATES = new Set<AgentSessionDetail['sessionState']>([
+const ACTIVE_TASK_THREAD_STATES = new Set<NonNullable<AgentThreadDetail['threadState']>>([
 	'starting',
 	'waiting',
 	'working'
 ]);
 
 type TaskThreadSelectionInput = {
-	assignedThread: AgentSessionDetail | null;
-	latestRunThread: AgentSessionDetail | null;
+	assignedThread: AgentThreadDetail | null;
+	latestRunThread: AgentThreadDetail | null;
 };
 
 export type TaskThreadSelection = TaskThreadSelectionInput & {
-	statusThread: AgentSessionDetail | null;
-	linkThread: AgentSessionDetail | null;
+	statusThread: AgentThreadDetail | null;
+	linkThread: AgentThreadDetail | null;
 	linkThreadKind: 'assigned' | 'latest' | null;
 };
 
-export function isActiveTaskThread(thread: AgentSessionDetail | null | undefined) {
-	return Boolean(thread && ACTIVE_TASK_THREAD_STATES.has(thread.sessionState));
+export function isActiveTaskThread(thread: AgentThreadDetail | null | undefined) {
+	return Boolean(
+		thread && ACTIVE_TASK_THREAD_STATES.has(thread.threadState ?? thread.sessionState ?? 'idle')
+	);
 }
 
 export function selectTaskThreadContext(input: TaskThreadSelectionInput): TaskThreadSelection {

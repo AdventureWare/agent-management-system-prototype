@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createTask, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
-import { listAgentSessions } from '$lib/server/agent-threads';
+import { listAgentThreads } from '$lib/server/agent-threads';
 import {
 	isSelfImprovementSqliteEmpty,
 	loadSelfImprovementFromSqlite,
@@ -389,7 +389,7 @@ export async function syncSelfImprovementAnalysis(
 
 export async function loadSelfImprovementSnapshot(input?: {
 	data?: ControlPlaneData;
-	sessions?: Awaited<ReturnType<typeof listAgentSessions>>;
+	sessions?: Awaited<ReturnType<typeof listAgentThreads>>;
 	now?: number;
 	projectId?: string | null;
 	goalId?: string | null;
@@ -397,7 +397,7 @@ export async function loadSelfImprovementSnapshot(input?: {
 }): Promise<SelfImprovementSnapshot> {
 	const [data, sessions] = await Promise.all([
 		input?.data ? Promise.resolve(input.data) : loadControlPlane(),
-		input?.sessions ? Promise.resolve(input.sessions) : listAgentSessions()
+		input?.sessions ? Promise.resolve(input.sessions) : listAgentThreads()
 	]);
 	const analysis = buildSelfImprovementAnalysis({
 		data,
@@ -417,14 +417,11 @@ export async function loadSelfImprovementSnapshot(input?: {
 		now: input?.now
 	});
 	const scopedSnapshot = applySelfImprovementGoalContext(
-		filterSelfImprovementSnapshot(
-			await syncSelfImprovementAnalysis(rankedAnalysis, signals),
-			{
-				projectId: input?.projectId ?? null,
-				goalId: input?.goalId ?? null,
-				data
-			}
-		),
+		filterSelfImprovementSnapshot(await syncSelfImprovementAnalysis(rankedAnalysis, signals), {
+			projectId: input?.projectId ?? null,
+			goalId: input?.goalId ?? null,
+			data
+		}),
 		{
 			data,
 			goalId: input?.goalId ?? null

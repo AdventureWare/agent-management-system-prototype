@@ -90,7 +90,7 @@
 		}
 
 		if (data.task.statusThread?.id === data.task.linkThread.id) {
-			switch (data.task.statusThread.sessionState) {
+			switch (data.task.statusThread.threadState ?? data.task.statusThread.sessionState) {
 				case 'starting':
 				case 'waiting':
 				case 'working':
@@ -387,7 +387,9 @@
 				{/if}
 				{#if data.task.linkThread.id !== data.task.statusThread?.id}
 					<p class="mt-2 text-xs text-slate-500">
-						{formatThreadStateLabel(data.task.linkThread.sessionState)}
+						{formatThreadStateLabel(
+							data.task.linkThread.threadState ?? data.task.linkThread.sessionState ?? 'idle'
+						)}
 					</p>
 				{/if}
 			{:else}
@@ -1297,7 +1299,11 @@
 												{data.suggestedThread.suggestionReason}
 											</p>
 											<p class="mt-2 text-xs text-slate-400">
-												{formatThreadStateLabel(data.suggestedThread.sessionState)} · Available to resume
+												{formatThreadStateLabel(
+													data.suggestedThread.threadState ??
+														data.suggestedThread.sessionState ??
+														'idle'
+												)} · Available to resume
 											</p>
 										</div>
 
@@ -1336,7 +1342,9 @@
 										{#each data.candidateThreads as thread (thread.id)}
 											<option value={thread.id} selected={data.task.threadSessionId === thread.id}>
 												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
-												{formatThreadStateLabel(thread.sessionState)} ·
+												{formatThreadStateLabel(
+													thread.threadState ?? thread.sessionState ?? 'idle'
+												)} ·
 												{thread.canResume
 													? 'ready'
 													: thread.hasActiveRun
@@ -1394,7 +1402,9 @@
 													{/if}
 												</div>
 												<p class="mt-1 text-xs text-slate-500">
-													{formatThreadStateLabel(thread.sessionState)} ·
+													{formatThreadStateLabel(
+														thread.threadState ?? thread.sessionState ?? 'idle'
+													)} ·
 													{thread.canResume
 														? 'Can resume'
 														: thread.hasActiveRun

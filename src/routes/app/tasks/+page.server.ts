@@ -19,11 +19,11 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 import {
-	cancelAgentSession,
-	getAgentSession,
-	listAgentSessions,
-	sendAgentSessionMessage,
-	startAgentSession
+	cancelAgentThread,
+	getAgentThread,
+	listAgentThreads,
+	sendAgentThreadMessage,
+	startAgentThread
 } from '$lib/server/agent-threads';
 import {
 	buildPromptDigest,
@@ -319,7 +319,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, sessions] = await Promise.all([
 		controlPlanePromise,
-		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
 	]);
 	const defaultDraftRole = getDefaultDraftRole(data);
 	const taskWorkItems = buildTaskWorkItems(data, sessions);
@@ -392,7 +392,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Select a project before running task ideation.' });
 		}
 
-		const [current, sessions] = await Promise.all([loadControlPlane(), listAgentSessions()]);
+		const [current, sessions] = await Promise.all([loadControlPlane(), listAgentThreads()]);
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 
 		if (!project) {
@@ -437,7 +437,7 @@ export const actions: Actions = {
 
 		if (ideationThread?.canResume) {
 			try {
-				await sendAgentSessionMessage(ideationThread.id, prompt);
+				await sendAgentThreadMessage(ideationThread.id, prompt);
 			} catch (error) {
 				return fail(400, {
 					message: getActionErrorMessage(
@@ -452,7 +452,7 @@ export const actions: Actions = {
 			let session;
 
 			try {
-				session = await startAgentSession({
+				session = await startAgentThread({
 					name: buildProjectTaskIdeationThreadName(project.name),
 					cwd: workspace,
 					prompt,
@@ -748,7 +748,7 @@ export const actions: Actions = {
 		let session;
 
 		try {
-			session = await startAgentSession({
+			session = await startAgentThread({
 				name: buildTaskThreadName({
 					projectName: project.name,
 					taskName: createdTask.title,
@@ -835,7 +835,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Select at least one suggested task to create.' });
 		}
 
-		const [current, session] = await Promise.all([loadControlPlane(), getAgentSession(sessionId)]);
+		const [current, session] = await Promise.all([loadControlPlane(), getAgentThread(sessionId)]);
 
 		if (!session) {
 			return fail(404, { message: 'Ideation session not found.' });
@@ -1051,15 +1051,13 @@ export const actions: Actions = {
 			project,
 			provider
 		});
-		const assignedThread = task.threadSessionId
-			? await getAgentSession(task.threadSessionId)
-			: null;
+		const assignedThread = task.threadSessionId ? await getAgentThread(task.threadSessionId) : null;
 		const latestRun = task.latestRunId
 			? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
 			: null;
 		const latestRunThread =
 			latestRun?.sessionId && latestRun.sessionId !== task.threadSessionId
-				? await getAgentSession(latestRun.sessionId)
+				? await getAgentThread(latestRun.sessionId)
 				: null;
 		const threadContext = selectProjectTaskThreadContext(project, {
 			assignedThread,
@@ -1090,7 +1088,7 @@ export const actions: Actions = {
 
 		if (compatibleAssignedThread?.canResume) {
 			try {
-				await sendAgentSessionMessage(compatibleAssignedThread.id, prompt);
+				await sendAgentThreadMessage(compatibleAssignedThread.id, prompt);
 			} catch (error) {
 				return fail(400, {
 					message: getActionErrorMessage(error, 'Could not queue work in the linked thread.')
@@ -1102,7 +1100,7 @@ export const actions: Actions = {
 			reusedThreadMode = 'assigned';
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			try {
-				await sendAgentSessionMessage(compatibleLatestRunThread.id, prompt);
+				await sendAgentThreadMessage(compatibleLatestRunThread.id, prompt);
 			} catch (error) {
 				return fail(400, {
 					message: getActionErrorMessage(error, 'Could not queue work in the latest thread.')
@@ -1116,7 +1114,7 @@ export const actions: Actions = {
 			let session;
 
 			try {
-				session = await startAgentSession({
+				session = await startAgentThread({
 					name: buildTaskThreadName({
 						projectName: project.name,
 						taskName: effectiveName,
@@ -1225,7 +1223,7 @@ export const actions: Actions = {
 			)
 		];
 
-		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentSession(sessionId)));
+		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentThread(sessionId)));
 		await updateControlPlane((data) =>
 			deletableTaskIds.reduce(
 				(currentData, taskId) => removeTaskFromControlPlane(currentData, taskId),

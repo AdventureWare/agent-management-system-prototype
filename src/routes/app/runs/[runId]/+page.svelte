@@ -265,16 +265,18 @@
 						</p>
 					</div>
 
-					{#if data.session}
+					{#if data.thread}
 						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 								Thread status
 							</p>
 							<p class="mt-2 text-sm text-white">
-								{formatThreadStateLabel(data.session.threadState ?? data.session.sessionState)}
+								{formatThreadStateLabel(
+									data.thread.threadState ?? data.thread.sessionState ?? 'idle'
+								)}
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
-								{data.session.canResume
+								{data.thread.canResume
 									? 'Resumable from the manager'
 									: 'History only from the manager'}
 							</p>

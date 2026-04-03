@@ -1,17 +1,17 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { listAgentSessions } from '$lib/server/agent-threads';
+import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
-	const [data, sessions] = await Promise.all([
+	const [data, threads] = await Promise.all([
 		controlPlanePromise,
-		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
 	]);
-	const runs = buildRunRecords(data, sessions);
+	const runs = buildRunRecords(data, threads);
 	const run = runs.find((candidate) => candidate.id === params.runId) ?? null;
 
 	if (!run) {
@@ -35,9 +35,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,
-		session: run.sessionId
-			? (sessions.find((session) => session.id === run.sessionId) ?? null)
-			: null,
+		thread: run.sessionId ? (threads.find((thread) => thread.id === run.sessionId) ?? null) : null,
 		relatedTaskRuns: runs
 			.filter((candidate) => candidate.taskId === run.taskId && candidate.id !== run.id)
 			.slice(0, 6)

@@ -31,12 +31,12 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 import {
-	cancelAgentSession,
-	getAgentSession,
-	listAgentSessions,
-	recoverAgentSession,
-	sendAgentSessionMessage,
-	startAgentSession
+	cancelAgentThread,
+	getAgentThread,
+	listAgentThreads,
+	recoverAgentThread,
+	sendAgentThreadMessage,
+	startAgentThread
 } from '$lib/server/agent-threads';
 import {
 	buildPromptDigest,
@@ -404,7 +404,7 @@ function getActiveTaskRun(data: { runs: Run[] }, taskId: string) {
 function buildStalledRecoveryState(input: {
 	task: Task;
 	activeRun: Run | null;
-	statusThread: Awaited<ReturnType<typeof getAgentSession>> | null;
+	statusThread: Awaited<ReturnType<typeof getAgentThread>> | null;
 }) {
 	if (!input.activeRun) {
 		return null;
@@ -554,13 +554,13 @@ async function buildTaskLaunchPlan(
 		project,
 		provider
 	});
-	const assignedThread = task.threadSessionId ? await getAgentSession(task.threadSessionId) : null;
+	const assignedThread = task.threadSessionId ? await getAgentThread(task.threadSessionId) : null;
 	const latestRun = task.latestRunId
 		? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
 		: null;
 	const latestRunThread =
 		latestRun?.sessionId && latestRun.sessionId !== task.threadSessionId
-			? await getAgentSession(latestRun.sessionId)
+			? await getAgentThread(latestRun.sessionId)
 			: null;
 	const threadContext = selectProjectTaskThreadContext(project, {
 		assignedThread,
@@ -620,17 +620,17 @@ async function launchTaskFromPlan(
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 	if (plan.compatibleAssignedThread?.canResume) {
-		await sendAgentSessionMessage(plan.compatibleAssignedThread.id, plan.prompt);
+		await sendAgentThreadMessage(plan.compatibleAssignedThread.id, plan.prompt);
 		sessionId = plan.compatibleAssignedThread.id;
 		threadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
-		await sendAgentSessionMessage(plan.compatibleLatestRunThread.id, plan.prompt);
+		await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, plan.prompt);
 		sessionId = plan.compatibleLatestRunThread.id;
 		threadId = plan.compatibleLatestRunThread.threadId;
 		reusedThreadMode = 'latest';
 	} else {
-		const session = await startAgentSession({
+		const session = await startAgentThread({
 			name: buildTaskThreadName({
 				projectName: plan.project.name,
 				taskName: plan.effectiveName,
@@ -718,7 +718,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
 	const [data, sessions] = await Promise.all([
 		controlPlanePromise,
-		listAgentSessions({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
 	]);
 	const task = data.tasks.find((candidate) => candidate.id === params.taskId);
 
@@ -1206,7 +1206,7 @@ export const actions: Actions = {
 		}
 
 		if (threadSessionId) {
-			const session = await getAgentSession(threadSessionId);
+			const session = await getAgentThread(threadSessionId);
 
 			if (!session) {
 				return fail(400, { message: 'Selected work thread was not found.' });
@@ -1322,11 +1322,9 @@ export const actions: Actions = {
 
 		const project = current.projects.find((candidate) => candidate.id === task.projectId) ?? null;
 		const activeTaskRun = getActiveTaskRun(current, task.id);
-		const assignedThread = task.threadSessionId
-			? await getAgentSession(task.threadSessionId)
-			: null;
+		const assignedThread = task.threadSessionId ? await getAgentThread(task.threadSessionId) : null;
 		const activeRunThread = activeTaskRun?.sessionId
-			? await getAgentSession(activeTaskRun.sessionId)
+			? await getAgentThread(activeTaskRun.sessionId)
 			: null;
 		const threadContext = selectProjectTaskThreadContext(project, {
 			assignedThread,
@@ -1357,7 +1355,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			await recoverAgentSession(activeTaskRun.sessionId);
+			await recoverAgentThread(activeTaskRun.sessionId);
 		} catch (error) {
 			if (error instanceof TaskActionError) {
 				return fail(error.status, { message: error.message });
@@ -1687,7 +1685,7 @@ export const actions: Actions = {
 			)
 		];
 
-		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentSession(sessionId)));
+		await Promise.all(relatedSessionIds.map((sessionId) => cancelAgentThread(sessionId)));
 		await updateControlPlane((data) => removeTaskFromControlPlane(data, params.taskId));
 
 		throw redirect(303, '/app/tasks?deleted=1');

@@ -21,16 +21,6 @@ async function fetchJson<T>(path: string, errorMessage: string): Promise<T> {
 	return (await response.json()) as T;
 }
 
-export async function fetchAgentSessions(options: { includeArchived?: boolean } = {}) {
-	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
-	const payload = await fetchJson<{
-		threads?: AgentThreadDetail[];
-		sessions?: AgentThreadDetail[];
-	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
-
-	return payload.threads ?? payload.sessions ?? [];
-}
-
 export async function fetchAgentThreads(options: { includeArchived?: boolean } = {}) {
 	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
 	const payload = await fetchJson<{
@@ -41,15 +31,19 @@ export async function fetchAgentThreads(options: { includeArchived?: boolean } =
 	return payload.threads ?? payload.sessions ?? [];
 }
 
-export async function updateAgentSessionArchiveState(sessionIds: string[], archived: boolean) {
+export async function fetchAgentSessions(options: { includeArchived?: boolean } = {}) {
+	return fetchAgentThreads(options);
+}
+
+export async function updateAgentThreadArchiveState(threadIds: string[], archived: boolean) {
 	const response = await fetch('/api/agents/threads/archive', {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json'
 		},
 		body: JSON.stringify({
-			threadIds: sessionIds,
-			sessionIds,
+			threadIds,
+			sessionIds: threadIds,
 			archived
 		})
 	});
@@ -66,34 +60,8 @@ export async function updateAgentSessionArchiveState(sessionIds: string[], archi
 	return payload.updatedThreadIds ?? payload.updatedSessionIds ?? [];
 }
 
-export async function updateAgentThreadArchiveState(threadIds: string[], archived: boolean) {
-	return updateAgentSessionArchiveState(threadIds, archived);
-}
-
-export async function fetchAgentSession(sessionId: string) {
-	const response = await fetch(`/api/agents/threads/${sessionId}`, {
-		cache: 'no-store'
-	});
-
-	if (response.status === 404) {
-		throw new Error('Thread not found.');
-	}
-
-	if (!response.ok) {
-		throw new Error('Could not refresh the thread.');
-	}
-
-	const payload = (await response.json()) as {
-		thread?: AgentThreadDetail;
-		session?: AgentThreadDetail;
-	};
-	const thread = payload.thread ?? payload.session;
-
-	if (!thread) {
-		throw new Error('Could not refresh the thread.');
-	}
-
-	return thread;
+export async function updateAgentSessionArchiveState(sessionIds: string[], archived: boolean) {
+	return updateAgentThreadArchiveState(sessionIds, archived);
 }
 
 export async function fetchAgentThread(threadId: string) {
@@ -120,6 +88,10 @@ export async function fetchAgentThread(threadId: string) {
 	}
 
 	return thread;
+}
+
+export async function fetchAgentSession(sessionId: string) {
+	return fetchAgentThread(sessionId);
 }
 
 export function fetchHomeDashboard() {
