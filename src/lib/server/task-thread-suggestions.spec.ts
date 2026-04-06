@@ -285,4 +285,75 @@ describe('buildTaskThreadSuggestions', () => {
 			'project Agent Management System Prototype'
 		);
 	});
+
+	it('prefers scoped UI continuity over a generic strategy thread for responsive mobile work', () => {
+		const result = buildTaskThreadSuggestions({
+			task: createTask({
+				title: 'Improve UI responsiveness and mobile appearance',
+				summary:
+					'Analyze the current state, then plan responsive layout and mobile UX improvements.',
+				projectId: 'project_ams',
+				goalId: 'goal_stable_ui',
+				requiredCapabilityNames: ['ui', 'responsive-ui']
+			}),
+			assignedThreadId: null,
+			threads: [
+				createSession('strategy', {
+					name: 'Operations strategy follow-up',
+					threadSummary:
+						'Review how the system keeps work moving with mobile monitoring and human oversight.',
+					categorization: {
+						projectIds: ['project_ams'],
+						projectLabels: ['Agent Management System Prototype'],
+						goalIds: ['goal_stable_ui'],
+						goalLabels: ['Have a consistent, stable UI'],
+						areaLabels: ['Product'],
+						focusLabels: ['Coordination', 'Planning'],
+						entityLabels: ['Task'],
+						roleLabels: ['Coordinator'],
+						capabilityLabels: [],
+						toolLabels: [],
+						keywordLabels: ['Mobile'],
+						labels: ['Product', 'Coordination', 'Task', 'Coordinator']
+					}
+				}),
+				createSession('ui', {
+					name: 'Plan a UI improvement sweep',
+					threadSummary:
+						'Review layout issues, responsive behavior, and mobile UI follow-up work.',
+					relatedTasks: [
+						{
+							id: 'task_ui_plan',
+							title: 'Plan a UI improvement sweep',
+							status: 'review',
+							isPrimary: true
+						}
+					],
+					categorization: {
+						projectIds: ['project_ams'],
+						projectLabels: ['Agent Management System Prototype'],
+						goalIds: ['goal_stable_ui'],
+						goalLabels: ['Have a consistent, stable UI'],
+						areaLabels: ['Product'],
+						focusLabels: ['UI/UX', 'Research'],
+						entityLabels: ['Task'],
+						roleLabels: ['Coordinator'],
+						capabilityLabels: [],
+						toolLabels: [],
+						keywordLabels: ['Responsive', 'Mobile'],
+						labels: ['Product', 'UI/UX', 'Task', 'Coordinator']
+					}
+				})
+			]
+		});
+
+		expect(result.suggestedThread?.id).toBe('ui');
+		expect(result.suggestedThread?.matchedContext.goalLabels).toEqual([
+			'Have a consistent, stable UI'
+		]);
+		expect(result.suggestedThread?.matchedContext.focusLabels).toEqual(
+			expect.arrayContaining(['UI/UX'])
+		);
+		expect(result.suggestedThread?.suggestionReason).toContain('focus UI/UX');
+	});
 });

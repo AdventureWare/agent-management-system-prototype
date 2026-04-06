@@ -32,14 +32,6 @@ import {
 } from '$lib/server/task-threads';
 import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
-import {
-	buildProjectTaskIdeationPrompt,
-	buildProjectTaskIdeationThreadName,
-	findProjectForTaskIdeationThread,
-	findProjectTaskIdeationThread,
-	getProjectTaskIdeationWorkspace,
-	parseIdeationTaskSuggestions
-} from '$lib/server/task-ideation';
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
@@ -58,6 +50,9 @@ function readTaskForm(form: FormData) {
 				.map((entry) => entry.trim())
 				.filter(Boolean)
 		)
+	];
+	const parseIdList = (values: FormDataEntryValue[]) => [
+		...new Set(values.map((value) => value.toString().trim()).filter(Boolean))
 	];
 	const parseOption = <T extends readonly string[]>(
 		options: T,
@@ -94,6 +89,8 @@ function readTaskForm(form: FormData) {
 		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
 		requiresReview: parseBoolean(form.get('requiresReview'), true),
 		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
+		blockedReason: form.get('blockedReason')?.toString().trim() ?? '',
+		dependencyTaskIds: parseIdList(form.getAll('dependencyTaskIds')),
 		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
 		requiredToolNames: parseNameList(form.get('requiredToolNames'))
 	};
@@ -133,6 +130,8 @@ function failTaskCreate(
 		approvalMode: string;
 		requiresReview: boolean;
 		desiredRoleId: string;
+		blockedReason: string;
+		dependencyTaskIds: string[];
 		requiredCapabilityNames: string[];
 		requiredToolNames: string[];
 		submitMode: 'create' | 'createAndRun';
@@ -150,17 +149,6 @@ function getDefaultDraftRole(data: ControlPlaneData): Role | null {
 
 function getDefaultDraftArtifactPath(project: Project) {
 	return project.defaultArtifactRoot || project.projectRootFolder || '';
-}
-
-function parseSuggestionIndexes(form: FormData) {
-	return [
-		...new Set(
-			form
-				.getAll('suggestionIndex')
-				.map((value) => Number.parseInt(value.toString(), 10))
-				.filter((value) => Number.isInteger(value) && value >= 0)
-		)
-	];
 }
 
 const ROOT_GOAL_PARENT_KEY = '__root__';
@@ -284,6 +272,14 @@ function readCreateTaskPrefill(url: URL) {
 
 		return fallback;
 	};
+	const parseQueryIdList = (value: string | null) => [
+		...new Set(
+			(value?.trim() ?? '')
+				.split(',')
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+		)
+	];
 
 	return {
 		open,
@@ -306,6 +302,8 @@ function readCreateTaskPrefill(url: URL) {
 		),
 		requiresReview: parseBoolean(url.searchParams.get('requiresReview'), true),
 		desiredRoleId: url.searchParams.get('desiredRoleId')?.trim() ?? '',
+		blockedReason: url.searchParams.get('blockedReason')?.trim() ?? '',
+		dependencyTaskIds: parseQueryIdList(url.searchParams.get('dependencyTaskIds')),
 		requiredCapabilityNames: url.searchParams.get('requiredCapabilityNames')?.trim() ?? '',
 		requiredToolNames: url.searchParams.get('requiredToolNames')?.trim() ?? ''
 	};
@@ -323,38 +321,19 @@ export const load: PageServerLoad = async ({ url }) => {
 	]);
 	const defaultDraftRole = getDefaultDraftRole(data);
 	const taskWorkItems = buildTaskWorkItems(data, sessions);
-	const ideationReviews = [...data.projects]
-		.map((project) => {
-			const ideationSession = findProjectTaskIdeationThread(project, sessions);
-			if (!ideationSession) {
-				return null;
-			}
+	const availableDependencyTasks = [...taskWorkItems]
+		.map((task) => ({
+			id: task.id,
+			title: task.title,
+			status: task.status,
+			projectId: task.projectId,
+			projectName: task.projectName
+		}))
+		.sort((left, right) => {
+			const projectComparison = left.projectName.localeCompare(right.projectName);
 
-			const lastMessage = ideationSession.latestRun?.lastMessage ?? '';
-			const suggestions = parseIdeationTaskSuggestions(lastMessage);
-
-			return {
-				projectId: project.id,
-				projectName: project.name,
-				threadId: ideationSession.id,
-				threadState: ideationSession.threadState ?? ideationSession.threadState,
-				lastActivityAt: ideationSession.lastActivityAt,
-				lastActivityLabel: ideationSession.lastActivityLabel,
-				threadSummary: ideationSession.threadSummary ?? ideationSession.threadSummary,
-				hasActiveRun: ideationSession.hasActiveRun,
-				canResume: ideationSession.canResume,
-				suggestionCount: suggestions.length,
-				hasSavedReply: Boolean(lastMessage),
-				defaultDraftRoleId: defaultDraftRole?.id ?? '',
-				defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
-				defaultArtifactPath: getDefaultDraftArtifactPath(project),
-				suggestions
-			};
-		})
-		.filter((review): review is NonNullable<typeof review> =>
-			Boolean(review && (review.suggestionCount > 0 || review.hasActiveRun || review.hasSavedReply))
-		)
-		.sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
+			return projectComparison !== 0 ? projectComparison : left.title.localeCompare(right.title);
+		});
 	const projectSkillSummaries = [...data.projects]
 		.map((project) => {
 			const installedSkills = listInstalledCodexSkills(project.projectRootFolder);
@@ -375,112 +354,16 @@ export const load: PageServerLoad = async ({ url }) => {
 		statusOptions: TASK_STATUS_OPTIONS,
 		goals: buildTaskGoalOptions(data.goals),
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
+		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
+		availableDependencyTasks,
 		projectSkillSummaries,
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
-		ideationReviews,
 		tasks: taskWorkItems
 	};
 };
 
 export const actions: Actions = {
-	runTaskIdeationAssistant: async ({ request }) => {
-		const form = await request.formData();
-		const projectId = form.get('projectId')?.toString().trim() ?? '';
-
-		if (!projectId) {
-			return fail(400, { message: 'Select a project before running task ideation.' });
-		}
-
-		const [current, sessions] = await Promise.all([
-			loadControlPlane(),
-			listAgentThreads({ includeCategorization: false })
-		]);
-		const project = current.projects.find((candidate) => candidate.id === projectId);
-
-		if (!project) {
-			return fail(404, { message: 'Project not found.' });
-		}
-
-		const workspace = getProjectTaskIdeationWorkspace(project);
-
-		if (!workspace) {
-			return fail(400, {
-				message:
-					'Configure a project root folder or default repo path before running task ideation.'
-			});
-		}
-
-		const prompt = buildProjectTaskIdeationPrompt({
-			data: current,
-			project
-		});
-		const ideationThread = findProjectTaskIdeationThread(project, sessions);
-
-		if (ideationThread?.hasActiveRun) {
-			return fail(409, {
-				message:
-					'The task ideation assistant is already running for this project. Open the existing thread instead of starting another run.'
-			});
-		}
-
-		let threadId = ideationThread?.id ?? null;
-		let reusedThread = false;
-		const ideationProvider = selectExecutionProvider(current);
-		const ideationSandbox = resolveThreadSandbox({ project, provider: ideationProvider });
-		const workspaceIssue = getWorkspaceExecutionIssue({
-			cwd: workspace,
-			sandbox: ideationSandbox,
-			scopeLabel: 'Ideation workspace'
-		});
-
-		if (workspaceIssue) {
-			return fail(400, { message: workspaceIssue });
-		}
-
-		if (ideationThread?.canResume) {
-			try {
-				await sendAgentThreadMessage(ideationThread.id, prompt);
-			} catch (error) {
-				return fail(400, {
-					message: getActionErrorMessage(
-						error,
-						'Could not queue work in the project ideation thread.'
-					)
-				});
-			}
-
-			reusedThread = true;
-		} else {
-			let session;
-
-			try {
-				session = await startAgentThread({
-					name: buildProjectTaskIdeationThreadName(project.name),
-					cwd: workspace,
-					prompt,
-					sandbox: ideationSandbox,
-					model: null
-				});
-			} catch (error) {
-				return fail(400, {
-					message: getActionErrorMessage(error, 'Could not start the project ideation thread.')
-				});
-			}
-
-			threadId = session.agentThreadId;
-		}
-
-		return {
-			ok: true,
-			successAction: 'runTaskIdeationAssistant',
-			projectId: project.id,
-			projectName: project.name,
-			threadId,
-			reusedThread
-		};
-	},
-
 	createTask: async ({ request }) => {
 		const form = await request.formData();
 		const {
@@ -496,6 +379,8 @@ export const actions: Actions = {
 			approvalMode,
 			requiresReview,
 			desiredRoleId,
+			blockedReason,
+			dependencyTaskIds,
 			requiredCapabilityNames,
 			requiredToolNames
 		} = readTaskForm(form);
@@ -517,6 +402,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -538,6 +425,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -566,6 +455,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -587,6 +478,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -608,6 +501,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -629,6 +524,36 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
+				requiredCapabilityNames,
+				requiredToolNames,
+				submitMode
+			});
+		}
+
+		const invalidDependencyTaskIds = dependencyTaskIds.filter(
+			(dependencyTaskId) =>
+				!current.tasks.some((candidateTask) => candidateTask.id === dependencyTaskId)
+		);
+
+		if (invalidDependencyTaskIds.length > 0) {
+			return failTaskCreate(400, {
+				message: 'One or more selected dependencies are no longer available.',
+				name,
+				instructions,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				goalId,
+				area,
+				priority,
+				riskLevel,
+				approvalMode,
+				requiresReview,
+				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -648,16 +573,18 @@ export const actions: Actions = {
 					'This project needs an artifact root before files can be attached during creation.',
 				name,
 				instructions,
-			projectId,
-			assigneeWorkerId,
-			targetDate,
-			goalId,
-			area,
+				projectId,
+				assigneeWorkerId,
+				targetDate,
+				goalId,
+				area,
 				priority,
 				riskLevel,
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -684,6 +611,8 @@ export const actions: Actions = {
 			requiresReview,
 			desiredRoleId: nextDesiredRoleId,
 			assigneeWorkerId: assigneeWorker?.id ?? null,
+			blockedReason,
+			dependencyTaskIds,
 			targetDate: targetDate || null,
 			requiredCapabilityNames,
 			requiredToolNames,
@@ -742,6 +671,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -777,6 +708,8 @@ export const actions: Actions = {
 				approvalMode,
 				requiresReview,
 				desiredRoleId,
+				blockedReason,
+				dependencyTaskIds,
 				requiredCapabilityNames,
 				requiredToolNames,
 				submitMode
@@ -822,96 +755,6 @@ export const actions: Actions = {
 			taskId: createdTask.id,
 			threadId: session.agentThreadId,
 			attachmentCount: attachments.length
-		};
-	},
-
-	createDraftTasksFromIdeation: async ({ request }) => {
-		const form = await request.formData();
-		const threadId = form.get('threadId')?.toString().trim() ?? '';
-		const selectedIndexes = parseSuggestionIndexes(form);
-
-		if (!threadId) {
-			return fail(400, { message: 'Ideation thread is required.' });
-		}
-
-		if (selectedIndexes.length === 0) {
-			return fail(400, { message: 'Select at least one suggested task to create.' });
-		}
-
-		const [current, session] = await Promise.all([loadControlPlane(), getAgentThread(threadId)]);
-
-		if (!session) {
-			return fail(404, { message: 'Ideation thread not found.' });
-		}
-
-		const project = findProjectForTaskIdeationThread(session, current.projects);
-
-		if (!project) {
-			return fail(400, { message: 'Could not match the ideation thread to a project.' });
-		}
-
-		const suggestions = parseIdeationTaskSuggestions(session.latestRun?.lastMessage ?? '');
-		const selectedSuggestions = selectedIndexes
-			.map((index) => suggestions[index] ?? null)
-			.filter((suggestion): suggestion is NonNullable<typeof suggestion> => Boolean(suggestion));
-
-		if (selectedSuggestions.length === 0) {
-			return fail(400, { message: 'The selected suggestions are no longer available.' });
-		}
-
-		const defaultDraftRole = getDefaultDraftRole(current);
-		const existingTitleKeys = new Set(
-			current.tasks
-				.filter((task) => task.projectId === project.id)
-				.map((task) => task.title.trim().toLowerCase())
-		);
-		const tasksToCreate = selectedSuggestions.filter((suggestion) => {
-			const titleKey = suggestion.title.trim().toLowerCase();
-			if (!titleKey || existingTitleKeys.has(titleKey)) {
-				return false;
-			}
-
-			existingTitleKeys.add(titleKey);
-			return true;
-		});
-
-		if (tasksToCreate.length === 0) {
-			return fail(409, {
-				message: 'Selected suggestions already exist as tasks for this project.'
-			});
-		}
-
-		await updateControlPlane((data) => ({
-			...data,
-			tasks: [
-				...tasksToCreate.map((suggestion) =>
-					createTask({
-						title: suggestion.title,
-						summary: suggestion.suggestedInstructions,
-						projectId: project.id,
-						area: 'product',
-						goalId: '',
-						priority: 'medium',
-						riskLevel: 'medium',
-						approvalMode: 'none',
-						requiresReview: true,
-						desiredRoleId: defaultDraftRole?.id ?? '',
-						assigneeWorkerId: null,
-						artifactPath: getDefaultDraftArtifactPath(project),
-						status: 'in_draft'
-					})
-				),
-				...data.tasks
-			]
-		}));
-
-		return {
-			ok: true,
-			successAction: 'createDraftTasksFromIdeation',
-			projectName: project.name,
-			threadId,
-			createdCount: tasksToCreate.length,
-			skippedCount: selectedSuggestions.length - tasksToCreate.length
 		};
 	},
 

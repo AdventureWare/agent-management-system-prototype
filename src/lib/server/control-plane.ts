@@ -423,8 +423,7 @@ function normalizeWorker(worker: LegacyWorker): Worker {
 }
 
 function normalizeGoal(goal: LegacyGoal): Goal {
-	const area =
-		typeof goal.area === 'string' && isArea(goal.area) ? goal.area : 'product';
+	const area = typeof goal.area === 'string' && isArea(goal.area) ? goal.area : 'product';
 	const statusValue = typeof goal.status === 'string' ? goal.status : '';
 
 	return {
@@ -528,9 +527,7 @@ function normalizeRun(run: LegacyRun): Run {
 		endedAt: typeof run.endedAt === 'string' ? run.endedAt : null,
 		threadId: typeof run.threadId === 'string' && run.threadId.trim() ? run.threadId : null,
 		agentThreadId:
-			typeof run.agentThreadId === 'string' && run.agentThreadId.trim()
-				? run.agentThreadId
-				: null,
+			typeof run.agentThreadId === 'string' && run.agentThreadId.trim() ? run.agentThreadId : null,
 		promptDigest: typeof run.promptDigest === 'string' ? run.promptDigest : '',
 		artifactPaths: Array.isArray(run.artifactPaths)
 			? run.artifactPaths.filter((candidate): candidate is string => typeof candidate === 'string')
@@ -703,8 +700,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		.filter((run) => run.taskId === task.id)
 		.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
-	const area =
-		typeof task.area === 'string' && isArea(task.area) ? task.area : 'product';
+	const area = typeof task.area === 'string' && isArea(task.area) ? task.area : 'product';
 	const priority: Priority =
 		typeof priorityValue === 'string' && isPriority(priorityValue) ? priorityValue : 'medium';
 	const status = typeof statusValue === 'string' ? normalizeTaskStatus(statusValue) : null;
@@ -1297,6 +1293,60 @@ export function goalLinksProject(goal: Goal, project: Project) {
 	return (
 		(goal.projectIds ?? []).includes(project.id) || projectMatchesPath(project, goal.artifactPath)
 	);
+}
+
+export function deleteGoal(data: ControlPlaneData, goalId: string): ControlPlaneData {
+	const deletedGoal = data.goals.find((goal) => goal.id === goalId);
+
+	if (!deletedGoal) {
+		return data;
+	}
+
+	const nextParentGoalId = deletedGoal.parentGoalId ?? null;
+	const now = new Date().toISOString();
+
+	return {
+		...data,
+		goals: data.goals
+			.filter((goal) => goal.id !== goalId)
+			.map((goal) =>
+				goal.parentGoalId === goalId ? { ...goal, parentGoalId: nextParentGoalId } : goal
+			),
+		tasks: data.tasks.map((task) =>
+			task.goalId === goalId
+				? {
+						...task,
+						goalId: '',
+						updatedAt: now
+					}
+				: task
+		),
+		planningSessions: (data.planningSessions ?? []).map((session) => ({
+			...session,
+			goalId: session.goalId === goalId ? null : session.goalId,
+			goalIds: session.goalIds.filter((candidateGoalId) => candidateGoalId !== goalId)
+		})),
+		decisions: (data.decisions ?? []).map((decision) =>
+			decision.goalId === goalId ? { ...decision, goalId: null } : decision
+		)
+	};
+}
+
+export function deleteProject(data: ControlPlaneData, projectId: string): ControlPlaneData {
+	return {
+		...data,
+		projects: data.projects.filter((project) => project.id !== projectId),
+		goals: data.goals.map((goal) => ({
+			...goal,
+			projectIds: (goal.projectIds ?? []).filter(
+				(candidateProjectId) => candidateProjectId !== projectId
+			)
+		})),
+		planningSessions: (data.planningSessions ?? []).map((session) => ({
+			...session,
+			projectId: session.projectId === projectId ? null : session.projectId
+		}))
+	};
 }
 
 export function createTask(input: {

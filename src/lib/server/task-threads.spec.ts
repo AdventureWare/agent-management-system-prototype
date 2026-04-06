@@ -30,12 +30,12 @@ describe('task thread naming', () => {
 	it('preserves custom names that are already descriptive', () => {
 		expect(
 			resolveTaskThreadName({
-				currentName: 'Task ideation: Agent Management System Prototype',
+				currentName: 'Architecture review: Agent Management System Prototype',
 				projectName: 'Agent Management System Prototype',
 				taskName: 'Thread naming standardization',
 				taskId: 'task_thread_naming'
 			})
-		).toBe('Task ideation: Agent Management System Prototype');
+		).toBe('Architecture review: Agent Management System Prototype');
 	});
 
 	it('includes installed skill names in the task prompt when available', () => {

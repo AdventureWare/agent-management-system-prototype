@@ -34,6 +34,7 @@
 		data.projects.filter((project) => project.defaultRepoPath || project.defaultRepoUrl).length
 	);
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createProject');
+	let deleteSuccess = $derived(data.deleted);
 
 	function matchesProject(project: (typeof data.projects)[number], term: string) {
 		const normalizedTerm = term.trim().toLowerCase();
@@ -146,6 +147,14 @@
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Project created and saved into the control plane.
+		</p>
+	{/if}
+
+	{#if deleteSuccess}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Project deleted.
 		</p>
 	{/if}
 

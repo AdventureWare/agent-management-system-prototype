@@ -19,7 +19,10 @@
 	} from '@lucide/svelte';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
 
-	let { children } = $props();
+	let { children, operatorAuthEnabled = false } = $props<{
+		children?: import('svelte').Snippet;
+		operatorAuthEnabled?: boolean;
+	}>();
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
 		home: LayoutDashboardIcon,
@@ -73,10 +76,12 @@
 />
 
 <div
-	class="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:grid-cols-[auto_minmax(0,1fr)]"
+	class="flex min-h-svh min-w-0 flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:h-dvh md:min-h-0 md:grid-cols-[auto_minmax(0,1fr)]"
 >
-	<header class="z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur md:hidden">
-		<div class="flex items-center justify-between gap-3 px-4 py-3">
+	<header
+		class="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur md:hidden"
+	>
+		<div class="flex items-center justify-between gap-3">
 			<div class="min-w-0">
 				<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">Agent Ops</p>
 				<p class="truncate text-sm text-slate-300">Overview, work, context, and capacity</p>
@@ -98,15 +103,17 @@
 	</header>
 
 	{#if mobileNavOpen}
-		<div class="fixed inset-0 z-40 md:hidden" aria-label="Mobile navigation">
+		<div class="fixed inset-0 z-40 flex md:hidden" aria-label="Mobile navigation">
 			<div
 				class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
 				data-mobile-overlay="true"
 			></div>
 			<div
-				class="absolute inset-x-3 top-16 rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl"
+				class="relative ml-auto flex h-full w-[min(24rem,calc(100%-1rem))] flex-col overflow-hidden border-l border-slate-800 bg-slate-950 shadow-2xl"
 			>
-				<div class="mb-4 flex items-center justify-between gap-3">
+				<div
+					class="flex items-start justify-between gap-3 border-b border-slate-800 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4"
+				>
 					<div>
 						<p class="text-[11px] font-semibold tracking-[0.24em] text-sky-300 uppercase">
 							Navigation
@@ -123,30 +130,35 @@
 					</button>
 				</div>
 
-				<nav class="space-y-4">
-					{#each appNavigationSections as section (section.title)}
-						<div class="space-y-2">
-							<div class="px-1">
-								<p class="text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
-									{section.title}
-								</p>
-								<p class="mt-1 text-xs text-slate-500">{section.description}</p>
+				<div
+					class="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+				>
+					<nav class="space-y-4">
+						{#each appNavigationSections as section (section.title)}
+							<div class="space-y-2">
+								<div class="px-1">
+									<p class="text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
+										{section.title}
+									</p>
+									<p class="mt-1 text-xs text-slate-500">{section.description}</p>
+								</div>
+								{#each section.links as link (link.href)}
+									{@const Icon = iconByLinkId[link.id]}
+									<a
+										class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 transition hover:border-slate-700 hover:text-white"
+										href={resolve(link.href)}
+										data-sveltekit-preload-data="hover"
+										onclick={closeMobileNav}
+									>
+										<Icon class="size-4 shrink-0" />
+										<span class="min-w-0">{link.label}</span>
+									</a>
+								{/each}
 							</div>
-							{#each section.links as link (link.href)}
-								{@const Icon = iconByLinkId[link.id]}
-								<a
-									class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 transition hover:border-slate-700 hover:text-white"
-									href={resolve(link.href)}
-									data-sveltekit-preload-data="hover"
-									onclick={closeMobileNav}
-								>
-									<Icon class="size-4" />
-									<span>{link.label}</span>
-								</a>
-							{/each}
-						</div>
-					{/each}
-				</nav>
+						{/each}
+					</nav>
+
+				</div>
 			</div>
 		</div>
 	{/if}

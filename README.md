@@ -73,6 +73,31 @@ npm run db:import-json
 npm run db:export-json
 ```
 
+## Remote phone access
+
+To use the app from a phone while away from the laptop, enable the shared operator password and start the remote-access helper:
+
+```sh
+export AMS_OPERATOR_PASSWORD='replace-this-with-a-strong-password'
+npm run remote:phone:start
+```
+
+Check the current URL:
+
+```sh
+npm run remote:phone:status
+```
+
+Stop the tunnel when you are done:
+
+```sh
+npm run remote:phone:stop
+```
+
+Full setup and security notes:
+
+- [`docs/remote-phone-access.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/remote-phone-access.md)
+
 ## Codex threads
 
 The first thread layer uses discrete background Codex runs:

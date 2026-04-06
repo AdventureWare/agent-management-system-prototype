@@ -129,6 +129,8 @@ export function buildTaskWorkItems(
 ): TaskWorkItem[] {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const runMap = new Map(data.runs.map((run) => [run.id, run]));
 	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 
@@ -153,6 +155,12 @@ export function buildTaskWorkItems(
 				assigneeName: task.assigneeWorkerId
 					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
 					: 'Unassigned',
+				desiredRoleName: task.desiredRoleId
+					? (roleMap.get(task.desiredRoleId)?.name ?? task.desiredRoleId)
+					: 'No role preference',
+				dependencyTaskNames: task.dependencyTaskIds.map(
+					(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
+				),
 				latestRun,
 				...threadContext,
 				updatedAtLabel: formatRelativeTime(task.updatedAt),

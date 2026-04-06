@@ -367,7 +367,161 @@
 		empty={rows.length === 0}
 		{emptyMessage}
 	>
-		<table class="min-w-[1100px] divide-y divide-slate-800 text-left">
+		<div class="space-y-3 lg:hidden">
+			<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+				<p class="text-xs font-medium tracking-[0.14em] text-slate-400 uppercase">
+					Select shown threads
+				</p>
+				<label class="inline-flex items-center gap-2">
+					<input
+						aria-label={`Select all rows in ${title}`}
+						type="checkbox"
+						checked={areAllRowsSelected(rows)}
+						onchange={(event) => {
+							if (event.currentTarget instanceof HTMLInputElement) {
+								setSelectionForRows(rows, event.currentTarget.checked);
+							}
+						}}
+					/>
+					<span class="sr-only">Select all</span>
+				</label>
+			</div>
+
+			{#each rows as session (session.id)}
+				<article
+					class={[
+						'rounded-2xl border bg-slate-950/50 p-4',
+						isThreadSelected(session.id) ? 'border-sky-500/40 bg-slate-900/80' : 'border-slate-800'
+					]}
+				>
+					<div class="flex items-start gap-3">
+						<label class="mt-1 inline-flex items-center gap-2">
+							<input
+								aria-label={`Select thread ${session.name}`}
+								type="checkbox"
+								checked={isThreadSelected(session.id)}
+								onchange={(event) => {
+									if (event.currentTarget instanceof HTMLInputElement) {
+										toggleThreadSelection(session.id, event.currentTarget.checked);
+									}
+								}}
+							/>
+							<span class="sr-only">Select thread {session.name}</span>
+						</label>
+
+						<div class="min-w-0 flex-1 space-y-3">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="min-w-0">
+									<a
+										class="block rounded-lg text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
+										href={resolve(`/app/threads/${session.id}`)}
+										aria-label={`View thread details for ${session.name}`}
+									>
+										<p class="ui-wrap-anywhere text-base font-semibold text-white">{session.name}</p>
+										<p class="ui-clamp-3 mt-2 text-sm text-slate-400">
+											{session.model ?? 'default model'} · {session.sandbox}
+										</p>
+									</a>
+								</div>
+								<span
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState)}`}
+								>
+									{formatThreadStateLabel(session.threadState)}
+								</span>
+							</div>
+
+							<div class="flex flex-wrap gap-2">
+								{#if session.archivedAt}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+									>
+										Archived
+									</span>
+								{/if}
+								{#if session.origin === 'external'}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
+									>
+										Imported from Codex
+									</span>
+								{/if}
+								{#each uniqueTopicLabels(session.topicLabels) as topicLabel (topicLabel)}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+									>
+										{topicLabel}
+									</span>
+								{/each}
+							</div>
+
+							{#if session.relatedTasks.length > 0}
+								<p class="ui-clamp-3 text-xs text-slate-500">
+									Tasks: {session.relatedTasks.map((task) => task.title).join(', ')}
+								</p>
+							{/if}
+							{#if session.latestRun?.lastMessage}
+								<p class="ui-clamp-3 text-xs text-slate-500">
+									Last reply: {compactText(session.latestRun.lastMessage, 120)}
+								</p>
+							{/if}
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-3">
+								<ThreadActivityIndicator {now} thread={session} compact />
+								<p class="mt-2 text-xs text-slate-500">Latest run {session.latestRunStatus}</p>
+							</div>
+
+							<div class="grid gap-3 sm:grid-cols-2">
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last activity</p>
+									<p class="mt-2 text-sm text-white">{formatActivityAge(session.lastActivityAt, now)}</p>
+									<p class="mt-1 text-xs text-slate-500">{formatTimestamp(session.lastActivityAt)}</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Started</p>
+									<p class="mt-2 text-sm text-white">{formatTimestamp(session.createdAt)}</p>
+									{#if session.archivedAt}
+										<p class="mt-1 text-xs text-slate-500">
+											Archived {formatTimestamp(session.archivedAt)}
+										</p>
+									{/if}
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Runs</p>
+									<p class="mt-2 text-sm text-white">{session.runCount}</p>
+									<p class="mt-1 text-xs text-slate-500">
+										latest {session.latestRun?.mode === 'message' ? 'follow-up' : 'start'}
+									</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Resume</p>
+									<p class="mt-2 text-sm text-white">{resumeLabel(session)}</p>
+									<p class="mt-1 text-xs text-slate-500">{threadLabel(session)}</p>
+									{#if session.threadId}
+										<p class="ui-clamp-2 mt-1 text-xs text-slate-500">{session.threadId}</p>
+									{/if}
+								</div>
+							</div>
+
+							<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Working directory</p>
+								<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{session.cwd}</p>
+							</div>
+
+							<AppButton
+								class="w-full sm:w-auto"
+								href={resolve(`/app/threads/${session.id}`)}
+								size="sm"
+								variant="accent"
+							>
+								View thread
+							</AppButton>
+						</div>
+					</div>
+				</article>
+			{/each}
+		</div>
+
+		<table class="hidden min-w-[1100px] divide-y divide-slate-800 text-left lg:table">
 			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
 				<tr>
 					<th class="w-16 px-3 py-3 font-medium">
@@ -528,38 +682,41 @@
 		</table>
 	</DataTableSection>
 {/snippet}
-<AppPage width="full" class="gap-6 px-4 py-5 sm:px-6 sm:py-8">
-	<PageHeader
-		eyebrow="Threads"
-		title="Browse active and historical background threads"
-		description="Use this page as the remote-work registry. The tables separate active runs from history, and each thread opens on its own detail page for logs, conversation turns, and follow-up work."
-	>
-		{#snippet meta()}
-			<div
-				class="flex flex-col gap-3 text-sm text-slate-400 sm:flex-row sm:flex-wrap sm:items-center"
-			>
-				<label
-					class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2"
-				>
-					<input bind:checked={autoRefresh} type="checkbox" />
-					<span>Auto-refresh active runs every {autoRefreshIntervalLabel}</span>
-				</label>
-				<span>Refresh pauses while you are typing or when this tab is in the background.</span>
-				<AppButton
-					class="w-full sm:w-auto"
-					type="button"
-					variant="neutral"
-					reserveLabel="Refreshing..."
-					onclick={() => {
-						void refreshSessions({ force: true });
+	<AppPage width="full" class="gap-6 px-1 py-4 sm:px-2 sm:py-6 xl:px-4">
+		<PageHeader
+			eyebrow="Threads"
+			title="Browse active and historical threads"
+			description="Use this page as the remote-work registry for live runs, resumable threads, and older history."
+		>
+			{#snippet meta()}
+				<div class="space-y-2 text-sm text-slate-400">
+					<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+						<label
+							class="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+						>
+							<input bind:checked={autoRefresh} type="checkbox" />
+							<span>Auto-refresh every {autoRefreshIntervalLabel}</span>
+						</label>
+					<AppButton
+						class="w-full sm:w-auto"
+						type="button"
+						variant="neutral"
+						size="sm"
+						reserveLabel="Refreshing..."
+						onclick={() => {
+							void refreshSessions({ force: true });
 					}}
 					disabled={isRefreshing}
-				>
-					{isRefreshing ? 'Refreshing...' : 'Refresh all'}
-				</AppButton>
-			</div>
-		{/snippet}
-	</PageHeader>
+					>
+						{isRefreshing ? 'Refreshing...' : 'Refresh all'}
+					</AppButton>
+					</div>
+					<p class="text-xs text-slate-500">
+						Refresh pauses while you are typing or when this tab is in the background.
+					</p>
+				</div>
+			{/snippet}
+		</PageHeader>
 
 	{#if pageNotice}
 		<p
@@ -576,7 +733,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+	<div class="grid gap-4 grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 		<MetricCard label="Active" value={activeCount} />
 		<MetricCard label="Available" value={availableCount} />
 		<MetricCard label="Closed / idle" value={inactiveCount} />

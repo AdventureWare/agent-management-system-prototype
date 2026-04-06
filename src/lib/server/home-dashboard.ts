@@ -18,14 +18,10 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 		data: controlPlane,
 		threads: threads
 	});
-	const taskMap = new Map(controlPlane.tasks.map((task) => [task.id, task]));
 	const taskWorkItems = buildTaskWorkItems(controlPlane, threads);
 	const dashboardTasks = taskWorkItems.map((task) => ({
 		...task,
-		goalName: controlPlane.goals.find((goal) => goal.id === task.goalId)?.name ?? 'Unknown goal',
-		dependencyTaskNames: task.dependencyTaskIds.map(
-			(dependencyTaskId) => taskMap.get(dependencyTaskId)?.title ?? dependencyTaskId
-		)
+		goalName: controlPlane.goals.find((goal) => goal.id === task.goalId)?.name ?? 'Unknown goal'
 	}));
 	const taskAttention = dashboardTasks
 		.filter(

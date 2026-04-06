@@ -40,9 +40,7 @@
 
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 
-	function assignmentSuggestionIsEligible(
-		suggestion: PageData['assignmentSuggestions'][number]
-	) {
+	function assignmentSuggestionIsEligible(suggestion: PageData['assignmentSuggestions'][number]) {
 		return suggestion.eligible;
 	}
 
@@ -59,7 +57,7 @@
 	let launchSuccess = $derived(form?.ok && form?.successAction === 'launchTaskSession');
 	let recoverSuccess = $derived(form?.ok && form?.successAction === 'recoverTaskSession');
 	let submittedThreadId = $derived(
-		form && typeof form === 'object' && 'threadId' in form ? form.threadId?.toString() ?? '' : ''
+		form && typeof form === 'object' && 'threadId' in form ? (form.threadId?.toString() ?? '') : ''
 	);
 	let showAllCandidateThreads = $state(false);
 	let visibleCandidateThreads = $derived(
@@ -100,7 +98,9 @@
 				case 'removeTaskAttachment':
 					return 'resources';
 				default:
-					return 'resources';
+					return props.data.task.linkThread || props.data.relatedRuns.length > 0
+						? 'execution'
+						: 'resources';
 			}
 		})()
 	);
@@ -124,7 +124,9 @@
 	function shouldAutoRefreshTaskDetail() {
 		return (
 			data.task.hasActiveRun ||
-			isActiveThreadState(data.task.statusThread?.threadState ?? data.task.statusThread?.threadState)
+			isActiveThreadState(
+				data.task.statusThread?.threadState ?? data.task.statusThread?.threadState
+			)
 		);
 	}
 
@@ -354,15 +356,20 @@
 	>
 		{#snippet actions()}
 			<div class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
-				<form method="GET" action={resolve('/app/tasks')}>
+				<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
 					<input type="hidden" name="create" value="1" />
 					<input type="hidden" name="projectId" value={data.task.projectId} />
 					<input type="hidden" name="name" value={`Follow-up: ${data.task.title}`} />
 					<input type="hidden" name="instructions" value={createFollowUpTaskInstructions()} />
-					<AppButton type="submit" variant="accent">Create follow-up task</AppButton>
+					<AppButton class="w-full sm:w-auto" type="submit" variant="accent">
+						Create follow-up task
+					</AppButton>
 				</form>
-				<AppButton type="submit" variant="neutral" form="task-update-form">Save changes</AppButton>
+				<AppButton class="w-full sm:w-auto" type="submit" variant="neutral" form="task-update-form">
+					Save changes
+				</AppButton>
 				<AppButton
+					class="w-full sm:w-auto"
 					variant={runTaskDisabled ? 'neutral' : 'primary'}
 					type="submit"
 					form="task-update-form"
@@ -375,6 +382,7 @@
 				</AppButton>
 				{#if data.task.linkThread}
 					<AppButton
+						class="w-full sm:w-auto"
 						href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 						variant="accent"
 						reserveLabel="Open assigned thread"
@@ -432,7 +440,9 @@
 			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
 		</button>
 		{#if shouldAutoRefreshTaskDetail()}
-			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+			<span
+				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
+			>
 				Live updates every {autoRefreshIntervalLabel} while work is active
 			</span>
 		{/if}
@@ -649,7 +659,7 @@
 				<div class="flex flex-col gap-3 sm:items-end">
 					{#if taskHasActiveRun && data.task.linkThread}
 						<a
-							class="inline-flex items-center justify-center rounded-full border border-sky-800/60 px-4 py-2 text-sm font-medium text-sky-200 transition hover:border-sky-500/60 hover:text-sky-100"
+							class="inline-flex w-full items-center justify-center rounded-full border border-sky-800/60 px-4 py-2 text-sm font-medium text-sky-200 transition hover:border-sky-500/60 hover:text-sky-100 sm:w-auto"
 							href={resolve(`/app/threads/${data.task.linkThread.id}`)}
 						>
 							{threadActionLabel() || 'Open current work thread'}
@@ -657,7 +667,7 @@
 					{/if}
 					{#if data.stalledRecovery?.eligible}
 						<button
-							class="inline-flex items-center justify-center rounded-full border border-amber-700/70 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-500/60 hover:text-white"
+							class="inline-flex w-full items-center justify-center rounded-full border border-amber-700/70 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-500/60 hover:text-white sm:w-auto"
 							type="submit"
 							form="task-update-form"
 							formaction="?/recoverTaskSession"
@@ -1429,11 +1439,7 @@
 
 										<div class="flex flex-col gap-2 sm:items-end">
 											<form method="POST" action="?/updateTaskThread">
-												<input
-													type="hidden"
-													name="agentThreadId"
-													value={data.suggestedThread.id}
-												/>
+												<input type="hidden" name="agentThreadId" value={data.suggestedThread.id} />
 												<button
 													class="rounded-full border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-500/60 hover:text-emerald-100"
 													type="submit"
@@ -1462,9 +1468,7 @@
 										{#each data.candidateThreads as thread (thread.id)}
 											<option value={thread.id} selected={data.task.agentThreadId === thread.id}>
 												{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
-												{formatThreadStateLabel(
-													thread.threadState ?? thread.threadState ?? 'idle'
-												)} ·
+												{formatThreadStateLabel(thread.threadState ?? thread.threadState ?? 'idle')} ·
 												{thread.canResume
 													? 'ready'
 													: thread.hasActiveRun

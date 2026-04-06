@@ -33,6 +33,8 @@ export type TaskFreshnessSummary = {
 export type TaskWorkItem = Task & {
 	projectName: string;
 	assigneeName: string;
+	desiredRoleName: string;
+	dependencyTaskNames: string[];
 	latestRun: Run | null;
 	assignedThread: AgentThreadDetail | null;
 	latestRunThread: AgentThreadDetail | null;

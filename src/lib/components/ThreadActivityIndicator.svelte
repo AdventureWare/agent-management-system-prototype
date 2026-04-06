@@ -50,8 +50,12 @@
 	});
 </script>
 
-<div class:items-center={compact} class="flex flex-col gap-2 sm:flex-row sm:justify-between">
-	<div class="flex items-start gap-3">
+<div
+	class={compact
+		? 'flex min-w-0 flex-col gap-2'
+		: 'flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-between sm:gap-3'}
+>
+	<div class="flex min-w-0 items-start gap-3">
 		<div aria-hidden="true" class="activity-signal mt-0.5">
 			{#each [0, 1, 2] as index (index)}
 				<span
@@ -61,36 +65,61 @@
 			{/each}
 		</div>
 
-		<div class="space-y-1">
-			<p class={`text-xs font-semibold tracking-[0.16em] uppercase ${toneClass.label}`}>
-				{meta.label}
+		<div class="min-w-0 flex-1 space-y-1.5">
+			<div class="flex min-w-0 flex-wrap items-start gap-2">
+				<p class={`text-xs font-semibold tracking-[0.16em] uppercase ${toneClass.label}`}>
+					{meta.label}
+				</p>
+				{#if compact}
+					<span
+						class={`inline-flex shrink-0 items-center justify-center rounded-full border px-2 py-1 text-center text-[10px] leading-none uppercase ${toneClass.chip}`}
+					>
+						Updated {meta.ageLabel}
+					</span>
+				{/if}
+			</div>
+			<p class={compact ? 'ui-clamp-2 text-xs text-slate-400' : 'text-xs text-slate-400'}>
+				{meta.detail}
 			</p>
-			<p class="text-xs text-slate-400">{meta.detail}</p>
 			{#if meta.activityLabel}
-				<div
-					class={`inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border px-2 py-1 text-[11px] leading-relaxed ${toneClass.chip}`}
-				>
-					{#if meta.activityHeading}
-						<span class="font-semibold uppercase opacity-80">{meta.activityHeading}</span>
-					{/if}
-					<span class="text-white">{meta.activityLabel}</span>
-					{#if !compact && meta.activityDetail}
-						<span class="ui-wrap-anywhere text-slate-300/90">{meta.activityDetail}</span>
-					{:else if compact && meta.activityDetail}
-						<span class="ui-wrap-anywhere text-slate-300/90">
-							{meta.activityDetail}
-						</span>
-					{/if}
-				</div>
+				{#if compact}
+					<div class={`min-w-0 rounded-xl border px-2.5 py-2 ${toneClass.chip}`}>
+						<p class={`text-[10px] font-semibold tracking-[0.16em] uppercase ${toneClass.label}`}>
+							{meta.activityHeading ?? 'Latest signal'}
+						</p>
+						<p class="ui-clamp-2 mt-1 text-[11px] font-medium leading-relaxed text-white">
+							{meta.activityLabel}
+						</p>
+						{#if meta.activityDetail}
+							<p class="ui-clamp-2 mt-1 text-[11px] leading-relaxed text-slate-300/90">
+								{meta.activityDetail}
+							</p>
+						{/if}
+					</div>
+				{:else}
+					<div
+						class={`inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border px-2 py-1 text-[11px] leading-relaxed ${toneClass.chip}`}
+					>
+						{#if meta.activityHeading}
+							<span class="font-semibold uppercase opacity-80">{meta.activityHeading}</span>
+						{/if}
+						<span class="text-white">{meta.activityLabel}</span>
+						{#if meta.activityDetail}
+							<span class="ui-wrap-anywhere text-slate-300/90">{meta.activityDetail}</span>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
 
-	<span
-		class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${toneClass.chip}`}
-	>
-		Updated {meta.ageLabel}
-	</span>
+	{#if !compact}
+		<span
+			class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${toneClass.chip}`}
+		>
+			Updated {meta.ageLabel}
+		</span>
+	{/if}
 </div>
 
 <style>

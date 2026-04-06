@@ -35,6 +35,7 @@
 	let isCreateModalOpen = $state(modalShouldStartOpen());
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createGoal');
+	let deleteSuccess = $derived(data.deleted);
 
 	function matchesStatus(goal: GoalDirectoryGoal) {
 		return selectedStatus === 'all' || goal.status === selectedStatus;
@@ -233,6 +234,15 @@
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
 			Goal created and relationship links saved.
+		</p>
+	{/if}
+
+	{#if deleteSuccess}
+		<p
+			aria-live="polite"
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Goal deleted.
 		</p>
 	{/if}
 

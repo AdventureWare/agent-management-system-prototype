@@ -36,7 +36,6 @@ export type ControlSummary = {
 
 export type DashboardTaskAttentionItem = TaskWorkItem & {
 	goalName: string;
-	dependencyTaskNames: string[];
 };
 
 export type HomeDashboardData = {

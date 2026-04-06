@@ -110,17 +110,16 @@ function getKeywordOverlapScore(taskTokens: string[], thread: AgentThreadDetail)
 		return 0;
 	}
 
-	const threadTokens = new Set(
-		tokenizeSearchText(
-			[
-				thread.name,
-				buildCandidatePreviewText(thread),
-				...thread.relatedTasks.map((relatedTask) => relatedTask.title)
-			].join(' ')
-		)
+	const nameTokens = new Set(tokenizeSearchText(thread.name));
+	const relatedTaskTokens = new Set(
+		tokenizeSearchText(thread.relatedTasks.map((relatedTask) => relatedTask.title).join(' '))
 	);
+	const previewTokens = new Set(tokenizeSearchText(buildCandidatePreviewText(thread)));
+	const nameOverlapCount = taskTokens.filter((token) => nameTokens.has(token)).length;
+	const relatedTaskOverlapCount = taskTokens.filter((token) => relatedTaskTokens.has(token)).length;
+	const previewOverlapCount = taskTokens.filter((token) => previewTokens.has(token)).length;
 
-	return taskTokens.filter((token) => threadTokens.has(token)).length * 10;
+	return nameOverlapCount * 12 + relatedTaskOverlapCount * 14 + previewOverlapCount * 5;
 }
 
 function getSharedTopicLabels(taskTopicLabels: string[], thread: AgentThreadDetail) {
@@ -273,6 +272,56 @@ function getCategorizationScore(match: ThreadCategorizationMatch) {
 	);
 }
 
+function getContextContinuityScore(
+	taskCategorization: ThreadCategorization,
+	thread: AgentThreadDetail,
+	sharedContext: ThreadCategorizationMatch
+) {
+	const threadCategorization = thread.categorization;
+	const threadHasScopedContext =
+		(threadCategorization?.projectIds.length ?? 0) > 0 ||
+		(threadCategorization?.goalIds.length ?? 0) > 0;
+	const taskHasSpecificFocus =
+		taskCategorization.focusLabels.length > 0 ||
+		taskCategorization.capabilityLabels.length > 0 ||
+		taskCategorization.toolLabels.length > 0 ||
+		taskCategorization.keywordLabels.length > 0;
+	let score = 0;
+
+	if (thread.relatedTasks.length > 0 && threadHasScopedContext) {
+		score += 10;
+	}
+
+	if (taskCategorization.focusLabels.length > 0) {
+		score += sharedContext.focusLabels.length * 14;
+	}
+
+	if (taskCategorization.capabilityLabels.length > 0) {
+		score += sharedContext.capabilityLabels.length * 16;
+	}
+
+	if (taskCategorization.toolLabels.length > 0) {
+		score += sharedContext.toolLabels.length * 14;
+	}
+
+	if (taskCategorization.keywordLabels.length > 0) {
+		score += sharedContext.keywordLabels.length * 10;
+	}
+
+	if (
+		taskHasSpecificFocus &&
+		thread.relatedTasks.length === 0 &&
+		sharedContext.focusLabels.length === 0 &&
+		sharedContext.capabilityLabels.length === 0 &&
+		sharedContext.toolLabels.length === 0 &&
+		sharedContext.keywordLabels.length === 0
+	) {
+		score -= 18;
+	}
+
+	return score;
+}
+
 function buildSuggestionReason(
 	task: Task,
 	thread: AgentThreadDetail,
@@ -364,11 +413,17 @@ export function buildTaskThreadSuggestions(
 		const sharedTopicLabels = sharedContext.labels.length
 			? sharedContext.labels
 			: getSharedTopicLabels(taskTopicLabels, thread);
+		const contextContinuityScore = getContextContinuityScore(
+			taskCategorization,
+			thread,
+			sharedContext
+		);
 		const score =
 			availableScore +
 			getThreadStateScore(thread) +
 			getRelatedTaskScore(input.task, thread) +
 			getCategorizationScore(sharedContext) +
+			contextContinuityScore +
 			sharedTopicLabels.length * 6 +
 			keywordOverlapScore;
 

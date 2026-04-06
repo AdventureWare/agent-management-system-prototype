@@ -34,6 +34,7 @@ body {
 		BlinkMacSystemFont,
 		'Segoe UI',
 		sans-serif;
+	overflow-x: hidden;
 }
 
 a {
@@ -46,8 +47,8 @@ a {
 	min-width: 0;
 	width: 100%;
 	flex-direction: column;
-	gap: 1.25rem;
-	padding: 1.25rem 1rem 1.75rem;
+	gap: 1rem;
+	padding: 1rem 0.875rem 1.5rem;
 }
 
 .ui-page-header {
@@ -56,7 +57,7 @@ a {
 	background:
 		linear-gradient(180deg, rgb(15 23 42 / 0.82), rgb(2 6 23 / 0.74)),
 		radial-gradient(circle at top left, rgb(14 165 233 / 0.12), transparent 35%);
-	padding: 1.5rem;
+	padding: 1.125rem;
 }
 
 .ui-eyebrow {
@@ -68,11 +69,12 @@ a {
 }
 
 .ui-page-title {
-	font-size: clamp(1.875rem, 2.8vw, 2.5rem);
+	font-size: clamp(1.625rem, 7vw, 2.5rem);
 	font-weight: 600;
-	line-height: 1.1;
+	line-height: 1.05;
 	letter-spacing: -0.02em;
 	color: white;
+	text-wrap: balance;
 }
 
 .ui-page-description {
@@ -86,14 +88,14 @@ a {
 	border-radius: 1rem;
 	border: 1px solid rgb(30 41 59 / 0.9);
 	background: rgb(2 6 23 / 0.72);
-	padding: 1.5rem;
+	padding: 1rem;
 }
 
 .ui-toolbar {
 	border-radius: 1rem;
 	border: 1px solid rgb(30 41 59 / 0.9);
 	background: rgb(2 6 23 / 0.72);
-	padding: 1.5rem;
+	padding: 1rem;
 }
 
 .ui-tabs {
@@ -159,7 +161,7 @@ a {
 	border-radius: 1rem;
 	border: 1px solid rgb(30 41 59 / 0.9);
 	background: rgb(2 6 23 / 0.72);
-	padding: 1.25rem;
+	padding: 1rem;
 }
 
 .ui-metric-label {
@@ -180,9 +182,13 @@ a {
 
 .ui-metric-detail {
 	margin-top: 0.5rem;
+	display: -webkit-box;
 	font-size: 0.875rem;
 	line-height: 1.5;
 	color: rgb(148 163 184);
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 }
 
 .ui-empty-state {
@@ -198,6 +204,7 @@ a {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	max-width: 100%;
 	gap: 0.5rem;
 	border-radius: 0.875rem;
 	border: 1px solid rgb(51 65 85 / 1);
@@ -372,6 +379,15 @@ a {
 	hyphens: auto;
 }
 
+.ui-wrap-title {
+	min-width: 0;
+	max-width: 100%;
+	white-space: normal;
+	word-break: normal;
+	overflow-wrap: normal;
+	hyphens: manual;
+}
+
 .ui-wrap-inline {
 	display: inline-flex;
 	min-width: 0;
@@ -430,6 +446,16 @@ a {
 		gap: 1.5rem;
 		padding-inline: 1.5rem;
 		padding-block: 2rem;
+	}
+
+	.ui-page-header,
+	.ui-panel,
+	.ui-toolbar {
+		padding: 1.5rem;
+	}
+
+	.ui-metric-card {
+		padding: 1.25rem;
 	}
 }
 

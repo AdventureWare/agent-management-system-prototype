@@ -49,7 +49,7 @@ What it is doing now:
 - This is the strongest primary workflow surface in the app.
 - Lets you create tasks, attach files, and optionally launch work immediately.
 - Connects tasks to projects, workers, threads, runs, approvals, and reviews.
-- Includes task-ideation helpers for projects and skill visibility by project.
+- Includes project skill visibility alongside the task queue and create flow.
 
 Task detail: `/app/tasks/[taskId]`
 

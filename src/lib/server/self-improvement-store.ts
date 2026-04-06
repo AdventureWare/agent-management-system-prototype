@@ -27,6 +27,7 @@ import {
 	SELF_IMPROVEMENT_SOURCE_OPTIONS
 } from '$lib/types/self-improvement';
 import type { ControlPlaneData } from '$lib/types/control-plane';
+import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type {
 	SelfImprovementAnalysis,
 	SelfImprovementCapturedSuggestion,
@@ -858,6 +859,22 @@ export function resolveSelfImprovementOpportunityTaskContext(input: {
 	};
 }
 
+export function resolveSelfImprovementOpportunityThreadAssignment(input: {
+	opportunity: Pick<TrackedSelfImprovementOpportunity, 'source' | 'relatedThreadIds'>;
+	threads: Pick<AgentThreadDetail, 'id' | 'canResume' | 'hasActiveRun'>[];
+}) {
+	const relatedThreads = input.opportunity.relatedThreadIds
+		.map((threadId) => input.threads.find((thread) => thread.id === threadId) ?? null)
+		.filter((thread): thread is NonNullable<typeof thread> => Boolean(thread));
+	const availableThreads = relatedThreads.filter((thread) => thread.canResume && !thread.hasActiveRun);
+
+	if (input.opportunity.source === 'thread_reuse_gap') {
+		return availableThreads[0]?.id ?? null;
+	}
+
+	return availableThreads.length === 1 ? availableThreads[0]?.id ?? null : null;
+}
+
 export async function createTaskFromSelfImprovementOpportunity(
 	opportunityId: string,
 	options: {
@@ -903,6 +920,14 @@ export async function createTaskFromSelfImprovementOpportunity(
 		return null;
 	}
 
+	const threads = await listAgentThreads({
+		controlPlane: data
+	});
+	const suggestedThreadId = resolveSelfImprovementOpportunityThreadAssignment({
+		opportunity,
+		threads
+	});
+
 	const createdTask = createTask({
 		title: opportunity.suggestedTask.title,
 		summary: opportunity.suggestedTask.summary,
@@ -915,6 +940,7 @@ export async function createTaskFromSelfImprovementOpportunity(
 		requiresReview: true,
 		desiredRoleId: getDefaultImprovementRoleId(data),
 		artifactPath: project.defaultArtifactRoot || project.projectRootFolder || '',
+		agentThreadId: suggestedThreadId,
 		status: 'in_draft'
 	});
 

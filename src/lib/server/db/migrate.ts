@@ -1,9 +1,22 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openAppDb } from '$lib/server/db/connection';
 
-const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'migrations');
+function resolveMigrationsDir() {
+	const candidateDirs = [
+		resolve(process.cwd(), 'src', 'lib', 'server', 'db', 'migrations'),
+		resolve(dirname(fileURLToPath(import.meta.url)), 'migrations')
+	];
+
+	for (const candidateDir of candidateDirs) {
+		if (existsSync(candidateDir)) {
+			return candidateDir;
+		}
+	}
+
+	return candidateDirs[0];
+}
 
 export function migrateAppDb() {
 	const db = openAppDb();
@@ -22,7 +35,8 @@ export function migrateAppDb() {
 				.all()
 				.map((row) => row.name)
 		);
-		const migrations = readdirSync(MIGRATIONS_DIR)
+		const migrationsDir = resolveMigrationsDir();
+		const migrations = readdirSync(migrationsDir)
 			.filter((file) => file.endsWith('.sql'))
 			.sort();
 
@@ -31,7 +45,7 @@ export function migrateAppDb() {
 				continue;
 			}
 
-			const sql = readFileSync(resolve(MIGRATIONS_DIR, name), 'utf8');
+			const sql = readFileSync(resolve(migrationsDir, name), 'utf8');
 			const applyMigration = db.transaction((migrationName: string, migrationSql: string) => {
 				db.exec(migrationSql);
 				db.prepare('insert into schema_migrations (name, applied_at) values (?, ?)').run(

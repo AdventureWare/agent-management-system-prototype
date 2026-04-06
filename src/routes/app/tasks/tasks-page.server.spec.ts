@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentThreadDetail } from '$lib/types/agent-thread';
-import type { ControlPlaneData, Project } from '$lib/types/control-plane';
+import type { ControlPlaneData } from '$lib/types/control-plane';
 
 const { mkdir, writeFile } = vi.hoisted(() => ({
 	mkdir: vi.fn(),
@@ -10,10 +9,6 @@ const { mkdir, writeFile } = vi.hoisted(() => ({
 const controlPlaneState = vi.hoisted(() => ({
 	current: null as ControlPlaneData | null,
 	saved: null as ControlPlaneData | null
-}));
-
-const agentSessionState = vi.hoisted(() => ({
-	session: null as AgentThreadDetail | null
 }));
 
 const createRunMock = vi.hoisted(() =>
@@ -44,7 +39,13 @@ const createTaskMock = vi.hoisted(() =>
 			summary: string;
 			projectId: string;
 			goalId: string;
+			priority?: string;
+			riskLevel?: string;
+			approvalMode?: string;
+			requiresReview?: boolean;
 			desiredRoleId: string;
+			blockedReason?: string;
+			dependencyTaskIds?: string[];
 			artifactPath: string;
 			targetDate?: string | null;
 			requiredCapabilityNames?: string[];
@@ -57,16 +58,16 @@ const createTaskMock = vi.hoisted(() =>
 			projectId: input.projectId,
 			area: 'product',
 			goalId: input.goalId,
-			priority: 'medium',
+			priority: input.priority ?? 'medium',
 			status: input.status ?? 'ready',
-			riskLevel: 'medium',
-			approvalMode: 'none',
-			requiresReview: true,
+			riskLevel: input.riskLevel ?? 'medium',
+			approvalMode: input.approvalMode ?? 'none',
+			requiresReview: input.requiresReview ?? true,
 			desiredRoleId: input.desiredRoleId,
 			assigneeWorkerId: null,
 			agentThreadId: null,
-			blockedReason: '',
-			dependencyTaskIds: [],
+			blockedReason: input.blockedReason ?? '',
+			dependencyTaskIds: input.dependencyTaskIds ?? [],
 			targetDate: input.targetDate ?? null,
 			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
 			requiredToolNames: input.requiredToolNames ?? [],
@@ -117,27 +118,6 @@ const listInstalledCodexSkillsMock = vi.hoisted(() =>
 	])
 );
 
-const parseIdeationTaskSuggestionsMock = vi.hoisted(() =>
-	vi.fn(() => [
-		{
-			index: 0,
-			title: 'Create draft tasks directly from ideation output',
-			whyItMatters: 'Eliminate retyping.',
-			suggestedInstructions: 'Add a review flow that creates selected suggestions as drafts.',
-			signals: 'Operators currently have to create tasks manually after ideation.',
-			confidence: 'high'
-		},
-		{
-			index: 1,
-			title: 'Show routing defaults beside ideation suggestions',
-			whyItMatters: 'Clarify where drafts go.',
-			suggestedInstructions: 'Display the default role and artifact path in the review UI.',
-			signals: 'Task creation already derives routing from project defaults.',
-			confidence: 'medium'
-		}
-	])
-);
-
 function syncTaskExecutionStateLike(data: ControlPlaneData) {
 	return {
 		...data,
@@ -174,8 +154,8 @@ vi.mock('$lib/server/control-plane', () => ({
 			const normalizedPath = artifactPath.trim();
 			return Boolean(
 				normalizedPath &&
-					(project.defaultArtifactRoot === normalizedPath ||
-						project.projectRootFolder === normalizedPath)
+				(project.defaultArtifactRoot === normalizedPath ||
+					project.projectRootFolder === normalizedPath)
 			);
 		}
 	),
@@ -216,7 +196,7 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('$lib/server/agent-threads', () => ({
 	cancelAgentThread: vi.fn(),
-	getAgentThread: vi.fn(async () => agentSessionState.session),
+	getAgentThread: vi.fn(async () => null),
 	listAgentThreads: vi.fn(async () => []),
 	sendAgentThreadMessage: vi.fn(),
 	startAgentThread: startAgentThreadMock
@@ -244,19 +224,6 @@ vi.mock('$lib/server/task-execution-workspace', () => ({
 	getWorkspaceExecutionIssue: getWorkspaceExecutionIssueMock
 }));
 
-vi.mock('$lib/server/task-ideation', () => ({
-	buildProjectTaskIdeationPrompt: vi.fn(),
-	buildProjectTaskIdeationThreadName: vi.fn(
-		(projectName: string) => `Task ideation: ${projectName}`
-	),
-	findProjectForTaskIdeationThread: vi.fn(
-		(_session: AgentThreadDetail, projects: Project[]) => projects[0] ?? null
-	),
-	findProjectTaskIdeationThread: vi.fn(),
-	getProjectTaskIdeationWorkspace: vi.fn(),
-	parseIdeationTaskSuggestions: parseIdeationTaskSuggestionsMock
-}));
-
 import { actions } from './+page.server';
 
 describe('tasks page server actions', () => {
@@ -269,7 +236,6 @@ describe('tasks page server actions', () => {
 		listInstalledCodexSkillsMock.mockClear();
 		createRunMock.mockClear();
 		createTaskMock.mockClear();
-		parseIdeationTaskSuggestionsMock.mockClear();
 		startAgentThreadMock.mockClear();
 		getWorkspaceExecutionIssueMock.mockReset();
 		getWorkspaceExecutionIssueMock.mockReturnValue(null);
@@ -299,6 +265,12 @@ describe('tasks page server actions', () => {
 					name: 'Coordinator',
 					area: 'shared',
 					description: 'Routes work'
+				},
+				{
+					id: 'role_reviewer',
+					name: 'Reviewer',
+					area: 'shared',
+					description: 'Reviews and verifies work'
 				}
 			],
 			projects: [
@@ -331,7 +303,7 @@ describe('tasks page server actions', () => {
 			tasks: [
 				{
 					id: 'task_existing',
-					title: 'Show routing defaults beside ideation suggestions',
+					title: 'Existing task already in queue',
 					summary: 'Existing task already in queue.',
 					projectId: 'project_ams',
 					area: 'product',
@@ -359,72 +331,6 @@ describe('tasks page server actions', () => {
 			approvals: []
 		};
 		controlPlaneState.saved = null;
-		agentSessionState.session = {
-			id: 'session_ideation',
-			name: 'Task ideation: Agent Management System Prototype',
-			cwd: '/tmp/project',
-			sandbox: 'workspace-write',
-			model: null,
-			threadId: 'thread_1',
-			archivedAt: null,
-			createdAt: '2026-03-30T11:00:00.000Z',
-			updatedAt: '2026-03-30T12:00:00.000Z',
-			origin: 'managed',
-			threadState: 'ready',
-			latestRunStatus: 'completed',
-			hasActiveRun: false,
-			canResume: true,
-			runCount: 1,
-			lastActivityAt: '2026-03-30T12:00:00.000Z',
-			lastActivityLabel: 'just now',
-			threadSummary: 'Suggested the next tasks.',
-			lastExitCode: 0,
-			runTimeline: [],
-			relatedTasks: [],
-			latestRun: null,
-			runs: []
-		};
-	});
-
-	it('creates selected ideation suggestions as draft tasks and skips duplicates', async () => {
-		const form = new FormData();
-		form.set('sessionId', 'session_ideation');
-		form.append('suggestionIndex', '0');
-		form.append('suggestionIndex', '1');
-
-		const result = await actions.createDraftTasksFromIdeation({
-			request: new Request('http://localhost/app/tasks', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				ok: true,
-				successAction: 'createDraftTasksFromIdeation',
-				projectName: 'Agent Management System Prototype',
-				createdCount: 1,
-				skippedCount: 1
-			})
-		);
-		expect(createTaskMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				title: 'Create draft tasks directly from ideation output',
-				summary: 'Add a review flow that creates selected suggestions as drafts.',
-				projectId: 'project_ams',
-				desiredRoleId: 'role_coordinator',
-				artifactPath: '/tmp/project/agent_output',
-				status: 'in_draft'
-			})
-		);
-		expect(controlPlaneState.saved?.tasks[0]).toEqual(
-			expect.objectContaining({
-				title: 'Create draft tasks directly from ideation output',
-				status: 'in_draft',
-				projectId: 'project_ams'
-			})
-		);
 	});
 
 	it('creates a queued task without launching a work thread by default', async () => {
@@ -466,6 +372,57 @@ describe('tasks page server actions', () => {
 				requiredToolNames: ['codex', 'playwright'],
 				agentThreadId: null,
 				runCount: 0
+			})
+		);
+	});
+
+	it('creates a queued task with advanced routing and governance metadata', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Escalate a blocked migration');
+		form.set('instructions', 'Capture the risk and route this through the right gate at intake.');
+		form.set('priority', 'urgent');
+		form.set('riskLevel', 'high');
+		form.set('approvalMode', 'before_apply');
+		form.set('requiresReview', 'false');
+		form.set('desiredRoleId', 'role_reviewer');
+		form.set('blockedReason', 'Waiting on a schema decision.');
+		form.append('dependencyTaskIds', 'task_existing');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				priority: 'urgent',
+				riskLevel: 'high',
+				approvalMode: 'before_apply',
+				requiresReview: false,
+				desiredRoleId: 'role_reviewer',
+				blockedReason: 'Waiting on a schema decision.',
+				dependencyTaskIds: ['task_existing']
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Escalate a blocked migration',
+				priority: 'urgent',
+				riskLevel: 'high',
+				approvalMode: 'before_apply',
+				requiresReview: false,
+				desiredRoleId: 'role_reviewer',
+				blockedReason: 'Waiting on a schema decision.',
+				dependencyTaskIds: ['task_existing']
 			})
 		);
 	});
@@ -604,7 +561,7 @@ describe('tasks page server actions', () => {
 				ok: true,
 				successAction: 'createTaskAndRun',
 				taskId: 'task_create_and_run_from_the_task_form',
-				agentThreadId: 'session_created'
+				threadId: 'session_created'
 			})
 		);
 		expect(buildTaskThreadPromptMock).toHaveBeenCalledWith(

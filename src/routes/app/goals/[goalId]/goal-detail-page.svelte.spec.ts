@@ -108,6 +108,7 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Parent and subgoal context');
 		expect(document.body.textContent).toContain('Validate creator partnerships');
 		expect(document.body.textContent).toContain('Goal artifact browser');
+		expect(document.body.textContent).toContain('Delete goal');
 		expect(document.body.textContent).toContain('notes.md');
 		expect(
 			(document.querySelector('input[name="targetDate"]') as HTMLInputElement | null)?.value

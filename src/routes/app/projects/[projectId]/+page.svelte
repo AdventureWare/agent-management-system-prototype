@@ -17,6 +17,7 @@
 	let { data, form } = $props();
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProject');
+	let deleteBlocked = $derived(data.relatedTasks.length > 0);
 </script>
 
 <AppPage width="full">
@@ -219,6 +220,25 @@
 					label="Default thread sandbox"
 					value={data.project.defaultThreadSandbox || 'Inherit provider default'}
 				/>
+			</DetailSection>
+
+			<DetailSection
+				eyebrow="Danger zone"
+				title="Delete project"
+				description={deleteBlocked
+					? `This project still has ${data.relatedTasks.length} linked task${data.relatedTasks.length === 1 ? '' : 's'}. Reassign or delete those tasks first because tasks require a project.`
+					: `This removes the project from the control plane, clears explicit links from ${data.relatedGoals.length} related goal${data.relatedGoals.length === 1 ? '' : 's'}, and removes it from planning session scope.`}
+				tone="rose"
+			>
+				<form class="mt-5" method="POST" action="?/deleteProject">
+					<button
+						class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+						type="submit"
+						disabled={deleteBlocked}
+					>
+						Delete project
+					</button>
+				</form>
 			</DetailSection>
 		</section>
 

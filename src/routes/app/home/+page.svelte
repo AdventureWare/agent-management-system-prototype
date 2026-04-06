@@ -11,7 +11,9 @@
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import {
+		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
@@ -283,7 +285,7 @@
 {/snippet}
 
 <section
-	class="mx-auto flex w-full max-w-[90rem] flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8 xl:px-8 2xl:px-10"
+	class="mx-auto flex w-full max-w-[90rem] flex-col gap-5 px-3 py-4 sm:gap-6 sm:px-5 sm:py-7 xl:px-8 2xl:px-10"
 >
 	<div class="flex flex-col gap-3">
 		<p class="text-sm font-semibold tracking-[0.24em] text-sky-300 uppercase">Home</p>
@@ -294,31 +296,31 @@
 			This is the operator view. It keeps the current state, trouble spots, and resumable work on
 			one page so you can check your laptop workers quickly while you are away.
 		</p>
-		<div
-			class="flex flex-col gap-3 text-sm text-slate-400 sm:flex-row sm:flex-wrap sm:items-center"
-		>
+		<div class="space-y-2 text-sm text-slate-400">
 			<label
 				class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2"
 			>
 				<input bind:checked={autoRefresh} type="checkbox" />
 				<span>Auto-refresh every 10s while runs are active</span>
 			</label>
-			<button
-				class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
-				type="button"
-				onclick={() => {
-					void refreshDashboard({ force: true });
-				}}
-				disabled={isRefreshing}
-			>
-				{isRefreshing ? 'Refreshing...' : 'Refresh now'}
-			</button>
-			<a
-				class="w-full rounded-2xl border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sky-200 transition hover:border-sky-700 hover:text-white sm:w-auto sm:rounded-full"
-				href={resolve('/app/threads')}
-			>
-				Open detailed thread controls
-			</a>
+			<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+				<button
+					class="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-full"
+					type="button"
+					onclick={() => {
+						void refreshDashboard({ force: true });
+					}}
+					disabled={isRefreshing}
+				>
+					{isRefreshing ? 'Refreshing...' : 'Refresh'}
+				</button>
+				<a
+					class="rounded-2xl border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-center text-sky-200 transition hover:border-sky-700 hover:text-white sm:w-auto sm:rounded-full"
+					href={resolve('/app/threads')}
+				>
+					Open threads
+				</a>
+			</div>
 		</div>
 		{#if refreshError}
 			<p
@@ -329,45 +331,7 @@
 		{/if}
 	</div>
 
-	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
-		<div class="flex flex-col gap-2">
-			<h2 class="text-lg font-semibold text-white sm:text-xl">Browse by area</h2>
-			<p class="max-w-3xl text-sm text-slate-400">
-				Use this page for cross-cutting status, then move into the work, context, or capacity
-				surface that matches the decision you need to make next.
-			</p>
-		</div>
-
-		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			{#each appNavigationSections as section (section.id)}
-				<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-					<p class="text-[11px] font-semibold tracking-[0.18em] text-sky-300 uppercase">
-						{section.title}
-					</p>
-					<p class="mt-2 text-sm text-slate-400">{section.description}</p>
-					<div class="mt-4 flex flex-wrap gap-2">
-						{#each section.links as link (link.href)}
-							{@const isCurrent = link.href === '/app/home'}
-							<a
-								class={[
-									'rounded-full border px-3 py-2 text-xs font-medium tracking-[0.14em] uppercase transition',
-									isCurrent
-										? 'border-sky-700/70 bg-sky-950/50 text-sky-200'
-										: 'border-slate-700 text-slate-200 hover:border-slate-600 hover:text-white'
-								]}
-								href={resolve(link.href)}
-								aria-current={isCurrent ? 'page' : undefined}
-							>
-								{link.label}
-							</a>
-						{/each}
-					</div>
-				</article>
-			{/each}
-		</div>
-	</section>
-
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+	<div class="grid grid-cols-2 gap-4 xl:grid-cols-5">
 		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
 			<p class="text-sm text-slate-400">Active</p>
 			<p class="mt-2 text-3xl font-semibold text-white">
@@ -400,44 +364,93 @@
 		</div>
 	</div>
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Ready tasks</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.readyTaskCount}
+	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">Task snapshot</p>
+				<p class="mt-2 text-sm text-slate-400">
+					Queue health in one block so you can scan it quickly on mobile.
+				</p>
+			</div>
+			<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}>Open tasks</a>
+		</div>
+
+		<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Ready</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.readyTaskCount}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Blocked</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.blockedTaskCount}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Reviews</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.openReviewCount}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Approvals</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.pendingApprovalCount}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Dependencies</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.dependencyBlockedTaskCount}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">High risk</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.controlSummary.highRiskTaskCount}
+				</dd>
+			</div>
+		</dl>
+	</section>
+
+	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
+		<div class="flex flex-col gap-2">
+			<h2 class="text-lg font-semibold text-white sm:text-xl">Browse by area</h2>
+			<p class="max-w-3xl text-sm text-slate-400">
+				Jump from the dashboard into the work, context, or capacity surface you need next.
 			</p>
 		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Blocked tasks</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.blockedTaskCount}
-			</p>
+
+		<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+			{#each appNavigationSections as section (section.id)}
+				<article class="rounded-2xl border border-slate-800 bg-slate-900/50 p-3 sm:p-4">
+					<p class="text-[11px] font-semibold tracking-[0.18em] text-sky-300 uppercase">
+						{section.title}
+					</p>
+					<p class="mt-2 hidden text-sm text-slate-400 sm:block">{section.description}</p>
+					<div class="mt-3 flex flex-wrap gap-2">
+						{#each section.links as link (link.href)}
+							{@const isCurrent = link.href === '/app/home'}
+							<a
+								class={[
+									'rounded-full border px-3 py-2 text-xs font-medium tracking-[0.14em] uppercase transition',
+									isCurrent
+										? 'border-sky-700/70 bg-sky-950/50 text-sky-200'
+										: 'border-slate-700 text-slate-200 hover:border-slate-600 hover:text-white'
+								]}
+								href={resolve(link.href)}
+								aria-current={isCurrent ? 'page' : undefined}
+							>
+								{link.label}
+							</a>
+						{/each}
+					</div>
+				</article>
+			{/each}
 		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Open reviews</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.openReviewCount}
-			</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Pending approvals</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.pendingApprovalCount}
-			</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">Dependency blocked</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.dependencyBlockedTaskCount}
-			</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-			<p class="text-sm text-slate-400">High risk open</p>
-			<p class="mt-2 text-3xl font-semibold text-white">
-				{dashboard.controlSummary.highRiskTaskCount}
-			</p>
-		</div>
-	</div>
+	</section>
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
 		<div class="space-y-6">
@@ -454,7 +467,7 @@
 					>
 				</div>
 
-				<div class="grid gap-3 sm:grid-cols-3">
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					<div class="rounded-xl border border-violet-900/50 bg-violet-950/30 p-4">
 						<p class="text-xs tracking-[0.16em] text-violet-300 uppercase">Stale WIP</p>
 						<p class="mt-2 text-2xl font-semibold text-white">
@@ -578,7 +591,7 @@
 					>
 				</div>
 
-				<div class="grid gap-3 sm:grid-cols-4">
+				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
 						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Blocked</p>
 						<p class="mt-2 text-2xl font-semibold text-white">{blockedTasks.length}</p>
@@ -613,6 +626,19 @@
 												{formatTaskStatusLabel(task.status)}
 											</span>
 											<span
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+													task.priority === 'urgent'
+														? 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
+														: task.priority === 'high'
+															? 'border border-amber-900/70 bg-amber-950/40 text-amber-200'
+															: task.priority === 'low'
+																? 'border border-slate-700 bg-slate-900/80 text-slate-300'
+																: 'border border-sky-900/70 bg-sky-950/40 text-sky-200'
+												}`}
+											>
+												{formatPriorityLabel(task.priority)}
+											</span>
+											<span
 												class={[
 													'inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase',
 													task.riskLevel === 'high'
@@ -622,8 +648,15 @@
 															: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
 												]}
 											>
-												{task.riskLevel} risk
+												{formatTaskRiskLevelLabel(task.riskLevel)} risk
 											</span>
+											{#if !task.requiresReview}
+												<span
+													class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+												>
+													review optional
+												</span>
+											{/if}
 											{#if task.openReview}
 												<span
 													class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
@@ -656,6 +689,7 @@
 										<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{task.summary}</p>
 										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
 											{task.projectName !== 'No project' ? task.projectName : task.goalName} · {task.assigneeName}
+											· {task.desiredRoleName}
 											· approval {formatTaskApprovalModeLabel(task.approvalMode)}
 										</p>
 										{#if task.blockedReason}
@@ -702,7 +736,7 @@
 					>
 				</div>
 
-				<div class="grid gap-3 sm:grid-cols-3">
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					<div class="rounded-xl border border-violet-900/50 bg-violet-950/30 p-4">
 						<p class="text-xs tracking-[0.16em] text-violet-300 uppercase">Open</p>
 						<p class="mt-2 text-2xl font-semibold text-white">

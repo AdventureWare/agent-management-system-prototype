@@ -14,7 +14,12 @@
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import {
+		PRIORITY_OPTIONS,
+		TASK_APPROVAL_MODE_OPTIONS,
+		TASK_RISK_LEVEL_OPTIONS,
+		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
@@ -29,6 +34,7 @@
 	let selectedStaleFilters = $state.raw<TaskStaleSignalKey[]>([]);
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
 	let createTaskDraftReady = $state(false);
+	let createTaskAdvancedOpen = $state(false);
 	let pendingCreateAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
@@ -49,7 +55,6 @@
 		{ key: 'activeThreadNoRecentOutput', label: 'Active thread, no recent output' }
 	] as const;
 
-	let ideationSuccess = $derived(form?.ok && form?.successAction === 'runTaskIdeationAssistant');
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createTask');
 	let createAndRunSuccess = $derived(form?.ok && form?.successAction === 'createTaskAndRun');
 	let createdAttachmentCount = $derived(
@@ -57,12 +62,6 @@
 			? Number(form.attachmentCount ?? 0)
 			: 0
 	);
-	let ideationDraftCreateCount = $derived(
-		form?.ok && form?.successAction === 'createDraftTasksFromIdeation'
-			? Number(form.createdCount ?? 0)
-			: 0
-	);
-	let ideationDraftCreateSuccess = $derived(ideationDraftCreateCount > 0);
 	let deleteCount = $derived.by(() => {
 		if (form?.ok && form?.successAction === 'deleteTasks') {
 			return Number(form.deletedCount ?? 0);
@@ -186,17 +185,6 @@
 		mergeCreateAttachmentFiles(pastedFiles);
 	}
 
-	function confidenceClass(confidence: 'high' | 'medium' | 'low') {
-		switch (confidence) {
-			case 'high':
-				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
-			case 'medium':
-				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
-			default:
-				return 'border-slate-700 bg-slate-950/70 text-slate-300';
-		}
-	}
-
 	function matchesTask(task: (typeof data.tasks)[number], term: string) {
 		const normalizedTerm = term.trim().toLowerCase();
 
@@ -209,10 +197,13 @@
 			task.summary,
 			task.projectName,
 			task.assigneeName,
+			task.desiredRoleName,
 			task.status,
 			task.targetDate ?? '',
 			formatDateLabel(task.targetDate),
 			task.artifactPath,
+			task.blockedReason,
+			...task.dependencyTaskNames,
 			...(task.requiredCapabilityNames ?? []),
 			...(task.requiredToolNames ?? []),
 			...task.attachments.map((attachment) => `${attachment.name} ${attachment.path}`),
@@ -377,6 +368,12 @@
 					approvalMode: form.approvalMode?.toString() ?? 'none',
 					requiresReview: form.requiresReview?.toString() !== 'false',
 					desiredRoleId: form.desiredRoleId?.toString() ?? '',
+					blockedReason: form.blockedReason?.toString() ?? '',
+					dependencyTaskIds:
+						Array.isArray(form.dependencyTaskIds) &&
+						form.dependencyTaskIds.every((value) => typeof value === 'string')
+							? form.dependencyTaskIds
+							: [],
 					requiredCapabilityNames:
 						Array.isArray(form.requiredCapabilityNames) &&
 						form.requiredCapabilityNames.every((value) => typeof value === 'string')
@@ -402,6 +399,8 @@
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: '',
+					blockedReason: '',
+					dependencyTaskIds: [],
 					requiredCapabilityNames: '',
 					requiredToolNames: '',
 					submitMode: 'create'
@@ -419,11 +418,136 @@
 	let createTaskApprovalMode = $state('none');
 	let createTaskRequiresReview = $state(true);
 	let createTaskDesiredRoleId = $state('');
+	let createTaskBlockedReason = $state('');
+	let createTaskDependencyTaskIds = $state.raw<string[]>([]);
 	let createTaskRequiredCapabilityNames = $state('');
 	let createTaskRequiredToolNames = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
 	);
+	let createTaskDependencyCount = $derived(createTaskDependencyTaskIds.length);
+	let createTaskDesiredRoleName = $derived(
+		data.roles.find((role) => role.id === createTaskDesiredRoleId)?.name ?? createTaskDesiredRoleId
+	);
+	let createTaskAdvancedSummary = $derived.by(() => {
+		const parts: string[] = [];
+
+		if (createTaskPriority !== 'medium') {
+			parts.push(`${formatPriorityLabel(createTaskPriority)} priority`);
+		}
+
+		if (createTaskRiskLevel !== 'medium') {
+			parts.push(`${formatTaskRiskLevelLabel(createTaskRiskLevel)} risk`);
+		}
+
+		if (createTaskApprovalMode !== 'none') {
+			parts.push(formatTaskApprovalModeLabel(createTaskApprovalMode));
+		}
+
+		if (!createTaskRequiresReview) {
+			parts.push('Review optional');
+		}
+
+		if (createTaskDesiredRoleId) {
+			parts.push(`Role ${createTaskDesiredRoleName}`);
+		}
+
+		if (createTaskBlockedReason) {
+			parts.push('Blocker recorded');
+		}
+
+		if (createTaskDependencyCount > 0) {
+			parts.push(
+				createTaskDependencyCount === 1
+					? '1 dependency selected'
+					: `${createTaskDependencyCount} dependencies selected`
+			);
+		}
+
+		return parts.length > 0
+			? parts.join(' · ')
+			: 'Defaults stay lightweight: medium priority, medium risk, no approval, review required.';
+	});
+
+	function shouldOpenCreateTaskAdvancedIntake(input: {
+		priority?: string;
+		riskLevel?: string;
+		approvalMode?: string;
+		requiresReview?: boolean;
+		desiredRoleId?: string;
+		blockedReason?: string;
+		dependencyTaskIds?: string[];
+	}) {
+		return (
+			(input.priority ?? 'medium') !== 'medium' ||
+			(input.riskLevel ?? 'medium') !== 'medium' ||
+			(input.approvalMode ?? 'none') !== 'none' ||
+			(input.requiresReview ?? true) !== true ||
+			Boolean(input.desiredRoleId) ||
+			Boolean(input.blockedReason?.trim()) ||
+			(input.dependencyTaskIds?.length ?? 0) > 0
+		);
+	}
+
+	function syncCreateTaskAdvancedOpen(
+		input: Parameters<typeof shouldOpenCreateTaskAdvancedIntake>[0]
+	) {
+		createTaskAdvancedOpen = shouldOpenCreateTaskAdvancedIntake(input);
+	}
+
+	function toggleCreateTaskDependency(taskId: string, checked: boolean) {
+		createTaskDependencyTaskIds = checked
+			? [...new Set([...createTaskDependencyTaskIds, taskId])]
+			: createTaskDependencyTaskIds.filter((candidateId) => candidateId !== taskId);
+	}
+
+	function hasCreateTaskDraftContent(
+		draft:
+			| {
+					projectId?: string;
+					name?: string;
+					instructions?: string;
+					assigneeWorkerId?: string;
+					targetDate?: string;
+					goalId?: string;
+					area?: string;
+					priority?: string;
+					riskLevel?: string;
+					approvalMode?: string;
+					requiresReview?: boolean;
+					desiredRoleId?: string;
+					blockedReason?: string;
+					dependencyTaskIds?: string[];
+					requiredCapabilityNames?: string;
+					requiredToolNames?: string;
+			  }
+			| null
+			| undefined
+	) {
+		if (!draft) {
+			return false;
+		}
+
+		return (
+			Boolean(draft.projectId?.trim()) ||
+			Boolean(draft.name?.trim()) ||
+			Boolean(draft.instructions?.trim()) ||
+			Boolean(draft.assigneeWorkerId?.trim()) ||
+			Boolean(draft.targetDate?.trim()) ||
+			Boolean(draft.goalId?.trim()) ||
+			Boolean(draft.requiredCapabilityNames?.trim()) ||
+			Boolean(draft.requiredToolNames?.trim()) ||
+			shouldOpenCreateTaskAdvancedIntake({
+				priority: draft.priority,
+				riskLevel: draft.riskLevel,
+				approvalMode: draft.approvalMode,
+				requiresReview: draft.requiresReview,
+				desiredRoleId: draft.desiredRoleId,
+				blockedReason: draft.blockedReason,
+				dependencyTaskIds: draft.dependencyTaskIds
+			})
+		);
+	}
 
 	function applyCreateTaskPrefill(
 		prefill: NonNullable<typeof data.createTaskPrefill> | null | undefined
@@ -440,8 +564,19 @@
 		createTaskApprovalMode = prefill?.approvalMode ?? 'none';
 		createTaskRequiresReview = prefill?.requiresReview ?? true;
 		createTaskDesiredRoleId = prefill?.desiredRoleId ?? '';
+		createTaskBlockedReason = prefill?.blockedReason ?? '';
+		createTaskDependencyTaskIds = prefill?.dependencyTaskIds ?? [];
 		createTaskRequiredCapabilityNames = prefill?.requiredCapabilityNames ?? '';
 		createTaskRequiredToolNames = prefill?.requiredToolNames ?? '';
+		syncCreateTaskAdvancedOpen({
+			priority: createTaskPriority,
+			riskLevel: createTaskRiskLevel,
+			approvalMode: createTaskApprovalMode,
+			requiresReview: createTaskRequiresReview,
+			desiredRoleId: createTaskDesiredRoleId,
+			blockedReason: createTaskBlockedReason,
+			dependencyTaskIds: createTaskDependencyTaskIds
+		});
 	}
 
 	function resetCreateTaskMetadata() {
@@ -452,6 +587,9 @@
 		createTaskApprovalMode = 'none';
 		createTaskRequiresReview = true;
 		createTaskDesiredRoleId = '';
+		createTaskBlockedReason = '';
+		createTaskDependencyTaskIds = [];
+		createTaskAdvancedOpen = false;
 	}
 
 	$effect(() => {
@@ -468,8 +606,11 @@
 			createTaskApprovalMode = createTaskFormValues.approvalMode;
 			createTaskRequiresReview = createTaskFormValues.requiresReview;
 			createTaskDesiredRoleId = createTaskFormValues.desiredRoleId;
+			createTaskBlockedReason = createTaskFormValues.blockedReason;
+			createTaskDependencyTaskIds = createTaskFormValues.dependencyTaskIds;
 			createTaskRequiredCapabilityNames = createTaskFormValues.requiredCapabilityNames;
 			createTaskRequiredToolNames = createTaskFormValues.requiredToolNames;
+			syncCreateTaskAdvancedOpen(createTaskFormValues);
 			return;
 		}
 
@@ -503,20 +644,48 @@
 			instructions: string;
 			assigneeWorkerId: string;
 			targetDate: string;
+			goalId: string;
+			area: string;
+			priority: string;
+			riskLevel: string;
+			approvalMode: string;
+			requiresReview: boolean;
+			desiredRoleId: string;
+			blockedReason: string;
+			dependencyTaskIds: string[];
 			requiredCapabilityNames: string;
 			requiredToolNames: string;
 		}>(CREATE_TASK_DRAFT_KEY);
 
-		if (savedDraft) {
-			resetCreateTaskMetadata();
+		if (savedDraft && hasCreateTaskDraftContent(savedDraft)) {
 			createTaskProjectId = savedDraft.projectId ?? '';
 			createTaskName = savedDraft.name ?? '';
 			createTaskInstructions = savedDraft.instructions ?? '';
 			createTaskAssigneeWorkerId = savedDraft.assigneeWorkerId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
+			createTaskGoalId = savedDraft.goalId ?? '';
+			createTaskArea = savedDraft.area ?? 'product';
+			createTaskPriority = savedDraft.priority ?? 'medium';
+			createTaskRiskLevel = savedDraft.riskLevel ?? 'medium';
+			createTaskApprovalMode = savedDraft.approvalMode ?? 'none';
+			createTaskRequiresReview = savedDraft.requiresReview ?? true;
+			createTaskDesiredRoleId = savedDraft.desiredRoleId ?? '';
+			createTaskBlockedReason = savedDraft.blockedReason ?? '';
+			createTaskDependencyTaskIds = savedDraft.dependencyTaskIds ?? [];
 			createTaskRequiredCapabilityNames = savedDraft.requiredCapabilityNames ?? '';
 			createTaskRequiredToolNames = savedDraft.requiredToolNames ?? '';
+			syncCreateTaskAdvancedOpen({
+				priority: createTaskPriority,
+				riskLevel: createTaskRiskLevel,
+				approvalMode: createTaskApprovalMode,
+				requiresReview: createTaskRequiresReview,
+				desiredRoleId: createTaskDesiredRoleId,
+				blockedReason: createTaskBlockedReason,
+				dependencyTaskIds: createTaskDependencyTaskIds
+			});
 			isCreateModalOpen = true;
+		} else if (savedDraft) {
+			clearFormDraft(CREATE_TASK_DRAFT_KEY);
 		}
 
 		createTaskDraftReady = true;
@@ -535,6 +704,15 @@
 			instructions: createTaskInstructions,
 			assigneeWorkerId: createTaskAssigneeWorkerId,
 			targetDate: createTaskTargetDate,
+			goalId: createTaskGoalId,
+			area: createTaskArea === 'product' ? '' : createTaskArea,
+			priority: createTaskPriority === 'medium' ? '' : createTaskPriority,
+			riskLevel: createTaskRiskLevel === 'medium' ? '' : createTaskRiskLevel,
+			approvalMode: createTaskApprovalMode === 'none' ? '' : createTaskApprovalMode,
+			requiresReview: createTaskRequiresReview ? undefined : false,
+			desiredRoleId: createTaskDesiredRoleId,
+			blockedReason: createTaskBlockedReason,
+			dependencyTaskIds: createTaskDependencyTaskIds,
 			requiredCapabilityNames: createTaskRequiredCapabilityNames,
 			requiredToolNames: createTaskRequiredToolNames
 		});
@@ -554,7 +732,201 @@
 		empty={rows.length === 0}
 		{emptyMessage}
 	>
-		<table class="w-full min-w-[980px] divide-y divide-slate-800 text-left">
+		<div class="space-y-3 lg:hidden">
+			<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+				<p class="text-xs font-medium tracking-[0.14em] text-slate-400 uppercase">
+					Select shown tasks
+				</p>
+				<label class="flex items-center justify-center">
+					<span class="sr-only">Select all shown tasks</span>
+					<input
+						checked={areAllRowsSelected(rows)}
+						class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+						type="checkbox"
+						onchange={(event) => {
+							setSelectionForRows(rows, event.currentTarget.checked);
+						}}
+					/>
+				</label>
+			</div>
+
+			{#each rows as task (task.id)}
+				<article
+					class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+					data-testid={`task-mobile-card-${task.id}`}
+				>
+					<div class="flex items-start gap-3">
+						<label class="mt-1 flex items-center justify-center">
+							<span class="sr-only">Select {task.title}</span>
+							<input
+								checked={isTaskSelected(task.id)}
+								class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+								type="checkbox"
+								onchange={(event) => {
+									toggleTaskSelection(task.id, event.currentTarget.checked);
+								}}
+							/>
+						</label>
+						<div class="min-w-0 flex-1">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="ui-wrap-anywhere text-base font-semibold text-white">{task.title}</p>
+									<p class="ui-clamp-3 mt-2 text-sm text-slate-400">
+										{compactText(task.summary, 180)}
+									</p>
+								</div>
+								<span
+									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
+								>
+									{formatTaskStatusLabel(task.status)}
+								</span>
+							</div>
+
+							<div class="mt-3 flex flex-wrap gap-2">
+								<span
+									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+										task.priority === 'urgent'
+											? 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
+											: task.priority === 'high'
+												? 'border border-amber-900/70 bg-amber-950/40 text-amber-200'
+												: task.priority === 'low'
+													? 'border border-slate-700 bg-slate-900/80 text-slate-300'
+													: 'border border-sky-900/70 bg-sky-950/40 text-sky-200'
+									}`}
+								>
+									{formatPriorityLabel(task.priority)}
+								</span>
+								<span
+									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+										task.riskLevel === 'high'
+											? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
+											: task.riskLevel === 'medium'
+												? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
+												: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
+									}`}
+								>
+									{formatTaskRiskLevelLabel(task.riskLevel)} risk
+								</span>
+								{#if task.approvalMode !== 'none'}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+									>
+										{formatTaskApprovalModeLabel(task.approvalMode)}
+									</span>
+								{/if}
+								{#if !task.requiresReview}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+									>
+										Review optional
+									</span>
+								{/if}
+								{#if task.desiredRoleId}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+									>
+										Role {task.desiredRoleName}
+									</span>
+								{/if}
+								{#if task.openReview}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+									>
+										Review open
+									</span>
+								{/if}
+								{#if task.pendingApproval}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+									>
+										Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
+									</span>
+								{/if}
+								{#each task.freshness.staleSignals as signal (signal)}
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
+									>
+										{staleBadgeLabel(task, signal)}
+									</span>
+								{/each}
+							</div>
+
+							{#if task.statusThread}
+								<div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-3">
+									<ThreadActivityIndicator compact thread={task.statusThread} />
+								</div>
+							{/if}
+
+							<div class="mt-3 grid gap-3 sm:grid-cols-2">
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Project</p>
+									<p class="ui-wrap-anywhere mt-2 text-sm text-white">{task.projectName}</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Assignee</p>
+									<p class="ui-wrap-anywhere mt-2 text-sm text-white">{task.assigneeName}</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Runs</p>
+									<p class="mt-2 text-sm text-white">{task.runCount}</p>
+									{#if task.statusThread}
+										<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+											{task.statusThread.name}
+										</p>
+									{/if}
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Updated</p>
+									<p class="mt-2 text-sm text-white">{task.updatedAtLabel}</p>
+									<p class="mt-1 text-xs text-slate-500">
+										{new Date(task.updatedAt).toLocaleString()}
+									</p>
+								</div>
+							</div>
+
+							{#if task.hasUnmetDependencies}
+								<p class="mt-3 text-xs text-rose-300">Blocked by unmet dependencies</p>
+							{/if}
+							{#if task.blockedReason}
+								<p class="ui-clamp-2 mt-2 text-xs text-rose-200">{task.blockedReason}</p>
+							{/if}
+							{#if task.dependencyTaskNames.length > 0}
+								<p class="ui-clamp-2 mt-2 text-xs text-slate-500">
+									Depends on: {task.dependencyTaskNames.join(', ')}
+								</p>
+							{/if}
+							{#if task.targetDate}
+								<p class="mt-2 text-xs text-slate-500">Target {formatDateLabel(task.targetDate)}</p>
+							{/if}
+
+							<div class="mt-4 flex flex-col gap-2 sm:flex-row">
+								<AppButton
+									class="w-full sm:w-auto"
+									href={resolve(`/app/tasks/${task.id}`)}
+									size="sm"
+									variant="accent"
+								>
+									Open task
+								</AppButton>
+								{#if task.linkThread}
+									<AppButton
+										class="w-full sm:w-auto"
+										href={resolve(`/app/threads/${task.linkThread.id}`)}
+										size="sm"
+										variant="accent"
+										reserveLabel="Open assigned thread"
+									>
+										{threadActionLabel(task)}
+									</AppButton>
+								{/if}
+							</div>
+						</div>
+					</div>
+				</article>
+			{/each}
+		</div>
+
+		<table class="hidden w-full min-w-[980px] divide-y divide-slate-800 text-left lg:table">
 			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
 				<tr>
 					<th class="px-3 py-3 font-medium">
@@ -602,6 +974,51 @@
 									{compactText(task.summary)}
 								</p>
 								<div class="mt-2 flex flex-wrap gap-2">
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+											task.priority === 'urgent'
+												? 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
+												: task.priority === 'high'
+													? 'border border-amber-900/70 bg-amber-950/40 text-amber-200'
+													: task.priority === 'low'
+														? 'border border-slate-700 bg-slate-900/80 text-slate-300'
+														: 'border border-sky-900/70 bg-sky-950/40 text-sky-200'
+										}`}
+									>
+										{formatPriorityLabel(task.priority)}
+									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+											task.riskLevel === 'high'
+												? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
+												: task.riskLevel === 'medium'
+													? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
+													: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
+										}`}
+									>
+										{formatTaskRiskLevelLabel(task.riskLevel)} risk
+									</span>
+									{#if task.approvalMode !== 'none'}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+										>
+											{formatTaskApprovalModeLabel(task.approvalMode)}
+										</span>
+									{/if}
+									{#if !task.requiresReview}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+										>
+											Review optional
+										</span>
+									{/if}
+									{#if task.desiredRoleId}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+										>
+											Role {task.desiredRoleName}
+										</span>
+									{/if}
 									{#if task.openReview}
 										<span
 											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
@@ -627,6 +1044,14 @@
 								{#if task.hasUnmetDependencies}
 									<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
 								{/if}
+								{#if task.blockedReason}
+									<p class="ui-clamp-2 mt-2 text-xs text-rose-200">{task.blockedReason}</p>
+								{/if}
+								{#if task.dependencyTaskNames.length > 0}
+									<p class="ui-clamp-2 mt-2 text-xs text-slate-500">
+										Depends on: {task.dependencyTaskNames.join(', ')}
+									</p>
+								{/if}
 								{#if task.targetDate}
 									<p class="mt-2 text-xs text-slate-500">
 										Target {formatDateLabel(task.targetDate)}
@@ -638,14 +1063,16 @@
 							<p class="ui-clamp-3 max-w-40">{task.projectName}</p>
 						</td>
 						<td class="px-3 py-3 align-top">
-							<div class="min-w-52 space-y-3">
+							<div class="min-w-52 space-y-2.5">
 								<span
 									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
 								>
 									{formatTaskStatusLabel(task.status)}
 								</span>
 								{#if task.statusThread}
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+									<div
+										class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2"
+									>
 										<ThreadActivityIndicator compact thread={task.statusThread} />
 									</div>
 								{/if}
@@ -693,14 +1120,15 @@
 {/snippet}
 
 <AppPage width="full" class="min-w-0">
-	<div class="flex flex-col gap-6 px-6 sm:px-8 xl:px-12 2xl:px-16">
+	<div class="flex flex-col gap-6 px-1 sm:px-2 xl:px-4 2xl:px-8">
 		<PageHeader
 			eyebrow="Tasks"
 			title="Browse the queue, then open one task"
-			description="Tasks should read like an operating queue. Scan by status, search for a specific brief, and use the detail page for editing, launching threads, and deeper execution context."
+			description="Scan by status, search for a brief, and use the detail page for editing, launches, and deeper execution context."
 		>
 			{#snippet actions()}
 				<AppButton
+					class="w-full sm:w-auto"
 					type="button"
 					variant="primary"
 					onclick={() => {
@@ -752,28 +1180,6 @@
 						: ` ${createdAttachmentCount} attachments saved with it.`}
 				{/if}
 			</p>
-		{:else if ideationSuccess}
-			<p
-				aria-live="polite"
-				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-			>
-				Task ideation queued for {form?.projectName?.toString() || 'the selected project'}.
-				{#if form?.threadId}
-					<a class="underline" href={resolve(`/app/threads/${form.threadId.toString()}`)}>
-						Open thread details
-					</a>
-					to review the suggested tasks.
-				{/if}
-			</p>
-		{:else if ideationDraftCreateSuccess}
-			<p
-				aria-live="polite"
-				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
-			>
-				{ideationDraftCreateCount === 1
-					? `1 draft task created for ${form?.projectName?.toString() || 'the selected project'}.`
-					: `${ideationDraftCreateCount} draft tasks created for ${form?.projectName?.toString() || 'the selected project'}.`}
-			</p>
 		{:else if deleteSuccess}
 			<p
 				aria-live="polite"
@@ -785,7 +1191,7 @@
 			</p>
 		{/if}
 
-		<div class="grid gap-3 md:grid-cols-3">
+		<div class="grid grid-cols-2 gap-3 xl:grid-cols-3">
 			<MetricCard
 				label="Active queue"
 				value={activeTasks.length}
@@ -823,7 +1229,7 @@
 					description="Search by task title, summary, project, assignee, or artifact path."
 				>
 					{#snippet controls()}
-						<div class="w-full xl:w-80">
+						<div class="w-full lg:max-w-sm">
 							<label class="sr-only" for="task-search">Search tasks</label>
 							<input
 								id="task-search"
@@ -872,7 +1278,7 @@
 							{/each}
 						</div>
 
-						<div class="flex flex-col gap-2 xl:items-end">
+						<div class="flex flex-col gap-2 lg:items-start xl:items-end">
 							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Stale work filters</p>
 							<div class="flex flex-wrap gap-2">
 								{#each STALE_FILTERS as filter (filter.key)}
@@ -975,238 +1381,6 @@
 							: 'No active tasks match the current filters.'
 					)}
 				</div>
-
-				<details class="group card border border-slate-800 bg-slate-950/60 p-6">
-					<summary
-						class="flex cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-					>
-						<div class="space-y-2">
-							<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-								Task ideation
-							</p>
-							<h2 class="text-xl font-semibold text-white">Ideation assistant and saved reviews</h2>
-							<p class="max-w-3xl text-sm text-slate-400">
-								Keep this collapsed until you need more draft work. Run the assistant or review
-								saved suggestions without taking space away from the queue.
-							</p>
-						</div>
-						<div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-							<span class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1">
-								{data.ideationReviews.length} saved review{data.ideationReviews.length === 1
-									? ''
-									: 's'}
-							</span>
-							<span
-								class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 font-medium tracking-[0.14em] uppercase transition group-open:border-sky-400/40 group-open:text-sky-200"
-							>
-								Expand
-							</span>
-						</div>
-					</summary>
-
-					<div class="mt-6 space-y-6 border-t border-slate-800 pt-6">
-						<form
-							class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-6"
-							method="POST"
-							action="?/runTaskIdeationAssistant"
-						>
-							<div class="space-y-2">
-								<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-									Run assistant
-								</p>
-								<h3 class="text-lg font-semibold text-white">Need more tasks to queue?</h3>
-								<p class="text-sm text-slate-400">
-									Run a reusable assistant thread that inspects a project, reviews its task history,
-									and proposes additional task ideas before you create them manually.
-								</p>
-							</div>
-
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
-								<select class="select text-white" name="projectId" required>
-									<option value="" disabled selected>Select a project</option>
-									{#each data.projects as project (project.id)}
-										<option value={project.id}>{project.name}</option>
-									{/each}
-								</select>
-							</label>
-
-							<p
-								class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300"
-							>
-								The assistant uses the selected project’s configured workspace plus its existing
-								tasks, runs, goals, and related project context. If a resumable ideation thread
-								already exists, this reuses it instead of starting from scratch.
-							</p>
-
-							<button
-								class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
-								type="submit"
-							>
-								Run task ideation assistant
-							</button>
-						</form>
-
-						<section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
-							<div class="space-y-2">
-								<p class="text-xs font-semibold tracking-[0.24em] text-sky-300 uppercase">
-									Saved reviews
-								</p>
-								<h3 class="text-lg font-semibold text-white">Create drafts from ideation output</h3>
-								<p class="text-sm text-slate-400">
-									Review each project’s latest ideation reply here, then create only the suggestions
-									you want as draft tasks.
-								</p>
-							</div>
-
-							{#if data.ideationReviews.length === 0}
-								<p
-									class="mt-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-5 text-sm text-slate-400"
-								>
-									Run the ideation assistant first. Its latest saved reply will appear here for
-									review.
-								</p>
-							{:else}
-								<div class="mt-4 space-y-4">
-									{#each data.ideationReviews as review (review.threadId)}
-										<form
-											class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
-											method="POST"
-											action="?/createDraftTasksFromIdeation"
-										>
-											<input name="threadId" type="hidden" value={review.threadId} />
-
-											<div class="flex flex-col gap-3">
-												<div
-													class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-												>
-													<div>
-														<h4 class="text-base font-semibold text-white">{review.projectName}</h4>
-														<p class="mt-1 text-sm text-slate-400">{review.threadSummary}</p>
-													</div>
-													<a
-														class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-														href={resolve(`/app/threads/${review.threadId}`)}
-													>
-														Open thread
-													</a>
-												</div>
-
-												<div class="flex flex-wrap gap-2 text-xs text-slate-300">
-													<span
-														class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
-													>
-														{review.suggestionCount} suggestion{review.suggestionCount === 1
-															? ''
-															: 's'}
-													</span>
-													<span
-														class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
-													>
-														Last activity {review.lastActivityLabel}
-													</span>
-													<span
-														class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1"
-													>
-														Default role {review.defaultDraftRoleName}
-													</span>
-												</div>
-
-												<p
-													class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-300"
-												>
-													Selected suggestions become <span class="font-medium text-white"
-														>In Draft</span
-													>
-													tasks in <span class="font-medium text-white">{review.projectName}</span>
-													with default routing to
-													<span class="font-medium text-white"> {review.defaultDraftRoleName}</span>
-													{#if review.defaultArtifactPath}
-														and artifact path
-														<span class="ui-wrap-anywhere font-medium text-white">
-															{review.defaultArtifactPath}
-														</span>.
-													{:else}
-														.
-													{/if}
-												</p>
-											</div>
-
-											{#if review.suggestionCount === 0}
-												<p
-													class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-4 text-sm text-slate-400"
-												>
-													{review.hasActiveRun
-														? 'The ideation run is still active. Wait for a saved assistant reply, then refresh or reopen this page.'
-														: 'The latest saved reply did not match the expected suggestion format. Open the thread to review the raw output.'}
-												</p>
-											{:else}
-												<div class="space-y-3">
-													{#each review.suggestions as suggestion (suggestion.index)}
-														<label
-															class="block rounded-2xl border border-slate-800 bg-slate-950/40 p-4 transition hover:border-slate-700"
-														>
-															<div class="flex items-start gap-3">
-																<input
-																	class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-																	name="suggestionIndex"
-																	type="checkbox"
-																	value={suggestion.index}
-																/>
-																<div class="min-w-0 flex-1">
-																	<div class="flex flex-wrap items-center gap-2">
-																		<p class="font-medium text-white">{suggestion.title}</p>
-																		<span
-																			class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${confidenceClass(suggestion.confidence)}`}
-																		>
-																			{suggestion.confidence} confidence
-																		</span>
-																	</div>
-																	<p class="mt-2 text-sm text-slate-300">
-																		{suggestion.whyItMatters}
-																	</p>
-																	<div class="mt-3 space-y-2 text-sm">
-																		<div>
-																			<p
-																				class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
-																			>
-																				Draft summary
-																			</p>
-																			<p class="mt-1 whitespace-pre-wrap text-slate-300">
-																				{suggestion.suggestedInstructions}
-																			</p>
-																		</div>
-																		<div>
-																			<p
-																				class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
-																			>
-																				Signals
-																			</p>
-																			<p class="mt-1 whitespace-pre-wrap text-slate-400">
-																				{suggestion.signals}
-																			</p>
-																		</div>
-																	</div>
-																</div>
-															</div>
-														</label>
-													{/each}
-												</div>
-
-												<button
-													class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-200"
-													type="submit"
-												>
-													Create selected draft tasks
-												</button>
-											{/if}
-										</form>
-									{/each}
-								</div>
-							{/if}
-						</section>
-					</div>
-				</details>
 			</div>
 		{/if}
 
@@ -1226,16 +1400,6 @@
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
-					<input type="hidden" name="area" value={createTaskArea} />
-					<input type="hidden" name="priority" value={createTaskPriority} />
-					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
-					<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />
-					<input
-						type="hidden"
-						name="requiresReview"
-						value={createTaskRequiresReview ? 'true' : 'false'}
-					/>
-					<input type="hidden" name="desiredRoleId" value={createTaskDesiredRoleId} />
 					<div class="min-w-0 space-y-4">
 						<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 							<label class="block">
@@ -1336,6 +1500,200 @@
 									{/each}
 								</select>
 							</label>
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="max-w-2xl">
+									<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+										Advanced intake
+									</p>
+									<p class="mt-2 text-sm text-white">
+										Set routing, approvals, blockers, and dependencies when this task needs more
+										than the default quick-create path.
+									</p>
+									<p class="mt-2 text-sm text-slate-400">{createTaskAdvancedSummary}</p>
+								</div>
+								<button
+									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+									type="button"
+									onclick={() => {
+										createTaskAdvancedOpen = !createTaskAdvancedOpen;
+									}}
+								>
+									{createTaskAdvancedOpen ? 'Hide advanced' : 'Show advanced'}
+								</button>
+							</div>
+
+							{#if createTaskAdvancedOpen}
+								<div class="mt-5 space-y-4">
+									<input type="hidden" name="area" value={createTaskArea} />
+
+									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
+											<select
+												bind:value={createTaskPriority}
+												class="select text-white"
+												name="priority"
+											>
+												{#each PRIORITY_OPTIONS as priority (priority)}
+													<option value={priority}>{formatPriorityLabel(priority)}</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span>
+											<select
+												bind:value={createTaskRiskLevel}
+												class="select text-white"
+												name="riskLevel"
+											>
+												{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
+													<option value={riskLevel}>
+														{formatTaskRiskLevelLabel(riskLevel)}
+													</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200"
+												>Approval mode</span
+											>
+											<select
+												bind:value={createTaskApprovalMode}
+												class="select text-white"
+												name="approvalMode"
+											>
+												{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
+													<option value={approvalMode}>
+														{formatTaskApprovalModeLabel(approvalMode)}
+													</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200"
+												>Requires review</span
+											>
+											<select
+												bind:value={createTaskRequiresReview}
+												class="select text-white"
+												name="requiresReview"
+											>
+												<option value={true}>Yes</option>
+												<option value={false}>No</option>
+											</select>
+										</label>
+									</div>
+
+									<div class="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span
+											>
+											<select
+												bind:value={createTaskDesiredRoleId}
+												class="select text-white"
+												name="desiredRoleId"
+											>
+												<option value="">No role preference</option>
+												{#if createTaskDesiredRoleId && !data.roles.some((role) => role.id === createTaskDesiredRoleId)}
+													<option value={createTaskDesiredRoleId}>
+														{createTaskDesiredRoleName} (missing role)
+													</option>
+												{/if}
+												{#each data.roles as role (role.id)}
+													<option value={role.id}>{role.name}</option>
+												{/each}
+											</select>
+											<span class="mt-2 block text-xs text-slate-500">
+												Use this when the task should route toward a role before a worker is
+												assigned.
+											</span>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200"
+												>Blocker notes</span
+											>
+											<textarea
+												bind:value={createTaskBlockedReason}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="blockedReason"
+												placeholder="Document the blocker, missing approval, or dependency holding this task."
+											></textarea>
+											<span class="mt-2 block text-xs text-slate-500">
+												Record the current blocker explicitly instead of relying on status alone.
+											</span>
+										</label>
+									</div>
+
+									<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+										<div class="flex flex-wrap items-center justify-between gap-3">
+											<div>
+												<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+													Dependencies
+												</p>
+												<p class="mt-2 text-sm text-slate-400">
+													Select tasks that must be cleared before this one should move.
+												</p>
+											</div>
+											<span
+												class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+											>
+												{createTaskDependencyCount} selected
+											</span>
+										</div>
+
+										{#if data.availableDependencyTasks.length === 0}
+											<p class="mt-4 text-sm text-slate-500">
+												No other tasks are available to use as dependencies yet.
+											</p>
+										{:else}
+											<div class="mt-4 grid gap-3 xl:grid-cols-2">
+												{#each data.availableDependencyTasks as dependency (dependency.id)}
+													<label
+														class={`rounded-2xl border p-3 transition ${
+															createTaskDependencyTaskIds.includes(dependency.id)
+																? 'border-sky-800/70 bg-sky-950/20'
+																: 'border-slate-800 bg-slate-900/60'
+														}`}
+													>
+														<div class="flex items-start gap-3">
+															<input
+																checked={createTaskDependencyTaskIds.includes(dependency.id)}
+																class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+																name="dependencyTaskIds"
+																type="checkbox"
+																value={dependency.id}
+																onchange={(event) => {
+																	toggleCreateTaskDependency(
+																		dependency.id,
+																		event.currentTarget.checked
+																	);
+																}}
+															/>
+															<div class="min-w-0">
+																<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																	{dependency.title}
+																</p>
+																<p class="mt-1 text-xs text-slate-400">
+																	{dependency.projectName} · {formatTaskStatusLabel(
+																		dependency.status
+																	)}
+																</p>
+															</div>
+														</div>
+													</label>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								</div>
+							{/if}
 						</div>
 
 						<div class="grid gap-4 md:grid-cols-2">

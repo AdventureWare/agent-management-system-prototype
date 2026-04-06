@@ -34,6 +34,13 @@
 		(form && 'values' in form ? form.values : undefined) as GoalFormValues | undefined
 	);
 	let selectedGoalPanel = $state<'structure' | 'projects' | 'tasks'>('structure');
+	let deleteDescription = $derived.by(() => {
+		const childDestination = data.goal.parentGoalName || 'the top level';
+		const relatedTaskCount = data.relatedTasks.length;
+		const childGoalCount = data.childGoals.length;
+
+		return `This removes the goal from the control plane, clears it from ${relatedTaskCount} linked task${relatedTaskCount === 1 ? '' : 's'}, and moves ${childGoalCount} subgoal${childGoalCount === 1 ? '' : 's'} under ${childDestination}.`;
+	});
 
 	function formatDateLabel(value: string | null | undefined) {
 		if (!value) {
@@ -160,6 +167,22 @@
 					browser={data.artifactBrowser}
 					emptyLabel="This goal workspace is empty right now."
 				/>
+			</DetailSection>
+
+			<DetailSection
+				eyebrow="Danger zone"
+				title="Delete goal"
+				description={deleteDescription}
+				tone="rose"
+			>
+				<form class="mt-5" method="POST" action="?/deleteGoal">
+					<button
+						class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+						type="submit"
+					>
+						Delete goal
+					</button>
+				</form>
 			</DetailSection>
 		</section>
 

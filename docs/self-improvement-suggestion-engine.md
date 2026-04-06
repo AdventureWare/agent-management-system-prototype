@@ -28,8 +28,6 @@ The current prototype already has the beginnings of a suggestion engine:
   - retrieves relevant lessons for a task using lightweight lexical and project-aware matching
 - `src/lib/server/task-thread-suggestions.ts`
   - ranks reusable thread candidates for a task
-- `src/lib/server/task-ideation.ts`
-  - assembles project context and prompts an ideation assistant for new task suggestions
 - `src/lib/server/planning.ts`
   - computes planning scope, capacity rollups, and eligible worker hints
 
@@ -374,7 +372,6 @@ Concrete repo direction:
   - self-improvement opportunities
   - task knowledge retrieval
   - thread reuse suggestions
-  - project task ideation
   - planning-gap suggestions
     all use a compatible ranking vocabulary
 
@@ -535,5 +532,4 @@ Local repo references:
 - `src/lib/server/self-improvement-store.ts`
 - `src/lib/server/self-improvement-knowledge.ts`
 - `src/lib/server/task-thread-suggestions.ts`
-- `src/lib/server/task-ideation.ts`
 - `src/lib/server/planning.ts`

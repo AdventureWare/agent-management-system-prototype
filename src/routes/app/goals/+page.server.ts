@@ -111,7 +111,7 @@ function validateGoalSelections(
 	return null;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	const data = await loadControlPlane();
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
@@ -155,6 +155,7 @@ export const load: PageServerLoad = async () => {
 	);
 
 	return {
+		deleted: url.searchParams.get('deleted') === '1',
 		goals,
 		areaOptions: AREA_OPTIONS,
 		statusOptions: GOAL_STATUS_OPTIONS,

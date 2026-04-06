@@ -29,7 +29,7 @@ function readProjectForm(form: FormData) {
 	};
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	const data = await loadControlPlane();
 	const taskCounts = new Map<string, number>();
 
@@ -38,6 +38,7 @@ export const load: PageServerLoad = async () => {
 	}
 
 	return {
+		deleted: url.searchParams.get('deleted') === '1',
 		projects: [...data.projects]
 			.map((project) => {
 				const relatedTaskGoalIds = new Set(

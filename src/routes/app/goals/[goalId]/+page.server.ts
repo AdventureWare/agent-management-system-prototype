@@ -1,4 +1,4 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
@@ -16,6 +16,7 @@ import {
 import { normalizePathInput } from '$lib/server/path-tools';
 import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
+	deleteGoal as removeGoalFromControlPlane,
 	loadControlPlane,
 	parseArea,
 	parseGoalStatus,
@@ -300,5 +301,18 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'updateGoal'
 		};
+	},
+
+	deleteGoal: async ({ params }) => {
+		const current = await loadControlPlane();
+		const goal = current.goals.find((candidate) => candidate.id === params.goalId);
+
+		if (!goal) {
+			return fail(404, { message: 'Goal not found.' });
+		}
+
+		await updateControlPlane((data) => removeGoalFromControlPlane(data, params.goalId));
+
+		throw redirect(303, '/app/goals?deleted=1');
 	}
 };

@@ -3,7 +3,7 @@
 	import { persistPageFields } from '$lib/client/persist-page-fields';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 
-	let { children } = $props();
+	let { data, children } = $props();
 
 	onMount(() => {
 		document.documentElement.classList.add('app-shell-locked');
@@ -16,7 +16,7 @@
 	});
 </script>
 
-<Sidebar>
+<Sidebar operatorAuthEnabled={data.operatorAuthEnabled}>
 	<div use:persistPageFields>
 		{@render children()}
 	</div>

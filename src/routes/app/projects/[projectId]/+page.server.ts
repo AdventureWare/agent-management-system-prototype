@@ -1,10 +1,11 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput } from '$lib/server/path-tools';
 import {
+	deleteProject as removeProjectFromControlPlane,
 	formatRelativeTime,
 	goalLinksProject,
 	getOpenReviewForTask,
@@ -123,5 +124,28 @@ export const actions: Actions = {
 			successAction: 'updateProject',
 			projectId: params.projectId
 		};
+	},
+
+	deleteProject: async ({ params }) => {
+		const current = await loadControlPlane();
+		const project = current.projects.find((candidate) => candidate.id === params.projectId);
+
+		if (!project) {
+			return fail(404, { message: 'Project not found.' });
+		}
+
+		const linkedTaskCount = current.tasks.filter(
+			(task) => task.projectId === params.projectId
+		).length;
+
+		if (linkedTaskCount > 0) {
+			return fail(400, {
+				message: `Delete or move ${linkedTaskCount} linked task${linkedTaskCount === 1 ? '' : 's'} before deleting this project.`
+			});
+		}
+
+		await updateControlPlane((data) => removeProjectFromControlPlane(data, params.projectId));
+
+		throw redirect(303, '/app/projects?deleted=1');
 	}
 };

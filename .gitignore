@@ -25,6 +25,7 @@ vite.config.ts.timestamp-*
 test-results
 playwright-report/
 .playwright-cli/
+.playwright-mcp/
 output/playwright/
 screenshots/
 
@@ -32,3 +33,4 @@ screenshots/
 data/agent-sessions/
 data
 agent_output/
+

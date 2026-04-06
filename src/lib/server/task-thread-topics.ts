@@ -84,17 +84,23 @@ const FOCUS_PROFILES = [
 	{
 		label: 'UI/UX',
 		keywords: [
+			'breakpoint',
 			'component',
 			'css',
 			'design',
 			'frontend',
 			'interface',
 			'layout',
+			'mobile',
 			'page',
+			'resize',
+			'resizing',
+			'responsive',
 			'style',
 			'svelte',
 			'ux',
-			'ui'
+			'ui',
+			'viewport'
 		]
 	},
 	{

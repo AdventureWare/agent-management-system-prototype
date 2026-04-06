@@ -1209,7 +1209,7 @@
 			{/if}
 
 			<div class="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(22rem,0.92fr)]">
-				<div class="space-y-6">
+				<div class="order-2 space-y-6 xl:order-1">
 					<DetailSection
 						eyebrow="Priority"
 						title="Decision context"
@@ -1352,122 +1352,6 @@
 							{/if}
 						</div>
 
-						<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-								<div class="min-w-0">
-									<p class="text-sm font-medium text-white">Relevant context</p>
-									<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-										{session.threadSummary ?? session.threadSummary}
-									</p>
-								</div>
-								<div class="flex min-w-0 flex-wrap items-center gap-2">
-									<span
-										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session.threadState ?? session.threadState ?? 'idle')}`}
-									>
-										{formatThreadStateLabel(session.threadState ?? session.threadState ?? 'idle')}
-									</span>
-									<span
-										class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session.latestRunStatus)}`}
-									>
-										latest run {session.latestRunStatus}
-									</span>
-								</div>
-							</div>
-
-							<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-								<DetailFactCard
-									label="Execution"
-									value={executionMeta(session).label}
-									detail={executionMeta(session).detail}
-									class="rounded-lg border-transparent bg-black/20"
-									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-								/>
-								<DetailFactCard
-									label="Reply state"
-									value={replyStateLabel(session)}
-									detail={replyStateDetail(session)}
-									class="rounded-lg border-transparent bg-black/20"
-									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-								/>
-								<DetailFactCard
-									label="Follow-up"
-									value={resumeLabel(session)}
-									detail={session.canResume
-										? 'You can respond in this thread now.'
-										: session.hasActiveRun
-											? 'Wait for the current run to finish first.'
-											: 'This thread cannot accept a follow-up yet.'}
-									class="rounded-lg border-transparent bg-black/20"
-									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-								/>
-								<DetailFactCard
-									label="Last activity"
-									value={formatActivityAge(session.lastActivityAt, now)}
-									detail={formatTimestamp(session.lastActivityAt)}
-									class="rounded-lg border-transparent bg-black/20"
-									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-								/>
-								<DetailFactCard
-									label="Attachments"
-									value={threadAttachments.length}
-									detail={threadAttachments.length > 0
-										? 'Files stay with the thread.'
-										: 'No thread files yet. Add one in the follow-up form when the next run needs extra context.'}
-									class="rounded-lg border-transparent bg-black/20"
-									labelClass="text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-								/>
-							</div>
-
-							{#if uniqueTopicLabels(session.topicLabels).length > 0 || session.relatedTasks.length > 0 || taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
-								<div class="mt-4 space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
-									{#if uniqueTopicLabels(session.topicLabels).length > 0}
-										<div class="flex flex-wrap gap-2">
-											{#each uniqueTopicLabels(session.topicLabels) as topicLabel (topicLabel)}
-												<span
-													class="inline-flex max-w-full items-center justify-center rounded-full border border-sky-900/60 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-sky-200 uppercase"
-												>
-													{topicLabel}
-												</span>
-											{/each}
-										</div>
-									{/if}
-
-									{#if taskResponseAction?.openReview || taskResponseAction?.pendingApproval}
-										<div class="flex flex-wrap gap-2">
-											{#if taskResponseAction?.openReview}
-												<span
-													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${reviewStatusToneClass(taskResponseAction.openReview.status)}`}
-												>
-													Review {formatReviewStatusLabel(taskResponseAction.openReview.status)}
-												</span>
-											{/if}
-											{#if taskResponseAction?.pendingApproval}
-												<span
-													class={`inline-flex max-w-full items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none whitespace-normal uppercase ${approvalStatusToneClass(taskResponseAction.pendingApproval.status)}`}
-												>
-													{formatTaskApprovalModeLabel(taskResponseAction.pendingApproval.mode)}
-													{formatApprovalStatusLabel(taskResponseAction.pendingApproval.status)}
-												</span>
-											{/if}
-										</div>
-									{/if}
-
-									{#if session.relatedTasks.length > 0}
-										<div class="flex flex-wrap gap-2">
-											{#each session.relatedTasks as task (task.id)}
-												<a
-													class="ui-wrap-anywhere inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-3 py-1 text-center text-xs leading-none whitespace-normal text-sky-300 transition hover:border-sky-400/40 hover:text-sky-200"
-													href={resolve(`/app/tasks/${task.id}`)}
-												>
-													{task.title}
-													{task.isPrimary ? ' · primary' : ''}
-												</a>
-											{/each}
-										</div>
-									{/if}
-								</div>
-							{/if}
-						</div>
 					</DetailSection>
 
 					{#if selectedHistoricalRun}
@@ -1696,7 +1580,7 @@
 					</DetailSection>
 				</div>
 
-				<div class="space-y-6">
+				<div class="order-1 space-y-6 xl:order-2">
 					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
 						<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 							<div class="min-w-0">

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	filterSelfImprovementSnapshot,
 	mergeSelfImprovementSnapshot,
-	resolveSelfImprovementOpportunityTaskContext
+	resolveSelfImprovementOpportunityTaskContext,
+	resolveSelfImprovementOpportunityThreadAssignment
 } from './self-improvement-store';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 import type {
@@ -522,5 +523,47 @@ describe('resolveSelfImprovementOpportunityTaskContext', () => {
 			projectId: 'project_2',
 			goalId: 'goal_child'
 		});
+	});
+});
+
+describe('resolveSelfImprovementOpportunityThreadAssignment', () => {
+	it('prefers the first available suggested thread for thread reuse gaps', () => {
+		const threadId = resolveSelfImprovementOpportunityThreadAssignment({
+			opportunity: {
+				source: 'thread_reuse_gap',
+				relatedThreadIds: ['thread_suggested', 'thread_current']
+			},
+			threads: [
+				{ id: 'thread_current', canResume: false, hasActiveRun: true },
+				{ id: 'thread_suggested', canResume: true, hasActiveRun: false }
+			]
+		});
+
+		expect(threadId).toBe('thread_suggested');
+	});
+
+	it('only auto-links non-reuse opportunities when there is a single available related thread', () => {
+		expect(
+			resolveSelfImprovementOpportunityThreadAssignment({
+				opportunity: {
+					source: 'failed_runs',
+					relatedThreadIds: ['thread_only']
+				},
+				threads: [{ id: 'thread_only', canResume: true, hasActiveRun: false }]
+			})
+		).toBe('thread_only');
+
+		expect(
+			resolveSelfImprovementOpportunityThreadAssignment({
+				opportunity: {
+					source: 'failed_runs',
+					relatedThreadIds: ['thread_one', 'thread_two']
+				},
+				threads: [
+					{ id: 'thread_one', canResume: true, hasActiveRun: false },
+					{ id: 'thread_two', canResume: true, hasActiveRun: false }
+				]
+			})
+		).toBeNull();
 	});
 });

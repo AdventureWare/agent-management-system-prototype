@@ -6,6 +6,8 @@ import {
 	createReview,
 	createRun,
 	createTask,
+	deleteGoal,
+	deleteProject,
 	deleteTask,
 	projectMatchesPath,
 	resolveThreadSandbox,
@@ -277,6 +279,161 @@ describe('control-plane helpers', () => {
 		expect(next.runs.map((run) => run.id)).toEqual(['run_done']);
 		expect(next.reviews).toEqual([]);
 		expect(next.approvals).toEqual([]);
+	});
+
+	it('deletes a goal, detaches linked tasks, and promotes child goals', () => {
+		const data = buildFixture();
+		data.goals = [
+			{
+				id: 'goal_parent',
+				name: 'Parent goal',
+				area: 'product',
+				status: 'running',
+				summary: 'Parent summary',
+				artifactPath: '/tmp/project',
+				parentGoalId: null,
+				projectIds: ['project_1'],
+				taskIds: [],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			},
+			{
+				id: 'goal_1',
+				name: 'Deleted goal',
+				area: 'product',
+				status: 'ready',
+				summary: 'Delete me',
+				artifactPath: '/tmp/project/goal',
+				parentGoalId: 'goal_parent',
+				projectIds: ['project_1'],
+				taskIds: ['task_review'],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			},
+			{
+				id: 'goal_child',
+				name: 'Child goal',
+				area: 'product',
+				status: 'ready',
+				summary: 'Child summary',
+				artifactPath: '/tmp/project/goal/child',
+				parentGoalId: 'goal_1',
+				projectIds: ['project_1'],
+				taskIds: [],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			}
+		];
+		data.planningSessions = [
+			{
+				id: 'planning_1',
+				windowStart: '2026-03-01',
+				windowEnd: '2026-03-07',
+				projectId: 'project_1',
+				goalId: 'goal_1',
+				workerId: null,
+				includeUnscheduled: true,
+				goalIds: ['goal_parent', 'goal_1', 'goal_child'],
+				taskIds: ['task_review'],
+				decisionIds: ['decision_1'],
+				summary: 'Planning summary',
+				createdAt: '2026-03-01T00:00:00.000Z'
+			}
+		];
+		data.decisions = [
+			{
+				id: 'decision_1',
+				taskId: null,
+				goalId: 'goal_1',
+				runId: null,
+				reviewId: null,
+				approvalId: null,
+				planningSessionId: 'planning_1',
+				decisionType: 'goal_plan_updated',
+				summary: 'Goal updated',
+				createdAt: '2026-03-01T00:00:00.000Z',
+				decidedByWorkerId: null
+			}
+		];
+
+		const next = deleteGoal(data, 'goal_1');
+
+		expect(next.goals.map((goal) => goal.id)).toEqual(['goal_parent', 'goal_child']);
+		expect(next.goals.find((goal) => goal.id === 'goal_child')?.parentGoalId).toBe('goal_parent');
+		expect(next.tasks.find((task) => task.id === 'task_done')?.goalId).toBe('');
+		expect(next.tasks.find((task) => task.id === 'task_review')?.goalId).toBe('');
+		expect(next.planningSessions?.[0]).toMatchObject({
+			goalId: null,
+			goalIds: ['goal_parent', 'goal_child']
+		});
+		expect(next.decisions?.[0]?.goalId).toBeNull();
+	});
+
+	it('deletes a project and removes explicit goal and planning links', () => {
+		const data = buildFixture();
+		data.projects = [
+			{
+				id: 'project_1',
+				name: 'Primary project',
+				summary: 'Project summary',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			},
+			{
+				id: 'project_2',
+				name: 'Secondary project',
+				summary: 'Other summary',
+				projectRootFolder: '/tmp/project-2',
+				defaultArtifactRoot: '/tmp/project-2/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			}
+		];
+		data.goals = [
+			{
+				id: 'goal_1',
+				name: 'Goal one',
+				area: 'product',
+				status: 'ready',
+				summary: 'Goal summary',
+				artifactPath: '/tmp/project/goal',
+				parentGoalId: null,
+				projectIds: ['project_1', 'project_2'],
+				taskIds: [],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			}
+		];
+		data.planningSessions = [
+			{
+				id: 'planning_1',
+				windowStart: '2026-03-01',
+				windowEnd: '2026-03-07',
+				projectId: 'project_1',
+				goalId: null,
+				workerId: null,
+				includeUnscheduled: true,
+				goalIds: [],
+				taskIds: [],
+				decisionIds: [],
+				summary: 'Planning summary',
+				createdAt: '2026-03-01T00:00:00.000Z'
+			}
+		];
+
+		const next = deleteProject(data, 'project_1');
+
+		expect(next.projects.map((project) => project.id)).toEqual(['project_2']);
+		expect(next.goals[0]?.projectIds).toEqual(['project_2']);
+		expect(next.planningSessions?.[0]?.projectId).toBeNull();
 	});
 
 	it('summarizes review, dependency, and risk counts', () => {

@@ -17,7 +17,7 @@
 </script>
 
 <section class={['ui-toolbar', className]}>
-	<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 		<div class="min-w-0">
 			<h2 class="text-xl font-semibold text-white">{title}</h2>
 			{#if description}
@@ -26,7 +26,7 @@
 		</div>
 
 		{#if controls}
-			<div class="flex w-full flex-col gap-3 xl:w-auto xl:items-end">
+			<div class="flex w-full flex-col gap-3 lg:max-w-[38rem] lg:items-end">
 				{@render controls()}
 			</div>
 		{/if}

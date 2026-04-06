@@ -22,26 +22,26 @@
 </script>
 
 <AppBar class="ui-page-header">
-	<AppBar.Toolbar class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+	<AppBar.Toolbar class="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
 		<AppBar.Headline class="min-w-0 flex-1 space-y-3">
 			{#if eyebrow}
 				<p class="ui-eyebrow">{eyebrow}</p>
 			{/if}
-			<h1 class={['ui-page-title ui-wrap-anywhere', titleClass]}>{title}</h1>
+			<h1 class={['ui-page-title ui-wrap-title', titleClass]}>{title}</h1>
 			{#if description}
 				<p class={['ui-page-description ui-wrap-anywhere', descriptionClass]}>{description}</p>
 			{/if}
 		</AppBar.Headline>
 
 		{#if actions}
-			<AppBar.Trail class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
+			<AppBar.Trail class="flex w-full flex-wrap gap-2 sm:gap-3 lg:w-auto lg:justify-end">
 				{@render actions()}
 			</AppBar.Trail>
 		{/if}
 	</AppBar.Toolbar>
 
 	{#if meta}
-		<div class="mt-4">
+		<div class="mt-3 sm:mt-4">
 			{@render meta()}
 		</div>
 	{/if}

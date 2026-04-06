@@ -31,6 +31,8 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		updatedAt: '2026-03-31T09:00:00.000Z',
 		projectName: 'Agent Management System Prototype',
 		assigneeName: 'Unassigned',
+		desiredRoleName: 'Coordinator',
+		dependencyTaskNames: [],
 		latestRun: null,
 		assignedThread: null,
 		latestRunThread: null,
@@ -58,36 +60,6 @@ function createTask(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-function createIdeationReview(overrides: Record<string, unknown> = {}) {
-	return {
-		projectId: 'project_1',
-		projectName: 'Agent Management System Prototype',
-		agentThreadId: 'session_ideation_1',
-		threadState: 'waiting',
-		lastActivityAt: '2026-03-31T09:00:00.000Z',
-		lastActivityLabel: '1h ago',
-		threadSummary: 'Suggested follow-up queue work.',
-		hasActiveRun: false,
-		canResume: true,
-		suggestionCount: 1,
-		hasSavedReply: true,
-		defaultDraftRoleId: 'role_1',
-		defaultDraftRoleName: 'Coordinator',
-		defaultArtifactPath: '/tmp/project/out',
-		suggestions: [
-			{
-				index: 0,
-				title: 'Add queue review flow',
-				whyItMatters: 'Keeps task intake aligned with follow-up work.',
-				suggestedInstructions: 'Create a review step for ideation output.',
-				signals: 'Existing queue management work suggests this gap.',
-				confidence: 'medium'
-			}
-		],
-		...overrides
-	};
-}
-
 function createGoal(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'goal_1',
@@ -103,7 +75,6 @@ function createGoal(overrides: Record<string, unknown> = {}) {
 
 function renderPage(
 	tasks = [] as ReturnType<typeof createTask>[],
-	ideationReviews = [] as ReturnType<typeof createIdeationReview>[],
 	form: Record<string, unknown> = {},
 	createTaskPrefill: Record<string, unknown> = {}
 ) {
@@ -126,7 +97,6 @@ function renderPage(
 			goals: [createGoal()],
 			statusOptions: TASK_STATUS_OPTIONS,
 			defaultDraftRoleName: 'Coordinator',
-			ideationReviews,
 			projects: [
 				{
 					id: 'project_1',
@@ -163,6 +133,29 @@ function renderPage(
 					]
 				}
 			],
+			roles: [
+				{
+					id: 'role_1',
+					name: 'Coordinator',
+					area: 'shared',
+					description: 'Routes work'
+				},
+				{
+					id: 'role_2',
+					name: 'Reviewer',
+					area: 'shared',
+					description: 'Reviews work'
+				}
+			],
+			availableDependencyTasks: [
+				{
+					id: 'task_dependency',
+					title: 'Existing dependency task',
+					status: 'in_progress',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype'
+				}
+			],
 			workers: [],
 			tasks
 		} as never
@@ -182,6 +175,26 @@ describe('/app/tasks/+page.svelte', () => {
 
 		expect(appPage?.className).toContain('max-w-none');
 		expect(queueTable?.className).toContain('w-full');
+	});
+
+	it('renders a stacked task card layout for small-screen queue scanning', async () => {
+		renderPage([
+			createTask({
+				id: 'task_mobile',
+				title: 'Run the mobile operator loop',
+				linkThread: {
+					id: 'thread_1',
+					name: 'Operator loop thread',
+					threadState: 'ready'
+				}
+			})
+		]);
+
+		await expect.element(page.getByTestId('task-mobile-card-task_mobile')).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Open task' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Open latest thread' }))
+			.toBeInTheDocument();
 	});
 
 	it('renders the project selector before the task name in the create form', async () => {
@@ -277,6 +290,21 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect.element(page.getByText('web-design-guidelines')).toBeInTheDocument();
 	});
 
+	it('keeps advanced routing fields collapsed until requested', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+
+		await expect.element(page.getByText('Advanced intake')).toBeInTheDocument();
+		await expect.element(page.getByText('Defaults stay lightweight')).toBeInTheDocument();
+		await expect.element(page.getByText('Priority')).not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Show advanced' }).click();
+
+		await expect.element(page.getByText('Priority')).toBeInTheDocument();
+		await expect.element(page.getByText('Blocker notes')).toBeInTheDocument();
+		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
+	});
+
 	it('restores a saved create-task draft after reload', async () => {
 		window.localStorage.setItem(
 			'ams:create-task',
@@ -286,6 +314,15 @@ describe('/app/tasks/+page.svelte', () => {
 				instructions: 'Persist this between reloads.',
 				assigneeWorkerId: '',
 				targetDate: '2026-04-10',
+				goalId: 'goal_1',
+				area: 'product',
+				priority: 'urgent',
+				riskLevel: 'high',
+				approvalMode: 'before_apply',
+				requiresReview: false,
+				desiredRoleId: 'role_2',
+				blockedReason: 'Waiting on review environment access.',
+				dependencyTaskIds: ['task_dependency'],
 				requiredCapabilityNames: 'planning, citations',
 				requiredToolNames: 'codex'
 			})
@@ -316,11 +353,32 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(instructionsInput?.value).toBe('Persist this between reloads.');
 		expect(requiredCapabilitiesInput?.value).toBe('planning, citations');
 		expect(requiredToolsInput?.value).toBe('codex');
+		await expect.element(page.getByRole('button', { name: 'Hide advanced' })).toBeInTheDocument();
+		expect(
+			(
+				document.querySelector(
+					'form[action="?/createTask"] select[name="priority"]'
+				) as HTMLSelectElement | null
+			)?.value
+		).toBe('urgent');
+		expect(
+			(
+				document.querySelector(
+					'form[action="?/createTask"] textarea[name="blockedReason"]'
+				) as HTMLTextAreaElement | null
+			)?.value
+		).toBe('Waiting on review environment access.');
+		expect(
+			(
+				document.querySelector(
+					'form[action="?/createTask"] input[name="dependencyTaskIds"]'
+				) as HTMLInputElement | null
+			)?.checked
+		).toBe(true);
 	});
 
 	it('opens the create dialog from a prefilled deep link', async () => {
 		renderPage(
-			[],
 			[],
 			{},
 			{
@@ -349,6 +407,32 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(goalSelect?.value).toBe('goal_1');
 	});
 
+	it('shows routing metadata directly in queue rows', async () => {
+		renderPage([
+			createTask({
+				id: 'task_routed',
+				title: 'Routed task',
+				priority: 'urgent',
+				riskLevel: 'high',
+				approvalMode: 'before_apply',
+				requiresReview: false,
+				desiredRoleId: 'role_2',
+				desiredRoleName: 'Reviewer',
+				blockedReason: 'Awaiting stakeholder sign-off.',
+				dependencyTaskNames: ['Existing dependency task']
+			})
+		]);
+
+		await expect.element(page.getByText('Urgent')).toBeInTheDocument();
+		await expect.element(page.getByText('High risk')).toBeInTheDocument();
+		await expect.element(page.getByText('Review optional')).toBeInTheDocument();
+		await expect.element(page.getByText('Role Reviewer')).toBeInTheDocument();
+		await expect.element(page.getByText('Awaiting stakeholder sign-off.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Depends on: Existing dependency task'))
+			.toBeInTheDocument();
+	});
+
 	it('clears a saved create-task draft after successful creation', () => {
 		window.localStorage.setItem(
 			'ams:create-task',
@@ -358,7 +442,7 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		);
 
-		renderPage([], [], {
+		renderPage([], {
 			ok: true,
 			successAction: 'createTask'
 		});
@@ -418,24 +502,6 @@ describe('/app/tasks/+page.svelte', () => {
 		]);
 
 		await expect.element(page.getByText('Target Apr 18, 2026')).toBeInTheDocument();
-	});
-
-	it('renders task ideation in a collapsed section below the queue', async () => {
-		renderPage([], [createIdeationReview()]);
-
-		const ideationPanel = document.querySelector('details');
-		const headings = Array.from(document.querySelectorAll('h2')).map((heading) =>
-			heading.textContent?.trim()
-		);
-
-		expect(ideationPanel).not.toBeNull();
-		expect(ideationPanel?.open).toBe(false);
-		expect(headings.indexOf('Active queue')).toBeLessThan(
-			headings.indexOf('Ideation assistant and saved reviews')
-		);
-		await expect
-			.element(page.getByRole('heading', { name: 'Ideation assistant and saved reviews' }))
-			.toBeVisible();
 	});
 
 	it('switches between active and completed task views with local tabs', async () => {
