@@ -59,9 +59,9 @@
 	let actionNotice = $state<string | null>(null);
 	let pendingOpportunityIds = $state.raw<string[]>([]);
 	let pendingKnowledgeItemIds = $state.raw<string[]>([]);
-	let dismissalReasonByOpportunityId = $state.raw<
-		Record<string, SelfImprovementDecisionReason>
-	>({});
+	let dismissalReasonByOpportunityId = $state.raw<Record<string, SelfImprovementDecisionReason>>(
+		{}
+	);
 	let searchQuery = $state('');
 	let statusFilter = $state<'all' | SelfImprovementStatus>('open');
 	let categoryFilter = $state<'all' | (typeof SELF_IMPROVEMENT_CATEGORY_OPTIONS)[number]>('all');
@@ -993,7 +993,9 @@
 
 								{#if opportunity.status !== 'dismissed'}
 									<label class="block">
-										<span class="mb-2 block text-xs font-medium tracking-[0.12em] text-slate-400 uppercase">
+										<span
+											class="mb-2 block text-xs font-medium tracking-[0.12em] text-slate-400 uppercase"
+										>
 											Dismiss reason
 										</span>
 										<select

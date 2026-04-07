@@ -87,7 +87,7 @@
 						<p class={`text-[10px] font-semibold tracking-[0.16em] uppercase ${toneClass.label}`}>
 							{meta.activityHeading ?? 'Latest signal'}
 						</p>
-						<p class="ui-clamp-2 mt-1 text-[11px] font-medium leading-relaxed text-white">
+						<p class="ui-clamp-2 mt-1 text-[11px] leading-relaxed font-medium text-white">
 							{meta.activityLabel}
 						</p>
 						{#if meta.activityDetail}

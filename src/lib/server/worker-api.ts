@@ -27,6 +27,9 @@ export type WorkerTaskFit = {
 	eligible: boolean;
 	exactRoleMatch: boolean;
 	assignedOpenTaskCount: number;
+	activeRunCount: number;
+	availableRunCapacity: number;
+	withinConcurrencyLimit: boolean;
 	missingCapabilityNames: string[];
 	missingToolNames: string[];
 };
@@ -108,6 +111,23 @@ function getWorkerAssignedOpenTaskCount(data: ControlPlaneData, worker: Worker) 
 		.length;
 }
 
+function getWorkerEffectiveConcurrencyLimit(worker: Worker) {
+	const configuredLimit =
+		typeof worker.maxConcurrentRuns === 'number' && Number.isFinite(worker.maxConcurrentRuns)
+			? worker.maxConcurrentRuns
+			: null;
+
+	return Math.max(1, configuredLimit ?? worker.capacity);
+}
+
+function getWorkerActiveRunCount(data: ControlPlaneData, worker: Worker) {
+	return data.runs.filter(
+		(run) =>
+			run.workerId === worker.id &&
+			(run.status === 'queued' || run.status === 'starting' || run.status === 'running')
+	).length;
+}
+
 function getWorkerStatusRank(status: WorkerStatus) {
 	switch (status) {
 		case 'idle':
@@ -128,6 +148,9 @@ export function describeWorkerTaskFit(
 	const roleEligible = worker.roleId === 'role_coordinator' || worker.roleId === task.desiredRoleId;
 	const capabilityKeys = getWorkerCapabilityKeys(data, worker);
 	const toolKeys = getWorkerToolKeys(data, worker);
+	const activeRunCount = getWorkerActiveRunCount(data, worker);
+	const concurrencyLimit = getWorkerEffectiveConcurrencyLimit(worker);
+	const withinConcurrencyLimit = activeRunCount < concurrencyLimit;
 	const missingCapabilityNames = (task.requiredCapabilityNames ?? []).filter(
 		(name) => !capabilityKeys.has(normalizeMatchKey(name))
 	);
@@ -141,9 +164,16 @@ export function describeWorkerTaskFit(
 		roleId: worker.roleId,
 		providerId: worker.providerId,
 		status: worker.status,
-		eligible: roleEligible && missingCapabilityNames.length === 0 && missingToolNames.length === 0,
+		eligible:
+			roleEligible &&
+			withinConcurrencyLimit &&
+			missingCapabilityNames.length === 0 &&
+			missingToolNames.length === 0,
 		exactRoleMatch: worker.roleId === task.desiredRoleId,
 		assignedOpenTaskCount: getWorkerAssignedOpenTaskCount(data, worker),
+		activeRunCount,
+		availableRunCapacity: Math.max(0, concurrencyLimit - activeRunCount),
+		withinConcurrencyLimit,
 		missingCapabilityNames,
 		missingToolNames
 	};
@@ -253,10 +283,6 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 		throw error(404, 'Task not found.');
 	}
 
-	if (!isWorkerEligibleForTask(data, worker, task)) {
-		throw error(403, 'Worker is not eligible for this task.');
-	}
-
 	if (task.assigneeWorkerId && task.assigneeWorkerId !== worker.id) {
 		throw error(409, 'Task is already assigned to another worker.');
 	}
@@ -274,6 +300,16 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 
 	if (getPendingApprovalForTask(data, task.id)?.mode === 'before_run') {
 		throw error(409, 'Task is waiting on before-run approval.');
+	}
+
+	const fit = describeWorkerTaskFit(data, worker, task);
+
+	if (!fit.withinConcurrencyLimit) {
+		throw error(409, 'Worker is already at its concurrency limit.');
+	}
+
+	if (!fit.eligible) {
+		throw error(403, 'Worker is not eligible for this task.');
 	}
 
 	if (task.assigneeWorkerId === worker.id && task.status === 'in_progress') {

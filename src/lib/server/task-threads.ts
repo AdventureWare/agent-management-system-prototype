@@ -10,9 +10,13 @@ const MAX_THREAD_NAME_SEGMENT_LENGTH = 48;
 export function buildTaskThreadPrompt(input: {
 	taskName: string;
 	taskInstructions: string;
+	successCriteria?: string;
+	readyCondition?: string;
+	expectedOutcome?: string;
 	projectName: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
+	additionalWritableRoots?: string[];
 	availableSkillNames?: string[];
 	relevantKnowledgeItems?: Array<
 		Pick<
@@ -29,6 +33,10 @@ export function buildTaskThreadPrompt(input: {
 
 	if (input.defaultArtifactRoot) {
 		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
+	}
+
+	if (input.additionalWritableRoots?.length) {
+		contextLines.push(`Additional writable roots: ${input.additionalWritableRoots.join(', ')}`);
 	}
 
 	if (input.availableSkillNames?.length) {
@@ -50,6 +58,13 @@ export function buildTaskThreadPrompt(input: {
 		'You are executing a queued task from the agent management system.',
 		'',
 		...contextLines,
+		...(input.successCriteria?.trim()
+			? ['', 'Success criteria:', input.successCriteria.trim()]
+			: []),
+		...(input.readyCondition?.trim() ? ['', 'Ready condition:', input.readyCondition.trim()] : []),
+		...(input.expectedOutcome?.trim()
+			? ['', 'Expected outcome:', input.expectedOutcome.trim()]
+			: []),
 		'',
 		'Instructions:',
 		input.taskInstructions,

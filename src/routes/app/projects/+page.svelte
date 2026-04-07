@@ -21,6 +21,7 @@
 	let defaultRepoPath = $state('');
 	let defaultRepoUrl = $state('');
 	let defaultBranch = $state('');
+	let additionalWritableRoots = $state('');
 	let defaultThreadSandbox = $state('');
 	let query = $state('');
 
@@ -51,6 +52,7 @@
 			project.defaultRepoPath,
 			project.defaultRepoUrl,
 			project.defaultBranch,
+			(project.additionalWritableRoots ?? []).join(' '),
 			project.defaultThreadSandbox ?? ''
 		]
 			.join(' ')
@@ -81,6 +83,7 @@
 			defaultRepoPath: string;
 			defaultRepoUrl: string;
 			defaultBranch: string;
+			additionalWritableRoots: string;
 			defaultThreadSandbox: string;
 		}>(CREATE_PROJECT_DRAFT_KEY);
 
@@ -92,6 +95,7 @@
 			defaultRepoPath = savedDraft.defaultRepoPath ?? '';
 			defaultRepoUrl = savedDraft.defaultRepoUrl ?? '';
 			defaultBranch = savedDraft.defaultBranch ?? '';
+			additionalWritableRoots = savedDraft.additionalWritableRoots ?? '';
 			defaultThreadSandbox = savedDraft.defaultThreadSandbox ?? '';
 			isCreateModalOpen = true;
 		}
@@ -112,6 +116,7 @@
 			defaultRepoPath,
 			defaultRepoUrl,
 			defaultBranch,
+			additionalWritableRoots,
 			defaultThreadSandbox
 		});
 	});
@@ -223,6 +228,12 @@
 							<p class="ui-clamp-2">
 								<span class="text-slate-500">Branch:</span>
 								{project.defaultBranch || 'Not configured'}
+							</p>
+							<p class="ui-clamp-2">
+								<span class="text-slate-500">Extra roots:</span>
+								{project.additionalWritableRoots?.length
+									? `${project.additionalWritableRoots.length} linked`
+									: 'None'}
 							</p>
 							<p class="ui-clamp-2">
 								<span class="text-slate-500">Thread sandbox:</span>
@@ -341,6 +352,23 @@
 						name="defaultBranch"
 						placeholder="main"
 					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">
+						Additional writable roots
+					</span>
+					<textarea
+						bind:value={additionalWritableRoots}
+						class="textarea min-h-28 text-white placeholder:text-slate-500"
+						name="additionalWritableRoots"
+						placeholder="/Users/you/Library/Mobile Documents/com~apple~CloudDocs/Shared&#10;/Users/you/Dropbox/Client Files"
+					></textarea>
+					<span class="mt-2 block text-xs text-slate-500">
+						One absolute folder per line. Use this for iCloud Drive, Dropbox, Google Drive,
+						OneDrive, or other synced folders outside the project root. New threads pass these roots
+						to Codex with <code>--add-dir</code>.
+					</span>
 				</label>
 
 				<label class="block">

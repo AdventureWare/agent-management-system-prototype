@@ -373,4 +373,26 @@ describe('worker-api helpers', () => {
 
 		expect(view.available.map((task) => task.id)).not.toContain('task_ready_match');
 	});
+
+	it('does not expose or claim new work when the worker is at its concurrency limit', () => {
+		const { data, worker } = buildFixture();
+		data.workers[0] = {
+			...worker,
+			maxConcurrentRuns: 1
+		};
+
+		const view = getWorkerTaskView(data, data.workers[0]!);
+
+		expect(view.available).toHaveLength(0);
+
+		try {
+			claimTaskForWorker(data, data.workers[0]!, 'task_ready_match');
+			throw new Error('Expected claimTaskForWorker to reject the claim.');
+		} catch (thrown) {
+			expect(thrown).toMatchObject({
+				status: 409,
+				body: { message: 'Worker is already at its concurrency limit.' }
+			});
+		}
+	});
 });

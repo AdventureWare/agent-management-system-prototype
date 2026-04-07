@@ -17,11 +17,9 @@ if (currentHooksPath.status === 0 && currentHooksPath.stdout.trim() === desiredH
 	process.exit(0);
 }
 
-const setHooksPath = spawnSync(
-	'git',
-	['config', '--local', 'core.hooksPath', desiredHooksPath],
-	{ encoding: 'utf8' }
-);
+const setHooksPath = spawnSync('git', ['config', '--local', 'core.hooksPath', desiredHooksPath], {
+	encoding: 'utf8'
+});
 
 if (setHooksPath.status !== 0) {
 	process.stderr.write(setHooksPath.stderr || 'Failed to configure git hooks path.\n');

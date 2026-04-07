@@ -67,8 +67,7 @@ export type SelfImprovementConfidence = (typeof SELF_IMPROVEMENT_CONFIDENCE_OPTI
 export type SelfImprovementStatus = (typeof SELF_IMPROVEMENT_STATUS_OPTIONS)[number];
 export type SelfImprovementKnowledgeStatus =
 	(typeof SELF_IMPROVEMENT_KNOWLEDGE_STATUS_OPTIONS)[number];
-export type SelfImprovementDecisionType =
-	(typeof SELF_IMPROVEMENT_DECISION_TYPE_OPTIONS)[number];
+export type SelfImprovementDecisionType = (typeof SELF_IMPROVEMENT_DECISION_TYPE_OPTIONS)[number];
 export type SelfImprovementDecisionReason =
 	(typeof SELF_IMPROVEMENT_DECISION_REASON_OPTIONS)[number];
 export type SelfImprovementSignalType = (typeof SELF_IMPROVEMENT_SIGNAL_TYPE_OPTIONS)[number];

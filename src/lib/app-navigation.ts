@@ -1,5 +1,6 @@
 export type AppNavigationLinkId =
 	| 'home'
+	| 'access'
 	| 'improvements'
 	| 'tasks'
 	| 'threads'
@@ -13,6 +14,7 @@ export type AppNavigationLinkId =
 
 export type AppNavigationRoute =
 	| '/app/home'
+	| '/app/access'
 	| '/app/improvements'
 	| '/app/tasks'
 	| '/app/threads'
@@ -44,6 +46,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		description: 'Cross-cutting system state',
 		links: [
 			{ id: 'home', label: 'Home', href: '/app/home' },
+			{ id: 'access', label: 'Access', href: '/app/access' },
 			{ id: 'improvements', label: 'Suggestions', href: '/app/improvements' }
 		]
 	},

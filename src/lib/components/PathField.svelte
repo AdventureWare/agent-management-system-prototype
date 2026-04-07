@@ -86,13 +86,11 @@
 					target: createMode === 'either' ? createTarget : createMode
 				})
 			});
-			const payload = (await response.json().catch(() => null)) as
-				| {
-						error?: string;
-						target?: 'folder' | 'file';
-						created?: boolean;
-				  }
-				| null;
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+				target?: 'folder' | 'file';
+				created?: boolean;
+			} | null;
 
 			if (!response.ok) {
 				throw new Error(payload?.error ?? 'Could not create the requested path.');
@@ -126,8 +124,8 @@
 		class="input w-full text-white placeholder:text-slate-500"
 		id={inputId}
 		list={listId}
-		name={name}
-		placeholder={placeholder}
+		{name}
+		{placeholder}
 		{required}
 	/>
 </label>
@@ -147,7 +145,7 @@
 	{/if}
 
 	<button
-		class="btn btn-sm border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-600 hover:text-white disabled:opacity-60"
+		class="btn border border-slate-700 bg-slate-900 btn-sm text-slate-200 hover:border-slate-600 hover:text-white disabled:opacity-60"
 		type="button"
 		onclick={createPath}
 		disabled={isCreating}

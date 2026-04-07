@@ -114,7 +114,9 @@
 			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
 		</button>
 		{#if shouldAutoRefreshRunDetail()}
-			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+			<span
+				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
+			>
 				Live updates every {autoRefreshIntervalLabel} while the run is active
 			</span>
 		{/if}

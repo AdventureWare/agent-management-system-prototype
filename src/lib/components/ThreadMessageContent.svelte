@@ -50,7 +50,9 @@
 		tone?: 'default' | 'muted';
 		showReferenceSummary?: boolean;
 		contextArtifacts?: ContextArtifactReference[];
-		onAttachArtifact?: ((artifact: { path: string; label: string }) => Promise<void> | void) | undefined;
+		onAttachArtifact?:
+			| ((artifact: { path: string; label: string }) => Promise<void> | void)
+			| undefined;
 	}>();
 
 	const codeFencePattern = /^\s*```([\w+-]+)?\s*$/;
@@ -1087,21 +1089,24 @@
 													<button
 														type="button"
 														class="rounded-full border border-violet-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100"
-														disabled={attachActionState?.path === reference.path && attachActionState.status === 'loading'}
+														disabled={attachActionState?.path === reference.path &&
+															attachActionState.status === 'loading'}
 														onclick={() => {
 															void attachArtifactToFollowUp(reference.path, reference.label);
 														}}
-														title={attachActionState?.path === reference.path && attachActionState.status === 'error'
+														title={attachActionState?.path === reference.path &&
+														attachActionState.status === 'error'
 															? attachActionState.message
 															: undefined}
 													>
-														{attachActionState?.path === reference.path && attachActionState.status === 'loading'
+														{attachActionState?.path === reference.path &&
+														attachActionState.status === 'loading'
 															? 'Attaching'
 															: attachActionState?.path === reference.path &&
-																	attachActionState.status === 'success'
+																  attachActionState.status === 'success'
 																? 'Attached'
 																: attachActionState?.path === reference.path &&
-																		attachActionState.status === 'error'
+																	  attachActionState.status === 'error'
 																	? 'Retry attach'
 																	: 'Attach'}
 													</button>

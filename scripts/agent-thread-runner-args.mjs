@@ -30,6 +30,7 @@ function buildManagedRunConfigArgs() {
  * @param {{
  *   mode: 'start' | 'message';
  *   cwd?: string;
+ *   additionalWritableRoots?: string[];
  *   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
  *   model?: string | null;
  *   threadId?: string | null;
@@ -65,6 +66,10 @@ export function buildCodexArgs(config) {
 		'--sandbox',
 		config.sandbox
 	);
+
+	for (const path of config.additionalWritableRoots ?? []) {
+		args.push('--add-dir', path);
+	}
 
 	if (config.model) {
 		args.push('-m', config.model);

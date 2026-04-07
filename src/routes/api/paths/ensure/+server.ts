@@ -2,12 +2,10 @@ import { json } from '@sveltejs/kit';
 import { ensurePathTarget, parsePathTarget } from '$lib/server/path-tools';
 
 export const POST = async ({ request }) => {
-	const body = (await request.json().catch(() => null)) as
-		| {
-				path?: string;
-				target?: string;
-		  }
-		| null;
+	const body = (await request.json().catch(() => null)) as {
+		path?: string;
+		target?: string;
+	} | null;
 
 	const path = body?.path?.trim() ?? '';
 	const target = parsePathTarget(body?.target, 'folder');

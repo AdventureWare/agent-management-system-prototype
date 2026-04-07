@@ -14,7 +14,9 @@ async function createTempRoot() {
 
 describe('path tools', () => {
 	afterEach(async () => {
-		await Promise.all(tempPaths.splice(0).map((path) => rm(path, { force: true, recursive: true })));
+		await Promise.all(
+			tempPaths.splice(0).map((path) => rm(path, { force: true, recursive: true }))
+		);
 	});
 
 	it('creates a missing folder path', async () => {

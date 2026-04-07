@@ -18,6 +18,51 @@
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProject');
 	let deleteBlocked = $derived(data.relatedTasks.length > 0);
+
+	function accessToneClass(status: string) {
+		switch (status) {
+			case 'ready':
+				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
+			case 'macos_cloud_probe_blocked':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			case 'missing':
+			case 'needs_host_access':
+				return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+			case 'not_configured':
+			default:
+				return 'border-slate-700 bg-slate-950/70 text-slate-300';
+		}
+	}
+
+	function accessLabel(status: string) {
+		switch (status) {
+			case 'ready':
+				return 'Host access ready';
+			case 'macos_cloud_probe_blocked':
+				return 'macOS protected';
+			case 'missing':
+				return 'Missing path';
+			case 'needs_host_access':
+				return 'Host access blocked';
+			case 'not_configured':
+			default:
+				return 'Not configured';
+		}
+	}
+
+	function coverageToneClass(status: string) {
+		switch (status) {
+			case 'project_root':
+			case 'additional_writable_root':
+			case 'danger_full_access':
+				return 'border-sky-800/70 bg-sky-950/40 text-sky-200';
+			case 'outside_sandbox':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			case 'not_configured':
+			default:
+				return 'border-slate-700 bg-slate-950/70 text-slate-300';
+		}
+	}
 </script>
 
 <AppPage width="full">
@@ -145,6 +190,23 @@
 						</label>
 					</div>
 
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">
+							Additional writable roots
+						</span>
+						<textarea
+							class="textarea min-h-28 text-white placeholder:text-slate-500"
+							name="additionalWritableRoots"
+							placeholder="/Users/you/Library/Mobile Documents/com~apple~CloudDocs/Shared&#10;/Users/you/Dropbox/Client Files"
+							>{(data.project.additionalWritableRoots ?? []).join('\n')}</textarea
+						>
+						<p class="mt-2 text-sm text-slate-500">
+							One absolute folder per line. New threads pass these folders to Codex with
+							<code>--add-dir</code>. macOS still has to grant the app process access to the folder
+							itself.
+						</p>
+					</label>
+
 					<div
 						class="flex flex-wrap items-end justify-between gap-3 border-t border-slate-800 pt-4"
 					>
@@ -187,6 +249,114 @@
 			</DetailSection>
 
 			<DetailSection
+				eyebrow="Permissions"
+				title="Local access and sandbox coverage"
+				description="This first pass checks local folders only. It separates host OS access from Codex sandbox coverage so iCloud and similar failures are easier to diagnose before a run starts."
+				bodyClass="space-y-5"
+			>
+				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Effective sandbox</p>
+						<p class="mt-2 text-sm font-medium text-white">
+							{data.permissionSurface.effectiveSandbox}
+						</p>
+						<p class="mt-2 text-sm text-slate-400">{data.permissionSurface.sandboxSource}</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Outside sandbox</p>
+						<p class="mt-2 text-sm font-medium text-white">
+							{data.permissionSurface.summary.outsideSandboxCount}
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Paths that currently sit outside the default thread sandbox coverage.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Launch blockers</p>
+						<p class="mt-2 text-sm font-medium text-white">
+							{data.permissionSurface.summary.blockerCount}
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Required thread paths that the current app process still cannot use.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">macOS cloud probes</p>
+						<p class="mt-2 text-sm font-medium text-white">
+							{data.permissionSurface.summary.macosPromptCount}
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Paths where macOS blocked the direct check but a real Codex run may still work.
+						</p>
+					</div>
+				</div>
+
+				<div class="space-y-4">
+					{#each data.permissionSurface.localPaths as item (item.id)}
+						<article class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="min-w-0 flex-1">
+									<div class="flex flex-wrap items-center gap-2">
+										<h3 class="ui-wrap-anywhere font-medium text-white">{item.label}</h3>
+										{#if item.requiredForLaunch}
+											<span
+												class="badge border border-slate-700 bg-slate-900/80 text-[0.7rem] tracking-[0.18em] text-slate-200 uppercase"
+											>
+												Launch critical
+											</span>
+										{/if}
+									</div>
+									<p class="ui-wrap-anywhere mt-2 text-sm text-slate-300">
+										{item.path || 'Not configured'}
+									</p>
+									<p class="mt-2 text-sm text-slate-500">{item.importance}</p>
+								</div>
+
+								<div class="flex flex-wrap gap-2">
+									<span class={`badge border text-[0.72rem] ${accessToneClass(item.accessStatus)}`}>
+										{accessLabel(item.accessStatus)}
+									</span>
+									<span
+										class={`badge border text-[0.72rem] ${coverageToneClass(item.coverageStatus)}`}
+									>
+										{item.coverageLabel}
+									</span>
+								</div>
+							</div>
+
+							<div class="mt-4 grid gap-3 lg:grid-cols-2">
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Host access</p>
+									<p class="mt-2 text-sm text-white">{item.accessMessage}</p>
+									{#if item.accessGuidance}
+										<p class="mt-2 text-sm text-slate-400">{item.accessGuidance}</p>
+									{/if}
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Sandbox coverage
+									</p>
+									<p class="mt-2 text-sm text-white">{item.coverageMessage}</p>
+								</div>
+							</div>
+
+							{#if item.recommendedAction}
+								<p class="mt-4 text-sm text-sky-200">{item.recommendedAction}</p>
+							{/if}
+						</article>
+					{/each}
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-400">
+					<p>
+						Provider and account authorization still live on the providers and workers surfaces.
+						This section is focused on local folder access because that is what controls iCloud,
+						Dropbox, and similar synced paths today.
+					</p>
+				</div>
+			</DetailSection>
+
+			<DetailSection
 				eyebrow="Project defaults"
 				title="Roots and repo context"
 				description="The same defaults shown in editable form, compressed here for quick scanning."
@@ -215,6 +385,11 @@
 				<DetailFactCard
 					label="Default branch"
 					value={data.project.defaultBranch || 'Not configured'}
+				/>
+				<DetailFactCard
+					class="md:col-span-2"
+					label="Additional writable roots"
+					value={(data.project.additionalWritableRoots ?? []).join(' · ') || 'None configured'}
 				/>
 				<DetailFactCard
 					label="Default thread sandbox"

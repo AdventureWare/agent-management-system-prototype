@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
-import { normalizePathInput } from '$lib/server/path-tools';
+import { normalizePathInput, normalizePathListInput } from '$lib/server/path-tools';
 import {
 	createProject,
 	goalLinksProject,
@@ -25,6 +25,9 @@ function readProjectForm(form: FormData) {
 		defaultRepoPath: normalizePathInput(form.get('defaultRepoPath')?.toString()),
 		defaultRepoUrl: form.get('defaultRepoUrl')?.toString().trim() ?? '',
 		defaultBranch: form.get('defaultBranch')?.toString().trim() ?? '',
+		additionalWritableRoots: normalizePathListInput(
+			form.get('additionalWritableRoots')?.toString()
+		),
 		defaultThreadSandbox: readProjectThreadSandbox(form.get('defaultThreadSandbox'))
 	};
 }
@@ -78,7 +81,8 @@ export const actions: Actions = {
 			defaultArtifactRoot,
 			defaultRepoPath,
 			defaultRepoUrl,
-			defaultBranch
+			defaultBranch,
+			additionalWritableRoots
 		} = readProjectForm(form);
 
 		if (!name || !summary) {
@@ -95,7 +99,8 @@ export const actions: Actions = {
 					defaultArtifactRoot,
 					defaultRepoPath,
 					defaultRepoUrl,
-					defaultBranch
+					defaultBranch,
+					additionalWritableRoots
 				}),
 				...data.projects
 			]

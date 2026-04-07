@@ -866,13 +866,15 @@ export function resolveSelfImprovementOpportunityThreadAssignment(input: {
 	const relatedThreads = input.opportunity.relatedThreadIds
 		.map((threadId) => input.threads.find((thread) => thread.id === threadId) ?? null)
 		.filter((thread): thread is NonNullable<typeof thread> => Boolean(thread));
-	const availableThreads = relatedThreads.filter((thread) => thread.canResume && !thread.hasActiveRun);
+	const availableThreads = relatedThreads.filter(
+		(thread) => thread.canResume && !thread.hasActiveRun
+	);
 
 	if (input.opportunity.source === 'thread_reuse_gap') {
 		return availableThreads[0]?.id ?? null;
 	}
 
-	return availableThreads.length === 1 ? availableThreads[0]?.id ?? null : null;
+	return availableThreads.length === 1 ? (availableThreads[0]?.id ?? null) : null;
 }
 
 export async function createTaskFromSelfImprovementOpportunity(

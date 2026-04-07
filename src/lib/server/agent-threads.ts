@@ -15,7 +15,8 @@ import {
 } from '$lib/server/db/agent-threads-store';
 import {
 	getCodexSkillExecutionIssue,
-	getWorkspaceExecutionIssue
+	getWorkspaceExecutionIssue,
+	normalizeAdditionalWritableRoots
 } from '$lib/server/task-execution-workspace';
 import {
 	buildThreadAttachmentPrompt,
@@ -52,12 +53,10 @@ const NATIVE_THREAD_CACHE_TTL_MS = 3_000;
 const AUTH_REFRESH_FAILURE_MARKER = 'Auth(TokenRefreshFailed("Failed to parse server response"))';
 const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
 
-let nativeThreadCache:
-	| {
-			expiresAt: number;
-			threads: NativeCodexThread[];
-	  }
-	| null = null;
+let nativeThreadCache: {
+	expiresAt: number;
+	threads: NativeCodexThread[];
+} | null = null;
 
 function defaultDb(): AgentThreadsDb {
 	return {
@@ -91,12 +90,19 @@ function normalizeAgentThreadsDb(parsed: Partial<AgentThreadsDb>): AgentThreadsD
 			.filter((session) => Boolean(session) && typeof session === 'object')
 			.map((session) => {
 				const candidate = session as Partial<AgentThread>;
+				const cwd = typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '';
 
 				return {
 					...candidate,
 					id: typeof candidate.id === 'string' ? candidate.id : createAgentThreadId(),
 					name: typeof candidate.name === 'string' ? candidate.name : 'Untitled thread',
-					cwd: typeof candidate.cwd === 'string' ? normalizePathInput(candidate.cwd) : '',
+					cwd,
+					additionalWritableRoots: normalizeAdditionalWritableRoots(
+						cwd,
+						Array.isArray(candidate.additionalWritableRoots)
+							? candidate.additionalWritableRoots
+							: []
+					),
 					sandbox: parseAgentSandbox(candidate.sandbox, 'workspace-write'),
 					model:
 						typeof candidate.model === 'string' && candidate.model.trim() ? candidate.model : null,
@@ -613,6 +619,7 @@ function materializeNativeThread(thread: NativeCodexThread): AgentThread {
 		id: thread.id,
 		name: thread.name,
 		cwd: thread.cwd,
+		additionalWritableRoots: [],
 		sandbox: thread.sandbox,
 		model: thread.model,
 		threadId: thread.id,
@@ -634,6 +641,7 @@ async function writeRunnerConfig(input: {
 		runId: input.run.id,
 		mode: input.run.mode,
 		cwd: input.session.cwd,
+		additionalWritableRoots: input.session.additionalWritableRoots ?? [],
 		sandbox: input.session.sandbox,
 		model: input.session.model,
 		prompt: input.run.prompt,
@@ -1845,7 +1853,8 @@ export function reconcileControlPlaneThreadMessage(
 			? (data.runs.find((candidate) => candidate.id === task.latestRunId) ?? null)
 			: null;
 		const isLinkedToSession =
-			latestRun?.agentThreadId === agentThreadId || (!latestRun && task.agentThreadId === agentThreadId);
+			latestRun?.agentThreadId === agentThreadId ||
+			(!latestRun && task.agentThreadId === agentThreadId);
 
 		if (!isLinkedToSession) {
 			return task;
@@ -2153,12 +2162,18 @@ export function extractThreadIdFromOutputLine(line: string) {
 export async function startAgentThread(input: {
 	name: string;
 	cwd: string;
+	additionalWritableRoots?: string[];
 	prompt: string;
 	sandbox: AgentSandbox;
 	model: string | null;
 }) {
+	const additionalWritableRoots = normalizeAdditionalWritableRoots(
+		input.cwd,
+		input.additionalWritableRoots
+	);
 	const workspaceIssue = getWorkspaceExecutionIssue({
 		cwd: input.cwd,
+		additionalWritableRoots,
 		sandbox: input.sandbox,
 		scopeLabel: 'Project root'
 	});
@@ -2182,6 +2197,7 @@ export async function startAgentThread(input: {
 		id: agentThreadId,
 		name: input.name,
 		cwd: normalizePathInput(input.cwd),
+		additionalWritableRoots,
 		sandbox: input.sandbox,
 		model: input.model,
 		threadId: null,
@@ -2230,8 +2246,7 @@ export async function updateAgentThreadSandbox(agentThreadId: string, sandbox: A
 	}
 
 	const now = new Date().toISOString();
-	const baseSession =
-		existingSession ?? materializeNativeThread(nativeThread as NativeCodexThread);
+	const baseSession = existingSession ?? materializeNativeThread(nativeThread as NativeCodexThread);
 	const updatedSession: AgentThread = {
 		...baseSession,
 		sandbox,
@@ -2326,6 +2341,7 @@ export async function sendAgentThreadMessage(
 	});
 	const workspaceIssue = getWorkspaceExecutionIssue({
 		cwd: session.cwd,
+		additionalWritableRoots: session.additionalWritableRoots ?? [],
 		sandbox: session.sandbox,
 		scopeLabel: 'Project root'
 	});
@@ -2372,7 +2388,11 @@ export async function sendAgentThreadMessage(
 		runs: [run, ...current.runs]
 	}));
 	const controlPlane = await loadControlPlane();
-	const reconciledControlPlane = reconcileControlPlaneThreadMessage(controlPlane, agentThreadId, now);
+	const reconciledControlPlane = reconcileControlPlaneThreadMessage(
+		controlPlane,
+		agentThreadId,
+		now
+	);
 
 	if (reconciledControlPlane !== controlPlane) {
 		await updateControlPlane(() => reconciledControlPlane);

@@ -4,8 +4,15 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+const remotePreviewAllowedHosts = (process.env.AMS_REMOTE_PREVIEW_ALLOWED_HOSTS ?? '')
+	.split(',')
+	.map((value) => value.trim())
+	.filter(Boolean);
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	preview:
+		remotePreviewAllowedHosts.length > 0 ? { allowedHosts: remotePreviewAllowedHosts } : undefined,
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

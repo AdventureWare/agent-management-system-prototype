@@ -361,6 +361,7 @@ export type Project = {
 	defaultRepoPath: string;
 	defaultRepoUrl: string;
 	defaultBranch: string;
+	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
 };
 
@@ -388,6 +389,9 @@ export type Task = {
 	id: string;
 	title: string;
 	summary: string;
+	successCriteria?: string;
+	readyCondition?: string;
+	expectedOutcome?: string;
 	projectId: string;
 	area: Area;
 	goalId: string;

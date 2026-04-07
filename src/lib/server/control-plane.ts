@@ -7,7 +7,7 @@ import {
 	loadControlPlaneFromSqlite,
 	saveControlPlaneToSqlite
 } from '$lib/server/db/control-plane-store';
-import { normalizePathInput } from '$lib/server/path-tools';
+import { normalizePathInput, normalizePathListInput } from '$lib/server/path-tools';
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
 import {
 	APPROVAL_STATUS_OPTIONS,
@@ -142,6 +142,7 @@ function defaultData(): ControlPlaneData {
 type LegacyProject = Partial<Project> & {
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
+	additionalWritableRoots?: unknown;
 };
 
 type LegacyProvider = Partial<Provider> & {
@@ -194,6 +195,9 @@ type LegacyTask = Partial<Task> & {
 	attachments?: unknown;
 	estimateHours?: unknown;
 	targetDate?: unknown;
+	successCriteria?: unknown;
+	readyCondition?: unknown;
+	expectedOutcome?: unknown;
 };
 
 type LegacyRole = Partial<Role> & {
@@ -470,6 +474,7 @@ function normalizeProject(
 		typeof legacyProject.defaultArtifactRoot === 'string' ? legacyProject.defaultArtifactRoot : '';
 	const defaultRepoPath =
 		typeof legacyProject.defaultRepoPath === 'string' ? legacyProject.defaultRepoPath : '';
+	const additionalWritableRoots = normalizePathListInput(legacyProject.additionalWritableRoots);
 
 	return {
 		id: typeof legacyProject.id === 'string' ? legacyProject.id : createProjectId(),
@@ -482,6 +487,7 @@ function normalizeProject(
 			typeof legacyProject.defaultRepoUrl === 'string' ? legacyProject.defaultRepoUrl : '',
 		defaultBranch:
 			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : '',
+		additionalWritableRoots,
 		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox)
 	};
 }
@@ -499,7 +505,12 @@ function inferTaskProjectId(task: LegacyTask, projects: Project[]) {
 
 	const matches = projects
 		.flatMap((project) =>
-			[project.projectRootFolder, project.defaultArtifactRoot, project.defaultRepoPath]
+			[
+				project.projectRootFolder,
+				project.defaultArtifactRoot,
+				project.defaultRepoPath,
+				...(project.additionalWritableRoots ?? [])
+			]
 				.filter((candidate) => candidate && artifactPath.startsWith(candidate))
 				.map((candidate) => ({
 					projectId: project.id,
@@ -716,6 +727,9 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		id: typeof task.id === 'string' ? task.id : createTaskId(),
 		title: typeof task.title === 'string' ? task.title : '',
 		summary: typeof task.summary === 'string' ? task.summary : '',
+		successCriteria: typeof task.successCriteria === 'string' ? task.successCriteria : '',
+		readyCondition: typeof task.readyCondition === 'string' ? task.readyCondition : '',
+		expectedOutcome: typeof task.expectedOutcome === 'string' ? task.expectedOutcome : '',
 		projectId: inferTaskProjectId(task, projects),
 		area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
@@ -1253,6 +1267,7 @@ export function createProject(input: {
 	defaultRepoPath?: string;
 	defaultRepoUrl?: string;
 	defaultBranch?: string;
+	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
 }): Project {
 	return {
@@ -1264,6 +1279,7 @@ export function createProject(input: {
 		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
 		defaultRepoUrl: input.defaultRepoUrl ?? '',
 		defaultBranch: input.defaultBranch ?? '',
+		additionalWritableRoots: normalizePathListInput(input.additionalWritableRoots),
 		defaultThreadSandbox: input.defaultThreadSandbox ?? null
 	};
 }
@@ -1276,7 +1292,8 @@ export function projectMatchesPath(project: Project, path: string) {
 	const projectPaths = [
 		project.projectRootFolder,
 		project.defaultArtifactRoot,
-		project.defaultRepoPath
+		project.defaultRepoPath,
+		...(project.additionalWritableRoots ?? [])
 	].filter((candidate): candidate is string => Boolean(candidate));
 
 	return projectPaths.some((projectPath) => {
@@ -1352,6 +1369,9 @@ export function deleteProject(data: ControlPlaneData, projectId: string): Contro
 export function createTask(input: {
 	title: string;
 	summary: string;
+	successCriteria?: string;
+	readyCondition?: string;
+	expectedOutcome?: string;
 	projectId: string;
 	area?: Area;
 	goalId: string;
@@ -1379,6 +1399,9 @@ export function createTask(input: {
 		id: createTaskId(),
 		title: input.title,
 		summary: input.summary,
+		successCriteria: input.successCriteria ?? '',
+		readyCondition: input.readyCondition ?? '',
+		expectedOutcome: input.expectedOutcome ?? '',
 		projectId: input.projectId,
 		area,
 		goalId: input.goalId,

@@ -33,6 +33,7 @@ export type AgentThread = {
 	id: string;
 	name: string;
 	cwd: string;
+	additionalWritableRoots?: string[];
 	sandbox: AgentSandbox;
 	model: string | null;
 	threadId: string | null;

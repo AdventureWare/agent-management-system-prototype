@@ -1,12 +1,35 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { normalizePathListInput } from '$lib/server/path-tools';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 
 type WorkspaceCheckInput = {
 	cwd: string;
 	sandbox: AgentSandbox;
 	scopeLabel?: string;
+	additionalWritableRoots?: string[];
+};
+
+export type LocalPathAccessMode = 'read' | 'read_write';
+export type LocalPathAccessStatus =
+	| 'not_configured'
+	| 'ready'
+	| 'missing'
+	| 'needs_host_access'
+	| 'macos_cloud_probe_blocked';
+export type LocalPathSandboxCoverage =
+	| 'not_configured'
+	| 'project_root'
+	| 'additional_writable_root'
+	| 'danger_full_access'
+	| 'outside_sandbox';
+
+export type LocalPathAccessReport = {
+	path: string;
+	status: LocalPathAccessStatus;
+	message: string;
+	guidance: string | null;
 };
 
 function formatWorkspaceAccessFailure(error: unknown) {
@@ -28,16 +51,38 @@ function formatWorkspaceAccessFailure(error: unknown) {
 	}
 }
 
-function formatHostAccessIssue(input: WorkspaceCheckInput, error: unknown) {
-	const base = `${
-		input.scopeLabel ?? 'Workspace'
-	} exists but the current app process cannot access it: ${input.cwd}. ${formatWorkspaceAccessFailure(error)}`;
-
-	if (process.platform === 'darwin' && input.cwd.includes('/Library/Mobile Documents/')) {
-		return `${base} Grant Files and Folders or iCloud Drive access to the app or terminal running Codex, or move the workspace to a locally accessible folder.`;
+function formatHostAccessGuidance(path: string) {
+	if (process.platform === 'darwin' && path.includes('/Library/Mobile Documents/')) {
+		return 'Grant Files and Folders or iCloud Drive access to the app or terminal running Codex, or move the workspace to a locally accessible folder.';
 	}
 
-	return `${base} This is a host OS permission problem, not a Codex sandbox restriction.`;
+	return 'This is a host OS permission problem, not a Codex sandbox restriction.';
+}
+
+function isInconclusiveMacCloudPermissionError(path: string, error: unknown) {
+	const code = typeof error === 'object' && error && 'code' in error ? error.code : null;
+
+	return (
+		process.platform === 'darwin' &&
+		path.includes('/Library/Mobile Documents/') &&
+		(code === 'EPERM' || code === 'EACCES')
+	);
+}
+
+function getAccessMode(mode: LocalPathAccessMode) {
+	return mode === 'read_write' ? constants.R_OK | constants.W_OK : constants.R_OK;
+}
+
+function isPathWithinRoot(path: string, root: string) {
+	const normalizedPath = resolve(path);
+	const normalizedRoot = resolve(root);
+
+	if (normalizedPath === normalizedRoot) {
+		return true;
+	}
+
+	const relativePath = relative(normalizedRoot, normalizedPath);
+	return Boolean(relativePath) && !relativePath.startsWith('..') && !isAbsolute(relativePath);
 }
 
 function formatSkillValidationFailure(error: unknown) {
@@ -65,6 +110,100 @@ function listSkillFiles(root: string) {
 	} catch {
 		return [];
 	}
+}
+
+export function normalizeAdditionalWritableRoots(
+	cwd: string,
+	additionalWritableRoots: string[] | null | undefined
+) {
+	const normalizedCwd = cwd.trim();
+	return normalizePathListInput(additionalWritableRoots).filter((path) => path !== normalizedCwd);
+}
+
+export function probeLocalPathAccess(input: {
+	path: string;
+	mode?: LocalPathAccessMode;
+	allowMacCloudProbeFailure?: boolean;
+}) {
+	const path = input.path.trim();
+
+	if (!path) {
+		return {
+			path,
+			status: 'not_configured',
+			message: 'No path configured yet.',
+			guidance: 'Add an absolute folder path to manage access here.'
+		} satisfies LocalPathAccessReport;
+	}
+
+	if (!existsSync(path)) {
+		return {
+			path,
+			status: 'missing',
+			message: 'This path does not exist.',
+			guidance: 'Create the folder or update the project path before launching work.'
+		} satisfies LocalPathAccessReport;
+	}
+
+	try {
+		accessSync(path, getAccessMode(input.mode ?? 'read'));
+		return {
+			path,
+			status: 'ready',
+			message: 'Accessible to the current app process.',
+			guidance: null
+		} satisfies LocalPathAccessReport;
+	} catch (error) {
+		if (input.allowMacCloudProbeFailure && isInconclusiveMacCloudPermissionError(path, error)) {
+			return {
+				path,
+				status: 'macos_cloud_probe_blocked',
+				message: 'macOS blocked the direct access probe for this cloud-synced folder.',
+				guidance:
+					'AMS will still let a danger-full-access run try the real Codex launch path, but Files and Folders or iCloud Drive approval may still be required.'
+			} satisfies LocalPathAccessReport;
+		}
+
+		return {
+			path,
+			status: 'needs_host_access',
+			message: formatWorkspaceAccessFailure(error),
+			guidance: formatHostAccessGuidance(path)
+		} satisfies LocalPathAccessReport;
+	}
+}
+
+export function getLocalPathSandboxCoverage(input: {
+	cwd: string;
+	path: string;
+	sandbox: AgentSandbox;
+	additionalWritableRoots?: string[] | null | undefined;
+}): LocalPathSandboxCoverage {
+	const path = input.path.trim();
+
+	if (!path) {
+		return 'not_configured';
+	}
+
+	if (input.sandbox === 'danger-full-access') {
+		return 'danger_full_access';
+	}
+
+	if (!input.cwd.trim()) {
+		return 'outside_sandbox';
+	}
+
+	if (isPathWithinRoot(path, input.cwd)) {
+		return 'project_root';
+	}
+
+	for (const root of normalizeAdditionalWritableRoots(input.cwd, input.additionalWritableRoots)) {
+		if (isPathWithinRoot(path, root)) {
+			return 'additional_writable_root';
+		}
+	}
+
+	return 'outside_sandbox';
 }
 
 export function getCodexSkillExecutionIssue(
@@ -114,23 +253,52 @@ export function getWorkspaceExecutionIssue(input: WorkspaceCheckInput) {
 		return `${input.scopeLabel ?? 'Workspace'} does not exist: ${cwd}.`;
 	}
 
+	const accessTargets = [
+		{ label: input.scopeLabel ?? 'Workspace', path: cwd },
+		...normalizeAdditionalWritableRoots(cwd, input.additionalWritableRoots).map((path, index) => ({
+			label: `Additional writable root ${index + 1}`,
+			path
+		}))
+	];
+
 	if (input.sandbox === 'danger-full-access') {
-		try {
-			accessSync(cwd, constants.R_OK);
-			return null;
-		} catch (error) {
-			return formatHostAccessIssue({ ...input, cwd }, error);
+		for (const target of accessTargets) {
+			const report = probeLocalPathAccess({
+				path: target.path,
+				mode: 'read',
+				allowMacCloudProbeFailure: true
+			});
+
+			if (report.status === 'missing') {
+				return `${target.label} does not exist: ${target.path}.`;
+			}
+
+			if (report.status === 'macos_cloud_probe_blocked') {
+				continue;
+			}
+
+			if (report.status === 'needs_host_access') {
+				return `${target.label} exists but the current app process cannot access it: ${target.path}. ${report.message} ${report.guidance}`;
+			}
+		}
+
+		return null;
+	}
+
+	for (const target of accessTargets) {
+		const report = probeLocalPathAccess({
+			path: target.path,
+			mode: input.sandbox === 'read-only' ? 'read' : 'read_write'
+		});
+
+		if (report.status === 'missing') {
+			return `${target.label} does not exist: ${target.path}.`;
+		}
+
+		if (report.status !== 'ready') {
+			return `${target.label} cannot be used with the ${input.sandbox} sandbox: ${target.path}. ${report.message}`;
 		}
 	}
 
-	const mode = input.sandbox === 'read-only' ? constants.R_OK : constants.R_OK | constants.W_OK;
-
-	try {
-		accessSync(cwd, mode);
-		return null;
-	} catch (error) {
-		return `${
-			input.scopeLabel ?? 'Workspace'
-		} cannot be used with the ${input.sandbox} sandbox: ${cwd}. ${formatWorkspaceAccessFailure(error)}`;
-	}
+	return null;
 }

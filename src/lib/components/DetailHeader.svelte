@@ -9,6 +9,7 @@
 		eyebrow,
 		title,
 		description = '',
+		density = 'default',
 		titleClass = '',
 		descriptionClass = '',
 		actions,
@@ -20,6 +21,7 @@
 		eyebrow?: string;
 		title: string;
 		description?: string;
+		density?: 'default' | 'compact';
 		titleClass?: string;
 		descriptionClass?: string;
 		actions?: Snippet;
@@ -38,5 +40,14 @@
 		</a>
 	{/if}
 
-	<PageHeader {eyebrow} {title} {description} {titleClass} {descriptionClass} {actions} {meta} />
+	<PageHeader
+		{eyebrow}
+		{title}
+		{description}
+		{density}
+		{titleClass}
+		{descriptionClass}
+		{actions}
+		{meta}
+	/>
 </div>

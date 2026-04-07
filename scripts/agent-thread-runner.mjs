@@ -63,9 +63,15 @@ await writeState(config.statePath, {
 const logStream = createWriteStream(config.logPath, { flags: 'a' });
 logStream.write(`=== ${new Date().toISOString()} ${config.mode.toUpperCase()} ===\n`);
 logStream.write(`cwd=${config.cwd ?? '(resume)'}\n`);
+if (Array.isArray(config.additionalWritableRoots) && config.additionalWritableRoots.length > 0) {
+	logStream.write(`additionalWritableRoots=${config.additionalWritableRoots.join(', ')}\n`);
+}
 
 const child = spawn(config.codexBin, buildCodexArgs(config), {
-	cwd: config.cwd,
+	// Let Codex change into the target workspace via -C. Some macOS-protected paths
+	// such as iCloud Drive can fail when the subprocess itself is launched with that
+	// directory as the OS-level cwd, even though Codex can still access the same path.
+	cwd: process.cwd(),
 	env: {
 		...process.env,
 		NO_COLOR: '1'

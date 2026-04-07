@@ -122,21 +122,19 @@ function rankOpportunity(opportunity: SelfImprovementOpportunity): SelfImproveme
 }
 
 export function rankSelfImprovementOpportunities(opportunities: SelfImprovementOpportunity[]) {
-	return opportunities
-		.map(rankOpportunity)
-		.sort((left, right) => {
-			if ((right.rankingScore ?? 0) !== (left.rankingScore ?? 0)) {
-				return (right.rankingScore ?? 0) - (left.rankingScore ?? 0);
-			}
+	return opportunities.map(rankOpportunity).sort((left, right) => {
+		if ((right.rankingScore ?? 0) !== (left.rankingScore ?? 0)) {
+			return (right.rankingScore ?? 0) - (left.rankingScore ?? 0);
+		}
 
-			const severityRank = SEVERITY_SCORE[right.severity] - SEVERITY_SCORE[left.severity];
+		const severityRank = SEVERITY_SCORE[right.severity] - SEVERITY_SCORE[left.severity];
 
-			if (severityRank !== 0) {
-				return severityRank;
-			}
+		if (severityRank !== 0) {
+			return severityRank;
+		}
 
-			return left.title.localeCompare(right.title);
-		});
+		return left.title.localeCompare(right.title);
+	});
 }
 
 export function rankSelfImprovementAnalysis(

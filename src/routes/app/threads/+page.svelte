@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThreads, updateAgentThreadArchiveState } from '$lib/client/agent-threads';
+	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -18,6 +19,7 @@
 	} from '$lib/thread-activity';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
 	import type { AgentThreadDetail } from '$lib/types/agent-thread';
+	import { fromStore } from 'svelte/store';
 	import { fade } from 'svelte/transition';
 
 	type ArchiveAction = 'archive' | 'unarchive';
@@ -31,15 +33,20 @@
 	let isRefreshing = $state(false);
 	let isUpdatingArchive = $state(false);
 	let now = $state(Date.now());
-	let sessions = $state.raw<AgentThreadDetail[]>([]);
 	let selectedThreadIds = $state.raw<string[]>([]);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
+	const threadStoreState = fromStore(agentThreadStore);
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
 		timeStyle: 'short'
 	});
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+	let sessions = $derived.by(() =>
+		threadStoreState.current.orderedIds
+			.map((threadId) => threadStoreState.current.byId[threadId])
+			.filter((session): session is AgentThreadDetail => Boolean(session))
+	);
 
 	let filteredSessions = $derived.by(() => {
 		const term = query.trim().toLowerCase();
@@ -123,7 +130,7 @@
 	});
 
 	$effect(() => {
-		sessions = data.threads ?? [];
+		agentThreadStore.seedThreads(data.threads ?? [], { replace: true });
 	});
 
 	$effect(() => {
@@ -178,7 +185,9 @@
 	}
 
 	async function loadSessions() {
-		sessions = await fetchAgentThreads({ includeArchived: true });
+		agentThreadStore.seedThreads(await fetchAgentThreads({ includeArchived: true }), {
+			replace: true
+		});
 	}
 
 	async function refreshSessions(options: { force?: boolean } = {}) {
@@ -215,7 +224,7 @@
 
 		try {
 			const updatedThreadIds = await updateAgentThreadArchiveState(threadIds, archived);
-			await loadSessions();
+			agentThreadStore.patchArchiveState(updatedThreadIds, archived);
 			selectedThreadIds = [];
 			pageNotice = {
 				tone: 'success',
@@ -368,7 +377,9 @@
 		{emptyMessage}
 	>
 		<div class="space-y-3 lg:hidden">
-			<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+			<div
+				class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+			>
 				<p class="text-xs font-medium tracking-[0.14em] text-slate-400 uppercase">
 					Select shown threads
 				</p>
@@ -417,7 +428,9 @@
 										href={resolve(`/app/threads/${session.id}`)}
 										aria-label={`View thread details for ${session.name}`}
 									>
-										<p class="ui-wrap-anywhere text-base font-semibold text-white">{session.name}</p>
+										<p class="ui-wrap-anywhere text-base font-semibold text-white">
+											{session.name}
+										</p>
 										<p class="ui-clamp-3 mt-2 text-sm text-slate-400">
 											{session.model ?? 'default model'} · {session.sandbox}
 										</p>
@@ -472,9 +485,15 @@
 
 							<div class="grid gap-3 sm:grid-cols-2">
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last activity</p>
-									<p class="mt-2 text-sm text-white">{formatActivityAge(session.lastActivityAt, now)}</p>
-									<p class="mt-1 text-xs text-slate-500">{formatTimestamp(session.lastActivityAt)}</p>
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Last activity
+									</p>
+									<p class="mt-2 text-sm text-white">
+										{formatActivityAge(session.lastActivityAt, now)}
+									</p>
+									<p class="mt-1 text-xs text-slate-500">
+										{formatTimestamp(session.lastActivityAt)}
+									</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Started</p>
@@ -503,7 +522,9 @@
 							</div>
 
 							<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Working directory</p>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Working directory
+								</p>
 								<p class="ui-clamp-3 mt-2 text-sm text-slate-300">{session.cwd}</p>
 							</div>
 
@@ -682,21 +703,21 @@
 		</table>
 	</DataTableSection>
 {/snippet}
-	<AppPage width="full" class="gap-6 px-1 py-4 sm:px-2 sm:py-6 xl:px-4">
-		<PageHeader
-			eyebrow="Threads"
-			title="Browse active and historical threads"
-			description="Use this page as the remote-work registry for live runs, resumable threads, and older history."
-		>
-			{#snippet meta()}
-				<div class="space-y-2 text-sm text-slate-400">
-					<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-						<label
-							class="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
-						>
-							<input bind:checked={autoRefresh} type="checkbox" />
-							<span>Auto-refresh every {autoRefreshIntervalLabel}</span>
-						</label>
+<AppPage width="full" class="gap-6 px-1 py-4 sm:px-2 sm:py-6 xl:px-4">
+	<PageHeader
+		eyebrow="Threads"
+		title="Browse active and historical threads"
+		description="Use this page as the remote-work registry for live runs, resumable threads, and older history."
+	>
+		{#snippet meta()}
+			<div class="space-y-2 text-sm text-slate-400">
+				<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+					<label
+						class="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+					>
+						<input bind:checked={autoRefresh} type="checkbox" />
+						<span>Auto-refresh every {autoRefreshIntervalLabel}</span>
+					</label>
 					<AppButton
 						class="w-full sm:w-auto"
 						type="button"
@@ -705,18 +726,18 @@
 						reserveLabel="Refreshing..."
 						onclick={() => {
 							void refreshSessions({ force: true });
-					}}
-					disabled={isRefreshing}
+						}}
+						disabled={isRefreshing}
 					>
 						{isRefreshing ? 'Refreshing...' : 'Refresh all'}
 					</AppButton>
-					</div>
-					<p class="text-xs text-slate-500">
-						Refresh pauses while you are typing or when this tab is in the background.
-					</p>
 				</div>
-			{/snippet}
-		</PageHeader>
+				<p class="text-xs text-slate-500">
+					Refresh pauses while you are typing or when this tab is in the background.
+				</p>
+			</div>
+		{/snippet}
+	</PageHeader>
 
 	{#if pageNotice}
 		<p
@@ -733,7 +754,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+	<div class="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-5">
 		<MetricCard label="Active" value={activeCount} />
 		<MetricCard label="Available" value={availableCount} />
 		<MetricCard label="Closed / idle" value={inactiveCount} />

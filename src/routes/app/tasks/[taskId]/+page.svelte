@@ -1,8 +1,14 @@
 <script lang="ts">
 	import type { ActionData, PageData } from './$types';
 	import { resolve } from '$app/paths';
+	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import {
+		collectTaskLinkedThreads,
+		mergeTaskThreadCandidateState,
+		mergeTaskThreadState
+	} from '$lib/client/task-thread-state';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
@@ -29,16 +35,34 @@
 		runStatusToneClass,
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
+	import { fromStore } from 'svelte/store';
 
 	let props = $props<{ data: PageData; form?: ActionData }>();
 	let form = $derived(props.form);
 	let refreshedData = $state.raw<PageData | null>(null);
-	let data = $derived(refreshedData ?? props.data);
+	let sourceData = $derived(refreshedData ?? props.data);
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
+	const threadStoreState = fromStore(agentThreadStore);
+	let data = $derived.by(() => ({
+		...sourceData,
+		task: mergeTaskThreadState(sourceData.task, threadStoreState.current.byId),
+		candidateThreads: sourceData.candidateThreads.map(
+			(thread: PageData['candidateThreads'][number]) =>
+				mergeTaskThreadCandidateState(thread, threadStoreState.current.byId)
+		),
+		suggestedThread: mergeTaskThreadCandidateState(
+			sourceData.suggestedThread,
+			threadStoreState.current.byId
+		)
+	}));
 
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+
+	$effect(() => {
+		agentThreadStore.seedThreads(collectTaskLinkedThreads(sourceData.task), { replace: false });
+	});
 
 	function assignmentSuggestionIsEligible(suggestion: PageData['assignmentSuggestions'][number]) {
 		return suggestion.eligible;
@@ -712,6 +736,42 @@
 								>{data.task.summary}</textarea
 							>
 						</label>
+
+						<div class="grid gap-4 lg:grid-cols-3">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Success criteria
+								</span>
+								<textarea
+									class="textarea min-h-28 text-white"
+									name="successCriteria"
+									placeholder="Describe how a reviewer should judge this task as complete."
+									>{data.task.successCriteria ?? ''}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200"> Ready condition </span>
+								<textarea
+									class="textarea min-h-28 text-white"
+									name="readyCondition"
+									placeholder="Describe what must already be true before this task should run."
+									>{data.task.readyCondition ?? ''}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Expected outcome
+								</span>
+								<textarea
+									class="textarea min-h-28 text-white"
+									name="expectedOutcome"
+									placeholder="Describe the desired end state or deliverable."
+									>{data.task.expectedOutcome ?? ''}</textarea
+								>
+							</label>
+						</div>
 					</div>
 				</section>
 
@@ -844,12 +904,19 @@
 											</p>
 										</div>
 										<p class="text-xs text-slate-500">
-											{suggestion.assignedOpenTaskCount} open assigned task(s)
+											{suggestion.assignedOpenTaskCount} open task(s) · {suggestion.activeRunCount}
+											active run(s)
 										</p>
 									</div>
 
-									{#if suggestion.missingCapabilityNames.length > 0 || suggestion.missingToolNames.length > 0}
+									{#if !suggestion.withinConcurrencyLimit || suggestion.missingCapabilityNames.length > 0 || suggestion.missingToolNames.length > 0}
 										<div class="mt-3 space-y-2 text-xs text-slate-300">
+											{#if !suggestion.withinConcurrencyLimit}
+												<p>
+													At concurrency limit: {suggestion.activeRunCount} active run(s), {suggestion.availableRunCapacity}
+													slot(s) open.
+												</p>
+											{/if}
 											{#if suggestion.missingCapabilityNames.length > 0}
 												<p>
 													Missing capabilities: {suggestion.missingCapabilityNames.join(', ')}
@@ -1088,6 +1155,35 @@
 							</p>
 							<p class="mt-2 text-sm text-slate-300">
 								{data.task.desiredRoleName || data.task.desiredRoleId || 'No role preference'}
+							</p>
+						</div>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-3">
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Success criteria
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{data.task.successCriteria || 'No success criteria recorded.'}
+							</p>
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Ready condition
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{data.task.readyCondition || 'No ready condition recorded.'}
+							</p>
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Expected outcome
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{data.task.expectedOutcome || 'No expected outcome recorded.'}
 							</p>
 						</div>
 					</div>

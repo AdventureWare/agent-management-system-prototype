@@ -486,6 +486,7 @@ describe('control-plane helpers', () => {
 		expect(project.defaultRepoPath).toBe('');
 		expect(project.defaultRepoUrl).toBe('');
 		expect(project.defaultBranch).toBe('');
+		expect(project.additionalWritableRoots).toEqual([]);
 		expect(project.defaultThreadSandbox).toBeNull();
 	});
 
@@ -495,12 +496,17 @@ describe('control-plane helpers', () => {
 			summary: 'holds reusable paths and repo defaults',
 			projectRootFolder: "'/tmp/prototype'",
 			defaultArtifactRoot: '"/tmp/prototype/agent_output"',
-			defaultRepoPath: "'/tmp/checkouts/prototype'"
+			defaultRepoPath: "'/tmp/checkouts/prototype'",
+			additionalWritableRoots: ["'/tmp/iCloud/Documents'", '"/tmp/dropbox/shared"']
 		});
 
 		expect(project.projectRootFolder).toBe('/tmp/prototype');
 		expect(project.defaultArtifactRoot).toBe('/tmp/prototype/agent_output');
 		expect(project.defaultRepoPath).toBe('/tmp/checkouts/prototype');
+		expect(project.additionalWritableRoots).toEqual([
+			'/tmp/iCloud/Documents',
+			'/tmp/dropbox/shared'
+		]);
 	});
 
 	it('matches project paths against configured roots with path boundaries', () => {
@@ -509,13 +515,15 @@ describe('control-plane helpers', () => {
 			summary: 'holds reusable paths and repo defaults',
 			projectRootFolder: '/tmp/prototype',
 			defaultArtifactRoot: '/tmp/prototype/agent_output',
-			defaultRepoPath: '/tmp/checkouts/prototype'
+			defaultRepoPath: '/tmp/checkouts/prototype',
+			additionalWritableRoots: ['/tmp/iCloud/shared']
 		});
 
 		expect(projectMatchesPath(project, '/tmp/prototype')).toBe(true);
 		expect(projectMatchesPath(project, '/tmp/prototype/docs/brief.md')).toBe(true);
 		expect(projectMatchesPath(project, '/tmp/prototype-app')).toBe(false);
 		expect(projectMatchesPath(project, '/tmp/checkouts/prototype/src')).toBe(true);
+		expect(projectMatchesPath(project, '/tmp/iCloud/shared/client/brief.md')).toBe(true);
 		expect(projectMatchesPath(project, '/tmp/unrelated/output')).toBe(false);
 	});
 

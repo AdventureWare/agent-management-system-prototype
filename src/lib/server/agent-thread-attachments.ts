@@ -58,7 +58,11 @@ function isInlineAttachment(upload: File) {
 }
 
 function decodeInlineAttachment(buffer: Buffer) {
-	const normalized = buffer.toString('utf8').replace(/\r\n/g, '\n').replace(/\u0000/g, '').trim();
+	const normalized = buffer
+		.toString('utf8')
+		.replace(/\r\n/g, '\n')
+		.replace(/\u0000/g, '')
+		.trim();
 
 	if (!normalized) {
 		return null;

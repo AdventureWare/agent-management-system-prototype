@@ -2,10 +2,11 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import { agentThreadStore } from '$lib/client/agent-thread-store';
+	import { collectTaskLinkedThreads, mergeTaskThreadState } from '$lib/client/task-thread-state';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
-	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import DataTableSection from '$lib/components/DataTableSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -24,8 +25,10 @@
 		taskStatusToneClass
 	} from '$lib/types/control-plane';
 	import type { TaskStaleSignalKey } from '$lib/types/task-work-item';
+	import { fromStore } from 'svelte/store';
 
 	let { data, form } = $props();
+	type TaskRow = (typeof data.tasks)[number];
 
 	let query = $state('');
 	let selectedStatus = $state('all');
@@ -40,6 +43,7 @@
 	>([]);
 
 	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
+	const threadStoreState = fromStore(agentThreadStore);
 
 	function createDialogShouldStartOpen() {
 		return (
@@ -50,9 +54,9 @@
 	let isCreateModalOpen = $state(createDialogShouldStartOpen());
 
 	const STALE_FILTERS = [
-		{ key: 'staleInProgress', label: 'Stale in-progress' },
-		{ key: 'noRecentRunActivity', label: 'No recent run activity' },
-		{ key: 'activeThreadNoRecentOutput', label: 'Active thread, no recent output' }
+		{ key: 'staleInProgress', label: 'Stale WIP' },
+		{ key: 'noRecentRunActivity', label: 'Quiet run' },
+		{ key: 'activeThreadNoRecentOutput', label: 'Quiet thread' }
 	] as const;
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createTask');
@@ -70,6 +74,16 @@
 		return data.deleted ? 1 : 0;
 	});
 	let deleteSuccess = $derived(deleteCount > 0);
+	let tasks = $derived.by(() =>
+		data.tasks.map((task) => mergeTaskThreadState(task, threadStoreState.current.byId))
+	);
+
+	$effect(() => {
+		agentThreadStore.seedThreads(
+			data.tasks.flatMap((task) => collectTaskLinkedThreads(task)),
+			{ replace: false }
+		);
+	});
 
 	function compactText(value: string, maxLength = 120) {
 		const normalized = value.replace(/\s+/g, ' ').trim();
@@ -185,7 +199,7 @@
 		mergeCreateAttachmentFiles(pastedFiles);
 	}
 
-	function matchesTask(task: (typeof data.tasks)[number], term: string) {
+	function matchesTask(task: TaskRow, term: string) {
 		const normalizedTerm = term.trim().toLowerCase();
 
 		if (!normalizedTerm) {
@@ -234,7 +248,7 @@
 		}
 	}
 
-	function staleBadgeLabel(task: (typeof data.tasks)[number], signal: TaskStaleSignalKey) {
+	function staleBadgeLabel(task: TaskRow, signal: TaskStaleSignalKey) {
 		switch (signal) {
 			case 'staleInProgress':
 				return `Stale WIP ${task.freshness.taskAgeLabel}`;
@@ -253,7 +267,7 @@
 			: [...selectedStaleFilters, filterKey];
 	}
 
-	function matchesStaleFilters(task: (typeof data.tasks)[number]) {
+	function matchesStaleFilters(task: TaskRow) {
 		if (selectedStaleFilters.length === 0) {
 			return true;
 		}
@@ -261,7 +275,7 @@
 		return selectedStaleFilters.some((filterKey) => task.freshness[filterKey]);
 	}
 
-	function threadActionLabel(task: (typeof data.tasks)[number]) {
+	function threadActionLabel(task: TaskRow) {
 		if (!task.linkThread) {
 			return '';
 		}
@@ -291,7 +305,7 @@
 		selectedTaskIds = selectedTaskIds.filter((candidate) => candidate !== taskId);
 	}
 
-	function setSelectionForRows(rows: (typeof data.tasks)[number][], checked: boolean) {
+	function setSelectionForRows(rows: TaskRow[], checked: boolean) {
 		const rowIds = rows.map((task) => task.id);
 		const rowIdSet = new Set(rowIds);
 
@@ -303,7 +317,7 @@
 		selectedTaskIds = selectedTaskIds.filter((taskId) => !rowIdSet.has(taskId));
 	}
 
-	function areAllRowsSelected(rows: (typeof data.tasks)[number][]) {
+	function areAllRowsSelected(rows: TaskRow[]) {
 		return rows.length > 0 && rows.every((task) => isTaskSelected(task.id));
 	}
 
@@ -328,7 +342,7 @@
 	});
 
 	let filteredTasks = $derived.by(() =>
-		data.tasks.filter((task) => {
+		tasks.filter((task) => {
 			if (selectedStatus !== 'all' && task.status !== selectedStatus) {
 				return false;
 			}
@@ -344,14 +358,13 @@
 	let completedTasks = $derived(filteredTasks.filter((task) => task.status === 'done'));
 	let visibleTaskRows = $derived(selectedTaskView === 'completed' ? completedTasks : activeTasks);
 	let staleTaskCount = $derived(
-		data.tasks.filter((task) => task.freshness.staleSignals.length > 0).length
+		tasks.filter((task) => task.freshness.staleSignals.length > 0).length
 	);
 	let staleFilterCounts = $derived.by(() => ({
-		staleInProgress: data.tasks.filter((task) => task.freshness.staleInProgress).length,
-		noRecentRunActivity: data.tasks.filter((task) => task.freshness.noRecentRunActivity).length,
-		activeThreadNoRecentOutput: data.tasks.filter(
-			(task) => task.freshness.activeThreadNoRecentOutput
-		).length
+		staleInProgress: tasks.filter((task) => task.freshness.staleInProgress).length,
+		noRecentRunActivity: tasks.filter((task) => task.freshness.noRecentRunActivity).length,
+		activeThreadNoRecentOutput: tasks.filter((task) => task.freshness.activeThreadNoRecentOutput)
+			.length
 	}));
 	let createTaskFormValues = $derived(
 		form?.formContext === 'taskCreate'
@@ -359,6 +372,9 @@
 					projectId: form.projectId?.toString() ?? '',
 					name: form.name?.toString() ?? '',
 					instructions: form.instructions?.toString() ?? '',
+					successCriteria: form.successCriteria?.toString() ?? '',
+					readyCondition: form.readyCondition?.toString() ?? '',
+					expectedOutcome: form.expectedOutcome?.toString() ?? '',
 					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
@@ -390,6 +406,9 @@
 					projectId: '',
 					name: '',
 					instructions: '',
+					successCriteria: '',
+					readyCondition: '',
+					expectedOutcome: '',
 					assigneeWorkerId: '',
 					targetDate: '',
 					goalId: '',
@@ -409,6 +428,9 @@
 	let createTaskProjectId = $state('');
 	let createTaskName = $state('');
 	let createTaskInstructions = $state('');
+	let createTaskSuccessCriteria = $state('');
+	let createTaskReadyCondition = $state('');
+	let createTaskExpectedOutcome = $state('');
 	let createTaskAssigneeWorkerId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
@@ -456,6 +478,18 @@
 			parts.push('Blocker recorded');
 		}
 
+		if (createTaskSuccessCriteria.trim()) {
+			parts.push('Success criteria set');
+		}
+
+		if (createTaskReadyCondition.trim()) {
+			parts.push('Ready condition set');
+		}
+
+		if (createTaskExpectedOutcome.trim()) {
+			parts.push('Expected outcome set');
+		}
+
 		if (createTaskDependencyCount > 0) {
 			parts.push(
 				createTaskDependencyCount === 1
@@ -470,6 +504,9 @@
 	});
 
 	function shouldOpenCreateTaskAdvancedIntake(input: {
+		successCriteria?: string;
+		readyCondition?: string;
+		expectedOutcome?: string;
 		priority?: string;
 		riskLevel?: string;
 		approvalMode?: string;
@@ -479,6 +516,9 @@
 		dependencyTaskIds?: string[];
 	}) {
 		return (
+			Boolean(input.successCriteria?.trim()) ||
+			Boolean(input.readyCondition?.trim()) ||
+			Boolean(input.expectedOutcome?.trim()) ||
 			(input.priority ?? 'medium') !== 'medium' ||
 			(input.riskLevel ?? 'medium') !== 'medium' ||
 			(input.approvalMode ?? 'none') !== 'none' ||
@@ -507,6 +547,9 @@
 					projectId?: string;
 					name?: string;
 					instructions?: string;
+					successCriteria?: string;
+					readyCondition?: string;
+					expectedOutcome?: string;
 					assigneeWorkerId?: string;
 					targetDate?: string;
 					goalId?: string;
@@ -532,6 +575,9 @@
 			Boolean(draft.projectId?.trim()) ||
 			Boolean(draft.name?.trim()) ||
 			Boolean(draft.instructions?.trim()) ||
+			Boolean(draft.successCriteria?.trim()) ||
+			Boolean(draft.readyCondition?.trim()) ||
+			Boolean(draft.expectedOutcome?.trim()) ||
 			Boolean(draft.assigneeWorkerId?.trim()) ||
 			Boolean(draft.targetDate?.trim()) ||
 			Boolean(draft.goalId?.trim()) ||
@@ -555,6 +601,9 @@
 		createTaskProjectId = prefill?.projectId ?? '';
 		createTaskName = prefill?.name ?? '';
 		createTaskInstructions = prefill?.instructions ?? '';
+		createTaskSuccessCriteria = prefill?.successCriteria ?? '';
+		createTaskReadyCondition = prefill?.readyCondition ?? '';
+		createTaskExpectedOutcome = prefill?.expectedOutcome ?? '';
 		createTaskAssigneeWorkerId = prefill?.assigneeWorkerId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
@@ -569,6 +618,9 @@
 		createTaskRequiredCapabilityNames = prefill?.requiredCapabilityNames ?? '';
 		createTaskRequiredToolNames = prefill?.requiredToolNames ?? '';
 		syncCreateTaskAdvancedOpen({
+			successCriteria: createTaskSuccessCriteria,
+			readyCondition: createTaskReadyCondition,
+			expectedOutcome: createTaskExpectedOutcome,
 			priority: createTaskPriority,
 			riskLevel: createTaskRiskLevel,
 			approvalMode: createTaskApprovalMode,
@@ -582,6 +634,9 @@
 	function resetCreateTaskMetadata() {
 		createTaskGoalId = '';
 		createTaskArea = 'product';
+		createTaskSuccessCriteria = '';
+		createTaskReadyCondition = '';
+		createTaskExpectedOutcome = '';
 		createTaskPriority = 'medium';
 		createTaskRiskLevel = 'medium';
 		createTaskApprovalMode = 'none';
@@ -597,6 +652,9 @@
 			createTaskProjectId = createTaskFormValues.projectId;
 			createTaskName = createTaskFormValues.name;
 			createTaskInstructions = createTaskFormValues.instructions;
+			createTaskSuccessCriteria = createTaskFormValues.successCriteria;
+			createTaskReadyCondition = createTaskFormValues.readyCondition;
+			createTaskExpectedOutcome = createTaskFormValues.expectedOutcome;
 			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
@@ -642,6 +700,9 @@
 			projectId: string;
 			name: string;
 			instructions: string;
+			successCriteria: string;
+			readyCondition: string;
+			expectedOutcome: string;
 			assigneeWorkerId: string;
 			targetDate: string;
 			goalId: string;
@@ -661,6 +722,9 @@
 			createTaskProjectId = savedDraft.projectId ?? '';
 			createTaskName = savedDraft.name ?? '';
 			createTaskInstructions = savedDraft.instructions ?? '';
+			createTaskSuccessCriteria = savedDraft.successCriteria ?? '';
+			createTaskReadyCondition = savedDraft.readyCondition ?? '';
+			createTaskExpectedOutcome = savedDraft.expectedOutcome ?? '';
 			createTaskAssigneeWorkerId = savedDraft.assigneeWorkerId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
@@ -675,6 +739,9 @@
 			createTaskRequiredCapabilityNames = savedDraft.requiredCapabilityNames ?? '';
 			createTaskRequiredToolNames = savedDraft.requiredToolNames ?? '';
 			syncCreateTaskAdvancedOpen({
+				successCriteria: createTaskSuccessCriteria,
+				readyCondition: createTaskReadyCondition,
+				expectedOutcome: createTaskExpectedOutcome,
 				priority: createTaskPriority,
 				riskLevel: createTaskRiskLevel,
 				approvalMode: createTaskApprovalMode,
@@ -702,6 +769,9 @@
 			projectId: createTaskProjectId === defaultProjectId ? '' : createTaskProjectId,
 			name: createTaskName,
 			instructions: createTaskInstructions,
+			successCriteria: createTaskSuccessCriteria,
+			readyCondition: createTaskReadyCondition,
+			expectedOutcome: createTaskExpectedOutcome,
 			assigneeWorkerId: createTaskAssigneeWorkerId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
@@ -719,12 +789,7 @@
 	});
 </script>
 
-{#snippet taskTable(
-	title: string,
-	description: string,
-	rows: (typeof data.tasks)[number][],
-	emptyMessage: string
-)}
+{#snippet taskTable(title: string, description: string, rows: TaskRow[], emptyMessage: string)}
 	<DataTableSection
 		{title}
 		{description}
@@ -733,7 +798,9 @@
 		{emptyMessage}
 	>
 		<div class="space-y-3 lg:hidden">
-			<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+			<div
+				class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+			>
 				<p class="text-xs font-medium tracking-[0.14em] text-slate-400 uppercase">
 					Select shown tasks
 				</p>
@@ -1120,11 +1187,12 @@
 {/snippet}
 
 <AppPage width="full" class="min-w-0">
-	<div class="flex flex-col gap-6 px-1 sm:px-2 xl:px-4 2xl:px-8">
+	<div class="flex flex-col gap-4 px-1 sm:gap-5 sm:px-2 xl:px-4 2xl:px-8">
 		<PageHeader
+			density="compact"
 			eyebrow="Tasks"
 			title="Browse the queue, then open one task"
-			description="Scan by status, search for a brief, and use the detail page for editing, launches, and deeper execution context."
+			description="Scan, filter, and open a task. Use the detail page for editing, launches, and deeper execution context."
 		>
 			{#snippet actions()}
 				<AppButton
@@ -1191,22 +1259,10 @@
 			</p>
 		{/if}
 
-		<div class="grid grid-cols-2 gap-3 xl:grid-cols-3">
-			<MetricCard
-				label="Active queue"
-				value={activeTasks.length}
-				detail="Draft, ready, blocked, review, and in-progress tasks that still need attention."
-			/>
-			<MetricCard
-				label="Completed"
-				value={completedTasks.length}
-				detail="Finished tasks still available for reference and follow-up."
-			/>
-			<MetricCard
-				label="Stale signals"
-				value={staleTaskCount}
-				detail="Tasks currently flagged for stale work, quiet threads, or inactive runs."
-			/>
+		<div class="grid grid-cols-2 gap-2.5 xl:grid-cols-3">
+			<MetricCard density="compact" label="Active queue" value={activeTasks.length} />
+			<MetricCard density="compact" label="Completed" value={completedTasks.length} />
+			<MetricCard density="compact" label="Stale signals" value={staleTaskCount} />
 		</div>
 
 		{#if data.projects.length === 0}
@@ -1223,31 +1279,37 @@
 				</a>
 			</section>
 		{:else}
-			<div class="space-y-6">
-				<CollectionToolbar
-					title="Task index"
-					description="Search by task title, summary, project, assignee, or artifact path."
+			<div class="space-y-4 sm:space-y-5">
+				<section
+					class="ui-toolbar sticky top-0 z-20 border-slate-800/95 bg-slate-950/88 p-3.5 shadow-[0_18px_48px_rgba(2,6,23,0.45)] backdrop-blur supports-[backdrop-filter]:bg-slate-950/72 sm:p-4"
+					data-testid="task-index-toolbar"
 				>
-					{#snippet controls()}
-						<div class="w-full lg:max-w-sm">
-							<label class="sr-only" for="task-search">Search tasks</label>
-							<input
-								id="task-search"
-								bind:value={query}
-								autocomplete="off"
-								autocapitalize="off"
-								autocorrect="off"
-								class="input text-white placeholder:text-slate-500"
-								data-persist-off
-								placeholder="Search tasks…"
-								spellcheck="false"
-							/>
+					<div class="flex flex-col gap-3">
+						<div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+							<div class="min-w-0">
+								<h2 class="text-lg font-semibold text-white">Task index</h2>
+							</div>
+
+							<div class="w-full xl:max-w-sm">
+								<label class="sr-only" for="task-search">Search tasks</label>
+								<input
+									id="task-search"
+									bind:value={query}
+									autocomplete="off"
+									autocapitalize="off"
+									autocorrect="off"
+									class="input text-white placeholder:text-slate-500"
+									data-persist-off
+									placeholder="Search tasks…"
+									spellcheck="false"
+								/>
+							</div>
 						</div>
 
 						<div class="flex flex-wrap gap-2">
 							<button
 								class={[
-									'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+									'inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.6875rem] leading-none font-medium tracking-[0.14em] uppercase transition',
 									selectedStatus === 'all'
 										? 'border-sky-400/40 bg-sky-400 text-slate-950'
 										: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
@@ -1263,7 +1325,7 @@
 							{#each data.statusOptions as status (status)}
 								<button
 									class={[
-										'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+										'inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.6875rem] leading-none font-medium tracking-[0.14em] uppercase transition',
 										selectedStatus === status
 											? 'border-sky-400/40 bg-sky-400 text-slate-950'
 											: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
@@ -1278,14 +1340,16 @@
 							{/each}
 						</div>
 
-						<div class="flex flex-col gap-2 lg:items-start xl:items-end">
-							<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Stale work filters</p>
-							<div class="flex flex-wrap gap-2">
+						<div class="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:justify-between">
+							<p class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+								Stale work filters
+							</p>
+							<div class="flex flex-wrap gap-2 xl:justify-end">
 								{#each STALE_FILTERS as filter (filter.key)}
 									<button
 										aria-pressed={selectedStaleFilters.includes(filter.key)}
 										class={[
-											'inline-flex items-center justify-center rounded-full border px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] uppercase transition',
+											'inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.6875rem] leading-none font-medium tracking-[0.14em] uppercase transition',
 											selectedStaleFilters.includes(filter.key)
 												? 'border-sky-400/40 bg-sky-400 text-slate-950'
 												: 'border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700 hover:text-white'
@@ -1300,7 +1364,7 @@
 								{/each}
 								{#if selectedStaleFilters.length > 0}
 									<button
-										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+										class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2.5 py-1.5 text-center text-[0.6875rem] leading-none font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
 										type="button"
 										onclick={() => {
 											selectedStaleFilters = [];
@@ -1311,18 +1375,14 @@
 								{/if}
 							</div>
 						</div>
-					{/snippet}
-				</CollectionToolbar>
+					</div>
+				</section>
 
-				<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-					<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 sm:p-4">
+					<div class="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
 						<div>
-							<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+							<p class="text-[0.6875rem] font-semibold tracking-[0.2em] text-slate-500 uppercase">
 								Queue views
-							</p>
-							<p class="mt-2 text-sm text-slate-400">
-								Switch between active work that still needs attention and completed work kept for
-								reference.
 							</p>
 						</div>
 						<PageTabs
@@ -1528,6 +1588,44 @@
 							{#if createTaskAdvancedOpen}
 								<div class="mt-5 space-y-4">
 									<input type="hidden" name="area" value={createTaskArea} />
+
+									<div class="grid gap-4 lg:grid-cols-3">
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Success criteria
+											</span>
+											<textarea
+												bind:value={createTaskSuccessCriteria}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="successCriteria"
+												placeholder="Describe how a reviewer should judge this task as complete."
+											></textarea>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Ready condition
+											</span>
+											<textarea
+												bind:value={createTaskReadyCondition}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="readyCondition"
+												placeholder="Describe what must already be true before this task should run."
+											></textarea>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Expected outcome
+											</span>
+											<textarea
+												bind:value={createTaskExpectedOutcome}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="expectedOutcome"
+												placeholder="Describe the desired end state or deliverable."
+											></textarea>
+										</label>
+									</div>
 
 									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
 										<label class="block">

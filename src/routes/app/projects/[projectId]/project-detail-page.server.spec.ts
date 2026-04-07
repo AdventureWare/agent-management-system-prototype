@@ -12,6 +12,32 @@ const deleteProjectMock = vi.hoisted(() =>
 		projects: data.projects.filter((project) => project.id !== projectId)
 	}))
 );
+const buildProjectPermissionSurfaceMock = vi.hoisted(() =>
+	vi.fn((project: { additionalWritableRoots?: string[] }) => ({
+		effectiveSandbox: 'workspace-write',
+		sandboxSource: 'Fallback until a worker or provider override is chosen',
+		summary: {
+			trackedPathCount: 3 + (project.additionalWritableRoots?.length ?? 0),
+			blockerCount: 0,
+			macosPromptCount: 0,
+			outsideSandboxCount: 0
+		},
+		localPaths: [
+			{
+				label: 'Project root folder',
+				path: '/tmp/project',
+				accessStatus: 'ready',
+				coverageStatus: 'project_root'
+			},
+			...((project.additionalWritableRoots ?? []).map((path, index) => ({
+				label: `Additional writable root ${index + 1}`,
+				path,
+				accessStatus: 'ready',
+				coverageStatus: 'project_root'
+			})) ?? [])
+		]
+	}))
+);
 
 vi.mock('$lib/server/control-plane', () => ({
 	deleteProject: deleteProjectMock,
@@ -20,6 +46,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	getOpenReviewForTask: vi.fn(() => null),
 	getPendingApprovalForTask: vi.fn(() => null),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
+	resolveThreadSandbox: vi.fn(({ project, fallback }) => project?.defaultThreadSandbox ?? fallback),
 	taskHasUnmetDependencies: vi.fn(() => false),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
@@ -28,11 +55,20 @@ vi.mock('$lib/server/control-plane', () => ({
 	})
 }));
 
-import { actions } from './+page.server';
+vi.mock('$lib/server/project-access', () => ({
+	buildProjectPermissionSurface: buildProjectPermissionSurfaceMock
+}));
+
+vi.mock('$lib/server/folder-options', () => ({
+	loadFolderPickerOptions: vi.fn(async () => [])
+}));
+
+import { actions, load } from './+page.server';
 
 describe('project detail page server actions', () => {
 	beforeEach(() => {
 		deleteProjectMock.mockClear();
+		buildProjectPermissionSurfaceMock.mockClear();
 		controlPlaneState.current = {
 			providers: [],
 			roles: [],
@@ -45,7 +81,8 @@ describe('project detail page server actions', () => {
 					defaultArtifactRoot: '/tmp/project/agent_output',
 					defaultRepoPath: '',
 					defaultRepoUrl: '',
-					defaultBranch: ''
+					defaultBranch: '',
+					additionalWritableRoots: []
 				}
 			],
 			goals: [],
@@ -119,5 +156,41 @@ describe('project detail page server actions', () => {
 			'project_1'
 		);
 		expect(controlPlaneState.saved?.projects).toEqual([]);
+	});
+
+	it('loads a project permissions surface for local paths', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.additionalWritableRoots = [
+			'/tmp/project/shared'
+		];
+
+		const result = await load({
+			params: { projectId: 'project_1' }
+		} as never);
+		const pageData = result as Exclude<typeof result, void>;
+
+		expect(pageData.permissionSurface).toMatchObject({
+			effectiveSandbox: 'workspace-write',
+			summary: {
+				trackedPathCount: 4,
+				blockerCount: 0,
+				macosPromptCount: 0
+			}
+		});
+		expect(pageData.permissionSurface.localPaths).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					label: 'Project root folder',
+					path: '/tmp/project',
+					accessStatus: 'ready',
+					coverageStatus: 'project_root'
+				}),
+				expect.objectContaining({
+					label: 'Additional writable root 1',
+					path: '/tmp/project/shared',
+					coverageStatus: 'project_root'
+				})
+			])
+		);
+		expect(buildProjectPermissionSurfaceMock).toHaveBeenCalled();
 	});
 });

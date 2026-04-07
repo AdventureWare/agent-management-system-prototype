@@ -8,6 +8,8 @@
 		description = '',
 		titleClass = '',
 		descriptionClass = '',
+		class: className = '',
+		density = 'default',
 		actions,
 		meta
 	} = $props<{
@@ -16,14 +18,21 @@
 		description?: string;
 		titleClass?: string;
 		descriptionClass?: string;
+		class?: string;
+		density?: 'default' | 'compact';
 		actions?: Snippet;
 		meta?: Snippet;
 	}>();
 </script>
 
-<AppBar class="ui-page-header">
-	<AppBar.Toolbar class="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<AppBar.Headline class="min-w-0 flex-1 space-y-3">
+<AppBar class={['ui-page-header', density === 'compact' && 'ui-page-header-compact', className]}>
+	<AppBar.Toolbar
+		class={[
+			'flex flex-col lg:flex-row lg:justify-between',
+			density === 'compact' ? 'gap-2 sm:gap-3 lg:items-center' : 'gap-3 sm:gap-4 lg:items-start'
+		]}
+	>
+		<AppBar.Headline class={['min-w-0 flex-1', density === 'compact' ? 'space-y-2' : 'space-y-3']}>
 			{#if eyebrow}
 				<p class="ui-eyebrow">{eyebrow}</p>
 			{/if}
@@ -34,14 +43,19 @@
 		</AppBar.Headline>
 
 		{#if actions}
-			<AppBar.Trail class="flex w-full flex-wrap gap-2 sm:gap-3 lg:w-auto lg:justify-end">
+			<AppBar.Trail
+				class={[
+					'flex w-full flex-wrap lg:w-auto lg:justify-end',
+					density === 'compact' ? 'gap-2' : 'gap-2 sm:gap-3'
+				]}
+			>
 				{@render actions()}
 			</AppBar.Trail>
 		{/if}
 	</AppBar.Toolbar>
 
 	{#if meta}
-		<div class="mt-3 sm:mt-4">
+		<div class={density === 'compact' ? 'mt-2 sm:mt-3' : 'mt-3 sm:mt-4'}>
 			{@render meta()}
 		</div>
 	{/if}

@@ -68,7 +68,8 @@ export const POST = async ({ request }) => {
 			note: body.note?.trim() ?? '',
 			tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.trim()).filter(Boolean) : [],
 			threadSandboxOverride:
-				typeof body.threadSandboxOverride === 'string' && body.threadSandboxOverride.trim().length > 0
+				typeof body.threadSandboxOverride === 'string' &&
+				body.threadSandboxOverride.trim().length > 0
 					? parseAgentSandbox(body.threadSandboxOverride, 'workspace-write')
 					: (null as AgentSandbox | null)
 		});

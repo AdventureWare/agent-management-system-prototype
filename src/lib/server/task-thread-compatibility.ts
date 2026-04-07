@@ -9,21 +9,36 @@ type TaskThreadInput = {
 	latestRunThread: AgentThreadDetail | null;
 };
 
+function sessionHasRequiredWritableRoots(
+	project: Project,
+	session: Pick<AgentThreadDetail, 'additionalWritableRoots'> | null | undefined
+) {
+	const requiredRoots = project.additionalWritableRoots ?? [];
+
+	if (requiredRoots.length === 0) {
+		return true;
+	}
+
+	const sessionRoots = new Set(session?.additionalWritableRoots ?? []);
+	return requiredRoots.every((root) => sessionRoots.has(root));
+}
+
 export function isTaskThreadCompatibleWithProject(
 	project: Project | null,
-	session: Pick<AgentThreadDetail, 'cwd'> | null | undefined
+	session: Pick<AgentThreadDetail, 'cwd' | 'additionalWritableRoots'> | null | undefined
 ) {
 	if (!project || !session?.cwd) {
 		return false;
 	}
 
-	return projectMatchesPath(project, session.cwd) && existsSync(session.cwd);
+	return (
+		projectMatchesPath(project, session.cwd) &&
+		sessionHasRequiredWritableRoots(project, session) &&
+		existsSync(session.cwd)
+	);
 }
 
-export function selectProjectTaskThreadContext(
-	project: Project | null,
-	input: TaskThreadInput
-) {
+export function selectProjectTaskThreadContext(project: Project | null, input: TaskThreadInput) {
 	const assignedThread = isTaskThreadCompatibleWithProject(project, input.assignedThread)
 		? input.assignedThread
 		: null;

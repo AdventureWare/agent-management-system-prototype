@@ -39,8 +39,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,
-		thread:
-			run.agentThreadId ? (threads.find((thread) => thread.id === run.agentThreadId) ?? null) : null,
+		thread: run.agentThreadId
+			? (threads.find((thread) => thread.id === run.agentThreadId) ?? null)
+			: null,
 		relatedTaskRuns: runs
 			.filter((candidate) => candidate.taskId === run.taskId && candidate.id !== run.id)
 			.slice(0, 6)

@@ -7,10 +7,7 @@ import {
 	buildSelfImprovementFeedbackSignals
 } from './self-improvement';
 
-function createSession(
-	id: string,
-	overrides: Partial<AgentThreadDetail> = {}
-): AgentThreadDetail {
+function createSession(id: string, overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id,
 		name: `Session ${id}`,

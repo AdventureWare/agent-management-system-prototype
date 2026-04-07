@@ -41,18 +41,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-			).toEqual([
-				'exec',
-				'resume',
-				'--json',
-				'--skip-git-repo-check',
-				'--disable',
-				'apps',
-				'-c',
-				'mcp_servers.supabase.enabled=false',
-				'thread_123',
-				'-o',
-				'/tmp/last-message.txt',
+		).toEqual([
+			'exec',
+			'resume',
+			'--json',
+			'--skip-git-repo-check',
+			'--disable',
+			'apps',
+			'-c',
+			'mcp_servers.supabase.enabled=false',
+			'thread_123',
+			'-o',
+			'/tmp/last-message.txt',
 			'follow up'
 		]);
 	});
@@ -67,18 +67,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-			).toEqual([
-				'exec',
-				'resume',
-				'--json',
-				'--skip-git-repo-check',
-				'--disable',
-				'apps',
-				'-c',
-				'mcp_servers.supabase.enabled=false',
-				'--full-auto',
-				'-m',
-				'gpt-5',
+		).toEqual([
+			'exec',
+			'resume',
+			'--json',
+			'--skip-git-repo-check',
+			'--disable',
+			'apps',
+			'-c',
+			'mcp_servers.supabase.enabled=false',
+			'--full-auto',
+			'-m',
+			'gpt-5',
 			'thread_123',
 			'-o',
 			'/tmp/last-message.txt',
@@ -96,18 +96,18 @@ describe('agent session helpers', () => {
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'follow up'
 			})
-			).toEqual([
-				'exec',
-				'resume',
-				'--json',
-				'--skip-git-repo-check',
-				'--disable',
-				'apps',
-				'-c',
-				'mcp_servers.supabase.enabled=false',
-				'--dangerously-bypass-approvals-and-sandbox',
-				'thread_123',
-				'-o',
+		).toEqual([
+			'exec',
+			'resume',
+			'--json',
+			'--skip-git-repo-check',
+			'--disable',
+			'apps',
+			'-c',
+			'mcp_servers.supabase.enabled=false',
+			'--dangerously-bypass-approvals-and-sandbox',
+			'thread_123',
+			'-o',
 			'/tmp/last-message.txt',
 			'follow up'
 		]);
@@ -118,23 +118,28 @@ describe('agent session helpers', () => {
 			buildCodexArgs({
 				mode: 'start',
 				cwd: '/tmp/project',
+				additionalWritableRoots: ['/tmp/iCloud/shared', '/tmp/dropbox'],
 				sandbox: 'workspace-write',
 				model: null,
 				messagePath: '/tmp/last-message.txt',
 				prompt: 'start work'
 			})
-			).toEqual([
-				'exec',
-				'--json',
-				'--skip-git-repo-check',
-				'--disable',
-				'apps',
-				'-c',
-				'mcp_servers.supabase.enabled=false',
-				'-C',
-				'/tmp/project',
-				'--sandbox',
+		).toEqual([
+			'exec',
+			'--json',
+			'--skip-git-repo-check',
+			'--disable',
+			'apps',
+			'-c',
+			'mcp_servers.supabase.enabled=false',
+			'-C',
+			'/tmp/project',
+			'--sandbox',
 			'workspace-write',
+			'--add-dir',
+			'/tmp/iCloud/shared',
+			'--add-dir',
+			'/tmp/dropbox',
 			'-o',
 			'/tmp/last-message.txt',
 			'start work'
@@ -437,10 +442,7 @@ describe('agent session helpers', () => {
 				codexThreadId: 'thread_123'
 			},
 			lastMessage: 'Done.',
-			logTail: [
-				'Assistant: Done.',
-				'=== EXIT code=0 signal=null ==='
-			],
+			logTail: ['Assistant: Done.', '=== EXIT code=0 signal=null ==='],
 			activityAt: '2026-04-01T16:25:00.000Z'
 		};
 

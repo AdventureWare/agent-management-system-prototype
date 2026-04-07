@@ -1,5 +1,7 @@
 # Remote Phone Access
 
+Legacy fallback path. Prefer [`docs/tailscale-remote-access.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/tailscale-remote-access.md) for the current near-term setup.
+
 This is the minimum viable path for using the AMS prototype from a phone while away from the MacBook that is running the app.
 
 It is intentionally narrow:
@@ -18,16 +20,17 @@ It is intentionally narrow:
 
 ## Required security setup
 
-Before exposing the app off-machine, set a shared password:
+Before exposing the app off-machine, create a local env file:
 
 ```sh
-export AMS_OPERATOR_PASSWORD='replace-this-with-a-strong-password'
+cp .env.example .env.local
 ```
 
-Optional but recommended:
+Then edit `.env.local` and set:
 
 ```sh
-export AMS_OPERATOR_SESSION_SECRET='replace-this-with-a-second-secret'
+AMS_OPERATOR_PASSWORD='replace-this-with-a-strong-password'
+AMS_OPERATOR_SESSION_SECRET='replace-this-with-a-long-random-secret'
 ```
 
 What this does:
@@ -43,6 +46,8 @@ From the repo root:
 ```sh
 npm run remote:phone:start
 ```
+
+The helper and the local app scripts automatically load `.env.local` when it exists.
 
 What the helper does:
 
@@ -90,4 +95,5 @@ export AMS_REMOTE_ACCESS_PORT='4273'
 - This tunnel is meant for personal operator use, not public multi-user access.
 - The preview URL should be treated as sensitive even with the password gate enabled.
 - Use a strong password and rotate it if you share the URL.
+- Keep `.env.local` local to the laptop and do not commit it.
 - Stop the tunnel when you are done instead of leaving it open indefinitely.

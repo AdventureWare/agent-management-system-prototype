@@ -27,11 +27,9 @@ const forbiddenPatterns = [
 	}
 ];
 
-const staged = spawnSync(
-	'git',
-	['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'],
-	{ encoding: 'utf8' }
-);
+const staged = spawnSync('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'], {
+	encoding: 'utf8'
+});
 
 if (staged.status !== 0) {
 	process.stderr.write(staged.stderr || 'Failed to inspect staged files.\n');

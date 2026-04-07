@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { fetchAgentThread } from '$lib/client/agent-threads';
+	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -27,7 +28,8 @@
 		reviewStatusToneClass
 	} from '$lib/types/control-plane';
 	import type { AgentRunDetail, AgentRunStatus, AgentThreadDetail } from '$lib/types/agent-thread';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { fromStore } from 'svelte/store';
 	import { fade } from 'svelte/transition';
 
 	type TaskResponseAction = {
@@ -93,7 +95,6 @@
 		backHref?: string;
 	}>();
 
-	let session = $state.raw<AgentThreadDetail | null>(null);
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
 	let isCanceling = $state(false);
@@ -110,6 +111,11 @@
 	>([]);
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
+	let threadDetailRoot = $state<HTMLElement | null>(null);
+	let threadHeaderShrinkProgress = $state(0);
+	let session = $derived.by<AgentThreadDetail | null>(
+		() => threadStoreState.current.byId[sessionProp.id] ?? sessionProp
+	);
 	let approveTaskResponseSuccess = $derived(
 		form?.ok &&
 			form?.successAction === 'approveTaskResponse' &&
@@ -132,6 +138,8 @@
 		timeStyle: 'short'
 	});
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+	const THREAD_HEADER_SHRINK_DISTANCE = 120;
+	const threadStoreState = fromStore(agentThreadStore);
 	type ThreadStateDescriptor = {
 		label: string;
 		detail: string;
@@ -255,8 +263,80 @@
 		return true;
 	});
 
+	function findScrollContainer(node: HTMLElement | null) {
+		const appShellScrollContainer = node?.closest('[data-app-shell-scroll-container="true"]');
+
+		if (appShellScrollContainer instanceof HTMLElement) {
+			return appShellScrollContainer;
+		}
+
+		let current = node?.parentElement ?? null;
+
+		while (current) {
+			const overflowY = window.getComputedStyle(current).overflowY;
+
+			if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+				return current;
+			}
+
+			current = current.parentElement;
+		}
+
+		return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+	}
+
+	onMount(() => {
+		let cancelled = false;
+		let cleanup: (() => void) | undefined;
+
+		void tick().then(() => {
+			if (cancelled) {
+				return;
+			}
+
+			const scrollContainer = findScrollContainer(threadDetailRoot);
+
+			if (!scrollContainer) {
+				return;
+			}
+
+			const syncThreadHeaderState = () => {
+				const scrollTop =
+					scrollContainer === document.scrollingElement
+						? window.scrollY
+						: scrollContainer.scrollTop;
+				const scrollViewportTop =
+					scrollContainer === document.scrollingElement
+						? 0
+						: scrollContainer.getBoundingClientRect().top;
+				const headerTop = threadDetailRoot?.getBoundingClientRect().top ?? scrollViewportTop;
+				const visibleScrollOffset = Math.max(scrollViewportTop - headerTop, 0);
+				const shrinkOffset = Math.max(scrollTop, visibleScrollOffset);
+
+				threadHeaderShrinkProgress = Math.min(
+					Math.max(shrinkOffset / THREAD_HEADER_SHRINK_DISTANCE, 0),
+					1
+				);
+			};
+
+			syncThreadHeaderState();
+			scrollContainer.addEventListener('scroll', syncThreadHeaderState, { passive: true });
+			window.addEventListener('resize', syncThreadHeaderState);
+
+			cleanup = () => {
+				scrollContainer.removeEventListener('scroll', syncThreadHeaderState);
+				window.removeEventListener('resize', syncThreadHeaderState);
+			};
+		});
+
+		return () => {
+			cancelled = true;
+			cleanup?.();
+		};
+	});
+
 	$effect(() => {
-		session = sessionProp;
+		agentThreadStore.seedThread(sessionProp);
 	});
 
 	$effect(() => {
@@ -469,7 +549,11 @@
 			throw new Error('Thread not found.');
 		}
 
-		session = (await fetchAgentThread(session.id)) ?? null;
+		const thread = (await fetchAgentThread(session.id)) ?? null;
+
+		if (thread) {
+			agentThreadStore.seedThread(thread);
+		}
 	}
 
 	async function refreshThread(options: { force?: boolean } = {}) {
@@ -1082,84 +1166,93 @@
 
 {#if session}
 	<AppPage width="full" class="gap-5 sm:gap-6">
-		<div class="space-y-5 sm:space-y-6" data-testid="thread-detail-panel">
-			<DetailHeader
-				backHref={resolve(backHref)}
-				backLabel="Back to threads"
-				eyebrow="Thread detail"
-				title={session.name}
-				description={session.threadSummary ?? session.threadSummary}
-			>
-				{#snippet actions()}
-					<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-						<button
-							class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-100"
-							type="button"
-							onclick={() => {
-								void refreshThread({ force: true });
-							}}
-						>
-							{isRefreshing ? 'Refreshing...' : 'Refresh thread'}
-						</button>
-						{#if session!.hasActiveRun}
+		<div
+			bind:this={threadDetailRoot}
+			class="space-y-5 sm:space-y-6"
+			data-testid="thread-detail-panel"
+		>
+			<div style={`--ui-scroll-shrink-progress:${threadHeaderShrinkProgress};`}>
+				<DetailHeader
+					backHref={resolve(backHref)}
+					backLabel="Back to threads"
+					eyebrow="Thread detail"
+					title={session.name}
+					description={session.threadSummary ?? session.threadSummary}
+					class="ui-scroll-shrink-header"
+				>
+					{#snippet actions()}
+						<div class="thread-detail-header-actions flex flex-col gap-3 sm:flex-row sm:flex-wrap">
 							<button
-								class="w-full rounded-lg border border-rose-900/70 bg-rose-950/30 px-4 py-2 text-sm font-medium text-rose-200 disabled:opacity-50 sm:w-auto"
+								class="thread-detail-header-action rounded-lg border border-slate-700 font-medium text-slate-100"
 								type="button"
 								onclick={() => {
-									void cancelActiveRun();
+									void refreshThread({ force: true });
 								}}
-								disabled={isCanceling}
 							>
-								{isCanceling ? 'Canceling...' : 'Cancel active run'}
+								{isRefreshing ? 'Refreshing...' : 'Refresh thread'}
 							</button>
-						{/if}
-					</div>
-				{/snippet}
-
-				{#snippet meta()}
-					<div class="space-y-4">
-						<div class="flex flex-wrap items-center gap-2">
-							<span
-								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.threadState ?? 'idle')}`}
-							>
-								{formatThreadStateLabel(session!.threadState ?? session!.threadState ?? 'idle')}
-							</span>
-							<span
-								class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session!.latestRunStatus)}`}
-							>
-								latest run {session!.latestRunStatus}
-							</span>
-							<span
-								class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
-							>
-								{session!.sandbox}
-							</span>
-							{#if session!.origin === 'external'}
-								<span
-									class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
+							{#if session!.hasActiveRun}
+								<button
+									class="thread-detail-header-action w-full rounded-lg border border-rose-900/70 bg-rose-950/30 font-medium text-rose-200 disabled:opacity-50 sm:w-auto"
+									type="button"
+									onclick={() => {
+										void cancelActiveRun();
+									}}
+									disabled={isCanceling}
 								>
-									Imported from Codex
-								</span>
+									{isCanceling ? 'Canceling...' : 'Cancel active run'}
+								</button>
 							{/if}
 						</div>
+					{/snippet}
 
-						<label
-							class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
-						>
-							<input bind:checked={autoRefresh} type="checkbox" />
-							<span>Auto-refresh active runs every {autoRefreshIntervalLabel}</span>
-						</label>
+					{#snippet meta()}
+						<div class="thread-detail-header-meta space-y-4">
+							<div class="flex flex-wrap items-center gap-2">
+								<span
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.threadState ?? 'idle')}`}
+								>
+									{formatThreadStateLabel(session!.threadState ?? session!.threadState ?? 'idle')}
+								</span>
+								<span
+									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(session!.latestRunStatus)}`}
+								>
+									latest run {session!.latestRunStatus}
+								</span>
+								<span
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+								>
+									{session!.sandbox}
+								</span>
+								{#if session!.origin === 'external'}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-300 uppercase"
+									>
+										Imported from Codex
+									</span>
+								{/if}
+							</div>
 
-						{#if session!.relatedTasks.length > 0}
-							<p class="ui-clamp-3 ui-wrap-anywhere max-w-3xl text-xs text-slate-500">
-								Related tasks: {session!.relatedTasks.map((task) => task.title).join(', ')}
-							</p>
-						{/if}
+							<div class="thread-detail-header-secondary space-y-4 overflow-hidden">
+								<label
+									class="inline-flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
+								>
+									<input bind:checked={autoRefresh} type="checkbox" />
+									<span>Auto-refresh active runs every {autoRefreshIntervalLabel}</span>
+								</label>
 
-						<p class="ui-wrap-anywhere max-w-4xl text-xs text-slate-500">{session!.cwd}</p>
-					</div>
-				{/snippet}
-			</DetailHeader>
+								{#if session!.relatedTasks.length > 0}
+									<p class="ui-clamp-3 ui-wrap-anywhere max-w-3xl text-xs text-slate-500">
+										Related tasks: {session!.relatedTasks.map((task) => task.title).join(', ')}
+									</p>
+								{/if}
+
+								<p class="ui-wrap-anywhere max-w-4xl text-xs text-slate-500">{session!.cwd}</p>
+							</div>
+						</div>
+					{/snippet}
+				</DetailHeader>
+			</div>
 
 			{#if pageNotice}
 				<p
@@ -1351,7 +1444,6 @@
 								</p>
 							{/if}
 						</div>
-
 					</DetailSection>
 
 					{#if selectedHistoricalRun}

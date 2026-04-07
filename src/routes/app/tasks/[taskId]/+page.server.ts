@@ -104,6 +104,9 @@ function readTaskForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
+		successCriteria: form.get('successCriteria')?.toString().trim() ?? '',
+		readyCondition: form.get('readyCondition')?.toString().trim() ?? '',
+		expectedOutcome: form.get('expectedOutcome')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		goalId: form.get('goalId')?.toString().trim() ?? '',
 		hasGoalId: form.has('goalId'),
@@ -156,6 +159,9 @@ function buildTaskPlanDecisionSummary(input: {
 	task: Task;
 	nextTitle: string;
 	nextSummary: string;
+	nextSuccessCriteria: string;
+	nextReadyCondition: string;
+	nextExpectedOutcome: string;
 	nextProject: Project;
 	nextGoalId: string;
 	nextGoalName: string | null;
@@ -191,6 +197,22 @@ function buildTaskPlanDecisionSummary(input: {
 
 	if (input.nextSummary !== input.task.summary) {
 		changes.push('updated the task brief');
+	}
+
+	if (input.nextSuccessCriteria !== (input.task.successCriteria ?? '')) {
+		changes.push(
+			input.nextSuccessCriteria ? 'updated success criteria' : 'cleared success criteria'
+		);
+	}
+
+	if (input.nextReadyCondition !== (input.task.readyCondition ?? '')) {
+		changes.push(input.nextReadyCondition ? 'updated ready condition' : 'cleared ready condition');
+	}
+
+	if (input.nextExpectedOutcome !== (input.task.expectedOutcome ?? '')) {
+		changes.push(
+			input.nextExpectedOutcome ? 'updated expected outcome' : 'cleared expected outcome'
+		);
 	}
 
 	if (input.nextProject.id !== input.task.projectId) {
@@ -443,6 +465,9 @@ async function buildTaskLaunchPlan(
 ) {
 	const effectiveName = input.name || task.title;
 	const effectiveInstructions = input.instructions || task.summary;
+	const effectiveSuccessCriteria = input.successCriteria;
+	const effectiveReadyCondition = input.readyCondition;
+	const effectiveExpectedOutcome = input.expectedOutcome;
 	const effectiveProjectId = input.projectId || task.projectId;
 	const effectivePriority = input.hasPriority ? input.priority : task.priority;
 	const effectiveRiskLevel = input.hasRiskLevel ? input.riskLevel : task.riskLevel;
@@ -540,9 +565,13 @@ async function buildTaskLaunchPlan(
 	const prompt = buildTaskThreadPrompt({
 		taskName: effectiveName,
 		taskInstructions: effectiveInstructions,
+		successCriteria: effectiveSuccessCriteria,
+		readyCondition: effectiveReadyCondition,
+		expectedOutcome: effectiveExpectedOutcome,
 		projectName: project.name,
 		projectRootFolder: project.projectRootFolder,
 		defaultArtifactRoot: project.defaultArtifactRoot,
+		additionalWritableRoots: project.additionalWritableRoots ?? [],
 		availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 			.slice(0, 12)
 			.map((skill) => skill.id),
@@ -577,6 +606,7 @@ async function buildTaskLaunchPlan(
 
 	const workspaceIssue = getWorkspaceExecutionIssue({
 		cwd: project.projectRootFolder,
+		additionalWritableRoots: project.additionalWritableRoots ?? [],
 		sandbox,
 		scopeLabel: 'Project root'
 	});
@@ -591,6 +621,9 @@ async function buildTaskLaunchPlan(
 		effectiveGoalId,
 		effectiveName,
 		effectiveInstructions,
+		effectiveSuccessCriteria,
+		effectiveReadyCondition,
+		effectiveExpectedOutcome,
 		effectivePriority,
 		effectiveRiskLevel,
 		effectiveApprovalMode,
@@ -638,6 +671,7 @@ async function launchTaskFromPlan(
 				taskId: plan.task.id
 			}),
 			cwd: plan.project.projectRootFolder,
+			additionalWritableRoots: plan.project.additionalWritableRoots ?? [],
 			prompt: plan.prompt,
 			sandbox: resolveThreadSandbox({
 				worker: plan.effectiveWorker,
@@ -684,6 +718,9 @@ async function launchTaskFromPlan(
 						...candidate,
 						title: plan.effectiveName,
 						summary: plan.effectiveInstructions,
+						successCriteria: plan.effectiveSuccessCriteria,
+						readyCondition: plan.effectiveReadyCondition,
+						expectedOutcome: plan.effectiveExpectedOutcome,
 						projectId: plan.project.id,
 						goalId: plan.effectiveGoalId,
 						assigneeWorkerId: plan.assigneeWorker?.id ?? candidate.assigneeWorkerId,
@@ -893,6 +930,9 @@ export const actions: Actions = {
 		const {
 			name,
 			instructions,
+			successCriteria,
+			readyCondition,
+			expectedOutcome,
 			projectId,
 			goalId,
 			hasGoalId,
@@ -981,6 +1021,9 @@ export const actions: Actions = {
 
 		const nextTitle = name;
 		const nextInstructions = instructions;
+		const nextSuccessCriteria = successCriteria;
+		const nextReadyCondition = readyCondition;
+		const nextExpectedOutcome = expectedOutcome;
 		const nextGoalId = hasGoalId ? (goal?.id ?? '') : existingTask.goalId;
 		const nextStatus = status;
 		const nextAssigneeWorker = hasAssigneeWorkerId
@@ -1010,6 +1053,9 @@ export const actions: Actions = {
 			task: existingTask,
 			nextTitle,
 			nextSummary: nextInstructions,
+			nextSuccessCriteria,
+			nextReadyCondition,
+			nextExpectedOutcome,
 			nextProject: project,
 			nextGoalId,
 			nextGoalName: goal?.name ?? null,
@@ -1059,6 +1105,9 @@ export const actions: Actions = {
 					...task,
 					title: nextTitle,
 					summary: nextInstructions,
+					successCriteria: nextSuccessCriteria,
+					readyCondition: nextReadyCondition,
+					expectedOutcome: nextExpectedOutcome,
 					projectId: project.id,
 					goalId: nextGoalId,
 					status: nextStatus,

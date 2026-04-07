@@ -29,10 +29,11 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 				task.status === 'blocked' ||
 				Boolean(task.openReview) ||
 				Boolean(task.pendingApproval) ||
-				task.hasUnmetDependencies
+				task.hasUnmetDependencies ||
+				task.freshness.isStale
 		)
 		.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-		.slice(0, 6);
+		.slice(0, 8);
 
 	return {
 		threads,

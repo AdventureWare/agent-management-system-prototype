@@ -169,7 +169,8 @@ export function buildOntologyV1Snapshot(input: {
 		defaultArtifactRoot: project.defaultArtifactRoot,
 		defaultRepoPath: project.defaultRepoPath,
 		defaultRepoUrl: project.defaultRepoUrl,
-		defaultBranch: project.defaultBranch
+		defaultBranch: project.defaultBranch,
+		additionalWritableRoots: project.additionalWritableRoots ?? []
 	}));
 
 	const contextResources: OntologyContextResource[] = [];

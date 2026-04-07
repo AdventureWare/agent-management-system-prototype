@@ -13,6 +13,7 @@
 		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
+		ShieldCheckIcon,
 		TargetIcon,
 		UsersIcon,
 		XIcon
@@ -26,6 +27,7 @@
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
 		home: LayoutDashboardIcon,
+		access: ShieldCheckIcon,
 		improvements: LightbulbIcon,
 		tasks: ListTodoIcon,
 		threads: MessagesSquareIcon,
@@ -76,7 +78,7 @@
 />
 
 <div
-	class="flex min-h-svh min-w-0 flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:h-dvh md:min-h-0 md:grid-cols-[auto_minmax(0,1fr)]"
+	class="flex h-svh min-h-svh min-w-0 flex-col overflow-hidden bg-slate-950 text-slate-100 md:grid md:h-dvh md:min-h-0 md:grid-cols-[auto_minmax(0,1fr)]"
 >
 	<header
 		class="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur md:hidden"
@@ -157,7 +159,6 @@
 							</div>
 						{/each}
 					</nav>
-
 				</div>
 			</div>
 		</div>
@@ -211,6 +212,7 @@
 	</Navigation>
 
 	<div
+		data-app-shell-scroll-container="true"
 		class="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(2,6,23,1))]"
 	>
 		{@render children()}

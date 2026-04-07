@@ -3,10 +3,7 @@ import { buildTaskThreadSuggestions } from './task-thread-suggestions';
 import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { Task } from '$lib/types/control-plane';
 
-function createSession(
-	id: string,
-	overrides: Partial<AgentThreadDetail> = {}
-): AgentThreadDetail {
+function createSession(id: string, overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id,
 		name: `Session ${id}`,
@@ -319,8 +316,7 @@ describe('buildTaskThreadSuggestions', () => {
 				}),
 				createSession('ui', {
 					name: 'Plan a UI improvement sweep',
-					threadSummary:
-						'Review layout issues, responsive behavior, and mobile UI follow-up work.',
+					threadSummary: 'Review layout issues, responsive behavior, and mobile UI follow-up work.',
 					relatedTasks: [
 						{
 							id: 'task_ui_plan',

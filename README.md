@@ -73,30 +73,40 @@ npm run db:import-json
 npm run db:export-json
 ```
 
-## Remote phone access
+## Remote access
 
-To use the app from a phone while away from the laptop, enable the shared operator password and start the remote-access helper:
+Preferred near-term path: local Node runtime plus Tailscale Serve.
 
-```sh
-export AMS_OPERATOR_PASSWORD='replace-this-with-a-strong-password'
-npm run remote:phone:start
-```
-
-Check the current URL:
+Build the app and start the local server:
 
 ```sh
-npm run remote:phone:status
+cp .env.example .env.local
+npm run build
+npm run app:server:start
 ```
 
-Stop the tunnel when you are done:
+Enable remote access through the vendor-neutral wrapper:
 
 ```sh
-npm run remote:phone:stop
+npm run remote:access:start
 ```
 
-Full setup and security notes:
+Check the current remote URL:
 
-- [`docs/remote-phone-access.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/remote-phone-access.md)
+```sh
+npm run remote:access:status
+```
+
+Stop the access layer when you are done:
+
+```sh
+npm run remote:access:stop
+```
+
+Related docs:
+
+- [`docs/tailscale-remote-access.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/tailscale-remote-access.md)
+- [`docs/remote-phone-access.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/remote-phone-access.md) for the older localhost.run-based fallback path
 
 ## Codex threads
 

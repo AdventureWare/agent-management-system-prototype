@@ -150,6 +150,7 @@ export type OntologyProject = {
 	defaultRepoPath: string;
 	defaultRepoUrl: string;
 	defaultBranch: string;
+	additionalWritableRoots?: string[];
 };
 
 export type OntologyReview = {

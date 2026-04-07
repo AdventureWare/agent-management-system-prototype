@@ -801,9 +801,7 @@ function buildThreadReuseOpportunities(data: ControlPlaneData, threads: AgentThr
 			return [];
 		}
 
-		const assignedThread = task.agentThreadId
-			? (threadMap.get(task.agentThreadId) ?? null)
-			: null;
+		const assignedThread = task.agentThreadId ? (threadMap.get(task.agentThreadId) ?? null) : null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
 			: false;
@@ -1045,9 +1043,7 @@ function buildThreadReuseFeedbackSignals(
 			return [];
 		}
 
-		const assignedThread = task.agentThreadId
-			? (threadMap.get(task.agentThreadId) ?? null)
-			: null;
+		const assignedThread = task.agentThreadId ? (threadMap.get(task.agentThreadId) ?? null) : null;
 		const assignedThreadIsUnavailable = assignedThread
 			? !assignedThread.canResume || assignedThread.hasActiveRun
 			: false;

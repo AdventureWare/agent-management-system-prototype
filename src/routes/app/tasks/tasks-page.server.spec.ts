@@ -88,7 +88,14 @@ const startAgentThreadMock = vi.hoisted(() =>
 	}))
 );
 const getWorkspaceExecutionIssueMock = vi.hoisted(() =>
-	vi.fn<(_: { cwd: string; sandbox: string; scopeLabel?: string }) => string | null>(() => null)
+	vi.fn<
+		(_: {
+			cwd: string;
+			additionalWritableRoots?: string[];
+			sandbox: string;
+			scopeLabel?: string;
+		}) => string | null
+	>(() => null)
 );
 
 const buildPromptDigestMock = vi.hoisted(() => vi.fn(() => 'digest_create_and_run'));
@@ -571,12 +578,14 @@ describe('tasks page server actions', () => {
 				projectName: 'Agent Management System Prototype',
 				projectRootFolder: '/tmp/project',
 				defaultArtifactRoot: '/tmp/project/agent_output',
+				additionalWritableRoots: [],
 				availableSkillNames: ['skill-installer', 'web-design-guidelines']
 			})
 		);
 		expect(startAgentThreadMock).toHaveBeenCalledWith({
 			name: 'Task thread · Create and run from the task form · Agent Management System Prototype · task_create_and_run_from_the_task_form',
 			cwd: '/tmp/project',
+			additionalWritableRoots: [],
 			prompt: 'task prompt',
 			sandbox: 'workspace-write',
 			model: null
@@ -692,5 +701,36 @@ describe('tasks page server actions', () => {
 		expect(startAgentThreadMock).not.toHaveBeenCalled();
 		expect(createRunMock).not.toHaveBeenCalled();
 		expect(controlPlaneState.saved).toBeNull();
+	});
+
+	it('passes project storage roots into new task launches', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.additionalWritableRoots = [
+			'/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared'
+		];
+
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Create and run with iCloud');
+		form.set('instructions', 'Use files from iCloud Drive.');
+		form.set('submitMode', 'createAndRun');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(getWorkspaceExecutionIssueMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				cwd: '/tmp/project',
+				additionalWritableRoots: ['/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared']
+			})
+		);
+		expect(startAgentThreadMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalWritableRoots: ['/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared']
+			})
+		);
 	});
 });

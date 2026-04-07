@@ -13,6 +13,7 @@ export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
 		name?: string;
 		cwd?: string;
+		additionalWritableRoots?: string[];
 		prompt?: string;
 		model?: string;
 		sandbox?: string;
@@ -29,6 +30,9 @@ export const POST = async ({ request }) => {
 	const result = await startAgentThread({
 		name,
 		cwd,
+		additionalWritableRoots: Array.isArray(body.additionalWritableRoots)
+			? body.additionalWritableRoots
+			: [],
 		prompt,
 		sandbox: parseAgentSandbox(body.sandbox, 'workspace-write'),
 		model: body.model?.trim() || null

@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { appNavigationSections } from '$lib/app-navigation';
+	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import {
 		createTaskFromSelfImprovementOpportunity,
 		fetchHomeDashboard,
@@ -26,6 +27,7 @@
 	import type { SelfImprovementStatus } from '$lib/types/self-improvement';
 	import type { DashboardTaskAttentionItem, HomeDashboardData } from '$lib/types/home-dashboard';
 	import type { TaskStaleSignalKey } from '$lib/types/task-work-item';
+	import { fromStore } from 'svelte/store';
 
 	let { data } = $props<{ data: HomeDashboardData }>();
 	let autoRefresh = $state(true);
@@ -33,8 +35,34 @@
 	let refreshedDashboard = $state.raw<HomeDashboardData | null>(null);
 	let refreshError = $state<string | null>(null);
 	let dashboard: HomeDashboardData = $derived(refreshedDashboard ?? data);
-	let dashboardThreads = $derived(dashboard.threads);
-	let dashboardThreadSummary = $derived(dashboard.threadSummary);
+	const threadStoreState = fromStore(agentThreadStore);
+	let dashboardThreads = $derived.by(() => {
+		const storedThreads = threadStoreState.current.orderedIds
+			.map((threadId) => threadStoreState.current.byId[threadId])
+			.filter((thread): thread is AgentThreadDetail => Boolean(thread));
+
+		return storedThreads.length > 0 ? storedThreads : dashboard.threads;
+	});
+	let dashboardThreadSummary = $derived.by(() => {
+		if (threadStoreState.current.orderedIds.length === 0) {
+			return dashboard.threadSummary;
+		}
+
+		return {
+			totalCount: dashboardThreads.length,
+			activeCount: dashboardThreads.filter(
+				(thread) =>
+					thread.threadState === 'starting' ||
+					thread.threadState === 'waiting' ||
+					thread.threadState === 'working'
+			).length,
+			readyCount: dashboardThreads.filter((thread) => thread.threadState === 'ready').length,
+			unavailableCount: dashboardThreads.filter(
+				(thread) => thread.threadState === 'unavailable' || thread.threadState === 'idle'
+			).length,
+			attentionCount: dashboardThreads.filter((thread) => thread.threadState === 'attention').length
+		};
+	});
 
 	let activeSessions = $derived(
 		dashboardThreads.filter(
@@ -69,6 +97,10 @@
 	let opportunityActionError = $state<string | null>(null);
 	let opportunityActionNotice = $state<string | null>(null);
 
+	$effect(() => {
+		agentThreadStore.seedThreads(dashboard.threads, { replace: true });
+	});
+
 	async function refreshDashboard(options: { force?: boolean } = {}) {
 		if (isRefreshing) {
 			return;
@@ -81,7 +113,9 @@
 		isRefreshing = true;
 
 		try {
-			refreshedDashboard = await fetchHomeDashboard();
+			const nextDashboard = await fetchHomeDashboard();
+			agentThreadStore.seedThreads(nextDashboard.threads, { replace: true });
+			refreshedDashboard = nextDashboard;
 			refreshError = null;
 		} catch (err) {
 			refreshError = err instanceof Error ? err.message : 'Could not refresh dashboard.';
@@ -367,7 +401,9 @@
 	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
 		<div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 			<div>
-				<p class="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">Task snapshot</p>
+				<p class="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">
+					Task snapshot
+				</p>
 				<p class="mt-2 text-sm text-slate-400">
 					Queue health in one block so you can scan it quickly on mobile.
 				</p>
@@ -581,9 +617,10 @@
 			<section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<h2 class="text-xl font-semibold text-white">Task attention queue</h2>
+						<h2 class="text-xl font-semibold text-white">Governance queue</h2>
 						<p class="text-sm text-slate-400">
-							Blocked work, open reviews, pending approvals, and items waiting on dependencies.
+							Blocked work, open reviews, pending approvals, dependency waits, and stalled active
+							work.
 						</p>
 					</div>
 					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
@@ -608,10 +645,16 @@
 						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Dependencies</p>
 						<p class="mt-2 text-2xl font-semibold text-white">{dependencyTasks.length}</p>
 					</div>
+					<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+						<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Stalled</p>
+						<p class="mt-2 text-2xl font-semibold text-white">{staleTasks.length}</p>
+					</div>
 				</div>
 
 				{#if dashboard.taskAttention.length === 0}
-					<p class="text-sm text-slate-400">No task-level intervention points right now.</p>
+					<p class="text-sm text-slate-400">
+						No governance or escalation items are waiting right now.
+					</p>
 				{:else}
 					<div class="space-y-3">
 						{#each dashboard.taskAttention as task (task.id)}

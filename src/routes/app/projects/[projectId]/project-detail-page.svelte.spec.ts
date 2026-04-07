@@ -18,6 +18,49 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 					defaultBranch: 'main',
 					defaultThreadSandbox: null
 				},
+				permissionSurface: {
+					effectiveSandbox: 'workspace-write',
+					sandboxSource: 'Fallback until a worker or provider override is chosen',
+					summary: {
+						trackedPathCount: 3,
+						blockerCount: 0,
+						macosPromptCount: 1,
+						outsideSandboxCount: 1
+					},
+					localPaths: [
+						{
+							id: 'project-root-folder',
+							label: 'Project root folder',
+							path: '/tmp/project',
+							importance: 'Required for every thread start.',
+							requiredForLaunch: true,
+							accessStatus: 'ready',
+							accessMessage: 'Accessible to the current app process.',
+							accessGuidance: null,
+							coverageStatus: 'project_root',
+							coverageLabel: 'Inside project root',
+							coverageMessage: 'Covered because the path lives under the thread workspace root.',
+							recommendedAction: null
+						},
+						{
+							id: 'artifact-root',
+							label: 'Default artifact root',
+							path: '/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared',
+							importance: 'Used when task outputs land outside the thread workspace.',
+							requiredForLaunch: false,
+							accessStatus: 'macos_cloud_probe_blocked',
+							accessMessage: 'macOS blocked the direct access probe for this cloud-synced folder.',
+							accessGuidance:
+								'AMS will still let a danger-full-access run try the real Codex launch path, but Files and Folders or iCloud Drive approval may still be required.',
+							coverageStatus: 'outside_sandbox',
+							coverageLabel: 'Outside sandbox',
+							coverageMessage:
+								'Not automatically writable from a standard thread launch. Move it under the project root, add it as an additional writable root, or use danger-full-access.',
+							recommendedAction:
+								'Retry the task first. If the run still fails, grant Files and Folders or iCloud Drive access to the app or terminal running AMS.'
+						}
+					]
+				},
 				relatedGoals: [
 					{
 						id: 'goal_1',
@@ -59,6 +102,9 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 		});
 
 		expect(document.body.textContent).toContain('Delete project');
+		expect(document.body.textContent).toContain('Local access and sandbox coverage');
+		expect(document.body.textContent).toContain('macOS protected');
+		expect(document.body.textContent).toContain('Outside sandbox');
 		expect(document.body.textContent).toContain(
 			'Reassign or delete those tasks first because tasks require a project.'
 		);

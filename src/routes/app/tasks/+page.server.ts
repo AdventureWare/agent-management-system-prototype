@@ -79,6 +79,9 @@ function readTaskForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		instructions: form.get('instructions')?.toString().trim() ?? '',
+		successCriteria: form.get('successCriteria')?.toString().trim() ?? '',
+		readyCondition: form.get('readyCondition')?.toString().trim() ?? '',
+		expectedOutcome: form.get('expectedOutcome')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
 		targetDate: form.get('targetDate')?.toString().trim() ?? '',
@@ -120,6 +123,9 @@ function failTaskCreate(
 		message: string;
 		name: string;
 		instructions: string;
+		successCriteria: string;
+		readyCondition: string;
+		expectedOutcome: string;
 		projectId: string;
 		assigneeWorkerId: string;
 		targetDate: string;
@@ -286,6 +292,9 @@ function readCreateTaskPrefill(url: URL) {
 		projectId: url.searchParams.get('projectId')?.trim() ?? '',
 		name: url.searchParams.get('name')?.trim() ?? '',
 		instructions: url.searchParams.get('instructions')?.trim() ?? '',
+		successCriteria: url.searchParams.get('successCriteria')?.trim() ?? '',
+		readyCondition: url.searchParams.get('readyCondition')?.trim() ?? '',
+		expectedOutcome: url.searchParams.get('expectedOutcome')?.trim() ?? '',
 		assigneeWorkerId: url.searchParams.get('assigneeWorkerId')?.trim() ?? '',
 		targetDate: (() => {
 			const value = url.searchParams.get('targetDate')?.trim() ?? '';
@@ -369,6 +378,9 @@ export const actions: Actions = {
 		const {
 			name,
 			instructions,
+			successCriteria,
+			readyCondition,
+			expectedOutcome,
 			projectId,
 			assigneeWorkerId,
 			targetDate,
@@ -392,6 +404,9 @@ export const actions: Actions = {
 				message: 'Name, instructions, and project are required.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -415,6 +430,9 @@ export const actions: Actions = {
 				message: 'Target date must use YYYY-MM-DD format.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -445,6 +463,9 @@ export const actions: Actions = {
 				message: 'Project not found.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -468,6 +489,9 @@ export const actions: Actions = {
 				message: 'Goal not found.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -491,6 +515,9 @@ export const actions: Actions = {
 				message: 'Worker not found.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -514,6 +541,9 @@ export const actions: Actions = {
 				message: 'This task cannot launch a work thread until its project has a root folder.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -542,6 +572,9 @@ export const actions: Actions = {
 				message: 'One or more selected dependencies are no longer available.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -573,6 +606,9 @@ export const actions: Actions = {
 					'This project needs an artifact root before files can be attached during creation.',
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -602,6 +638,9 @@ export const actions: Actions = {
 		const baseTask = createTask({
 			title: name,
 			summary: instructions,
+			successCriteria,
+			readyCondition,
+			expectedOutcome,
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
@@ -641,9 +680,13 @@ export const actions: Actions = {
 		const prompt = buildTaskThreadPrompt({
 			taskName: name,
 			taskInstructions: instructions,
+			successCriteria,
+			readyCondition,
+			expectedOutcome,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder ?? '',
 			defaultArtifactRoot: project.defaultArtifactRoot,
+			additionalWritableRoots: project.additionalWritableRoots ?? [],
 			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 				.slice(0, 12)
 				.map((skill) => skill.id)
@@ -652,6 +695,7 @@ export const actions: Actions = {
 		const sandbox = resolveThreadSandbox({ worker: assigneeWorker, project, provider });
 		const workspaceIssue = getWorkspaceExecutionIssue({
 			cwd: project.projectRootFolder ?? '',
+			additionalWritableRoots: project.additionalWritableRoots ?? [],
 			sandbox,
 			scopeLabel: 'Project root'
 		});
@@ -661,6 +705,9 @@ export const actions: Actions = {
 				message: workspaceIssue,
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -689,6 +736,7 @@ export const actions: Actions = {
 					taskId: createdTask.id
 				}),
 				cwd: project.projectRootFolder ?? '',
+				additionalWritableRoots: project.additionalWritableRoots ?? [],
 				prompt,
 				sandbox,
 				model: null
@@ -698,6 +746,9 @@ export const actions: Actions = {
 				message: getActionErrorMessage(error, 'Could not start a work thread for this task.'),
 				name,
 				instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
 				projectId,
 				assigneeWorkerId,
 				targetDate,
@@ -850,6 +901,9 @@ export const actions: Actions = {
 
 		const effectiveName = name || task.title;
 		const effectiveInstructions = instructions || task.summary;
+		const effectiveSuccessCriteria = task.successCriteria ?? '';
+		const effectiveReadyCondition = task.readyCondition ?? '';
+		const effectiveExpectedOutcome = task.expectedOutcome ?? '';
 		const effectiveProjectId = projectId || task.projectId;
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
@@ -884,9 +938,13 @@ export const actions: Actions = {
 		const prompt = buildTaskThreadPrompt({
 			taskName: effectiveName,
 			taskInstructions: effectiveInstructions,
+			successCriteria: effectiveSuccessCriteria,
+			readyCondition: effectiveReadyCondition,
+			expectedOutcome: effectiveExpectedOutcome,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot,
+			additionalWritableRoots: project.additionalWritableRoots ?? [],
 			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 				.slice(0, 12)
 				.map((skill) => skill.id)
@@ -924,6 +982,7 @@ export const actions: Actions = {
 
 		const workspaceIssue = getWorkspaceExecutionIssue({
 			cwd: project.projectRootFolder,
+			additionalWritableRoots: project.additionalWritableRoots ?? [],
 			sandbox,
 			scopeLabel: 'Project root'
 		});
@@ -967,6 +1026,7 @@ export const actions: Actions = {
 						taskId: task.id
 					}),
 					cwd: project.projectRootFolder,
+					additionalWritableRoots: project.additionalWritableRoots ?? [],
 					prompt,
 					sandbox,
 					model: null

@@ -1,6 +1,7 @@
 <script lang="ts">
 	let { data, form } = $props<{
 		data: {
+			formAction: string;
 			nextPath: string;
 		};
 		form?: {
@@ -31,7 +32,7 @@
 			</p>
 		</div>
 
-		<form class="mt-6 space-y-4" method="POST">
+		<form action={data.formAction} class="mt-6 space-y-4" method="POST">
 			<input type="hidden" name="next" value={nextPath} />
 
 			<label class="block">

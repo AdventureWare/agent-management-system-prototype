@@ -28,9 +28,7 @@
 		return ['queued', 'starting', 'running'].includes(run.status);
 	}
 
-	let hasActiveRecentRun = $derived(
-		data.recentRuns.some(runIsActive)
-	);
+	let hasActiveRecentRun = $derived(data.recentRuns.some(runIsActive));
 
 	$effect(() => {
 		props.data;
@@ -55,8 +53,7 @@
 			);
 			refreshError = null;
 		} catch (err) {
-			refreshError =
-				err instanceof Error ? err.message : 'Could not refresh the worker detail.';
+			refreshError = err instanceof Error ? err.message : 'Could not refresh the worker detail.';
 		} finally {
 			isRefreshing = false;
 		}
@@ -123,7 +120,9 @@
 			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
 		</button>
 		{#if shouldAutoRefreshWorkerDetail()}
-			<span class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200">
+			<span
+				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
+			>
 				Live updates every {autoRefreshIntervalLabel} while this worker is active
 			</span>
 		{/if}

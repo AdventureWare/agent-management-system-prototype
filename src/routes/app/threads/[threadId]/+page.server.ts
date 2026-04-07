@@ -144,10 +144,7 @@ function buildTaskResponseAction(input: {
 		disabledReason = 'Wait for the active run to finish before approving this response.';
 	} else if (!input.thread?.latestRun) {
 		disabledReason = 'No thread output is available yet.';
-	} else if (
-		!input.thread.latestRun.lastMessage &&
-		input.thread.latestRunStatus !== 'completed'
-	) {
+	} else if (!input.thread.latestRun.lastMessage && input.thread.latestRunStatus !== 'completed') {
 		disabledReason = 'This thread has not captured a response yet.';
 	}
 
@@ -184,7 +181,10 @@ function buildThreadResponseContextArtifacts(input: {
 	const relatedTaskIds = [
 		resolveThreadTask(input.data, input.threadId)?.id ?? null,
 		...input.thread.relatedTasks.map((task) => task.id)
-	].filter((taskId, index, taskIds): taskId is string => Boolean(taskId) && taskIds.indexOf(taskId) === index);
+	].filter(
+		(taskId, index, taskIds): taskId is string =>
+			Boolean(taskId) && taskIds.indexOf(taskId) === index
+	);
 
 	const contextArtifacts = relatedTaskIds.flatMap((taskId): ThreadResponseContextArtifact[] => {
 		const task = tasksById.get(taskId);
@@ -531,6 +531,7 @@ export const actions: Actions = {
 			nextThread = await startAgentThread({
 				name: thread.name,
 				cwd: thread.cwd,
+				additionalWritableRoots: thread.additionalWritableRoots ?? [],
 				prompt,
 				sandbox: thread.sandbox,
 				model: thread.model

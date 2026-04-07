@@ -20,12 +20,13 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	}
 
 	return {
+		formAction: `${url.pathname}${url.search}`,
 		nextPath: sanitizeNextPath(url.searchParams.get('next'))
 	};
 };
 
 export const actions: Actions = {
-	default: async ({ cookies, request }) => {
+	default: async ({ cookies, request, url }) => {
 		const authConfig = getOperatorAuthConfig();
 
 		if (!authConfig) {
@@ -48,6 +49,7 @@ export const actions: Actions = {
 			httpOnly: true,
 			path: '/',
 			sameSite: 'lax',
+			secure: url.protocol === 'https:',
 			maxAge: 60 * 60 * 24 * 14
 		});
 

@@ -17,7 +17,13 @@ vi.mock('node:fs', async () => {
 	};
 });
 
-import { getCodexSkillExecutionIssue, getWorkspaceExecutionIssue } from './task-execution-workspace';
+import {
+	getLocalPathSandboxCoverage,
+	getCodexSkillExecutionIssue,
+	getWorkspaceExecutionIssue,
+	normalizeAdditionalWritableRoots,
+	probeLocalPathAccess
+} from './task-execution-workspace';
 
 describe('task execution workspace checks', () => {
 	beforeEach(() => {
@@ -59,6 +65,30 @@ describe('task execution workspace checks', () => {
 		);
 	});
 
+	it('validates additional writable roots alongside the project root', () => {
+		existsSync.mockImplementation((path: string) =>
+			new Set(['/tmp/project', '/tmp/iCloud/shared']).has(path)
+		);
+		accessSync.mockImplementation((path: string) => {
+			if (path === '/tmp/iCloud/shared') {
+				const error = new Error('operation not permitted') as NodeJS.ErrnoException;
+				error.code = 'EPERM';
+				throw error;
+			}
+		});
+
+		expect(
+			getWorkspaceExecutionIssue({
+				cwd: '/tmp/project',
+				additionalWritableRoots: ['/tmp/iCloud/shared'],
+				sandbox: 'workspace-write',
+				scopeLabel: 'Project root'
+			})
+		).toBe(
+			'Additional writable root 1 cannot be used with the workspace-write sandbox: /tmp/iCloud/shared. Operation not permitted (EPERM).'
+		);
+	});
+
 	it('requires only read access for read-only runs', () => {
 		existsSync.mockReturnValue(true);
 		accessSync.mockReturnValue(undefined);
@@ -86,7 +116,7 @@ describe('task execution workspace checks', () => {
 		expect(accessSync).toHaveBeenCalledTimes(1);
 	});
 
-	it('reports host access issues under danger-full-access without blaming the sandbox', () => {
+	it('does not block iCloud Drive roots under danger-full-access when app-process access is inconclusive', () => {
 		existsSync.mockReturnValue(true);
 		accessSync.mockImplementation(() => {
 			const error = new Error('operation not permitted') as NodeJS.ErrnoException;
@@ -100,9 +130,61 @@ describe('task execution workspace checks', () => {
 				sandbox: 'danger-full-access',
 				scopeLabel: 'Project root'
 			})
-		).toBe(
-			'Project root exists but the current app process cannot access it: /Users/test/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault. Operation not permitted (EPERM). Grant Files and Folders or iCloud Drive access to the app or terminal running Codex, or move the workspace to a locally accessible folder.'
-		);
+		).toBeNull();
+	});
+
+	it('reports macOS cloud probe blocks separately when requested', () => {
+		existsSync.mockReturnValue(true);
+		accessSync.mockImplementation(() => {
+			const error = new Error('operation not permitted') as NodeJS.ErrnoException;
+			error.code = 'EPERM';
+			throw error;
+		});
+
+		expect(
+			probeLocalPathAccess({
+				path: '/Users/test/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault',
+				mode: 'read',
+				allowMacCloudProbeFailure: true
+			})
+		).toMatchObject({
+			status: 'macos_cloud_probe_blocked'
+		});
+	});
+
+	it('reports sandbox coverage for project roots, extra roots, and out-of-scope paths', () => {
+		expect(
+			getLocalPathSandboxCoverage({
+				cwd: '/tmp/project',
+				path: '/tmp/project/docs',
+				sandbox: 'workspace-write',
+				additionalWritableRoots: ['/tmp/iCloud/shared']
+			})
+		).toBe('project_root');
+		expect(
+			getLocalPathSandboxCoverage({
+				cwd: '/tmp/project',
+				path: '/tmp/iCloud/shared/client-a',
+				sandbox: 'workspace-write',
+				additionalWritableRoots: ['/tmp/iCloud/shared']
+			})
+		).toBe('additional_writable_root');
+		expect(
+			getLocalPathSandboxCoverage({
+				cwd: '/tmp/project',
+				path: '/tmp/outside',
+				sandbox: 'workspace-write',
+				additionalWritableRoots: ['/tmp/iCloud/shared']
+			})
+		).toBe('outside_sandbox');
+		expect(
+			getLocalPathSandboxCoverage({
+				cwd: '/tmp/project',
+				path: '/tmp/outside',
+				sandbox: 'danger-full-access',
+				additionalWritableRoots: ['/tmp/iCloud/shared']
+			})
+		).toBe('danger_full_access');
 	});
 
 	it('reports missing workspaces clearly', () => {
@@ -117,14 +199,23 @@ describe('task execution workspace checks', () => {
 		).toBe('Project root does not exist: /missing/project.');
 	});
 
+	it('normalizes additional writable roots by trimming, deduplicating, and removing the cwd', () => {
+		expect(
+			normalizeAdditionalWritableRoots('/tmp/project', [
+				'/tmp/project',
+				' "/tmp/iCloud/shared" ',
+				'/tmp/iCloud/shared',
+				'/tmp/dropbox'
+			])
+		).toEqual(['/tmp/iCloud/shared', '/tmp/dropbox']);
+	});
+
 	it('accepts valid skill files with YAML frontmatter', () => {
 		existsSync.mockImplementation((path: string) =>
 			new Set(['/fake/.codex/skills', '/fake/.codex/skills/writing/SKILL.md']).has(path)
 		);
 		readdirSync.mockImplementation((path: string) =>
-			path === '/fake/.codex/skills'
-				? [{ name: 'writing', isDirectory: () => true }]
-				: []
+			path === '/fake/.codex/skills' ? [{ name: 'writing', isDirectory: () => true }] : []
 		);
 		readFileSync.mockReturnValue(
 			'---\nname: writing\ndescription: Reusable writing guidance.\n---\n\n# Writing\n'
@@ -138,9 +229,7 @@ describe('task execution workspace checks', () => {
 			new Set(['/fake/.codex/skills', '/fake/.codex/skills/writing/SKILL.md']).has(path)
 		);
 		readdirSync.mockImplementation((path: string) =>
-			path === '/fake/.codex/skills'
-				? [{ name: 'writing', isDirectory: () => true }]
-				: []
+			path === '/fake/.codex/skills' ? [{ name: 'writing', isDirectory: () => true }] : []
 		);
 		readFileSync.mockReturnValue('# writing');
 
@@ -154,9 +243,7 @@ describe('task execution workspace checks', () => {
 			new Set(['/tmp/project/.agents', '/tmp/project/.agents/docs-writer/SKILL.md']).has(path)
 		);
 		readdirSync.mockImplementation((path: string) =>
-			path === '/tmp/project/.agents'
-				? [{ name: 'docs-writer', isDirectory: () => true }]
-				: []
+			path === '/tmp/project/.agents' ? [{ name: 'docs-writer', isDirectory: () => true }] : []
 		);
 		readFileSync.mockReturnValue('# docs writer');
 

@@ -46,7 +46,14 @@ const createRun = vi.hoisted(() =>
 
 const projectMatchesPath = vi.hoisted(() => vi.fn(() => true));
 const getWorkspaceExecutionIssue = vi.hoisted(() =>
-	vi.fn<(_: { cwd: string; sandbox: string; scopeLabel?: string }) => string | null>(() => null)
+	vi.fn<
+		(_: {
+			cwd: string;
+			additionalWritableRoots?: string[];
+			sandbox: string;
+			scopeLabel?: string;
+		}) => string | null
+	>(() => null)
 );
 const getAgentThread = vi.hoisted(() => vi.fn());
 const recoverAgentThread = vi.hoisted(() => vi.fn());
@@ -619,6 +626,7 @@ describe('task detail page server actions', () => {
 			expect.objectContaining({
 				name: 'Task thread · Attach a brief · Agent Management System Prototype · task_1',
 				cwd: '/tmp/project',
+				additionalWritableRoots: [],
 				prompt: 'run the task'
 			})
 		);
@@ -634,7 +642,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'launchTaskSession',
 				taskId: 'task_1',
-				agentThreadId: 'session_new'
+				threadId: 'session_new'
 			})
 		);
 	});
@@ -765,7 +773,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'launchTaskSession',
 				taskId: 'task_1',
-				agentThreadId: 'session_previous'
+				threadId: 'session_previous'
 			})
 		);
 	});
@@ -931,7 +939,7 @@ describe('task detail page server actions', () => {
 				ok: true,
 				successAction: 'recoverTaskSession',
 				taskId: 'task_1',
-				agentThreadId: 'session_active'
+				threadId: 'session_active'
 			})
 		);
 	});
@@ -1064,6 +1072,83 @@ describe('task detail page server actions', () => {
 		expect(startAgentThread).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'danger-full-access'
+			})
+		);
+	});
+
+	it('starts a fresh thread when the project now requires extra writable roots', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.additionalWritableRoots = [
+			'/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared'
+		];
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				{
+					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+					agentThreadId: null,
+					latestRunId: 'run_previous'
+				}
+			],
+			runs: [
+				{
+					id: 'run_previous',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: 'provider_local_codex',
+					status: 'completed',
+					createdAt: '2026-03-30T12:10:00.000Z',
+					updatedAt: '2026-03-30T12:15:00.000Z',
+					startedAt: '2026-03-30T12:10:00.000Z',
+					endedAt: '2026-03-30T12:15:00.000Z',
+					threadId: 'thread_previous',
+					agentThreadId: 'session_previous',
+					promptDigest: 'digest_previous',
+					artifactPaths: ['/tmp/project/agent_output'],
+					summary: 'Completed previous run.',
+					lastHeartbeatAt: '2026-03-30T12:15:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+		getAgentThread.mockResolvedValue({
+			id: 'session_previous',
+			name: 'Work thread: Previous Run',
+			cwd: '/tmp/project',
+			additionalWritableRoots: [],
+			sandbox: 'workspace-write',
+			model: null,
+			threadId: 'thread_previous',
+			archivedAt: null,
+			createdAt: '2026-03-30T12:10:00.000Z',
+			updatedAt: '2026-03-30T12:15:00.000Z',
+			origin: 'managed',
+			threadState: 'ready',
+			latestRunStatus: 'completed',
+			hasActiveRun: false,
+			canResume: true,
+			runCount: 1,
+			lastActivityAt: '2026-03-30T12:15:00.000Z',
+			lastActivityLabel: 'just now',
+			threadSummary: 'The thread is idle and available for the next instruction.',
+			lastExitCode: 0,
+			runTimeline: [],
+			relatedTasks: [],
+			latestRun: null,
+			runs: []
+		});
+
+		await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(sendAgentThreadMessage).not.toHaveBeenCalled();
+		expect(startAgentThread).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalWritableRoots: ['/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Shared']
 			})
 		);
 	});

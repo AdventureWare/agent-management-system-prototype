@@ -16,7 +16,10 @@ function isPathTarget(value: string): value is PathTarget {
 	return PATH_TARGET_OPTIONS.includes(value as PathTarget);
 }
 
-export function parsePathTarget(value: string | null | undefined, fallback: PathTarget): PathTarget {
+export function parsePathTarget(
+	value: string | null | undefined,
+	fallback: PathTarget
+): PathTarget {
 	return value && isPathTarget(value) ? value : fallback;
 }
 
@@ -34,6 +37,22 @@ export function normalizePathInput(value: string | null | undefined) {
 	}
 
 	return path;
+}
+
+export function normalizePathListInput(value: string | string[] | null | undefined) {
+	const candidates = Array.isArray(value)
+		? value
+		: typeof value === 'string'
+			? value.split(/\r?\n/)
+			: [];
+
+	return [
+		...new Set(
+			candidates
+				.map((candidate) => normalizePathInput(candidate))
+				.filter((candidate) => candidate.length > 0)
+		)
+	];
 }
 
 export async function ensurePathTarget(input: {

@@ -197,6 +197,16 @@ describe('/app/tasks/+page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('keeps the task index toolbar sticky while the queue scrolls', () => {
+		renderPage([createTask()]);
+
+		const toolbar = document.querySelector('[data-testid="task-index-toolbar"]');
+
+		expect(toolbar?.className).toContain('sticky');
+		expect(toolbar?.className).toContain('top-0');
+		expect(toolbar?.className).toContain('z-20');
+	});
+
 	it('renders the project selector before the task name in the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();

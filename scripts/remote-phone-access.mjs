@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
+import { closeSync, openSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
@@ -51,9 +51,54 @@ function readFileMatches(path) {
 		.catch(() => []);
 }
 
+async function readTunnelEvents() {
+	try {
+		const text = await readFile(TUNNEL_LOG_PATH, 'utf8');
+
+		return text
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => line.startsWith('{') && line.endsWith('}'))
+			.map((line) => {
+				try {
+					return JSON.parse(line);
+				} catch {
+					return null;
+				}
+			})
+			.filter(Boolean);
+	} catch {
+		return [];
+	}
+}
+
 async function deriveTunnelUrl() {
+	const events = await readTunnelEvents();
+	const openedTunnel = events.findLast(
+		(event) =>
+			event?.event === 'tcpip-forward' &&
+			event?.status === 'success' &&
+			typeof event.listen_host === 'string'
+	);
+
+	if (openedTunnel?.listen_host) {
+		const protocol = openedTunnel.tls_termination === false ? 'http' : 'https';
+		return `${protocol}://${openedTunnel.listen_host}`;
+	}
+
 	const matches = await readFileMatches(TUNNEL_LOG_PATH);
-	return matches.at(-1) ?? null;
+	return (
+		matches.findLast((value) => {
+			try {
+				const url = new URL(value);
+				return !['localhost.run', 'admin.localhost.run', 'twitter.com', 'localhost:3000'].includes(
+					url.host
+				);
+			} catch {
+				return false;
+			}
+		}) ?? null
+	);
 }
 
 function printHeader(label) {
@@ -78,6 +123,16 @@ function runOrFail(command, args, options = {}) {
 	}
 }
 
+function deriveAllowedHostsForTunnel(hostname) {
+	const parts = hostname.split('.').filter(Boolean);
+
+	if (parts.length < 3) {
+		return [hostname];
+	}
+
+	return [hostname, `.${parts.slice(1).join('.')}`];
+}
+
 async function waitForLocalServer(url, attempts = 40) {
 	for (let index = 0; index < attempts; index += 1) {
 		try {
@@ -98,7 +153,16 @@ async function waitForLocalServer(url, attempts = 40) {
 
 async function waitForTunnelUrl(attempts = 30) {
 	for (let index = 0; index < attempts; index += 1) {
-		const tunnelUrl = await deriveTunnelUrl();
+		const events = await readTunnelEvents();
+		const openedTunnel = events.findLast(
+			(event) =>
+				event?.event === 'tcpip-forward' &&
+				event?.status === 'success' &&
+				typeof event.listen_host === 'string'
+		);
+		const tunnelUrl = openedTunnel?.listen_host
+			? `${openedTunnel.tls_termination === false ? 'http' : 'https'}://${openedTunnel.listen_host}`
+			: null;
 
 		if (tunnelUrl) {
 			return tunnelUrl;
@@ -156,7 +220,7 @@ async function startRemoteAccess() {
 		processIsAlive(currentStatus.previewPid) &&
 		processIsAlive(currentStatus.tunnelPid)
 	) {
-		const tunnelUrl = currentStatus.tunnelUrl ?? (await deriveTunnelUrl());
+		const tunnelUrl = (await deriveTunnelUrl()) ?? currentStatus.tunnelUrl ?? null;
 		printHeader('Remote access already running');
 		process.stdout.write(`Local: ${currentStatus.localUrl}\n`);
 		process.stdout.write(`Phone: ${tunnelUrl ?? 'Waiting for tunnel URL'}\n`);
@@ -172,27 +236,7 @@ async function startRemoteAccess() {
 	runOrFail('npm', ['run', 'build']);
 
 	const localUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
-	const previewLog = createWriteStream(PREVIEW_LOG_PATH, { flags: 'w' });
-	const previewProcess = spawn(
-		'npm',
-		['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(DEFAULT_PORT), '--strictPort'],
-		{
-			cwd: REPO_ROOT,
-			detached: true,
-			env: process.env,
-			stdio: ['ignore', previewLog, previewLog]
-		}
-	);
-	previewProcess.unref();
-
-	const localServerReady = await waitForLocalServer(localUrl);
-
-	if (!localServerReady) {
-		await stopProcessGroup(previewProcess.pid);
-		failWithMessage(`Preview server did not start on ${localUrl}. Check ${PREVIEW_LOG_PATH}.`);
-	}
-
-	const tunnelLog = createWriteStream(TUNNEL_LOG_PATH, { flags: 'w' });
+	const tunnelLogFd = openSync(TUNNEL_LOG_PATH, 'w');
 	const tunnelProcess = spawn(
 		'ssh',
 		[
@@ -202,21 +246,57 @@ async function startRemoteAccess() {
 			'ServerAliveInterval=30',
 			'-o',
 			'StrictHostKeyChecking=accept-new',
-			'-N',
 			'-R',
 			`${DEFAULT_TUNNEL_REMOTE_PORT}:127.0.0.1:${DEFAULT_PORT}`,
-			DEFAULT_TUNNEL_TARGET
+			DEFAULT_TUNNEL_TARGET,
+			'--',
+			'--output',
+			'json'
 		],
 		{
 			cwd: REPO_ROOT,
 			detached: true,
 			env: process.env,
-			stdio: ['ignore', tunnelLog, tunnelLog]
+			stdio: ['ignore', tunnelLogFd, tunnelLogFd]
 		}
 	);
+	closeSync(tunnelLogFd);
 	tunnelProcess.unref();
 
 	const tunnelUrl = await waitForTunnelUrl();
+	const tunnelHost = tunnelUrl ? new URL(tunnelUrl).host : null;
+	const previewAllowedHosts = tunnelHost ? deriveAllowedHostsForTunnel(tunnelHost).join(',') : null;
+
+	if (!tunnelHost) {
+		await stopProcessGroup(tunnelProcess.pid);
+		failWithMessage(`Tunnel URL was not detected. Check ${TUNNEL_LOG_PATH}.`);
+	}
+
+	const previewLogFd = openSync(PREVIEW_LOG_PATH, 'w');
+	const previewProcess = spawn(
+		'npm',
+		['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(DEFAULT_PORT), '--strictPort'],
+		{
+			cwd: REPO_ROOT,
+			detached: true,
+			env: {
+				...process.env,
+				__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: tunnelHost,
+				AMS_REMOTE_PREVIEW_ALLOWED_HOSTS: previewAllowedHosts ?? ''
+			},
+			stdio: ['ignore', previewLogFd, previewLogFd]
+		}
+	);
+	closeSync(previewLogFd);
+	previewProcess.unref();
+
+	const localServerReady = await waitForLocalServer(localUrl);
+
+	if (!localServerReady) {
+		await stopProcessGroup(tunnelProcess.pid);
+		await stopProcessGroup(previewProcess.pid);
+		failWithMessage(`Preview server did not start on ${localUrl}. Check ${PREVIEW_LOG_PATH}.`);
+	}
 
 	const status = {
 		startedAt: new Date().toISOString(),
@@ -264,7 +344,7 @@ async function showRemoteStatus() {
 		return;
 	}
 
-	const tunnelUrl = status.tunnelUrl ?? (await deriveTunnelUrl());
+	const tunnelUrl = (await deriveTunnelUrl()) ?? status.tunnelUrl ?? null;
 	const previewAlive = processIsAlive(status.previewPid);
 	const tunnelAlive = processIsAlive(status.tunnelPid);
 
