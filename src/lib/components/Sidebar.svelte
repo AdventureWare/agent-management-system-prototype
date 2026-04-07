@@ -27,6 +27,7 @@
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
 		home: LayoutDashboardIcon,
+		governance: ArrowLeftRightIcon,
 		access: ShieldCheckIcon,
 		improvements: LightbulbIcon,
 		tasks: ListTodoIcon,

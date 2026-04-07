@@ -35,6 +35,15 @@
 		sourceLabel: string;
 		actionLabel?: string;
 	};
+	type DetectedReferenceSummary = {
+		references: DetectedReference[];
+		artifactPaths: string[];
+		counts: {
+			artifacts: number;
+			appLinks: number;
+			externalLinks: number;
+		};
+	};
 
 	const artifactReferenceStatusCache = new Map<string, ArtifactReferenceStatus>();
 	const pendingArtifactReferenceRequests = new Map<string, Promise<ArtifactReferenceStatus>>();
@@ -67,20 +76,46 @@
 	const continuationPattern = /^\s{2,}\S/;
 
 	let blocks = $derived.by(() => parseMessageBlocks(text ?? ''));
-	let detectedReferences = $derived.by(() => collectDetectedReferences(blocks));
+	let detectedReferenceSummary = $derived.by<DetectedReferenceSummary>(() => {
+		const references = collectDetectedReferences(blocks);
+		const artifactPaths: string[] = [];
+		const seenArtifactPaths = new Set<string>();
+		const counts = {
+			artifacts: 0,
+			appLinks: 0,
+			externalLinks: 0
+		};
+
+		for (const reference of references) {
+			switch (reference.kind) {
+				case 'artifact':
+					counts.artifacts += 1;
+
+					if (!seenArtifactPaths.has(reference.path)) {
+						seenArtifactPaths.add(reference.path);
+						artifactPaths.push(reference.path);
+					}
+					break;
+				case 'appLink':
+					counts.appLinks += 1;
+					break;
+				case 'externalLink':
+					counts.externalLinks += 1;
+					break;
+			}
+		}
+
+		return {
+			references,
+			artifactPaths,
+			counts
+		};
+	});
+	let detectedReferences = $derived(detectedReferenceSummary.references);
 	let artifactStatuses = $state.raw<Record<string, ArtifactReferenceStatus>>({});
-	let artifactReferencePaths = $derived.by(() =>
-		detectedReferences
-			.flatMap((reference) => (reference.kind === 'artifact' ? [reference.path] : []))
-			.filter((path, index, paths) => paths.indexOf(path) === index)
-	);
+	let artifactReferencePaths = $derived(detectedReferenceSummary.artifactPaths);
 	let referenceSummaryExpanded = $state(false);
-	let referenceSummaryCounts = $derived.by(() => ({
-		artifacts: detectedReferences.filter((reference) => reference.kind === 'artifact').length,
-		appLinks: detectedReferences.filter((reference) => reference.kind === 'appLink').length,
-		externalLinks: detectedReferences.filter((reference) => reference.kind === 'externalLink')
-			.length
-	}));
+	let referenceSummaryCounts = $derived(detectedReferenceSummary.counts);
 	let previewDialogOpen = $state(false);
 	let previewState = $state<ArtifactPreviewState>({
 		path: '',

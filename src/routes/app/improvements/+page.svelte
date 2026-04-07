@@ -3,6 +3,11 @@
 	import { resolve } from '$app/paths';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import {
+		mergeStoredKnowledgeItemRecord,
+		mergeStoredOpportunityRecord,
+		selfImprovementRecordStore
+	} from '$lib/client/self-improvement-record-store';
 	import { tick } from 'svelte';
 	import {
 		captureSelfImprovementSuggestion,
@@ -32,6 +37,7 @@
 		type SelfImprovementStatus,
 		type TrackedSelfImprovementOpportunity
 	} from '$lib/types/self-improvement';
+	import { fromStore } from 'svelte/store';
 
 	type ImprovementProjectOption = {
 		id: string;
@@ -52,7 +58,25 @@
 		};
 	}>();
 	let refreshedSnapshot = $state.raw<SelfImprovementSnapshot | null>(null);
-	let snapshot = $derived(refreshedSnapshot ?? data.snapshot);
+	let sourceSnapshot = $derived(refreshedSnapshot ?? data.snapshot);
+	const selfImprovementRecordState = fromStore(selfImprovementRecordStore);
+	let snapshot = $derived.by(() => ({
+		...sourceSnapshot,
+		opportunities: sourceSnapshot.opportunities.map(
+			(opportunity: SelfImprovementSnapshot['opportunities'][number]) =>
+				mergeStoredOpportunityRecord(
+					opportunity,
+					selfImprovementRecordState.current.opportunitiesById
+				)
+		),
+		knowledgeItems: sourceSnapshot.knowledgeItems.map(
+			(knowledgeItem: SelfImprovementSnapshot['knowledgeItems'][number]) =>
+				mergeStoredKnowledgeItemRecord(
+					knowledgeItem,
+					selfImprovementRecordState.current.knowledgeItemsById
+				)
+		)
+	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
@@ -77,6 +101,11 @@
 	let captureCategory = $state<(typeof SELF_IMPROVEMENT_CATEGORY_OPTIONS)[number]>('coordination');
 	let captureSeverity = $state<(typeof SELF_IMPROVEMENT_SEVERITY_OPTIONS)[number]>('medium');
 	let isCapturingSuggestion = $state(false);
+
+	$effect(() => {
+		selfImprovementRecordStore.seedOpportunities(sourceSnapshot.opportunities);
+		selfImprovementRecordStore.seedKnowledgeItems(sourceSnapshot.knowledgeItems);
+	});
 
 	let activeProjectLabel = $derived.by(() => {
 		if (activeProjectId === 'all') {

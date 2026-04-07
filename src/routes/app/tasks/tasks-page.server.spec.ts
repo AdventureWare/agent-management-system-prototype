@@ -39,9 +39,18 @@ const createTaskMock = vi.hoisted(() =>
 			summary: string;
 			projectId: string;
 			goalId: string;
+			parentTaskId?: string | null;
+			delegationPacket?: {
+				objective: string;
+				inputContext: string;
+				expectedDeliverable: string;
+				doneCondition: string;
+				integrationNotes: string;
+			} | null;
 			priority?: string;
 			riskLevel?: string;
 			approvalMode?: string;
+			requiredThreadSandbox?: string | null;
 			requiresReview?: boolean;
 			desiredRoleId: string;
 			blockedReason?: string;
@@ -58,10 +67,13 @@ const createTaskMock = vi.hoisted(() =>
 			projectId: input.projectId,
 			area: 'product',
 			goalId: input.goalId,
+			parentTaskId: input.parentTaskId ?? null,
+			delegationPacket: input.delegationPacket ?? null,
 			priority: input.priority ?? 'medium',
 			status: input.status ?? 'ready',
 			riskLevel: input.riskLevel ?? 'medium',
 			approvalMode: input.approvalMode ?? 'none',
+			requiredThreadSandbox: input.requiredThreadSandbox ?? null,
 			requiresReview: input.requiresReview ?? true,
 			desiredRoleId: input.desiredRoleId,
 			assigneeWorkerId: null,
@@ -168,10 +180,12 @@ vi.mock('$lib/server/control-plane', () => ({
 	),
 	resolveThreadSandbox: vi.fn(
 		(input: {
+			task?: { requiredThreadSandbox?: string | null } | null;
 			worker?: { threadSandboxOverride: string | null } | null;
 			project?: { defaultThreadSandbox?: string | null } | null;
 			provider?: { defaultThreadSandbox: string } | null;
 		}) =>
+			input.task?.requiredThreadSandbox ??
 			input.worker?.threadSandboxOverride ??
 			input.project?.defaultThreadSandbox ??
 			input.provider?.defaultThreadSandbox ??
@@ -470,6 +484,83 @@ describe('tasks page server actions', () => {
 		).toEqual(['task_existing', 'task_link_new_task_to_goal']);
 	});
 
+	it('creates a delegated child task when a parent task is provided', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('parentTaskId', 'task_existing');
+		form.set('name', 'Split out delegation contract');
+		form.set('instructions', 'Create a child task for the specialized contract work.');
+		form.set('delegationObjective', 'Own the delegation packet schema and validation.');
+		form.set('delegationDoneCondition', 'The parent task can see and trust the child contract.');
+		form.set('delegationExpectedDeliverable', 'Schema updates and create-form validation.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				parentTaskId: 'task_existing',
+				delegationPacket: {
+					objective: 'Own the delegation packet schema and validation.',
+					inputContext: '',
+					expectedDeliverable: 'Schema updates and create-form validation.',
+					doneCondition: 'The parent task can see and trust the child contract.',
+					integrationNotes: ''
+				}
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Split out delegation contract',
+				parentTaskId: 'task_existing',
+				delegationPacket: {
+					objective: 'Own the delegation packet schema and validation.',
+					inputContext: '',
+					expectedDeliverable: 'Schema updates and create-form validation.',
+					doneCondition: 'The parent task can see and trust the child contract.',
+					integrationNotes: ''
+				}
+			})
+		);
+	});
+
+	it('rejects delegated child tasks that do not include an objective and done condition', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('parentTaskId', 'task_existing');
+		form.set('name', 'Split out delegation contract');
+		form.set('instructions', 'Create a child task for the specialized contract work.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message: 'Delegated child tasks need a clear delegation objective.'
+			}
+		});
+		expect(createTaskMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				parentTaskId: 'task_existing'
+			})
+		);
+	});
+
 	it('rejects an invalid target date during task creation', async () => {
 		const form = new FormData();
 		form.set('projectId', 'project_ams');
@@ -669,6 +760,37 @@ describe('tasks page server actions', () => {
 		expect(startAgentThreadMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'read-only'
+			})
+		);
+	});
+
+	it('uses the task sandbox requirement over inherited defaults during create-and-run', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.defaultThreadSandbox = 'read-only';
+		(controlPlaneState.current as ControlPlaneData).providers[0]!.defaultThreadSandbox =
+			'danger-full-access';
+
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Launch with task sandbox');
+		form.set('instructions', 'Use the task sandbox preference.');
+		form.set('requiredThreadSandbox', 'workspace-write');
+		form.set('submitMode', 'createAndRun');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(startAgentThreadMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sandbox: 'workspace-write'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				requiredThreadSandbox: 'workspace-write'
 			})
 		);
 	});

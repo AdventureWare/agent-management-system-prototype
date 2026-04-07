@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -9,9 +10,11 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { formatWorkerStatusLabel, workerStatusToneClass } from '$lib/types/control-plane';
+	import { fromStore } from 'svelte/store';
 
 	let { data, form } = $props();
 	const CREATE_WORKER_DRAFT_KEY = 'ams:create-worker';
+	const workerRecordState = fromStore(workerRecordStore);
 
 	let createWorkerDraftReady = $state(false);
 	let workerName = $state('');
@@ -29,12 +32,13 @@
 	}
 
 	let isCreateModalOpen = $state(modalShouldStartOpen());
-
-	let localWorkerCount = $derived(
-		data.workers.filter((worker) => worker.location === 'local').length
+	let workers = $derived.by(() =>
+		data.workers.map((worker) => mergeStoredWorkerRecord(worker, workerRecordState.current.byId))
 	);
-	let busyWorkerCount = $derived(data.workers.filter((worker) => worker.status === 'busy').length);
-	let totalCapacity = $derived(data.workers.reduce((count, worker) => count + worker.capacity, 0));
+
+	let localWorkerCount = $derived(workers.filter((worker) => worker.location === 'local').length);
+	let busyWorkerCount = $derived(workers.filter((worker) => worker.status === 'busy').length);
+	let totalCapacity = $derived(workers.reduce((count, worker) => count + worker.capacity, 0));
 
 	function locationClass(location: string) {
 		return location === 'local'
@@ -63,9 +67,13 @@
 			.includes(normalizedTerm);
 	}
 
-	let filteredWorkers = $derived(data.workers.filter((worker) => matchesWorker(worker, query)));
+	let filteredWorkers = $derived(workers.filter((worker) => matchesWorker(worker, query)));
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createWorker');
+
+	$effect(() => {
+		workerRecordStore.seedWorkers(data.workers);
+	});
 
 	function defaultWorkerProviderId() {
 		return data.providers[0]?.id ?? '';
@@ -169,7 +177,7 @@
 	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 		<MetricCard
 			label="Workers"
-			value={data.workers.length}
+			value={workers.length}
 			detail="Reachable execution surfaces saved in the control plane."
 		/>
 		<MetricCard

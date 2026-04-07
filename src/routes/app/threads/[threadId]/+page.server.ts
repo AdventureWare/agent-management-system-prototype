@@ -45,6 +45,16 @@ type ThreadTaskResponseAction = {
 	disabledReason: string;
 };
 
+type ThreadFocusTask = {
+	id: string;
+	title: string;
+	projectId: string | null;
+	status: Task['status'];
+	summary: string;
+	isPrimary: boolean;
+	source: 'resolved' | 'linked';
+};
+
 type ThreadResponseContextArtifact = {
 	path: string;
 	label: string;
@@ -109,6 +119,46 @@ function resolveThreadTask(data: ControlPlaneData, threadId: string) {
 	}
 
 	return data.tasks.find((task) => task.id === relatedTaskIds[0]) ?? null;
+}
+
+function buildThreadFocusTask(input: {
+	threadId: string;
+	thread: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>;
+	data: ControlPlaneData;
+}): ThreadFocusTask | null {
+	const resolvedTask = resolveThreadTask(input.data, input.threadId);
+
+	if (resolvedTask) {
+		return {
+			id: resolvedTask.id,
+			title: resolvedTask.title,
+			projectId: resolvedTask.projectId,
+			status: resolvedTask.status,
+			summary: resolvedTask.summary,
+			isPrimary: true,
+			source: 'resolved'
+		};
+	}
+
+	const primaryTask =
+		input.thread.relatedTasks.find((task) => task.isPrimary) ??
+		(input.thread.relatedTasks.length === 1 ? input.thread.relatedTasks[0] : null);
+
+	if (!primaryTask) {
+		return null;
+	}
+
+	const linkedTask = input.data.tasks.find((task) => task.id === primaryTask.id) ?? null;
+
+	return {
+		id: primaryTask.id,
+		title: linkedTask?.title ?? primaryTask.title,
+		projectId: linkedTask?.projectId ?? null,
+		status: linkedTask?.status ?? (primaryTask.status as Task['status']),
+		summary: linkedTask?.summary ?? '',
+		isPrimary: primaryTask.isPrimary,
+		source: 'linked'
+	};
 }
 
 function buildTaskResponseAction(input: {
@@ -376,6 +426,11 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		thread,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
+		threadFocusTask: buildThreadFocusTask({
+			threadId: params.threadId,
+			thread,
+			data
+		}),
 		taskResponseAction: buildTaskResponseAction({
 			threadId: params.threadId,
 			thread,

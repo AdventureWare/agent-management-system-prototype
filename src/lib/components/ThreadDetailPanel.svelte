@@ -60,6 +60,7 @@
 		title: string;
 		projectId: string | null;
 		status: string;
+		summary: string;
 		isPrimary: boolean;
 		source: 'resolved' | 'linked';
 	};
@@ -75,6 +76,7 @@
 	let {
 		thread: sessionProp,
 		sandboxOptions,
+		threadFocusTask = null,
 		taskResponseAction = null,
 		responseContextArtifacts = [],
 		form = null,
@@ -82,6 +84,7 @@
 	} = $props<{
 		thread: AgentThreadDetail;
 		sandboxOptions: readonly string[];
+		threadFocusTask?: ThreadFocusTask | null;
 		taskResponseAction?: TaskResponseAction | null;
 		responseContextArtifacts?: ResponseContextArtifact[];
 		form?: {
@@ -189,12 +192,17 @@
 	let latestContextRun = $derived.by(() => session?.latestRun ?? session?.runs[0] ?? null);
 	let latestInstructionNeedsClamp = $derived((latestContextRun?.prompt?.trim().length ?? 0) > 180);
 	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
+		if (threadFocusTask) {
+			return threadFocusTask;
+		}
+
 		if (taskResponseAction) {
 			return {
 				id: taskResponseAction.taskId,
 				title: taskResponseAction.taskTitle,
 				projectId: taskResponseAction.taskProjectId,
 				status: taskResponseAction.taskStatus,
+				summary: '',
 				isPrimary: true,
 				source: 'resolved'
 			};
@@ -217,6 +225,7 @@
 			title: primaryTask.title,
 			projectId: null,
 			status: primaryTask.status,
+			summary: '',
 			isPrimary: primaryTask.isPrimary,
 			source: 'linked'
 		};
@@ -1002,7 +1011,21 @@
 					{options.label}
 				</p>
 				<p class="ui-wrap-anywhere mt-2 text-sm font-semibold text-white">{task.title}</p>
-				<p class="ui-wrap-anywhere mt-1 text-sm text-slate-300">{options.description}</p>
+				{#if task.summary.trim()}
+					<div class="mt-3 rounded-lg border border-slate-800/80 bg-black/20 p-3">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Task brief</p>
+						<p
+							class={[
+								'ui-wrap-anywhere mt-2 text-sm text-slate-200',
+								options.compact ? '' : 'leading-6 whitespace-pre-wrap'
+							]}
+						>
+							{options.compact ? compactText(task.summary.trim(), 220) : task.summary.trim()}
+						</p>
+					</div>
+				{:else}
+					<p class="ui-wrap-anywhere mt-1 text-sm text-slate-300">{options.description}</p>
+				{/if}
 			</div>
 			<div class="flex min-w-0 flex-wrap items-center gap-2">
 				<span

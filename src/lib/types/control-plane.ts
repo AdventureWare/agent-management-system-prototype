@@ -39,6 +39,8 @@ export const DECISION_TYPE_OPTIONS = [
 	'task_plan_updated',
 	'task_thread_updated',
 	'task_recovered',
+	'delegation_handoff_accepted',
+	'delegation_handoff_changes_requested',
 	'review_approved',
 	'review_changes_requested',
 	'approval_approved',
@@ -242,6 +244,10 @@ export function formatDecisionTypeLabel(type: string): string {
 			return 'Thread Updated';
 		case 'task_recovered':
 			return 'Task Recovered';
+		case 'delegation_handoff_accepted':
+			return 'Handoff Accepted';
+		case 'delegation_handoff_changes_requested':
+			return 'Handoff Changes Requested';
 		case 'review_approved':
 			return 'Review Approved';
 		case 'review_changes_requested':
@@ -385,6 +391,19 @@ export type Worker = {
 	authTokenHash: string;
 };
 
+export type DelegationPacket = {
+	objective: string;
+	inputContext: string;
+	expectedDeliverable: string;
+	doneCondition: string;
+	integrationNotes: string;
+};
+
+export type DelegationAcceptance = {
+	summary: string;
+	acceptedAt: string;
+};
+
 export type Task = {
 	id: string;
 	title: string;
@@ -395,10 +414,14 @@ export type Task = {
 	projectId: string;
 	area: Area;
 	goalId: string;
+	parentTaskId?: string | null;
+	delegationPacket?: DelegationPacket | null;
+	delegationAcceptance?: DelegationAcceptance | null;
 	priority: Priority;
 	status: TaskStatus;
 	riskLevel: TaskRiskLevel;
 	approvalMode: TaskApprovalMode;
+	requiredThreadSandbox?: AgentSandbox | null;
 	requiresReview: boolean;
 	desiredRoleId: string;
 	assigneeWorkerId: string | null;

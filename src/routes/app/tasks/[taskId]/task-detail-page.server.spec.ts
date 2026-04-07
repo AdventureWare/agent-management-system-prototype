@@ -144,10 +144,12 @@ vi.mock('$lib/server/control-plane', () => ({
 	projectMatchesPath,
 	resolveThreadSandbox: vi.fn(
 		(input: {
+			task?: { requiredThreadSandbox?: string | null } | null;
 			worker?: { threadSandboxOverride: string | null } | null;
 			project?: { defaultThreadSandbox?: string | null } | null;
 			provider?: { defaultThreadSandbox: string } | null;
 		}) =>
+			input.task?.requiredThreadSandbox ??
 			input.worker?.threadSandboxOverride ??
 			input.project?.defaultThreadSandbox ??
 			input.provider?.defaultThreadSandbox ??
@@ -389,6 +391,38 @@ describe('task detail page server actions', () => {
 		);
 	});
 
+	it('updates the task sandbox requirement from the detail form', async () => {
+		const form = new FormData();
+		form.set('name', 'Attach a brief');
+		form.set('instructions', 'Need source documents');
+		form.set('projectId', 'project_1');
+		form.set('requiredThreadSandbox', 'danger-full-access');
+
+		const result = await actions.updateTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'updateTask',
+				taskId: 'task_1'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				requiredThreadSandbox: 'danger-full-access'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]?.summary).toContain(
+			'Danger Full Access sandbox'
+		);
+	});
+
 	it('updates the task goal link from the detail form', async () => {
 		const form = new FormData();
 		form.set('name', 'Attach a brief');
@@ -511,6 +545,156 @@ describe('task detail page server actions', () => {
 			'set desired role to Reviewer'
 		);
 		expect(controlPlaneState.saved?.decisions?.[0]?.summary).toContain('"Unblock API contract"');
+	});
+
+	it('accepts a completed child handoff into the parent task', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				...(controlPlaneState.current as ControlPlaneData).tasks,
+				{
+					id: 'task_child',
+					title: 'Delegated child task',
+					summary: 'Produce the specialized handoff.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: '',
+					parentTaskId: 'task_1',
+					delegationPacket: {
+						objective: 'Own the specialized packet work.',
+						inputContext: '',
+						expectedDeliverable: 'A concrete child artifact.',
+						doneCondition: 'The parent can accept the handoff.',
+						integrationNotes: ''
+					},
+					priority: 'medium',
+					status: 'done',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					targetDate: null,
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('childTaskId', 'task_child');
+
+		const result = await actions.acceptChildHandoff({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'acceptChildHandoff',
+				taskId: 'task_1',
+				childTaskId: 'task_child'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_child')).toEqual(
+			expect.objectContaining({
+				delegationAcceptance: expect.objectContaining({
+					summary: 'Accepted child handoff into parent task "Attach a brief".'
+				})
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_child',
+				decisionType: 'delegation_handoff_accepted'
+			})
+		);
+	});
+
+	it('requests follow-up on a child handoff and moves the child back into blocked state', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				...(controlPlaneState.current as ControlPlaneData).tasks,
+				{
+					id: 'task_child',
+					title: 'Delegated child task',
+					summary: 'Produce the specialized handoff.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: '',
+					parentTaskId: 'task_1',
+					delegationPacket: {
+						objective: 'Own the specialized packet work.',
+						inputContext: '',
+						expectedDeliverable: 'A concrete child artifact.',
+						doneCondition: 'The parent can accept the handoff.',
+						integrationNotes: ''
+					},
+					priority: 'medium',
+					status: 'done',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					targetDate: null,
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('childTaskId', 'task_child');
+
+		const result = await actions.requestChildHandoffChanges({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'requestChildHandoffChanges',
+				taskId: 'task_1',
+				childTaskId: 'task_child'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_child')).toEqual(
+			expect.objectContaining({
+				status: 'blocked',
+				blockedReason: 'Parent task requested follow-up before accepting this child handoff.',
+				delegationAcceptance: null
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_child',
+				decisionType: 'delegation_handoff_changes_requested'
+			})
+		);
 	});
 
 	it('rejects an invalid task target date from the detail form', async () => {
@@ -1072,6 +1256,60 @@ describe('task detail page server actions', () => {
 		expect(startAgentThread).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sandbox: 'danger-full-access'
+			})
+		);
+	});
+
+	it('uses the task sandbox requirement over worker and project defaults on the task detail page', async () => {
+		(controlPlaneState.current as ControlPlaneData).projects[0]!.defaultThreadSandbox =
+			'danger-full-access';
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			workers: [
+				{
+					id: 'worker_1',
+					name: 'Local operator',
+					providerId: 'provider_local_codex',
+					roleId: 'role_coordinator',
+					location: 'local',
+					status: 'idle',
+					capacity: 1,
+					registeredAt: '2026-03-30T12:00:00.000Z',
+					lastSeenAt: '2026-03-30T12:00:00.000Z',
+					note: '',
+					tags: [],
+					threadSandboxOverride: 'read-only',
+					authTokenHash: ''
+				}
+			],
+			tasks: [
+				{
+					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+					assigneeWorkerId: 'worker_1'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('assigneeWorkerId', 'worker_1');
+		form.set('requiredThreadSandbox', 'workspace-write');
+
+		await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(startAgentThread).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sandbox: 'workspace-write'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				requiredThreadSandbox: 'workspace-write'
 			})
 		);
 	});

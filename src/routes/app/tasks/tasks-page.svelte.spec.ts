@@ -218,6 +218,16 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(createFormLabels.slice(0, 2)).toEqual(['Project', 'Name']);
 	});
 
+	it('includes a required sandbox control in the advanced create task intake', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Show advanced' }).click();
+
+		await expect
+			.element(page.getByRole('combobox', { name: 'Required sandbox' }))
+			.toBeInTheDocument();
+	});
+
 	it('renders create and run controls in the quick create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();

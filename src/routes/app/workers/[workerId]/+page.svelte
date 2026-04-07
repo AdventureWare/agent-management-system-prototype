@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
@@ -14,11 +15,17 @@
 		taskStatusToneClass,
 		workerStatusToneClass
 	} from '$lib/types/control-plane';
+	import { fromStore } from 'svelte/store';
 
 	let props = $props<{ data: PageData; form?: ActionData }>();
 	let form = $derived(props.form);
 	let refreshedData = $state.raw<PageData | null>(null);
-	let data = $derived(refreshedData ?? props.data);
+	let sourceData = $derived(refreshedData ?? props.data);
+	const workerRecordState = fromStore(workerRecordStore);
+	let data = $derived.by(() => ({
+		...sourceData,
+		worker: mergeStoredWorkerRecord(sourceData.worker, workerRecordState.current.byId)
+	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 
@@ -33,6 +40,10 @@
 	$effect(() => {
 		props.data;
 		refreshedData = null;
+	});
+
+	$effect(() => {
+		workerRecordStore.seedWorker(sourceData.worker);
 	});
 
 	function shouldAutoRefreshWorkerDetail() {

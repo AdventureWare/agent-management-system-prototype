@@ -4,6 +4,7 @@
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import {
 		collectTaskLinkedThreads,
 		mergeTaskThreadCandidateState,
@@ -19,6 +20,7 @@
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
+	import { AGENT_SANDBOX_OPTIONS, formatAgentSandboxLabel } from '$lib/types/agent-thread';
 	import {
 		PRIORITY_OPTIONS,
 		TASK_APPROVAL_MODE_OPTIONS,
@@ -45,9 +47,13 @@
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 	const threadStoreState = fromStore(agentThreadStore);
+	const taskRecordState = fromStore(taskRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
-		task: mergeTaskThreadState(sourceData.task, threadStoreState.current.byId),
+		task: mergeTaskThreadState(
+			mergeStoredTaskRecord(sourceData.task, taskRecordState.current.byId),
+			threadStoreState.current.byId
+		),
 		candidateThreads: sourceData.candidateThreads.map(
 			(thread: PageData['candidateThreads'][number]) =>
 				mergeTaskThreadCandidateState(thread, threadStoreState.current.byId)
@@ -61,6 +67,7 @@
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 
 	$effect(() => {
+		taskRecordStore.seedTask(sourceData.task);
 		agentThreadStore.seedThreads(collectTaskLinkedThreads(sourceData.task), { replace: false });
 	});
 
@@ -102,6 +109,10 @@
 				return 'Approval granted.';
 			case 'rejectApproval':
 				return 'Approval rejected and task blocked.';
+			case 'acceptChildHandoff':
+				return 'Child handoff accepted into the parent task.';
+			case 'requestChildHandoffChanges':
+				return 'Child handoff returned for follow-up.';
 			default:
 				return '';
 		}
@@ -117,6 +128,8 @@
 				case 'requestChanges':
 				case 'approveApproval':
 				case 'rejectApproval':
+				case 'acceptChildHandoff':
+				case 'requestChildHandoffChanges':
 					return 'governance';
 				case 'attachTaskFile':
 				case 'removeTaskAttachment':
@@ -326,6 +339,29 @@
 		].join('\n\n');
 	}
 
+	function createDelegatedSubtaskInstructions() {
+		return [
+			`Delegate a focused subtask from "${data.task.title}" to a specialized agent.`,
+			`Parent task summary:\n${compactText(data.task.summary, 420)}`,
+			'Subtask brief:\n- Define one narrow objective.\n- Specify required output or artifact.\n- Keep scope separate enough to integrate cleanly into the parent task.'
+		].join('\n\n');
+	}
+
+	function createDelegationInputContext() {
+		return [
+			`Parent task: ${data.task.title}`,
+			`Current status: ${formatTaskStatusLabel(data.task.status)}`,
+			`Task summary: ${compactText(data.task.summary, 420)}`
+		].join('\n');
+	}
+
+	function createDelegationIntegrationNotes() {
+		return [
+			`Return the completed handoff to parent task ${data.task.id}.`,
+			'Call out unresolved risks or assumptions so the parent task can decide whether integration is safe.'
+		].join('\n');
+	}
+
 	let taskHasActiveRun = $derived(Boolean(data.task.hasActiveRun));
 	let taskIsReadyToRun = $derived(data.task.status === 'ready');
 	let runTaskDisabled = $derived(!taskIsReadyToRun || taskHasActiveRun);
@@ -380,6 +416,28 @@
 	>
 		{#snippet actions()}
 			<div class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
+				<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
+					<input type="hidden" name="create" value="1" />
+					<input type="hidden" name="projectId" value={data.task.projectId} />
+					<input type="hidden" name="goalId" value={data.task.goalId} />
+					<input type="hidden" name="parentTaskId" value={data.task.id} />
+					<input type="hidden" name="desiredRoleId" value={data.task.desiredRoleId} />
+					<input
+						type="hidden"
+						name="delegationInputContext"
+						value={createDelegationInputContext()}
+					/>
+					<input
+						type="hidden"
+						name="delegationIntegrationNotes"
+						value={createDelegationIntegrationNotes()}
+					/>
+					<input type="hidden" name="name" value={`Delegated subtask: ${data.task.title}`} />
+					<input type="hidden" name="instructions" value={createDelegatedSubtaskInstructions()} />
+					<AppButton class="w-full sm:w-auto" type="submit" variant="primary">
+						Delegate subtask
+					</AppButton>
+				</form>
 				<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
 					<input type="hidden" name="create" value="1" />
 					<input type="hidden" name="projectId" value={data.task.projectId} />
@@ -772,6 +830,84 @@
 								>
 							</label>
 						</div>
+
+						{#if data.task.parentTaskId || data.task.delegationPacket}
+							<section class="rounded-2xl border border-sky-900/50 bg-sky-950/15 p-4">
+								<div class="space-y-2">
+									<p class="text-xs font-semibold tracking-[0.16em] text-sky-300 uppercase">
+										Delegation packet
+									</p>
+									<p class="text-sm text-slate-300">
+										Make the child contract explicit so the parent task can integrate the result
+										without guessing.
+									</p>
+								</div>
+
+								<div class="mt-4 grid gap-4 lg:grid-cols-2">
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Delegation objective
+										</span>
+										<textarea
+											class="textarea min-h-28 text-white"
+											name="delegationObjective"
+											placeholder="Describe the exact slice of work this child task owns."
+											required={Boolean(data.task.parentTaskId)}
+											>{data.task.delegationPacket?.objective ?? ''}</textarea
+										>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Done condition
+										</span>
+										<textarea
+											class="textarea min-h-28 text-white"
+											name="delegationDoneCondition"
+											placeholder="Describe what must be true before the parent can accept this handoff."
+											required={Boolean(data.task.parentTaskId)}
+											>{data.task.delegationPacket?.doneCondition ?? ''}</textarea
+										>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Input context
+										</span>
+										<textarea
+											class="textarea min-h-28 text-white"
+											name="delegationInputContext"
+											placeholder="Capture upstream constraints, source material, or context the child needs."
+											>{data.task.delegationPacket?.inputContext ?? ''}</textarea
+										>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Expected deliverable
+										</span>
+										<textarea
+											class="textarea min-h-28 text-white"
+											name="delegationExpectedDeliverable"
+											placeholder="Name the artifact, format, or concrete output expected from this child."
+											>{data.task.delegationPacket?.expectedDeliverable ?? ''}</textarea
+										>
+									</label>
+								</div>
+
+								<label class="mt-4 block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">
+										Integration notes
+									</span>
+									<textarea
+										class="textarea min-h-24 text-white"
+										name="delegationIntegrationNotes"
+										placeholder="Describe how the parent task should verify or integrate this child output."
+										>{data.task.delegationPacket?.integrationNotes ?? ''}</textarea
+									>
+								</label>
+							</section>
+						{/if}
 					</div>
 				</section>
 
@@ -977,7 +1113,7 @@
 						</p>
 					</div>
 
-					<div class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+					<div class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
 						<label class="block">
 							<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
 							<select class="select text-white" name="priority">
@@ -1009,6 +1145,23 @@
 									</option>
 								{/each}
 							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200"> Required sandbox </span>
+							<select class="select text-white" name="requiredThreadSandbox">
+								<option value="" selected={!data.task.requiredThreadSandbox}>
+									Inherit worker and project defaults
+								</option>
+								{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
+									<option value={sandbox} selected={data.task.requiredThreadSandbox === sandbox}>
+										{formatAgentSandboxLabel(sandbox)}
+									</option>
+								{/each}
+							</select>
+							<p class="mt-2 text-xs text-slate-500">
+								New work threads for this task will use this sandbox when set here.
+							</p>
 						</label>
 
 						<label class="block">
@@ -1145,6 +1298,12 @@
 								<p>Priority: {formatPriorityLabel(data.task.priority)}</p>
 								<p>Risk level: {formatTaskRiskLevelLabel(data.task.riskLevel)}</p>
 								<p>Approval mode: {formatTaskApprovalModeLabel(data.task.approvalMode)}</p>
+								<p>
+									Required sandbox:
+									{data.task.requiredThreadSandbox
+										? formatAgentSandboxLabel(data.task.requiredThreadSandbox)
+										: 'Inherit defaults'}
+								</p>
 								<p>Requires review: {data.task.requiresReview ? 'Yes' : 'No'}</p>
 							</div>
 						</div>
@@ -1187,6 +1346,67 @@
 							</p>
 						</div>
 					</div>
+
+					{#if data.task.parentTaskId || data.task.delegationPacket}
+						<div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Delegation objective
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationPacket?.objective || 'No delegation objective recorded.'}
+								</p>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Done condition
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationPacket?.doneCondition || 'No done condition recorded.'}
+								</p>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Expected deliverable
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationPacket?.expectedDeliverable ||
+										'No expected deliverable recorded.'}
+								</p>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Input context
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationPacket?.inputContext || 'No input context recorded.'}
+								</p>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 xl:col-span-2">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Integration notes
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationPacket?.integrationNotes || 'No integration notes recorded.'}
+								</p>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 xl:col-span-3">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Parent acceptance
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{data.task.delegationAcceptance
+										? `${data.task.delegationAcceptance.summary} · ${data.task.delegationAcceptance.acceptedAtLabel}`
+										: 'This child handoff has not been accepted by the parent task yet.'}
+								</p>
+							</div>
+						</div>
+					{/if}
 
 					<div class="mt-4 grid gap-4 sm:grid-cols-2">
 						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -1921,6 +2141,187 @@
 											Desired role:
 											{data.task.desiredRoleName || data.task.desiredRoleId || 'No role preference'}
 										</p>
+									</div>
+								</div>
+
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Delegation lineage
+											</p>
+											<p class="mt-2 text-sm text-white">
+												Track whether this task belongs to a parent task or owns delegated subtasks.
+											</p>
+										</div>
+										<span
+											class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+										>
+											{(data.parentTask ? 1 : 0) + data.childTasks.length} links
+										</span>
+									</div>
+
+									<div class="mt-4 space-y-4">
+										{#if data.childTaskRollup}
+											<div class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+												<div class="flex flex-wrap items-center justify-between gap-3">
+													<div>
+														<p
+															class="text-xs font-semibold tracking-[0.14em] text-slate-500 uppercase"
+														>
+															Parent rollup
+														</p>
+														<p class="mt-2 text-sm text-white">{data.childTaskRollup.summary}</p>
+													</div>
+													<span
+														class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(data.childTaskRollup.status)}`}
+													>
+														{data.childTaskRollup.status === 'done'
+															? 'Ready to integrate'
+															: formatTaskStatusLabel(data.childTaskRollup.status)}
+													</span>
+												</div>
+												<p class="mt-3 text-xs text-slate-500">
+													{data.childTaskRollup.doneCount} done ·
+													{data.childTaskRollup.acceptedCount} accepted ·
+													{data.childTaskRollup.pendingIntegrationCount} pending parent review ·
+													{data.childTaskRollup.inProgressCount} in progress ·
+													{data.childTaskRollup.reviewCount} in review ·
+													{data.childTaskRollup.blockedCount} blocked ·
+													{data.childTaskRollup.readyCount} ready
+												</p>
+											</div>
+										{/if}
+
+										<div class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+											<p class="text-xs font-semibold tracking-[0.14em] text-slate-500 uppercase">
+												Parent task
+											</p>
+											{#if data.parentTask}
+												<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+													<a
+														class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+														href={resolve(`/app/tasks/${data.parentTask.id}`)}
+													>
+														{data.parentTask.title}
+													</a>
+													<span
+														class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(data.parentTask.status)}`}
+													>
+														{formatTaskStatusLabel(data.parentTask.status)}
+													</span>
+												</div>
+												<p class="mt-2 text-xs text-slate-500">{data.parentTask.projectName}</p>
+											{:else}
+												<p class="mt-2 text-sm text-slate-400">
+													This task is not linked to a parent task.
+												</p>
+											{/if}
+										</div>
+
+										<div class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+											<div class="flex flex-wrap items-center justify-between gap-3">
+												<p class="text-xs font-semibold tracking-[0.14em] text-slate-500 uppercase">
+													Delegated subtasks
+												</p>
+												<span class="text-xs text-slate-500">
+													{data.childTasks.length === 1
+														? '1 child task'
+														: `${data.childTasks.length} child tasks`}
+												</span>
+											</div>
+											{#if data.childTasks.length === 0}
+												<p class="mt-2 text-sm text-slate-400">
+													No delegated subtasks are linked yet.
+												</p>
+											{:else}
+												<div class="mt-3 space-y-3">
+													{#each data.childTasks as childTask (childTask.id)}
+														<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+															<div class="flex flex-wrap items-center justify-between gap-3">
+																<a
+																	class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+																	href={resolve(`/app/tasks/${childTask.id}`)}
+																>
+																	{childTask.title}
+																</a>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(childTask.status)}`}
+																>
+																	{formatTaskStatusLabel(childTask.status)}
+																</span>
+															</div>
+															<p class="mt-2 text-xs text-slate-500">
+																{childTask.projectName} · Updated {childTask.updatedAtLabel}
+															</p>
+															<div class="mt-3 flex flex-wrap items-center gap-2">
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${
+																		childTask.integrationStatus === 'accepted'
+																			? taskStatusToneClass('done')
+																			: childTask.integrationStatus === 'pending'
+																				? taskStatusToneClass('review')
+																				: taskStatusToneClass(childTask.status)
+																	}`}
+																>
+																	{childTask.integrationStatus === 'accepted'
+																		? 'Accepted'
+																		: childTask.integrationStatus === 'pending'
+																			? 'Pending integration'
+																			: 'Not ready'}
+																</span>
+																{#if childTask.delegationAcceptance}
+																	<span class="text-xs text-slate-500">
+																		{childTask.delegationAcceptance.acceptedAtLabel}
+																	</span>
+																{/if}
+															</div>
+															{#if childTask.delegationPacket?.objective || childTask.delegationPacket?.expectedDeliverable || childTask.delegationPacket?.doneCondition}
+																<div class="mt-3 space-y-2 text-xs text-slate-400">
+																	{#if childTask.delegationPacket?.objective}
+																		<p>
+																			Objective: {childTask.delegationPacket.objective}
+																		</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.expectedDeliverable}
+																		<p>
+																			Deliverable: {childTask.delegationPacket.expectedDeliverable}
+																		</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.doneCondition}
+																		<p>
+																			Done condition: {childTask.delegationPacket.doneCondition}
+																		</p>
+																	{/if}
+																</div>
+															{/if}
+															{#if childTask.integrationStatus === 'pending'}
+																<div class="mt-4 flex flex-col gap-3 sm:flex-row">
+																	<form method="POST" action="?/acceptChildHandoff">
+																		<input type="hidden" name="childTaskId" value={childTask.id} />
+																		<button
+																			class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+																			type="submit"
+																		>
+																			Accept handoff
+																		</button>
+																	</form>
+																	<form method="POST" action="?/requestChildHandoffChanges">
+																		<input type="hidden" name="childTaskId" value={childTask.id} />
+																		<button
+																			class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+																			type="submit"
+																		>
+																			Request follow-up
+																		</button>
+																	</form>
+																</div>
+															{/if}
+														</div>
+													{/each}
+												</div>
+											{/if}
+										</div>
 									</div>
 								</div>
 

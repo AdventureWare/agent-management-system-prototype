@@ -4,6 +4,11 @@
 	import { appNavigationSections } from '$lib/app-navigation';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import {
+		mergeStoredOpportunityRecord,
+		selfImprovementRecordStore
+	} from '$lib/client/self-improvement-record-store';
+	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
+	import {
 		createTaskFromSelfImprovementOpportunity,
 		fetchHomeDashboard,
 		updateSelfImprovementOpportunityStatus
@@ -36,6 +41,8 @@
 	let refreshError = $state<string | null>(null);
 	let dashboard: HomeDashboardData = $derived(refreshedDashboard ?? data);
 	const threadStoreState = fromStore(agentThreadStore);
+	const selfImprovementRecordState = fromStore(selfImprovementRecordStore);
+	const taskRecordState = fromStore(taskRecordStore);
 	let dashboardThreads = $derived.by(() => {
 		const storedThreads = threadStoreState.current.orderedIds
 			.map((threadId) => threadStoreState.current.byId[threadId])
@@ -79,26 +86,46 @@
 		dashboardThreads.filter((session: AgentThreadDetail) => session.threadState === 'ready')
 	);
 	let latestSessions = $derived(dashboardThreads.slice(0, 5));
+	let taskAttention = $derived.by(() =>
+		dashboard.taskAttention.map((task) => mergeStoredTaskRecord(task, taskRecordState.current.byId))
+	);
 	let blockedTasks = $derived(
-		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.status === 'blocked')
+		taskAttention.filter((task: DashboardTaskAttentionItem) => task.status === 'blocked')
 	);
 	let reviewTasks = $derived(
-		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.openReview)
+		taskAttention.filter((task: DashboardTaskAttentionItem) => task.openReview)
 	);
 	let approvalTasks = $derived(
-		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.pendingApproval)
+		taskAttention.filter((task: DashboardTaskAttentionItem) => task.pendingApproval)
 	);
 	let dependencyTasks = $derived(
-		dashboard.taskAttention.filter((task: DashboardTaskAttentionItem) => task.hasUnmetDependencies)
+		taskAttention.filter((task: DashboardTaskAttentionItem) => task.hasUnmetDependencies)
 	);
-	let staleTasks = $derived(dashboard.staleTasks);
-	let improvementOpportunities = $derived(dashboard.improvementOpportunities);
+	let staleTasks = $derived.by(() =>
+		dashboard.staleTasks.map((task) => mergeStoredTaskRecord(task, taskRecordState.current.byId))
+	);
+	let improvementOpportunities = $derived.by(() =>
+		dashboard.improvementOpportunities.map((opportunity) =>
+			mergeStoredOpportunityRecord(
+				opportunity,
+				selfImprovementRecordState.current.opportunitiesById
+			)
+		)
+	);
 	let opportunityActionIds = $state.raw<string[]>([]);
 	let opportunityActionError = $state<string | null>(null);
 	let opportunityActionNotice = $state<string | null>(null);
 
 	$effect(() => {
 		agentThreadStore.seedThreads(dashboard.threads, { replace: true });
+	});
+
+	$effect(() => {
+		taskRecordStore.seedTasks([...dashboard.taskAttention, ...dashboard.staleTasks]);
+	});
+
+	$effect(() => {
+		selfImprovementRecordStore.seedOpportunities(dashboard.improvementOpportunities);
 	});
 
 	async function refreshDashboard(options: { force?: boolean } = {}) {
@@ -651,13 +678,13 @@
 					</div>
 				</div>
 
-				{#if dashboard.taskAttention.length === 0}
+				{#if taskAttention.length === 0}
 					<p class="text-sm text-slate-400">
 						No governance or escalation items are waiting right now.
 					</p>
 				{:else}
 					<div class="space-y-3">
-						{#each dashboard.taskAttention as task (task.id)}
+						{#each taskAttention as task (task.id)}
 							<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div class="min-w-0">

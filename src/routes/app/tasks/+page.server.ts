@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
 import {
 	AREA_OPTIONS,
 	PRIORITY_OPTIONS,
@@ -75,6 +76,12 @@ function readTaskForm(form: FormData) {
 
 		return fallback;
 	};
+	const parseOptionalSandbox = (value: FormDataEntryValue | null): AgentSandbox | null => {
+		const normalized = value?.toString().trim() ?? '';
+		return AGENT_SANDBOX_OPTIONS.includes(normalized as AgentSandbox)
+			? (normalized as AgentSandbox)
+			: null;
+	};
 
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
@@ -83,6 +90,13 @@ function readTaskForm(form: FormData) {
 		readyCondition: form.get('readyCondition')?.toString().trim() ?? '',
 		expectedOutcome: form.get('expectedOutcome')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
+		parentTaskId: form.get('parentTaskId')?.toString().trim() ?? '',
+		delegationObjective: form.get('delegationObjective')?.toString().trim() ?? '',
+		delegationInputContext: form.get('delegationInputContext')?.toString().trim() ?? '',
+		delegationExpectedDeliverable:
+			form.get('delegationExpectedDeliverable')?.toString().trim() ?? '',
+		delegationDoneCondition: form.get('delegationDoneCondition')?.toString().trim() ?? '',
+		delegationIntegrationNotes: form.get('delegationIntegrationNotes')?.toString().trim() ?? '',
 		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
 		targetDate: form.get('targetDate')?.toString().trim() ?? '',
 		goalId: form.get('goalId')?.toString().trim() ?? '',
@@ -90,6 +104,7 @@ function readTaskForm(form: FormData) {
 		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
 		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
+		requiredThreadSandbox: parseOptionalSandbox(form.get('requiredThreadSandbox')),
 		requiresReview: parseBoolean(form.get('requiresReview'), true),
 		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
 		blockedReason: form.get('blockedReason')?.toString().trim() ?? '',
@@ -127,6 +142,12 @@ function failTaskCreate(
 		readyCondition: string;
 		expectedOutcome: string;
 		projectId: string;
+		parentTaskId: string;
+		delegationObjective: string;
+		delegationInputContext: string;
+		delegationExpectedDeliverable: string;
+		delegationDoneCondition: string;
+		delegationIntegrationNotes: string;
 		assigneeWorkerId: string;
 		targetDate: string;
 		goalId: string;
@@ -134,6 +155,7 @@ function failTaskCreate(
 		priority: string;
 		riskLevel: string;
 		approvalMode: string;
+		requiredThreadSandbox: string | null;
 		requiresReview: boolean;
 		desiredRoleId: string;
 		blockedReason: string;
@@ -290,11 +312,19 @@ function readCreateTaskPrefill(url: URL) {
 	return {
 		open,
 		projectId: url.searchParams.get('projectId')?.trim() ?? '',
+		parentTaskId: url.searchParams.get('parentTaskId')?.trim() ?? '',
+		delegationObjective: url.searchParams.get('delegationObjective')?.trim() ?? '',
+		delegationInputContext: url.searchParams.get('delegationInputContext')?.trim() ?? '',
+		delegationExpectedDeliverable:
+			url.searchParams.get('delegationExpectedDeliverable')?.trim() ?? '',
+		delegationDoneCondition: url.searchParams.get('delegationDoneCondition')?.trim() ?? '',
+		delegationIntegrationNotes: url.searchParams.get('delegationIntegrationNotes')?.trim() ?? '',
 		name: url.searchParams.get('name')?.trim() ?? '',
 		instructions: url.searchParams.get('instructions')?.trim() ?? '',
 		successCriteria: url.searchParams.get('successCriteria')?.trim() ?? '',
 		readyCondition: url.searchParams.get('readyCondition')?.trim() ?? '',
 		expectedOutcome: url.searchParams.get('expectedOutcome')?.trim() ?? '',
+		requiredThreadSandbox: url.searchParams.get('requiredThreadSandbox')?.trim() ?? '',
 		assigneeWorkerId: url.searchParams.get('assigneeWorkerId')?.trim() ?? '',
 		targetDate: (() => {
 			const value = url.searchParams.get('targetDate')?.trim() ?? '';
@@ -382,6 +412,12 @@ export const actions: Actions = {
 			readyCondition,
 			expectedOutcome,
 			projectId,
+			parentTaskId,
+			delegationObjective,
+			delegationInputContext,
+			delegationExpectedDeliverable,
+			delegationDoneCondition,
+			delegationIntegrationNotes,
 			assigneeWorkerId,
 			targetDate,
 			goalId,
@@ -389,6 +425,7 @@ export const actions: Actions = {
 			priority,
 			riskLevel,
 			approvalMode,
+			requiredThreadSandbox,
 			requiresReview,
 			desiredRoleId,
 			blockedReason,
@@ -398,62 +435,56 @@ export const actions: Actions = {
 		} = readTaskForm(form);
 		const submitMode = readCreateTaskSubmitMode(form);
 		const uploads = readTaskAttachments(form);
+		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> = {
+			name,
+			instructions,
+			successCriteria,
+			readyCondition,
+			expectedOutcome,
+			projectId,
+			parentTaskId,
+			delegationObjective,
+			delegationInputContext,
+			delegationExpectedDeliverable,
+			delegationDoneCondition,
+			delegationIntegrationNotes,
+			assigneeWorkerId,
+			targetDate,
+			goalId,
+			area,
+			priority,
+			riskLevel,
+			approvalMode,
+			requiredThreadSandbox,
+			requiresReview,
+			desiredRoleId,
+			blockedReason,
+			dependencyTaskIds,
+			requiredCapabilityNames,
+			requiredToolNames,
+			submitMode
+		};
 
 		if (!name || !instructions || !projectId) {
 			return failTaskCreate(400, {
 				message: 'Name, instructions, and project are required.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
 		if (targetDate && !isValidDate(targetDate)) {
 			return failTaskCreate(400, {
 				message: 'Target date must use YYYY-MM-DD format.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 		const goal = goalId ? current.goals.find((candidate) => candidate.id === goalId) : null;
+		const parentTask = parentTaskId
+			? current.tasks.find((candidate) => candidate.id === parentTaskId)
+			: null;
 		const assigneeWorker = assigneeWorkerId
 			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
 			: null;
@@ -461,104 +492,49 @@ export const actions: Actions = {
 		if (!project) {
 			return failTaskCreate(400, {
 				message: 'Project not found.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
 		if (goalId && !goal) {
 			return failTaskCreate(400, {
 				message: 'Goal not found.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
+			});
+		}
+
+		if (parentTaskId && !parentTask) {
+			return failTaskCreate(400, {
+				message: 'Parent task not found.',
+				...failureContext
+			});
+		}
+
+		if (parentTaskId && !delegationObjective.trim()) {
+			return failTaskCreate(400, {
+				message: 'Delegated child tasks need a clear delegation objective.',
+				...failureContext
+			});
+		}
+
+		if (parentTaskId && !delegationDoneCondition.trim()) {
+			return failTaskCreate(400, {
+				message: 'Delegated child tasks need a done condition for handoff.',
+				...failureContext
 			});
 		}
 
 		if (assigneeWorkerId && !assigneeWorker) {
 			return failTaskCreate(400, {
 				message: 'Worker not found.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
 		if (submitMode === 'createAndRun' && !project.projectRootFolder) {
 			return failTaskCreate(400, {
 				message: 'This task cannot launch a work thread until its project has a root folder.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
@@ -570,26 +546,7 @@ export const actions: Actions = {
 		if (invalidDependencyTaskIds.length > 0) {
 			return failTaskCreate(400, {
 				message: 'One or more selected dependencies are no longer available.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
@@ -604,26 +561,7 @@ export const actions: Actions = {
 			return failTaskCreate(400, {
 				message:
 					'This project needs an artifact root before files can be attached during creation.',
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
@@ -644,9 +582,20 @@ export const actions: Actions = {
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
+			parentTaskId: parentTask?.id ?? null,
+			delegationPacket: parentTask
+				? {
+						objective: delegationObjective,
+						inputContext: delegationInputContext,
+						expectedDeliverable: delegationExpectedDeliverable,
+						doneCondition: delegationDoneCondition,
+						integrationNotes: delegationIntegrationNotes
+					}
+				: null,
 			priority,
 			riskLevel,
 			approvalMode,
+			requiredThreadSandbox,
 			requiresReview,
 			desiredRoleId: nextDesiredRoleId,
 			assigneeWorkerId: assigneeWorker?.id ?? null,
@@ -683,6 +632,7 @@ export const actions: Actions = {
 			successCriteria,
 			readyCondition,
 			expectedOutcome,
+			delegationPacket: createdTask.delegationPacket ?? null,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder ?? '',
 			defaultArtifactRoot: project.defaultArtifactRoot,
@@ -692,7 +642,12 @@ export const actions: Actions = {
 				.map((skill) => skill.id)
 		});
 		const provider = selectExecutionProvider(current, assigneeWorker);
-		const sandbox = resolveThreadSandbox({ worker: assigneeWorker, project, provider });
+		const sandbox = resolveThreadSandbox({
+			task: createdTask,
+			worker: assigneeWorker,
+			project,
+			provider
+		});
 		const workspaceIssue = getWorkspaceExecutionIssue({
 			cwd: project.projectRootFolder ?? '',
 			additionalWritableRoots: project.additionalWritableRoots ?? [],
@@ -703,26 +658,7 @@ export const actions: Actions = {
 		if (workspaceIssue) {
 			return failTaskCreate(400, {
 				message: workspaceIssue,
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 
@@ -744,26 +680,7 @@ export const actions: Actions = {
 		} catch (error) {
 			return failTaskCreate(400, {
 				message: getActionErrorMessage(error, 'Could not start a work thread for this task.'),
-				name,
-				instructions,
-				successCriteria,
-				readyCondition,
-				expectedOutcome,
-				projectId,
-				assigneeWorkerId,
-				targetDate,
-				goalId,
-				area,
-				priority,
-				riskLevel,
-				approvalMode,
-				requiresReview,
-				desiredRoleId,
-				blockedReason,
-				dependencyTaskIds,
-				requiredCapabilityNames,
-				requiredToolNames,
-				submitMode
+				...failureContext
 			});
 		}
 		const providerId = provider?.id ?? null;
@@ -813,7 +730,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
-		const { name, instructions, projectId, assigneeWorkerId, targetDate } = readTaskForm(form);
+		const { name, instructions, projectId, assigneeWorkerId, targetDate, requiredThreadSandbox } =
+			readTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
@@ -861,9 +779,11 @@ export const actions: Actions = {
 						summary: instructions,
 						projectId: project.id,
 						status,
+						requiredThreadSandbox,
 						assigneeWorkerId: assigneeWorker?.id ?? null,
 						desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
 						targetDate: targetDate || null,
+						delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
 						artifactPath:
 							task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
 						updatedAt: new Date().toISOString()
@@ -941,6 +861,7 @@ export const actions: Actions = {
 			successCriteria: effectiveSuccessCriteria,
 			readyCondition: effectiveReadyCondition,
 			expectedOutcome: effectiveExpectedOutcome,
+			delegationPacket: task.delegationPacket ?? null,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot,
@@ -951,6 +872,7 @@ export const actions: Actions = {
 		});
 		const provider = selectExecutionProvider(current, effectiveWorker);
 		const sandbox = resolveThreadSandbox({
+			task,
 			worker: effectiveWorker,
 			project,
 			provider
@@ -1077,6 +999,7 @@ export const actions: Actions = {
 							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
 							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
 							agentThreadId,
+							delegationAcceptance: null,
 							artifactPath:
 								candidate.artifactPath ||
 								project.defaultArtifactRoot ||

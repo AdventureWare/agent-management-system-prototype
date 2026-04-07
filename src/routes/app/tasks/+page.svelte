@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
+	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import { collectTaskLinkedThreads, mergeTaskThreadState } from '$lib/client/task-thread-state';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
@@ -14,6 +15,11 @@
 	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import {
+		AGENT_SANDBOX_OPTIONS,
+		formatAgentSandboxLabel,
+		type AgentSandbox
+	} from '$lib/types/agent-thread';
 	import {
 		PRIORITY_OPTIONS,
 		TASK_APPROVAL_MODE_OPTIONS,
@@ -44,6 +50,7 @@
 
 	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
 	const threadStoreState = fromStore(agentThreadStore);
+	const taskRecordState = fromStore(taskRecordStore);
 
 	function createDialogShouldStartOpen() {
 		return (
@@ -75,10 +82,17 @@
 	});
 	let deleteSuccess = $derived(deleteCount > 0);
 	let tasks = $derived.by(() =>
-		data.tasks.map((task) => mergeTaskThreadState(task, threadStoreState.current.byId))
+		data.tasks.map((task) =>
+			mergeTaskThreadState(
+				mergeStoredTaskRecord(task, taskRecordState.current.byId),
+				threadStoreState.current.byId
+			)
+		)
 	);
+	let selectedTaskIdSet = $derived(new Set(selectedTaskIds));
 
 	$effect(() => {
+		taskRecordStore.seedTasks(data.tasks);
 		agentThreadStore.seedThreads(
 			data.tasks.flatMap((task) => collectTaskLinkedThreads(task)),
 			{ replace: false }
@@ -93,6 +107,10 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function normalizeSandboxValue(value: string | null | undefined): '' | AgentSandbox {
+		return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox) ? (value as AgentSandbox) : '';
 	}
 
 	function formatDateLabel(value: string | null | undefined) {
@@ -293,7 +311,7 @@
 	}
 
 	function isTaskSelected(taskId: string) {
-		return selectedTaskIds.includes(taskId);
+		return selectedTaskIdSet.has(taskId);
 	}
 
 	function toggleTaskSelection(taskId: string, checked: boolean) {
@@ -325,11 +343,71 @@
 		selectedTaskIds = [];
 	}
 
+	let taskCollections = $derived.by(() => {
+		const filteredTasks: TaskRow[] = [];
+		const activeTasks: TaskRow[] = [];
+		const completedTasks: TaskRow[] = [];
+		let staleTaskCount = 0;
+		const staleFilterCounts = {
+			staleInProgress: 0,
+			noRecentRunActivity: 0,
+			activeThreadNoRecentOutput: 0
+		};
+
+		for (const task of tasks) {
+			if (task.freshness.staleSignals.length > 0) {
+				staleTaskCount += 1;
+			}
+
+			if (task.freshness.staleInProgress) {
+				staleFilterCounts.staleInProgress += 1;
+			}
+
+			if (task.freshness.noRecentRunActivity) {
+				staleFilterCounts.noRecentRunActivity += 1;
+			}
+
+			if (task.freshness.activeThreadNoRecentOutput) {
+				staleFilterCounts.activeThreadNoRecentOutput += 1;
+			}
+
+			if (selectedStatus !== 'all' && task.status !== selectedStatus) {
+				continue;
+			}
+
+			if (!matchesStaleFilters(task) || !matchesTask(task, query)) {
+				continue;
+			}
+
+			filteredTasks.push(task);
+
+			if (task.status === 'done') {
+				completedTasks.push(task);
+				continue;
+			}
+
+			activeTasks.push(task);
+		}
+
+		return {
+			filteredTasks,
+			activeTasks,
+			completedTasks,
+			visibleTaskRows: selectedTaskView === 'completed' ? completedTasks : activeTasks,
+			staleTaskCount,
+			staleFilterCounts
+		};
+	});
+	let filteredTasks = $derived(taskCollections.filteredTasks);
+	let activeTasks = $derived(taskCollections.activeTasks);
+	let completedTasks = $derived(taskCollections.completedTasks);
+	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);
+	let visibleTaskRowIdSet = $derived(new Set(visibleTaskRows.map((task) => task.id)));
+	let staleTaskCount = $derived(taskCollections.staleTaskCount);
+	let staleFilterCounts = $derived(taskCollections.staleFilterCounts);
+
 	$effect(() => {
-		const visibleTaskIdSet = new Set(
-			(selectedTaskView === 'completed' ? completedTasks : activeTasks).map((task) => task.id)
-		);
-		const nextSelectedTaskIds = selectedTaskIds.filter((taskId) => visibleTaskIdSet.has(taskId));
+		const nextSelectedTaskIds = selectedTaskIds.filter((taskId) => visibleTaskRowIdSet.has(taskId));
 
 		if (
 			nextSelectedTaskIds.length === selectedTaskIds.length &&
@@ -340,36 +418,16 @@
 
 		selectedTaskIds = nextSelectedTaskIds;
 	});
-
-	let filteredTasks = $derived.by(() =>
-		tasks.filter((task) => {
-			if (selectedStatus !== 'all' && task.status !== selectedStatus) {
-				return false;
-			}
-
-			if (!matchesStaleFilters(task)) {
-				return false;
-			}
-
-			return matchesTask(task, query);
-		})
-	);
-	let activeTasks = $derived(filteredTasks.filter((task) => task.status !== 'done'));
-	let completedTasks = $derived(filteredTasks.filter((task) => task.status === 'done'));
-	let visibleTaskRows = $derived(selectedTaskView === 'completed' ? completedTasks : activeTasks);
-	let staleTaskCount = $derived(
-		tasks.filter((task) => task.freshness.staleSignals.length > 0).length
-	);
-	let staleFilterCounts = $derived.by(() => ({
-		staleInProgress: tasks.filter((task) => task.freshness.staleInProgress).length,
-		noRecentRunActivity: tasks.filter((task) => task.freshness.noRecentRunActivity).length,
-		activeThreadNoRecentOutput: tasks.filter((task) => task.freshness.activeThreadNoRecentOutput)
-			.length
-	}));
 	let createTaskFormValues = $derived(
 		form?.formContext === 'taskCreate'
 			? {
 					projectId: form.projectId?.toString() ?? '',
+					parentTaskId: form.parentTaskId?.toString() ?? '',
+					delegationObjective: form.delegationObjective?.toString() ?? '',
+					delegationInputContext: form.delegationInputContext?.toString() ?? '',
+					delegationExpectedDeliverable: form.delegationExpectedDeliverable?.toString() ?? '',
+					delegationDoneCondition: form.delegationDoneCondition?.toString() ?? '',
+					delegationIntegrationNotes: form.delegationIntegrationNotes?.toString() ?? '',
 					name: form.name?.toString() ?? '',
 					instructions: form.instructions?.toString() ?? '',
 					successCriteria: form.successCriteria?.toString() ?? '',
@@ -382,6 +440,7 @@
 					priority: form.priority?.toString() ?? 'medium',
 					riskLevel: form.riskLevel?.toString() ?? 'medium',
 					approvalMode: form.approvalMode?.toString() ?? 'none',
+					requiredThreadSandbox: form.requiredThreadSandbox?.toString() ?? '',
 					requiresReview: form.requiresReview?.toString() !== 'false',
 					desiredRoleId: form.desiredRoleId?.toString() ?? '',
 					blockedReason: form.blockedReason?.toString() ?? '',
@@ -404,6 +463,12 @@
 				}
 			: {
 					projectId: '',
+					parentTaskId: '',
+					delegationObjective: '',
+					delegationInputContext: '',
+					delegationExpectedDeliverable: '',
+					delegationDoneCondition: '',
+					delegationIntegrationNotes: '',
 					name: '',
 					instructions: '',
 					successCriteria: '',
@@ -416,6 +481,7 @@
 					priority: 'medium',
 					riskLevel: 'medium',
 					approvalMode: 'none',
+					requiredThreadSandbox: '',
 					requiresReview: true,
 					desiredRoleId: '',
 					blockedReason: '',
@@ -426,6 +492,12 @@
 				}
 	);
 	let createTaskProjectId = $state('');
+	let createTaskParentTaskId = $state('');
+	let createTaskDelegationObjective = $state('');
+	let createTaskDelegationInputContext = $state('');
+	let createTaskDelegationExpectedDeliverable = $state('');
+	let createTaskDelegationDoneCondition = $state('');
+	let createTaskDelegationIntegrationNotes = $state('');
 	let createTaskName = $state('');
 	let createTaskInstructions = $state('');
 	let createTaskSuccessCriteria = $state('');
@@ -438,6 +510,7 @@
 	let createTaskPriority = $state('medium');
 	let createTaskRiskLevel = $state('medium');
 	let createTaskApprovalMode = $state('none');
+	let createTaskRequiredThreadSandbox = $state<'' | AgentSandbox>('');
 	let createTaskRequiresReview = $state(true);
 	let createTaskDesiredRoleId = $state('');
 	let createTaskBlockedReason = $state('');
@@ -446,6 +519,18 @@
 	let createTaskRequiredToolNames = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
+	);
+	let createTaskParentTask = $derived(
+		tasks.find((task) => task.id === createTaskParentTaskId) ?? null
+	);
+	let createTaskHasDelegationPacket = $derived(
+		Boolean(
+			createTaskDelegationObjective.trim() ||
+			createTaskDelegationInputContext.trim() ||
+			createTaskDelegationExpectedDeliverable.trim() ||
+			createTaskDelegationDoneCondition.trim() ||
+			createTaskDelegationIntegrationNotes.trim()
+		)
 	);
 	let createTaskDependencyCount = $derived(createTaskDependencyTaskIds.length);
 	let createTaskDesiredRoleName = $derived(
@@ -464,6 +549,10 @@
 
 		if (createTaskApprovalMode !== 'none') {
 			parts.push(formatTaskApprovalModeLabel(createTaskApprovalMode));
+		}
+
+		if (createTaskRequiredThreadSandbox) {
+			parts.push(`Sandbox ${formatAgentSandboxLabel(createTaskRequiredThreadSandbox)}`);
 		}
 
 		if (!createTaskRequiresReview) {
@@ -490,6 +579,10 @@
 			parts.push('Expected outcome set');
 		}
 
+		if (createTaskHasDelegationPacket) {
+			parts.push('Delegation packet set');
+		}
+
 		if (createTaskDependencyCount > 0) {
 			parts.push(
 				createTaskDependencyCount === 1
@@ -510,6 +603,7 @@
 		priority?: string;
 		riskLevel?: string;
 		approvalMode?: string;
+		requiredThreadSandbox?: string;
 		requiresReview?: boolean;
 		desiredRoleId?: string;
 		blockedReason?: string;
@@ -522,6 +616,7 @@
 			(input.priority ?? 'medium') !== 'medium' ||
 			(input.riskLevel ?? 'medium') !== 'medium' ||
 			(input.approvalMode ?? 'none') !== 'none' ||
+			Boolean(input.requiredThreadSandbox) ||
 			(input.requiresReview ?? true) !== true ||
 			Boolean(input.desiredRoleId) ||
 			Boolean(input.blockedReason?.trim()) ||
@@ -545,6 +640,12 @@
 		draft:
 			| {
 					projectId?: string;
+					parentTaskId?: string;
+					delegationObjective?: string;
+					delegationInputContext?: string;
+					delegationExpectedDeliverable?: string;
+					delegationDoneCondition?: string;
+					delegationIntegrationNotes?: string;
 					name?: string;
 					instructions?: string;
 					successCriteria?: string;
@@ -557,6 +658,7 @@
 					priority?: string;
 					riskLevel?: string;
 					approvalMode?: string;
+					requiredThreadSandbox?: string;
 					requiresReview?: boolean;
 					desiredRoleId?: string;
 					blockedReason?: string;
@@ -573,6 +675,12 @@
 
 		return (
 			Boolean(draft.projectId?.trim()) ||
+			Boolean(draft.parentTaskId?.trim()) ||
+			Boolean(draft.delegationObjective?.trim()) ||
+			Boolean(draft.delegationInputContext?.trim()) ||
+			Boolean(draft.delegationExpectedDeliverable?.trim()) ||
+			Boolean(draft.delegationDoneCondition?.trim()) ||
+			Boolean(draft.delegationIntegrationNotes?.trim()) ||
 			Boolean(draft.name?.trim()) ||
 			Boolean(draft.instructions?.trim()) ||
 			Boolean(draft.successCriteria?.trim()) ||
@@ -587,6 +695,7 @@
 				priority: draft.priority,
 				riskLevel: draft.riskLevel,
 				approvalMode: draft.approvalMode,
+				requiredThreadSandbox: draft.requiredThreadSandbox,
 				requiresReview: draft.requiresReview,
 				desiredRoleId: draft.desiredRoleId,
 				blockedReason: draft.blockedReason,
@@ -599,6 +708,12 @@
 		prefill: NonNullable<typeof data.createTaskPrefill> | null | undefined
 	) {
 		createTaskProjectId = prefill?.projectId ?? '';
+		createTaskParentTaskId = prefill?.parentTaskId ?? '';
+		createTaskDelegationObjective = prefill?.delegationObjective ?? '';
+		createTaskDelegationInputContext = prefill?.delegationInputContext ?? '';
+		createTaskDelegationExpectedDeliverable = prefill?.delegationExpectedDeliverable ?? '';
+		createTaskDelegationDoneCondition = prefill?.delegationDoneCondition ?? '';
+		createTaskDelegationIntegrationNotes = prefill?.delegationIntegrationNotes ?? '';
 		createTaskName = prefill?.name ?? '';
 		createTaskInstructions = prefill?.instructions ?? '';
 		createTaskSuccessCriteria = prefill?.successCriteria ?? '';
@@ -611,6 +726,7 @@
 		createTaskPriority = prefill?.priority ?? 'medium';
 		createTaskRiskLevel = prefill?.riskLevel ?? 'medium';
 		createTaskApprovalMode = prefill?.approvalMode ?? 'none';
+		createTaskRequiredThreadSandbox = normalizeSandboxValue(prefill?.requiredThreadSandbox);
 		createTaskRequiresReview = prefill?.requiresReview ?? true;
 		createTaskDesiredRoleId = prefill?.desiredRoleId ?? '';
 		createTaskBlockedReason = prefill?.blockedReason ?? '';
@@ -624,6 +740,7 @@
 			priority: createTaskPriority,
 			riskLevel: createTaskRiskLevel,
 			approvalMode: createTaskApprovalMode,
+			requiredThreadSandbox: createTaskRequiredThreadSandbox,
 			requiresReview: createTaskRequiresReview,
 			desiredRoleId: createTaskDesiredRoleId,
 			blockedReason: createTaskBlockedReason,
@@ -632,6 +749,12 @@
 	}
 
 	function resetCreateTaskMetadata() {
+		createTaskParentTaskId = '';
+		createTaskDelegationObjective = '';
+		createTaskDelegationInputContext = '';
+		createTaskDelegationExpectedDeliverable = '';
+		createTaskDelegationDoneCondition = '';
+		createTaskDelegationIntegrationNotes = '';
 		createTaskGoalId = '';
 		createTaskArea = 'product';
 		createTaskSuccessCriteria = '';
@@ -640,6 +763,7 @@
 		createTaskPriority = 'medium';
 		createTaskRiskLevel = 'medium';
 		createTaskApprovalMode = 'none';
+		createTaskRequiredThreadSandbox = '';
 		createTaskRequiresReview = true;
 		createTaskDesiredRoleId = '';
 		createTaskBlockedReason = '';
@@ -650,6 +774,12 @@
 	$effect(() => {
 		if (form?.formContext === 'taskCreate') {
 			createTaskProjectId = createTaskFormValues.projectId;
+			createTaskParentTaskId = createTaskFormValues.parentTaskId;
+			createTaskDelegationObjective = createTaskFormValues.delegationObjective;
+			createTaskDelegationInputContext = createTaskFormValues.delegationInputContext;
+			createTaskDelegationExpectedDeliverable = createTaskFormValues.delegationExpectedDeliverable;
+			createTaskDelegationDoneCondition = createTaskFormValues.delegationDoneCondition;
+			createTaskDelegationIntegrationNotes = createTaskFormValues.delegationIntegrationNotes;
 			createTaskName = createTaskFormValues.name;
 			createTaskInstructions = createTaskFormValues.instructions;
 			createTaskSuccessCriteria = createTaskFormValues.successCriteria;
@@ -662,6 +792,9 @@
 			createTaskPriority = createTaskFormValues.priority;
 			createTaskRiskLevel = createTaskFormValues.riskLevel;
 			createTaskApprovalMode = createTaskFormValues.approvalMode;
+			createTaskRequiredThreadSandbox = normalizeSandboxValue(
+				createTaskFormValues.requiredThreadSandbox
+			);
 			createTaskRequiresReview = createTaskFormValues.requiresReview;
 			createTaskDesiredRoleId = createTaskFormValues.desiredRoleId;
 			createTaskBlockedReason = createTaskFormValues.blockedReason;
@@ -698,6 +831,12 @@
 
 		const savedDraft = readFormDraft<{
 			projectId: string;
+			parentTaskId: string;
+			delegationObjective: string;
+			delegationInputContext: string;
+			delegationExpectedDeliverable: string;
+			delegationDoneCondition: string;
+			delegationIntegrationNotes: string;
 			name: string;
 			instructions: string;
 			successCriteria: string;
@@ -710,6 +849,7 @@
 			priority: string;
 			riskLevel: string;
 			approvalMode: string;
+			requiredThreadSandbox: string;
 			requiresReview: boolean;
 			desiredRoleId: string;
 			blockedReason: string;
@@ -720,6 +860,12 @@
 
 		if (savedDraft && hasCreateTaskDraftContent(savedDraft)) {
 			createTaskProjectId = savedDraft.projectId ?? '';
+			createTaskParentTaskId = savedDraft.parentTaskId ?? '';
+			createTaskDelegationObjective = savedDraft.delegationObjective ?? '';
+			createTaskDelegationInputContext = savedDraft.delegationInputContext ?? '';
+			createTaskDelegationExpectedDeliverable = savedDraft.delegationExpectedDeliverable ?? '';
+			createTaskDelegationDoneCondition = savedDraft.delegationDoneCondition ?? '';
+			createTaskDelegationIntegrationNotes = savedDraft.delegationIntegrationNotes ?? '';
 			createTaskName = savedDraft.name ?? '';
 			createTaskInstructions = savedDraft.instructions ?? '';
 			createTaskSuccessCriteria = savedDraft.successCriteria ?? '';
@@ -732,6 +878,7 @@
 			createTaskPriority = savedDraft.priority ?? 'medium';
 			createTaskRiskLevel = savedDraft.riskLevel ?? 'medium';
 			createTaskApprovalMode = savedDraft.approvalMode ?? 'none';
+			createTaskRequiredThreadSandbox = normalizeSandboxValue(savedDraft.requiredThreadSandbox);
 			createTaskRequiresReview = savedDraft.requiresReview ?? true;
 			createTaskDesiredRoleId = savedDraft.desiredRoleId ?? '';
 			createTaskBlockedReason = savedDraft.blockedReason ?? '';
@@ -745,6 +892,7 @@
 				priority: createTaskPriority,
 				riskLevel: createTaskRiskLevel,
 				approvalMode: createTaskApprovalMode,
+				requiredThreadSandbox: createTaskRequiredThreadSandbox,
 				requiresReview: createTaskRequiresReview,
 				desiredRoleId: createTaskDesiredRoleId,
 				blockedReason: createTaskBlockedReason,
@@ -767,6 +915,12 @@
 
 		writeFormDraft(CREATE_TASK_DRAFT_KEY, {
 			projectId: createTaskProjectId === defaultProjectId ? '' : createTaskProjectId,
+			parentTaskId: createTaskParentTaskId,
+			delegationObjective: createTaskDelegationObjective,
+			delegationInputContext: createTaskDelegationInputContext,
+			delegationExpectedDeliverable: createTaskDelegationExpectedDeliverable,
+			delegationDoneCondition: createTaskDelegationDoneCondition,
+			delegationIntegrationNotes: createTaskDelegationIntegrationNotes,
 			name: createTaskName,
 			instructions: createTaskInstructions,
 			successCriteria: createTaskSuccessCriteria,
@@ -779,6 +933,7 @@
 			priority: createTaskPriority === 'medium' ? '' : createTaskPriority,
 			riskLevel: createTaskRiskLevel === 'medium' ? '' : createTaskRiskLevel,
 			approvalMode: createTaskApprovalMode === 'none' ? '' : createTaskApprovalMode,
+			requiredThreadSandbox: createTaskRequiredThreadSandbox,
 			requiresReview: createTaskRequiresReview ? undefined : false,
 			desiredRoleId: createTaskDesiredRoleId,
 			blockedReason: createTaskBlockedReason,
@@ -1460,7 +1615,98 @@
 					enctype="multipart/form-data"
 					onpaste={handleCreateTaskAttachmentPaste}
 				>
+					<input type="hidden" name="parentTaskId" value={createTaskParentTaskId} />
 					<div class="min-w-0 space-y-4">
+						{#if createTaskParentTaskId}
+							<div class="rounded-2xl border border-sky-900/60 bg-sky-950/20 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-sky-300 uppercase">
+									Delegation lineage
+								</p>
+								{#if createTaskParentTask}
+									<p class="mt-2 text-sm text-white">
+										This task will be linked as a delegated child of
+										<a
+											class="font-medium text-sky-300 transition hover:text-sky-200"
+											href={resolve(`/app/tasks/${createTaskParentTask.id}`)}
+										>
+											{createTaskParentTask.title}
+										</a>.
+									</p>
+									<p class="mt-2 text-sm text-slate-400">
+										Keep the subtask narrow so the parent can integrate its output cleanly.
+									</p>
+								{:else}
+									<p class="mt-2 text-sm text-white">
+										This task will be linked to parent task <code>{createTaskParentTaskId}</code>.
+									</p>
+								{/if}
+
+								<div class="mt-4 grid gap-4 lg:grid-cols-2">
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Delegation objective
+										</span>
+										<textarea
+											bind:value={createTaskDelegationObjective}
+											class="textarea min-h-28 text-white placeholder:text-slate-500"
+											name="delegationObjective"
+											placeholder="Describe the exact slice of work this child task owns."
+											required
+										></textarea>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Done condition
+										</span>
+										<textarea
+											bind:value={createTaskDelegationDoneCondition}
+											class="textarea min-h-28 text-white placeholder:text-slate-500"
+											name="delegationDoneCondition"
+											placeholder="Describe what must be true before the parent can accept the handoff."
+											required
+										></textarea>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Input context
+										</span>
+										<textarea
+											bind:value={createTaskDelegationInputContext}
+											class="textarea min-h-28 text-white placeholder:text-slate-500"
+											name="delegationInputContext"
+											placeholder="Capture upstream context, constraints, or source material this child needs."
+										></textarea>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Expected deliverable
+										</span>
+										<textarea
+											bind:value={createTaskDelegationExpectedDeliverable}
+											class="textarea min-h-28 text-white placeholder:text-slate-500"
+											name="delegationExpectedDeliverable"
+											placeholder="Name the artifact, output format, or concrete result expected from this child."
+										></textarea>
+									</label>
+								</div>
+
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">
+										Integration notes
+									</span>
+									<textarea
+										bind:value={createTaskDelegationIntegrationNotes}
+										class="textarea min-h-24 text-white placeholder:text-slate-500"
+										name="delegationIntegrationNotes"
+										placeholder="Describe how the parent task should incorporate or verify the child output."
+									></textarea>
+								</label>
+							</div>
+						{/if}
+
 						<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 							<label class="block">
 								<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
@@ -1627,7 +1873,7 @@
 										</label>
 									</div>
 
-									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
 										<label class="block">
 											<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
 											<select
@@ -1671,6 +1917,25 @@
 													</option>
 												{/each}
 											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Required sandbox
+											</span>
+											<select
+												bind:value={createTaskRequiredThreadSandbox}
+												class="select text-white"
+												name="requiredThreadSandbox"
+											>
+												<option value="">Inherit worker and project defaults</option>
+												{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
+													<option value={sandbox}>{formatAgentSandboxLabel(sandbox)}</option>
+												{/each}
+											</select>
+											<span class="mt-2 block text-xs text-slate-500">
+												Use this when the task needs a specific sandbox for its first work thread.
+											</span>
 										</label>
 
 										<label class="block">

@@ -1,6 +1,11 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
+	AGENT_SANDBOX_OPTIONS,
+	formatAgentSandboxLabel,
+	type AgentSandbox
+} from '$lib/types/agent-thread';
+import {
 	PRIORITY_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
@@ -48,6 +53,13 @@ import { buildTaskThreadSuggestions } from '$lib/server/task-thread-suggestions'
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import {
+	approveTaskApproval,
+	approveTaskReview,
+	rejectTaskApproval,
+	requestTaskReviewChanges,
+	TaskGovernanceActionError
+} from '$lib/server/task-governance';
 import {
 	isTaskThreadCompatibleWithProject,
 	selectProjectTaskThreadContext
@@ -100,6 +112,12 @@ function readTaskForm(form: FormData) {
 	const parseIdList = (values: FormDataEntryValue[]) => [
 		...new Set(values.map((value) => value.toString().trim()).filter(Boolean))
 	];
+	const parseOptionalSandbox = (value: FormDataEntryValue | null): AgentSandbox | null => {
+		const normalized = value?.toString().trim() ?? '';
+		return AGENT_SANDBOX_OPTIONS.includes(normalized as AgentSandbox)
+			? (normalized as AgentSandbox)
+			: null;
+	};
 
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
@@ -107,6 +125,18 @@ function readTaskForm(form: FormData) {
 		successCriteria: form.get('successCriteria')?.toString().trim() ?? '',
 		readyCondition: form.get('readyCondition')?.toString().trim() ?? '',
 		expectedOutcome: form.get('expectedOutcome')?.toString().trim() ?? '',
+		delegationObjective: form.get('delegationObjective')?.toString().trim() ?? '',
+		delegationInputContext: form.get('delegationInputContext')?.toString().trim() ?? '',
+		delegationExpectedDeliverable:
+			form.get('delegationExpectedDeliverable')?.toString().trim() ?? '',
+		delegationDoneCondition: form.get('delegationDoneCondition')?.toString().trim() ?? '',
+		delegationIntegrationNotes: form.get('delegationIntegrationNotes')?.toString().trim() ?? '',
+		hasDelegationPacketFields:
+			form.has('delegationObjective') ||
+			form.has('delegationInputContext') ||
+			form.has('delegationExpectedDeliverable') ||
+			form.has('delegationDoneCondition') ||
+			form.has('delegationIntegrationNotes'),
 		projectId: form.get('projectId')?.toString().trim() ?? '',
 		goalId: form.get('goalId')?.toString().trim() ?? '',
 		hasGoalId: form.has('goalId'),
@@ -118,6 +148,8 @@ function readTaskForm(form: FormData) {
 		hasRiskLevel: form.has('riskLevel'),
 		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
 		hasApprovalMode: form.has('approvalMode'),
+		requiredThreadSandbox: parseOptionalSandbox(form.get('requiredThreadSandbox')),
+		hasRequiredThreadSandbox: form.has('requiredThreadSandbox'),
 		requiresReview: parseBoolean(form.get('requiresReview'), true),
 		hasRequiresReview: form.has('requiresReview'),
 		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
@@ -155,6 +187,16 @@ function normalizeIdList(values: string[]) {
 	return [...new Set(values.filter(Boolean))].sort();
 }
 
+function hasDelegationPacketContent(packet: Task['delegationPacket'] | null | undefined) {
+	return Boolean(
+		packet?.objective ||
+		packet?.inputContext ||
+		packet?.expectedDeliverable ||
+		packet?.doneCondition ||
+		packet?.integrationNotes
+	);
+}
+
 function buildTaskPlanDecisionSummary(input: {
 	task: Task;
 	nextTitle: string;
@@ -162,6 +204,7 @@ function buildTaskPlanDecisionSummary(input: {
 	nextSuccessCriteria: string;
 	nextReadyCondition: string;
 	nextExpectedOutcome: string;
+	nextDelegationPacket: Task['delegationPacket'] | null;
 	nextProject: Project;
 	nextGoalId: string;
 	nextGoalName: string | null;
@@ -171,6 +214,7 @@ function buildTaskPlanDecisionSummary(input: {
 	nextPriority: Priority;
 	nextRiskLevel: TaskRiskLevel;
 	nextApprovalMode: TaskApprovalMode;
+	nextRequiredThreadSandbox: AgentSandbox | null;
 	nextRequiresReview: boolean;
 	nextDesiredRoleId: string;
 	nextDesiredRoleName: string | null;
@@ -215,6 +259,19 @@ function buildTaskPlanDecisionSummary(input: {
 		);
 	}
 
+	const currentDelegationPacket = input.task.delegationPacket ?? null;
+	const nextDelegationPacket = input.nextDelegationPacket ?? null;
+
+	if (JSON.stringify(currentDelegationPacket) !== JSON.stringify(nextDelegationPacket)) {
+		changes.push(
+			hasDelegationPacketContent(nextDelegationPacket)
+				? hasDelegationPacketContent(currentDelegationPacket)
+					? 'updated delegation packet'
+					: 'added delegation packet'
+				: 'cleared delegation packet'
+		);
+	}
+
 	if (input.nextProject.id !== input.task.projectId) {
 		changes.push(`moved the task to ${input.nextProject.name}`);
 	}
@@ -251,6 +308,14 @@ function buildTaskPlanDecisionSummary(input: {
 
 	if (input.nextApprovalMode !== input.task.approvalMode) {
 		changes.push(`set approval mode to ${formatTaskApprovalModeLabel(input.nextApprovalMode)}`);
+	}
+
+	if ((input.nextRequiredThreadSandbox ?? null) !== (input.task.requiredThreadSandbox ?? null)) {
+		changes.push(
+			input.nextRequiredThreadSandbox
+				? `required the ${formatAgentSandboxLabel(input.nextRequiredThreadSandbox)} sandbox`
+				: 'cleared the task sandbox requirement'
+		);
 	}
 
 	if (input.nextRequiresReview !== input.task.requiresReview) {
@@ -458,6 +523,21 @@ function buildStalledRecoveryState(input: {
 	};
 }
 
+function selectTaskThreadForSandbox(
+	thread: Awaited<ReturnType<typeof getAgentThread>> | null,
+	requiredSandbox: AgentSandbox | null
+) {
+	if (!thread) {
+		return null;
+	}
+
+	if (requiredSandbox && thread.sandbox !== requiredSandbox) {
+		return null;
+	}
+
+	return thread;
+}
+
 async function buildTaskLaunchPlan(
 	current: Awaited<ReturnType<typeof loadControlPlane>>,
 	task: Task,
@@ -468,10 +548,23 @@ async function buildTaskLaunchPlan(
 	const effectiveSuccessCriteria = input.successCriteria;
 	const effectiveReadyCondition = input.readyCondition;
 	const effectiveExpectedOutcome = input.expectedOutcome;
+	const effectiveDelegationPacket =
+		task.parentTaskId && input.hasDelegationPacketFields
+			? {
+					objective: input.delegationObjective,
+					inputContext: input.delegationInputContext,
+					expectedDeliverable: input.delegationExpectedDeliverable,
+					doneCondition: input.delegationDoneCondition,
+					integrationNotes: input.delegationIntegrationNotes
+				}
+			: (task.delegationPacket ?? null);
 	const effectiveProjectId = input.projectId || task.projectId;
 	const effectivePriority = input.hasPriority ? input.priority : task.priority;
 	const effectiveRiskLevel = input.hasRiskLevel ? input.riskLevel : task.riskLevel;
 	const effectiveApprovalMode = input.hasApprovalMode ? input.approvalMode : task.approvalMode;
+	const effectiveRequiredThreadSandbox = input.hasRequiredThreadSandbox
+		? input.requiredThreadSandbox
+		: (task.requiredThreadSandbox ?? null);
 	const effectiveRequiresReview = input.hasRequiresReview
 		? input.requiresReview
 		: task.requiresReview;
@@ -568,6 +661,7 @@ async function buildTaskLaunchPlan(
 		successCriteria: effectiveSuccessCriteria,
 		readyCondition: effectiveReadyCondition,
 		expectedOutcome: effectiveExpectedOutcome,
+		delegationPacket: effectiveDelegationPacket,
 		projectName: project.name,
 		projectRootFolder: project.projectRootFolder,
 		defaultArtifactRoot: project.defaultArtifactRoot,
@@ -579,6 +673,7 @@ async function buildTaskLaunchPlan(
 	});
 	const provider = selectExecutionProvider(current, effectiveWorker);
 	const sandbox = resolveThreadSandbox({
+		task: { requiredThreadSandbox: effectiveRequiredThreadSandbox },
 		worker: effectiveWorker,
 		project,
 		provider
@@ -592,8 +687,8 @@ async function buildTaskLaunchPlan(
 			? await getAgentThread(latestRun.agentThreadId)
 			: null;
 	const threadContext = selectProjectTaskThreadContext(project, {
-		assignedThread,
-		latestRunThread
+		assignedThread: selectTaskThreadForSandbox(assignedThread, effectiveRequiredThreadSandbox),
+		latestRunThread: selectTaskThreadForSandbox(latestRunThread, effectiveRequiredThreadSandbox)
 	});
 	const compatibleAssignedThread = threadContext.assignedThread;
 
@@ -624,9 +719,11 @@ async function buildTaskLaunchPlan(
 		effectiveSuccessCriteria,
 		effectiveReadyCondition,
 		effectiveExpectedOutcome,
+		effectiveDelegationPacket,
 		effectivePriority,
 		effectiveRiskLevel,
 		effectiveApprovalMode,
+		effectiveRequiredThreadSandbox,
 		effectiveRequiresReview,
 		effectiveDesiredRoleId,
 		assigneeWorker,
@@ -674,6 +771,7 @@ async function launchTaskFromPlan(
 			additionalWritableRoots: plan.project.additionalWritableRoots ?? [],
 			prompt: plan.prompt,
 			sandbox: resolveThreadSandbox({
+				task: { requiredThreadSandbox: plan.effectiveRequiredThreadSandbox },
 				worker: plan.effectiveWorker,
 				project: plan.project,
 				provider: plan.provider
@@ -727,6 +825,7 @@ async function launchTaskFromPlan(
 						priority: plan.effectivePriority,
 						riskLevel: plan.effectiveRiskLevel,
 						approvalMode: plan.effectiveApprovalMode,
+						requiredThreadSandbox: plan.effectiveRequiredThreadSandbox,
 						requiresReview: plan.effectiveRequiresReview,
 						desiredRoleId: plan.effectiveDesiredRoleId,
 						requiredCapabilityNames: plan.effectiveRequiredCapabilityNames,
@@ -735,6 +834,7 @@ async function launchTaskFromPlan(
 						dependencyTaskIds: plan.effectiveDependencyTaskIds,
 						targetDate: plan.effectiveTargetDate,
 						agentThreadId,
+						delegationAcceptance: null,
 						artifactPath:
 							candidate.artifactPath ||
 							plan.project.defaultArtifactRoot ||
@@ -770,6 +870,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const dependencyTaskIds = new Set(task.dependencyTaskIds);
+	const parentTask = task.parentTaskId
+		? (data.tasks.find((candidate) => candidate.id === task.parentTaskId) ?? null)
+		: null;
 	const relatedRuns = data.runs
 		.filter((run) => run.taskId === task.id)
 		.map((run) => ({
@@ -793,6 +896,101 @@ export const load: PageServerLoad = async ({ params }) => {
 			projectName: projectMap.get(dependency.projectId)?.name ?? 'No project'
 		}))
 		.sort((a, b) => a.title.localeCompare(b.title));
+	const childTasks = data.tasks
+		.filter((candidate) => candidate.parentTaskId === task.id)
+		.map((childTask) => {
+			const integrationStatus = childTask.delegationAcceptance
+				? 'accepted'
+				: childTask.status === 'done'
+					? 'pending'
+					: 'not_ready';
+
+			return {
+				id: childTask.id,
+				title: childTask.title,
+				status: childTask.status,
+				projectId: childTask.projectId,
+				projectName: projectMap.get(childTask.projectId)?.name ?? 'No project',
+				updatedAtLabel: formatRelativeTime(childTask.updatedAt),
+				delegationPacket: childTask.delegationPacket ?? null,
+				delegationAcceptance: childTask.delegationAcceptance
+					? {
+							...childTask.delegationAcceptance,
+							acceptedAtLabel: formatRelativeTime(childTask.delegationAcceptance.acceptedAt)
+						}
+					: null,
+				integrationStatus
+			};
+		})
+		.sort((left, right) => left.title.localeCompare(right.title));
+	const childTaskStatusCounts = childTasks.reduce(
+		(counts, childTask) => {
+			counts[childTask.status] += 1;
+			return counts;
+		},
+		{
+			in_draft: 0,
+			ready: 0,
+			in_progress: 0,
+			review: 0,
+			blocked: 0,
+			done: 0
+		}
+	);
+	const childTaskRollup =
+		childTasks.length > 0
+			? (() => {
+					const total = childTasks.length;
+					const blockedCount = childTaskStatusCounts.blocked;
+					const reviewCount = childTaskStatusCounts.review;
+					const doneCount = childTaskStatusCounts.done;
+					const inProgressCount = childTaskStatusCounts.in_progress;
+					const readyCount = childTaskStatusCounts.ready;
+					const acceptedCount = childTasks.filter(
+						(childTask) => childTask.integrationStatus === 'accepted'
+					).length;
+					const pendingIntegrationCount = childTasks.filter(
+						(childTask) => childTask.integrationStatus === 'pending'
+					).length;
+					const rollupStatus =
+						blockedCount > 0
+							? 'blocked'
+							: reviewCount > 0
+								? 'review'
+								: pendingIntegrationCount > 0
+									? 'review'
+									: acceptedCount === total
+										? 'done'
+										: inProgressCount > 0
+											? 'in_progress'
+											: 'ready';
+					const summary =
+						rollupStatus === 'blocked'
+							? `${blockedCount} delegated ${blockedCount === 1 ? 'task is' : 'tasks are'} blocked, so parent integration is blocked.`
+							: rollupStatus === 'review'
+								? pendingIntegrationCount > 0
+									? `${pendingIntegrationCount} completed child ${pendingIntegrationCount === 1 ? 'handoff is' : 'handoffs are'} waiting on parent acceptance.`
+									: `${reviewCount} delegated ${reviewCount === 1 ? 'task is' : 'tasks are'} waiting on review before integration can finish.`
+								: rollupStatus === 'done'
+									? 'All delegated subtasks have been accepted by the parent task.'
+									: rollupStatus === 'in_progress'
+										? `${inProgressCount} delegated ${inProgressCount === 1 ? 'task is' : 'tasks are'} actively moving.`
+										: `${readyCount} delegated ${readyCount === 1 ? 'task is' : 'tasks are'} queued but not started.`;
+
+					return {
+						status: rollupStatus,
+						total,
+						doneCount,
+						blockedCount,
+						reviewCount,
+						inProgressCount,
+						readyCount,
+						acceptedCount,
+						pendingIntegrationCount,
+						summary
+					};
+				})()
+			: null;
 	const availableDependencyTasks = data.tasks
 		.filter((candidate) => candidate.id !== task.id)
 		.map((candidate) => ({
@@ -881,6 +1079,12 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		task: {
 			...task,
+			delegationAcceptance: task.delegationAcceptance
+				? {
+						...task.delegationAcceptance,
+						acceptedAtLabel: formatRelativeTime(task.delegationAcceptance.acceptedAt)
+					}
+				: null,
 			projectName: projectMap.get(task.projectId)?.name ?? 'No project',
 			goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : '',
 			desiredRoleName: task.desiredRoleId
@@ -897,6 +1101,17 @@ export const load: PageServerLoad = async ({ params }) => {
 			openReview,
 			pendingApproval
 		},
+		parentTask: parentTask
+			? {
+					id: parentTask.id,
+					title: parentTask.title,
+					status: parentTask.status,
+					projectId: parentTask.projectId,
+					projectName: projectMap.get(parentTask.projectId)?.name ?? 'No project'
+				}
+			: null,
+		childTasks,
+		childTaskRollup,
 		stalledRecovery,
 		attachmentRoot: artifactRoot,
 		availableSkills: {
@@ -933,6 +1148,12 @@ export const actions: Actions = {
 			successCriteria,
 			readyCondition,
 			expectedOutcome,
+			delegationObjective,
+			delegationInputContext,
+			delegationExpectedDeliverable,
+			delegationDoneCondition,
+			delegationIntegrationNotes,
+			hasDelegationPacketFields,
 			projectId,
 			goalId,
 			hasGoalId,
@@ -944,6 +1165,8 @@ export const actions: Actions = {
 			hasRiskLevel,
 			approvalMode,
 			hasApprovalMode,
+			requiredThreadSandbox,
+			hasRequiredThreadSandbox,
 			requiresReview,
 			hasRequiresReview,
 			desiredRoleId,
@@ -1019,11 +1242,29 @@ export const actions: Actions = {
 			return fail(400, { message: 'One or more selected dependencies are no longer available.' });
 		}
 
+		if (existingTask.parentTaskId && hasDelegationPacketFields && !delegationObjective) {
+			return fail(400, { message: 'Delegated child tasks need a clear delegation objective.' });
+		}
+
+		if (existingTask.parentTaskId && hasDelegationPacketFields && !delegationDoneCondition) {
+			return fail(400, { message: 'Delegated child tasks need a done condition for handoff.' });
+		}
+
 		const nextTitle = name;
 		const nextInstructions = instructions;
 		const nextSuccessCriteria = successCriteria;
 		const nextReadyCondition = readyCondition;
 		const nextExpectedOutcome = expectedOutcome;
+		const nextDelegationPacket =
+			existingTask.parentTaskId && hasDelegationPacketFields
+				? {
+						objective: delegationObjective,
+						inputContext: delegationInputContext,
+						expectedDeliverable: delegationExpectedDeliverable,
+						doneCondition: delegationDoneCondition,
+						integrationNotes: delegationIntegrationNotes
+					}
+				: (existingTask.delegationPacket ?? null);
 		const nextGoalId = hasGoalId ? (goal?.id ?? '') : existingTask.goalId;
 		const nextStatus = status;
 		const nextAssigneeWorker = hasAssigneeWorkerId
@@ -1035,6 +1276,9 @@ export const actions: Actions = {
 		const nextPriority = hasPriority ? priority : existingTask.priority;
 		const nextRiskLevel = hasRiskLevel ? riskLevel : existingTask.riskLevel;
 		const nextApprovalMode = hasApprovalMode ? approvalMode : existingTask.approvalMode;
+		const nextRequiredThreadSandbox = hasRequiredThreadSandbox
+			? requiredThreadSandbox
+			: (existingTask.requiredThreadSandbox ?? null);
 		const nextRequiresReview = hasRequiresReview ? requiresReview : existingTask.requiresReview;
 		const nextDesiredRoleId = hasDesiredRoleId ? desiredRoleId : existingTask.desiredRoleId;
 		const nextRequiredCapabilityNames = hasRequiredCapabilityNames
@@ -1056,6 +1300,7 @@ export const actions: Actions = {
 			nextSuccessCriteria,
 			nextReadyCondition,
 			nextExpectedOutcome,
+			nextDelegationPacket,
 			nextProject: project,
 			nextGoalId,
 			nextGoalName: goal?.name ?? null,
@@ -1067,6 +1312,7 @@ export const actions: Actions = {
 			nextPriority,
 			nextRiskLevel,
 			nextApprovalMode,
+			nextRequiredThreadSandbox,
 			nextRequiresReview,
 			nextDesiredRoleId,
 			nextDesiredRoleName: nextDesiredRoleId
@@ -1108,6 +1354,7 @@ export const actions: Actions = {
 					successCriteria: nextSuccessCriteria,
 					readyCondition: nextReadyCondition,
 					expectedOutcome: nextExpectedOutcome,
+					delegationPacket: nextDelegationPacket,
 					projectId: project.id,
 					goalId: nextGoalId,
 					status: nextStatus,
@@ -1115,6 +1362,7 @@ export const actions: Actions = {
 					priority: nextPriority,
 					riskLevel: nextRiskLevel,
 					approvalMode: nextApprovalMode,
+					requiredThreadSandbox: nextRequiredThreadSandbox,
 					requiresReview: nextRequiresReview,
 					desiredRoleId: nextDesiredRoleId,
 					requiredCapabilityNames: nextRequiredCapabilityNames,
@@ -1122,6 +1370,8 @@ export const actions: Actions = {
 					blockedReason: nextBlockedReason,
 					dependencyTaskIds: nextDependencyTaskIds,
 					targetDate: nextTargetDate,
+					delegationAcceptance:
+						task.parentTaskId && decisionSummary ? null : (task.delegationAcceptance ?? null),
 					artifactPath:
 						task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
 					updatedAt: now
@@ -1302,6 +1552,115 @@ export const actions: Actions = {
 		};
 	},
 
+	acceptChildHandoff: async ({ params, request }) => {
+		const form = await request.formData();
+		const childTaskId = form.get('childTaskId')?.toString().trim() ?? '';
+		const current = await loadControlPlane();
+		const parentTask = current.tasks.find((candidate) => candidate.id === params.taskId);
+		const childTask = current.tasks.find((candidate) => candidate.id === childTaskId);
+
+		if (!parentTask) {
+			return fail(404, { message: 'Parent task not found.' });
+		}
+
+		if (!childTask || childTask.parentTaskId !== parentTask.id) {
+			return fail(404, { message: 'Delegated child task not found.' });
+		}
+
+		if (childTask.status !== 'done') {
+			return fail(409, { message: 'Only completed child tasks can be accepted into the parent.' });
+		}
+
+		const now = new Date().toISOString();
+		const summary =
+			form.get('summary')?.toString().trim() ||
+			`Accepted child handoff into parent task "${parentTask.title}".`;
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === childTask.id
+					? {
+							...candidate,
+							delegationAcceptance: {
+								summary,
+								acceptedAt: now
+							},
+							updatedAt: now
+						}
+					: candidate
+			),
+			decisions: [
+				createDecision({
+					taskId: childTask.id,
+					decisionType: 'delegation_handoff_accepted',
+					summary,
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
+		}));
+
+		return {
+			ok: true,
+			successAction: 'acceptChildHandoff',
+			taskId: params.taskId,
+			childTaskId
+		};
+	},
+
+	requestChildHandoffChanges: async ({ params, request }) => {
+		const form = await request.formData();
+		const childTaskId = form.get('childTaskId')?.toString().trim() ?? '';
+		const current = await loadControlPlane();
+		const parentTask = current.tasks.find((candidate) => candidate.id === params.taskId);
+		const childTask = current.tasks.find((candidate) => candidate.id === childTaskId);
+
+		if (!parentTask) {
+			return fail(404, { message: 'Parent task not found.' });
+		}
+
+		if (!childTask || childTask.parentTaskId !== parentTask.id) {
+			return fail(404, { message: 'Delegated child task not found.' });
+		}
+
+		const now = new Date().toISOString();
+		const blockedReason =
+			form.get('summary')?.toString().trim() ||
+			'Parent task requested follow-up before accepting this child handoff.';
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: data.tasks.map((candidate) =>
+				candidate.id === childTask.id
+					? {
+							...candidate,
+							status: 'blocked',
+							blockedReason,
+							delegationAcceptance: null,
+							updatedAt: now
+						}
+					: candidate
+			),
+			decisions: [
+				createDecision({
+					taskId: childTask.id,
+					decisionType: 'delegation_handoff_changes_requested',
+					summary: blockedReason,
+					createdAt: now
+				}),
+				...(data.decisions ?? [])
+			]
+		}));
+
+		return {
+			ok: true,
+			successAction: 'requestChildHandoffChanges',
+			taskId: params.taskId,
+			childTaskId
+		};
+	},
+
 	launchTaskSession: async ({ params, request }) => {
 		const form = await request.formData();
 		const taskInput = readTaskForm(form);
@@ -1477,245 +1836,51 @@ export const actions: Actions = {
 	},
 
 	approveReview: async ({ params }) => {
-		const current = await loadControlPlane();
-		const openReview = getOpenReviewForTask(current, params.taskId);
-		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+		try {
+			return await approveTaskReview(params.taskId, 'task detail page');
+		} catch (caughtError) {
+			if (caughtError instanceof TaskGovernanceActionError) {
+				return fail(caughtError.status, { message: caughtError.message });
+			}
 
-		if (!openReview || !task) {
-			return fail(404, { message: 'No open review found for this task.' });
+			throw caughtError;
 		}
-
-		const pendingApproval = getPendingApprovalForTask(current, params.taskId);
-		const shouldCloseTask = !pendingApproval;
-		const now = new Date().toISOString();
-
-		await updateControlPlane((data) => ({
-			...data,
-			reviews: data.reviews.map((review) =>
-				review.id === openReview.id
-					? {
-							...review,
-							status: 'approved',
-							updatedAt: now,
-							resolvedAt: now,
-							summary: 'Review approved from the task detail page.'
-						}
-					: review
-			),
-			runs: shouldCloseTask
-				? data.runs.map(
-						updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after review approval.')
-					)
-				: data.runs,
-			tasks: data.tasks.map((task) =>
-				task.id === params.taskId
-					? {
-							...task,
-							status: shouldCloseTask ? 'done' : task.status,
-							blockedReason: '',
-							updatedAt: now
-						}
-					: task
-			),
-			decisions: [
-				createDecision({
-					taskId: params.taskId,
-					runId: task.latestRunId,
-					reviewId: openReview.id,
-					decisionType: 'review_approved',
-					summary: shouldCloseTask
-						? 'Approved the open review and closed the task.'
-						: 'Approved the open review.',
-					createdAt: now
-				}),
-				...(data.decisions ?? [])
-			]
-		}));
-
-		return {
-			ok: true,
-			successAction: 'approveReview',
-			taskId: params.taskId
-		};
 	},
 
 	requestChanges: async ({ params }) => {
-		const current = await loadControlPlane();
-		const openReview = getOpenReviewForTask(current, params.taskId);
-		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+		try {
+			return await requestTaskReviewChanges(params.taskId, 'task detail page');
+		} catch (caughtError) {
+			if (caughtError instanceof TaskGovernanceActionError) {
+				return fail(caughtError.status, { message: caughtError.message });
+			}
 
-		if (!openReview || !task) {
-			return fail(404, { message: 'No open review found for this task.' });
+			throw caughtError;
 		}
-
-		const now = new Date().toISOString();
-		const blockedReason = 'Changes requested during review.';
-
-		await updateControlPlane((data) => ({
-			...data,
-			reviews: data.reviews.map((review) =>
-				review.id === openReview.id
-					? {
-							...review,
-							status: 'changes_requested',
-							updatedAt: now,
-							resolvedAt: now,
-							summary: blockedReason
-						}
-					: review
-			),
-			runs: data.runs.map(
-				updateLatestRunForTask(task.latestRunId, 'blocked', blockedReason, blockedReason)
-			),
-			tasks: data.tasks.map((task) =>
-				task.id === params.taskId
-					? {
-							...task,
-							status: 'blocked',
-							blockedReason,
-							updatedAt: now
-						}
-					: task
-			),
-			decisions: [
-				createDecision({
-					taskId: params.taskId,
-					runId: task.latestRunId,
-					reviewId: openReview.id,
-					decisionType: 'review_changes_requested',
-					summary: blockedReason,
-					createdAt: now
-				}),
-				...(data.decisions ?? [])
-			]
-		}));
-
-		return {
-			ok: true,
-			successAction: 'requestChanges',
-			taskId: params.taskId
-		};
 	},
 
 	approveApproval: async ({ params }) => {
-		const current = await loadControlPlane();
-		const pendingApproval = getPendingApprovalForTask(current, params.taskId);
-		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+		try {
+			return await approveTaskApproval(params.taskId, 'task detail page');
+		} catch (caughtError) {
+			if (caughtError instanceof TaskGovernanceActionError) {
+				return fail(caughtError.status, { message: caughtError.message });
+			}
 
-		if (!pendingApproval || !task) {
-			return fail(404, { message: 'No pending approval found for this task.' });
+			throw caughtError;
 		}
-
-		const now = new Date().toISOString();
-		const openReview = getOpenReviewForTask(current, params.taskId);
-		const shouldCloseTask = pendingApproval.mode === 'before_complete' && !openReview;
-
-		await updateControlPlane((data) => ({
-			...data,
-			approvals: data.approvals.map((approval) =>
-				approval.id === pendingApproval.id
-					? {
-							...approval,
-							status: 'approved',
-							updatedAt: now,
-							resolvedAt: now,
-							summary: `Approved ${approval.mode} gate from the task detail page.`
-						}
-					: approval
-			),
-			runs: shouldCloseTask
-				? data.runs.map(
-						updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after approval.')
-					)
-				: data.runs,
-			tasks: data.tasks.map((task) =>
-				task.id === params.taskId
-					? {
-							...task,
-							status: shouldCloseTask ? 'done' : task.status,
-							blockedReason: '',
-							updatedAt: now
-						}
-					: task
-			),
-			decisions: [
-				createDecision({
-					taskId: params.taskId,
-					runId: task.latestRunId,
-					approvalId: pendingApproval.id,
-					decisionType: 'approval_approved',
-					summary: shouldCloseTask
-						? `Approved the ${pendingApproval.mode} gate and closed the task.`
-						: `Approved the ${pendingApproval.mode} gate.`,
-					createdAt: now
-				}),
-				...(data.decisions ?? [])
-			]
-		}));
-
-		return {
-			ok: true,
-			successAction: 'approveApproval',
-			taskId: params.taskId
-		};
 	},
 
 	rejectApproval: async ({ params }) => {
-		const current = await loadControlPlane();
-		const pendingApproval = getPendingApprovalForTask(current, params.taskId);
-		const task = current.tasks.find((candidate) => candidate.id === params.taskId);
+		try {
+			return await rejectTaskApproval(params.taskId);
+		} catch (caughtError) {
+			if (caughtError instanceof TaskGovernanceActionError) {
+				return fail(caughtError.status, { message: caughtError.message });
+			}
 
-		if (!pendingApproval || !task) {
-			return fail(404, { message: 'No pending approval found for this task.' });
+			throw caughtError;
 		}
-
-		const now = new Date().toISOString();
-		const blockedReason = `${pendingApproval.mode} approval rejected.`;
-
-		await updateControlPlane((data) => ({
-			...data,
-			approvals: data.approvals.map((approval) =>
-				approval.id === pendingApproval.id
-					? {
-							...approval,
-							status: 'rejected',
-							updatedAt: now,
-							resolvedAt: now,
-							summary: blockedReason
-						}
-					: approval
-			),
-			runs: data.runs.map(
-				updateLatestRunForTask(task.latestRunId, 'blocked', blockedReason, blockedReason)
-			),
-			tasks: data.tasks.map((task) =>
-				task.id === params.taskId
-					? {
-							...task,
-							status: 'blocked',
-							blockedReason,
-							updatedAt: now
-						}
-					: task
-			),
-			decisions: [
-				createDecision({
-					taskId: params.taskId,
-					runId: task.latestRunId,
-					approvalId: pendingApproval.id,
-					decisionType: 'approval_rejected',
-					summary: blockedReason,
-					createdAt: now
-				}),
-				...(data.decisions ?? [])
-			]
-		}));
-
-		return {
-			ok: true,
-			successAction: 'rejectApproval',
-			taskId: params.taskId
-		};
 	},
 
 	deleteTask: async ({ params }) => {

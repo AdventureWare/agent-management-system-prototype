@@ -47,71 +47,82 @@
 			.map((threadId) => threadStoreState.current.byId[threadId])
 			.filter((session): session is AgentThreadDetail => Boolean(session))
 	);
-
-	let filteredSessions = $derived.by(() => {
+	let sessionById = $derived.by(
+		() => new Map(sessions.map((session) => [session.id, session] as const))
+	);
+	let selectedThreadIdSet = $derived(new Set(selectedThreadIds));
+	let sessionCollections = $derived.by(() => {
 		const term = query.trim().toLowerCase();
+		const filteredSessions: AgentThreadDetail[] = [];
+		const unarchivedSessions: AgentThreadDetail[] = [];
+		const archivedSessions: AgentThreadDetail[] = [];
+		const activeSessions: AgentThreadDetail[] = [];
+		const historicalSessions: AgentThreadDetail[] = [];
+		let activeCount = 0;
+		let availableCount = 0;
+		let inactiveCount = 0;
+		let attentionCount = 0;
+		let archivedCount = 0;
 
-		if (!term) {
-			return sessions;
+		for (const session of sessions) {
+			if (session.archivedAt) {
+				archivedCount += 1;
+			} else if (isActiveSessionState(session.threadState)) {
+				activeCount += 1;
+			} else if (session.threadState === 'ready') {
+				availableCount += 1;
+			} else if (session.threadState === 'attention') {
+				attentionCount += 1;
+			} else if (session.threadState === 'unavailable' || session.threadState === 'idle') {
+				inactiveCount += 1;
+			}
+
+			if (term && !threadMatchesQuery(session, term)) {
+				continue;
+			}
+
+			filteredSessions.push(session);
+
+			if (session.archivedAt) {
+				archivedSessions.push(session);
+				continue;
+			}
+
+			unarchivedSessions.push(session);
+
+			if (isActiveSessionState(session.threadState)) {
+				activeSessions.push(session);
+				continue;
+			}
+
+			historicalSessions.push(session);
 		}
 
-		return sessions.filter((session) => {
-			return [
-				session.name,
-				session.cwd,
-				session.threadState,
-				formatThreadStateLabel(session.threadState),
-				session.latestRunStatus,
-				(session.topicLabels ?? []).join(' '),
-				(session.categorization?.projectLabels ?? []).join(' '),
-				(session.categorization?.goalLabels ?? []).join(' '),
-				(session.categorization?.areaLabels ?? []).join(' '),
-				(session.categorization?.focusLabels ?? []).join(' '),
-				(session.categorization?.entityLabels ?? []).join(' '),
-				(session.categorization?.roleLabels ?? []).join(' '),
-				(session.categorization?.capabilityLabels ?? []).join(' '),
-				(session.categorization?.toolLabels ?? []).join(' '),
-				(session.categorization?.keywordLabels ?? []).join(' '),
-				session.threadId ?? '',
-				session.relatedTasks.map((task) => task.title).join(' '),
-				session.latestRun?.prompt ?? '',
-				session.latestRun?.lastMessage ?? ''
-			]
-				.join(' ')
-				.toLowerCase()
-				.includes(term);
-		});
+		return {
+			filteredSessions,
+			unarchivedSessions,
+			archivedSessions,
+			activeSessions,
+			historicalSessions,
+			activeCount,
+			availableCount,
+			inactiveCount,
+			attentionCount,
+			archivedCount
+		};
 	});
-	let unarchivedSessions = $derived(filteredSessions.filter((session) => !session.archivedAt));
-	let archivedSessions = $derived(
-		filteredSessions.filter((session) => Boolean(session.archivedAt))
-	);
-	let activeSessions = $derived(
-		unarchivedSessions.filter((session) => isActiveSessionState(session.threadState))
-	);
-	let historicalSessions = $derived(
-		unarchivedSessions.filter((session) => !isActiveSessionState(session.threadState))
-	);
-	let activeCount = $derived(
-		sessions.filter((session) => !session.archivedAt && isActiveSessionState(session.threadState))
-			.length
-	);
-	let availableCount = $derived(
-		sessions.filter((session) => !session.archivedAt && session.threadState === 'ready').length
-	);
-	let inactiveCount = $derived(
-		sessions.filter(
-			(session) =>
-				!session.archivedAt &&
-				(session.threadState === 'unavailable' || session.threadState === 'idle')
-		).length
-	);
-	let attentionCount = $derived(
-		sessions.filter((session) => !session.archivedAt && session.threadState === 'attention').length
-	);
-	let archivedCount = $derived(sessions.filter((session) => Boolean(session.archivedAt)).length);
+	let filteredSessions = $derived(sessionCollections.filteredSessions);
+	let unarchivedSessions = $derived(sessionCollections.unarchivedSessions);
+	let archivedSessions = $derived(sessionCollections.archivedSessions);
+	let activeSessions = $derived(sessionCollections.activeSessions);
+	let historicalSessions = $derived(sessionCollections.historicalSessions);
+	let activeCount = $derived(sessionCollections.activeCount);
+	let availableCount = $derived(sessionCollections.availableCount);
+	let inactiveCount = $derived(sessionCollections.inactiveCount);
+	let attentionCount = $derived(sessionCollections.attentionCount);
+	let archivedCount = $derived(sessionCollections.archivedCount);
 	let selectedThreads = $derived.by(() =>
-		sessions.filter((session) => selectedThreadIds.includes(session.id))
+		sessions.filter((session) => selectedThreadIdSet.has(session.id))
 	);
 	let selectedArchivedCount = $derived(
 		selectedThreads.filter((session) => Boolean(session.archivedAt)).length
@@ -134,9 +145,7 @@
 	});
 
 	$effect(() => {
-		const nextSelectedThreadIds = selectedThreadIds.filter((threadId) =>
-			sessions.some((session) => session.id === threadId)
-		);
+		const nextSelectedThreadIds = selectedThreadIds.filter((threadId) => sessionById.has(threadId));
 
 		if (
 			nextSelectedThreadIds.length === selectedThreadIds.length &&
@@ -182,6 +191,33 @@
 
 	function isActiveSessionState(state: AgentThreadDetail['threadState']) {
 		return state === 'starting' || state === 'waiting' || state === 'working';
+	}
+
+	function threadMatchesQuery(session: AgentThreadDetail, term: string) {
+		return [
+			session.name,
+			session.cwd,
+			session.threadState,
+			formatThreadStateLabel(session.threadState),
+			session.latestRunStatus,
+			(session.topicLabels ?? []).join(' '),
+			(session.categorization?.projectLabels ?? []).join(' '),
+			(session.categorization?.goalLabels ?? []).join(' '),
+			(session.categorization?.areaLabels ?? []).join(' '),
+			(session.categorization?.focusLabels ?? []).join(' '),
+			(session.categorization?.entityLabels ?? []).join(' '),
+			(session.categorization?.roleLabels ?? []).join(' '),
+			(session.categorization?.capabilityLabels ?? []).join(' '),
+			(session.categorization?.toolLabels ?? []).join(' '),
+			(session.categorization?.keywordLabels ?? []).join(' '),
+			session.threadId ?? '',
+			session.relatedTasks.map((task) => task.title).join(' '),
+			session.latestRun?.prompt ?? '',
+			session.latestRun?.lastMessage ?? ''
+		]
+			.join(' ')
+			.toLowerCase()
+			.includes(term);
 	}
 
 	async function loadSessions() {
@@ -255,13 +291,13 @@
 		}
 
 		selectedThreadIds = selectedThreadIds.filter((threadId) => {
-			const session = sessions.find((candidate) => candidate.id === threadId);
+			const session = sessionById.get(threadId);
 			return !session?.archivedAt;
 		});
 	}
 
 	function isThreadSelected(threadId: string) {
-		return selectedThreadIds.includes(threadId);
+		return selectedThreadIdSet.has(threadId);
 	}
 
 	function toggleThreadSelection(threadId: string, checked: boolean) {

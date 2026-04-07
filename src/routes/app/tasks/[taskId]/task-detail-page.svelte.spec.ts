@@ -107,6 +107,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					status: 'in_progress',
 					riskLevel: 'medium',
 					approvalMode: 'none',
+					requiredThreadSandbox: 'danger-full-access',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
 					assigneeWorkerId: null,
@@ -154,6 +155,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('/tmp/project/agent_output');
 		expect(document.body.textContent).toContain('Target date');
 		expect(document.body.textContent).toContain('Apr 22, 2026');
+		expect(document.body.textContent).toContain('Required sandbox: Danger Full Access');
 		expect(
 			(document.querySelector('input[name="targetDate"]') as HTMLInputElement | null)?.value
 		).toBe('2026-04-22');

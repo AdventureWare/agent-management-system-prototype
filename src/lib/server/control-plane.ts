@@ -32,6 +32,8 @@ import {
 	type ControlPlaneData,
 	type Decision,
 	type DecisionType,
+	type DelegationAcceptance,
+	type DelegationPacket,
 	type Goal,
 	type GoalStatus,
 	type PlanningConfidence,
@@ -198,6 +200,9 @@ type LegacyTask = Partial<Task> & {
 	successCriteria?: unknown;
 	readyCondition?: unknown;
 	expectedOutcome?: unknown;
+	parentTaskId?: unknown;
+	delegationPacket?: unknown;
+	delegationAcceptance?: unknown;
 };
 
 type LegacyRole = Partial<Role> & {
@@ -226,6 +231,46 @@ type LegacyApproval = Partial<Approval>;
 type LegacyPlanningSession = Partial<PlanningSession>;
 type LegacyDecision = Partial<Decision>;
 type LegacyTaskAttachment = Partial<TaskAttachment>;
+
+function normalizeDelegationPacket(packet: unknown): DelegationPacket | null {
+	if (!packet || typeof packet !== 'object') {
+		return null;
+	}
+
+	const candidate = packet as Record<string, unknown>;
+	const normalized = {
+		objective: typeof candidate.objective === 'string' ? candidate.objective.trim() : '',
+		inputContext: typeof candidate.inputContext === 'string' ? candidate.inputContext.trim() : '',
+		expectedDeliverable:
+			typeof candidate.expectedDeliverable === 'string' ? candidate.expectedDeliverable.trim() : '',
+		doneCondition:
+			typeof candidate.doneCondition === 'string' ? candidate.doneCondition.trim() : '',
+		integrationNotes:
+			typeof candidate.integrationNotes === 'string' ? candidate.integrationNotes.trim() : ''
+	} satisfies DelegationPacket;
+
+	return Object.values(normalized).some(Boolean) ? normalized : null;
+}
+
+function normalizeDelegationAcceptance(acceptance: unknown): DelegationAcceptance | null {
+	if (!acceptance || typeof acceptance !== 'object') {
+		return null;
+	}
+
+	const candidate = acceptance as Record<string, unknown>;
+	const summary = typeof candidate.summary === 'string' ? candidate.summary.trim() : '';
+	const acceptedAt =
+		typeof candidate.acceptedAt === 'string' && candidate.acceptedAt.trim()
+			? candidate.acceptedAt
+			: '';
+
+	return acceptedAt
+		? {
+				summary,
+				acceptedAt
+			}
+		: null;
+}
 
 function inferProviderService(provider: LegacyProvider) {
 	const haystack = `${provider.id ?? ''} ${provider.name ?? ''} ${provider.description ?? ''}`
@@ -707,6 +752,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 	const statusValue = task.status;
 	const riskLevelValue = task.riskLevel;
 	const approvalModeValue = task.approvalMode;
+	const requiredThreadSandbox = normalizeOptionalAgentSandbox(task.requiredThreadSandbox);
 	const taskRuns = runs
 		.filter((run) => run.taskId === task.id)
 		.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -733,10 +779,15 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		projectId: inferTaskProjectId(task, projects),
 		area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
+		parentTaskId:
+			typeof task.parentTaskId === 'string' && task.parentTaskId.trim() ? task.parentTaskId : null,
+		delegationPacket: normalizeDelegationPacket(task.delegationPacket),
+		delegationAcceptance: normalizeDelegationAcceptance(task.delegationAcceptance),
 		priority,
 		status: status ?? 'ready',
 		riskLevel,
 		approvalMode,
+		requiredThreadSandbox,
 		requiresReview: typeof task.requiresReview === 'boolean' ? task.requiresReview : true,
 		desiredRoleId: typeof task.desiredRoleId === 'string' ? task.desiredRoleId : '',
 		assigneeWorkerId:
@@ -1375,9 +1426,13 @@ export function createTask(input: {
 	projectId: string;
 	area?: Area;
 	goalId: string;
+	parentTaskId?: string | null;
+	delegationPacket?: DelegationPacket | null;
+	delegationAcceptance?: DelegationAcceptance | null;
 	priority: Priority;
 	riskLevel: TaskRiskLevel;
 	approvalMode: TaskApprovalMode;
+	requiredThreadSandbox?: AgentSandbox | null;
 	requiresReview: boolean;
 	desiredRoleId: string;
 	artifactPath: string;
@@ -1405,10 +1460,14 @@ export function createTask(input: {
 		projectId: input.projectId,
 		area,
 		goalId: input.goalId,
+		parentTaskId: input.parentTaskId?.trim() ? input.parentTaskId : null,
+		delegationPacket: normalizeDelegationPacket(input.delegationPacket ?? null),
+		delegationAcceptance: normalizeDelegationAcceptance(input.delegationAcceptance ?? null),
 		priority: input.priority,
 		status: input.status ?? 'ready',
 		riskLevel: input.riskLevel,
 		approvalMode: input.approvalMode,
+		requiredThreadSandbox: input.requiredThreadSandbox ?? null,
 		requiresReview: input.requiresReview,
 		desiredRoleId: input.desiredRoleId,
 		assigneeWorkerId: input.assigneeWorkerId ?? null,
@@ -1595,17 +1654,29 @@ export function deleteTask(data: ControlPlaneData, taskId: string): ControlPlane
 		...data,
 		tasks: data.tasks
 			.filter((task) => task.id !== taskId)
-			.map((task) =>
-				task.dependencyTaskIds.includes(taskId)
-					? {
-							...task,
-							dependencyTaskIds: task.dependencyTaskIds.filter(
-								(dependencyTaskId) => dependencyTaskId !== taskId
-							),
-							updatedAt: now
-						}
-					: task
-			),
+			.map((task) => {
+				let nextTask = task;
+
+				if (task.dependencyTaskIds.includes(taskId)) {
+					nextTask = {
+						...nextTask,
+						dependencyTaskIds: nextTask.dependencyTaskIds.filter(
+							(dependencyTaskId) => dependencyTaskId !== taskId
+						),
+						updatedAt: now
+					};
+				}
+
+				if (nextTask.parentTaskId === taskId) {
+					nextTask = {
+						...nextTask,
+						parentTaskId: null,
+						updatedAt: now
+					};
+				}
+
+				return nextTask;
+			}),
 		runs: data.runs.filter((run) => run.taskId !== taskId),
 		reviews: data.reviews.filter(
 			(review) => review.taskId !== taskId && !(review.runId && relatedRunIds.has(review.runId))
@@ -1670,12 +1741,14 @@ export function createWorker(input: {
 }
 
 export function resolveThreadSandbox(input: {
+	task?: Pick<Task, 'requiredThreadSandbox'> | null;
 	worker?: Pick<Worker, 'threadSandboxOverride'> | null;
 	project?: Pick<Project, 'defaultThreadSandbox'> | null;
 	provider?: Pick<Provider, 'defaultThreadSandbox'> | null;
 	fallback?: AgentSandbox;
 }) {
 	return (
+		input.task?.requiredThreadSandbox ??
 		input.worker?.threadSandboxOverride ??
 		input.project?.defaultThreadSandbox ??
 		input.provider?.defaultThreadSandbox ??

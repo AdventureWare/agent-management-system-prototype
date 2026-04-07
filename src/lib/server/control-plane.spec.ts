@@ -158,6 +158,14 @@ describe('control-plane helpers', () => {
 			projectId: 'project_1',
 			area: 'ops',
 			goalId: 'goal_1',
+			parentTaskId: 'task_parent',
+			delegationPacket: {
+				objective: 'Own the specialized packet work.',
+				inputContext: 'Parent task summary.',
+				expectedDeliverable: 'Schema and UI updates.',
+				doneCondition: 'The parent can integrate without guessing.',
+				integrationNotes: 'Report risks back to the parent.'
+			},
 			priority: 'high',
 			riskLevel: 'high',
 			approvalMode: 'before_apply',
@@ -170,6 +178,14 @@ describe('control-plane helpers', () => {
 		expect(task.riskLevel).toBe('high');
 		expect(task.approvalMode).toBe('before_apply');
 		expect(task.requiresReview).toBe(true);
+		expect(task.parentTaskId).toBe('task_parent');
+		expect(task.delegationPacket).toEqual({
+			objective: 'Own the specialized packet work.',
+			inputContext: 'Parent task summary.',
+			expectedDeliverable: 'Schema and UI updates.',
+			doneCondition: 'The parent can integrate without guessing.',
+			integrationNotes: 'Report risks back to the parent.'
+		});
 		expect(task.dependencyTaskIds).toEqual(['task_alpha']);
 		expect(task.blockedReason).toBe('');
 		expect(task.runCount).toBe(0);
@@ -239,6 +255,10 @@ describe('control-plane helpers', () => {
 
 	it('deletes a task and cleans up related execution state', () => {
 		const data = buildFixture();
+		data.tasks[2] = {
+			...data.tasks[2]!,
+			parentTaskId: 'task_review'
+		};
 		data.runs.push({
 			id: 'run_review',
 			taskId: 'task_review',
@@ -276,6 +296,7 @@ describe('control-plane helpers', () => {
 
 		expect(next.tasks.map((task) => task.id)).toEqual(['task_done', 'task_waiting']);
 		expect(waitingTask?.dependencyTaskIds).toEqual([]);
+		expect(waitingTask?.parentTaskId).toBeNull();
 		expect(next.runs.map((run) => run.id)).toEqual(['run_done']);
 		expect(next.reviews).toEqual([]);
 		expect(next.approvals).toEqual([]);
@@ -534,6 +555,17 @@ describe('control-plane helpers', () => {
 				provider: { defaultThreadSandbox: 'workspace-write' }
 			})
 		).toBe('danger-full-access');
+	});
+
+	it('prefers the task sandbox requirement before worker, project, and provider defaults', () => {
+		expect(
+			resolveThreadSandbox({
+				task: { requiredThreadSandbox: 'read-only' },
+				worker: { threadSandboxOverride: 'danger-full-access' },
+				project: { defaultThreadSandbox: 'workspace-write' },
+				provider: { defaultThreadSandbox: 'danger-full-access' }
+			})
+		).toBe('read-only');
 	});
 
 	it('creates providers with configurable setup defaults', () => {

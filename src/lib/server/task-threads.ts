@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
+import type { DelegationPacket } from '$lib/types/control-plane';
 
 const TASK_THREAD_NAME_PREFIX = 'Task thread';
 const LEGACY_TASK_THREAD_NAME_PREFIX = 'Work thread:';
@@ -13,6 +14,7 @@ export function buildTaskThreadPrompt(input: {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	delegationPacket?: DelegationPacket | null;
 	projectName: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
@@ -64,6 +66,27 @@ export function buildTaskThreadPrompt(input: {
 		...(input.readyCondition?.trim() ? ['', 'Ready condition:', input.readyCondition.trim()] : []),
 		...(input.expectedOutcome?.trim()
 			? ['', 'Expected outcome:', input.expectedOutcome.trim()]
+			: []),
+		...(input.delegationPacket
+			? [
+					'',
+					'Delegation packet:',
+					...(input.delegationPacket.objective
+						? [`Objective: ${input.delegationPacket.objective}`]
+						: []),
+					...(input.delegationPacket.inputContext
+						? [`Input context: ${input.delegationPacket.inputContext}`]
+						: []),
+					...(input.delegationPacket.expectedDeliverable
+						? [`Expected deliverable: ${input.delegationPacket.expectedDeliverable}`]
+						: []),
+					...(input.delegationPacket.doneCondition
+						? [`Done condition: ${input.delegationPacket.doneCondition}`]
+						: []),
+					...(input.delegationPacket.integrationNotes
+						? [`Integration notes: ${input.delegationPacket.integrationNotes}`]
+						: [])
+				]
 			: []),
 		'',
 		'Instructions:',

@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
@@ -12,10 +13,18 @@
 		formatWorkerStatusLabel,
 		runStatusToneClass
 	} from '$lib/types/control-plane';
+	import { fromStore } from 'svelte/store';
 
 	let props = $props<{ data: PageData }>();
 	let refreshedData = $state.raw<PageData | null>(null);
-	let data = $derived(refreshedData ?? props.data);
+	let sourceData = $derived(refreshedData ?? props.data);
+	const workerRecordState = fromStore(workerRecordStore);
+	let data = $derived.by(() => ({
+		...sourceData,
+		worker: sourceData.worker
+			? mergeStoredWorkerRecord(sourceData.worker, workerRecordState.current.byId)
+			: null
+	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 
@@ -29,6 +38,12 @@
 	$effect(() => {
 		props.data;
 		refreshedData = null;
+	});
+
+	$effect(() => {
+		if (sourceData.worker) {
+			workerRecordStore.seedWorker(sourceData.worker);
+		}
 	});
 
 	function formatTimestamp(iso: string | null) {

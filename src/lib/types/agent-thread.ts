@@ -29,6 +29,10 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUS_OPTIONS)[number];
 export type AgentThreadState = (typeof AGENT_THREAD_STATE_OPTIONS)[number];
 export type AgentThreadOrigin = 'managed' | 'external';
 
+export function formatAgentSandboxLabel(sandbox: AgentSandbox): string {
+	return sandbox.replace(/-/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 export type AgentThread = {
 	id: string;
 	name: string;

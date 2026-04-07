@@ -71,4 +71,23 @@ describe('task thread naming', () => {
 			})
 		).toContain('Apply this published system knowledge when it is relevant to the work:');
 	});
+
+	it('includes delegation packet details in the task prompt when present', () => {
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Implement delegation packet editing',
+				taskInstructions: 'Add the missing contract fields for delegated child tasks.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				delegationPacket: {
+					objective: 'Own the packet editing flow.',
+					inputContext: 'Parent task handles overall coordination.',
+					expectedDeliverable: 'Editable packet fields on task detail.',
+					doneCondition: 'The parent can inspect and trust the child contract.',
+					integrationNotes: 'Call out anything the parent must still decide.'
+				}
+			})
+		).toContain('Delegation packet:');
+	});
 });

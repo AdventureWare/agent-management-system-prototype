@@ -7,6 +7,7 @@
 <ThreadDetailPanel
 	thread={data.thread}
 	sandboxOptions={data.sandboxOptions}
+	threadFocusTask={data.threadFocusTask}
 	taskResponseAction={data.taskResponseAction}
 	responseContextArtifacts={data.responseContextArtifacts}
 	{form}
