@@ -19,6 +19,8 @@ describe('control-plane project migration', () => {
 		mkdir.mockReset();
 		readFile.mockReset();
 		writeFile.mockReset();
+		vi.unstubAllEnvs();
+		vi.stubEnv('APP_STORAGE_BACKEND', 'json');
 	});
 
 	it('maps legacy defaultCoordinationFolder into projectRootFolder', async () => {

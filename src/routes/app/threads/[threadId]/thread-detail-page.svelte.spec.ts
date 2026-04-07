@@ -45,6 +45,8 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 						mode: 'message',
 						prompt: 'Update the Current Task pane so it shows the real task brief.',
 						requestedThreadId: 'codex_thread_1',
+						sourceAgentThreadId: 'thread_2',
+						sourceAgentThreadName: 'Coordinator thread',
 						createdAt: '2026-04-07T12:01:00.000Z',
 						updatedAt: '2026-04-07T12:05:00.000Z',
 						logPath: '/tmp/project/agent_output/log.txt',
@@ -71,6 +73,8 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 							mode: 'message',
 							prompt: 'Update the Current Task pane so it shows the real task brief.',
 							requestedThreadId: 'codex_thread_1',
+							sourceAgentThreadId: 'thread_2',
+							sourceAgentThreadName: 'Coordinator thread',
 							createdAt: '2026-04-07T12:01:00.000Z',
 							updatedAt: '2026-04-07T12:05:00.000Z',
 							logPath: '/tmp/project/agent_output/log.txt',
@@ -103,6 +107,18 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 					isPrimary: true,
 					source: 'resolved'
 				},
+				threadContactTargets: [
+					{
+						id: 'thread_2',
+						name: 'Coordinator thread',
+						threadState: 'ready',
+						latestRunStatus: 'completed',
+						threadSummary: 'Handles coordination and assignment decisions.',
+						relatedTaskTitles: ['Coordinate implementation'],
+						canContact: true,
+						disabledReason: ''
+					}
+				],
 				taskResponseAction: null,
 				responseContextArtifacts: []
 			} as never
@@ -114,6 +130,9 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain(
 			'Replace the current text/content of the Current Task pane in the Thread Detail page so it shows the task name and instructions/summary instead.'
 		);
+		expect(document.body.textContent).toContain('Contact another thread');
+		expect(document.body.textContent).toContain('Coordinator thread');
+		expect(document.body.textContent).toContain('Contact from Coordinator thread');
 		expect(document.body.textContent).not.toContain(
 			'This is the task the thread is currently anchored to while you review or reply.'
 		);

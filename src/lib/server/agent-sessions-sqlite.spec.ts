@@ -73,10 +73,10 @@ describe('agent sessions sqlite backend', () => {
 		const row = sqlite
 			.prepare<[], { payload: string }>(
 				`
-					select payload
-					from agent_session_records
-					where collection = 'sessions' and id = 'thread_seeded'
-				`
+						select payload
+						from agent_thread_records
+						where collection = 'threads' and id = 'thread_seeded'
+					`
 			)
 			.get();
 		sqlite.close();
@@ -107,10 +107,10 @@ describe('agent sessions sqlite backend', () => {
 		const row = sqlite
 			.prepare<[], { payload: string }>(
 				`
-					select payload
-					from agent_session_records
-					where collection = 'sessions' and id = 'thread_seeded'
-				`
+						select payload
+						from agent_thread_records
+						where collection = 'threads' and id = 'thread_seeded'
+					`
 			)
 			.get();
 		sqlite.close();

@@ -47,16 +47,6 @@ type PlanningTaskSummary = {
 	assignedWorkerEligible: boolean | null;
 };
 
-type PlanningWorkerLoad = {
-	id: string;
-	name: string;
-	status: Worker['status'];
-	capacityHours: number;
-	plannedHours: number;
-	remainingHours: number;
-	overAllocated: boolean;
-};
-
 function getWorkerCapacityHours(worker: Worker) {
 	return (
 		(worker.weeklyCapacityHours ?? worker.capacity * FALLBACK_CAPACITY_HOURS_PER_SLOT) *

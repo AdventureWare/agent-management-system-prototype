@@ -45,8 +45,8 @@
 		};
 	};
 
-	const artifactReferenceStatusCache = new Map<string, ArtifactReferenceStatus>();
-	const pendingArtifactReferenceRequests = new Map<string, Promise<ArtifactReferenceStatus>>();
+	const artifactReferenceStatusCache: Record<string, ArtifactReferenceStatus> = {};
+	const pendingArtifactReferenceRequests: Record<string, Promise<ArtifactReferenceStatus>> = {};
 
 	let {
 		text,
@@ -79,7 +79,7 @@
 	let detectedReferenceSummary = $derived.by<DetectedReferenceSummary>(() => {
 		const references = collectDetectedReferences(blocks);
 		const artifactPaths: string[] = [];
-		const seenArtifactPaths = new Set<string>();
+		const seenArtifactPaths: string[] = [];
 		const counts = {
 			artifacts: 0,
 			appLinks: 0,
@@ -91,8 +91,8 @@
 				case 'artifact':
 					counts.artifacts += 1;
 
-					if (!seenArtifactPaths.has(reference.path)) {
-						seenArtifactPaths.add(reference.path);
+					if (!seenArtifactPaths.includes(reference.path)) {
+						seenArtifactPaths.push(reference.path);
 						artifactPaths.push(reference.path);
 					}
 					break;
@@ -125,13 +125,12 @@
 		content: '',
 		errorMessage: ''
 	});
-	let contextArtifactByPath = $derived.by<Map<string, ContextArtifactReference>>(
-		() =>
-			new Map(
-				contextArtifacts.map(
-					(artifact: ContextArtifactReference) => [artifact.path, artifact] as const
-				)
+	let contextArtifactByPath = $derived.by<Record<string, ContextArtifactReference>>(() =>
+		Object.fromEntries(
+			contextArtifacts.map(
+				(artifact: ContextArtifactReference) => [artifact.path, artifact] as const
 			)
+		)
 	);
 	let copiedArtifactPath = $state<string | null>(null);
 	let attachActionState = $state<{
@@ -141,8 +140,9 @@
 	} | null>(null);
 
 	$effect(() => {
-		text;
-		referenceSummaryExpanded = false;
+		if (text !== undefined || text === undefined) {
+			referenceSummaryExpanded = false;
+		}
 	});
 
 	$effect(() => {
@@ -158,7 +158,7 @@
 		let cancelled = false;
 		artifactStatuses = Object.fromEntries(
 			artifactReferencePaths.flatMap((path) => {
-				const cachedStatus = artifactReferenceStatusCache.get(path);
+				const cachedStatus = artifactReferenceStatusCache[path];
 				return cachedStatus ? [[path, cachedStatus] as const] : [];
 			})
 		);
@@ -384,7 +384,7 @@
 	}
 
 	function collectDetectedReferences(messageBlocks: MessageBlock[]) {
-		const references = new Map<string, DetectedReference>();
+		const referencesByKey: Record<string, DetectedReference> = {};
 
 		for (const block of messageBlocks) {
 			const values =
@@ -393,13 +393,13 @@
 			for (const value of values) {
 				for (const token of parseInlineTokens(value)) {
 					if (token.type === 'localPath') {
-						references.set(`artifact:${token.path}`, {
+						referencesByKey[`artifact:${token.path}`] = {
 							key: `artifact:${token.path}`,
 							kind: 'artifact',
 							label: localPathLabel(token.reference),
 							path: token.path,
 							reference: token.reference
-						});
+						};
 						continue;
 					}
 
@@ -409,49 +409,49 @@
 						!isNavigableHref(token.href)
 					) {
 						const path = trimLocalPathFragment(token.href);
-						references.set(`artifact:${path}`, {
+						referencesByKey[`artifact:${path}`] = {
 							key: `artifact:${path}`,
 							kind: 'artifact',
 							label: token.label,
 							path,
 							reference: token.href
-						});
+						};
 						continue;
 					}
 
 					if (token.type === 'markdownLink' && token.href.startsWith('/app/')) {
-						references.set(`app:${token.href}`, {
+						referencesByKey[`app:${token.href}`] = {
 							key: `app:${token.href}`,
 							kind: 'appLink',
 							label: token.label,
 							href: token.href
-						});
+						};
 						continue;
 					}
 
 					if (token.type === 'markdownLink' && token.href.startsWith('http')) {
-						references.set(`external:${token.href}`, {
+						referencesByKey[`external:${token.href}`] = {
 							key: `external:${token.href}`,
 							kind: 'externalLink',
 							label: token.label,
 							href: token.href
-						});
+						};
 						continue;
 					}
 
 					if (token.type === 'url') {
-						references.set(`external:${token.value}`, {
+						referencesByKey[`external:${token.value}`] = {
 							key: `external:${token.value}`,
 							kind: 'externalLink',
 							label: urlLabel(token.value),
 							href: token.value
-						});
+						};
 					}
 				}
 			}
 		}
 
-		return [...references.values()];
+		return Object.values(referencesByKey);
 	}
 
 	function parseInlineTokens(text: string): InlineToken[] {
@@ -681,16 +681,6 @@
 		return fragmentMatch ? `${name} ${fragmentMatch[0].slice(1)}` : name;
 	}
 
-	function localPathHref(reference: string) {
-		return resolve(
-			`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(reference))}`
-		);
-	}
-
-	function localPathBrowseHref(reference: string) {
-		return resolve(`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(reference))}`);
-	}
-
 	function localPathPreviewHref(reference: string) {
 		return resolve(
 			`/api/artifacts/preview?path=${encodeURIComponent(trimLocalPathFragment(reference))}`
@@ -708,11 +698,11 @@
 	}
 
 	function artifactReferenceStatus(path: string) {
-		return artifactStatuses[path] ?? artifactReferenceStatusCache.get(path) ?? null;
+		return artifactStatuses[path] ?? artifactReferenceStatusCache[path] ?? null;
 	}
 
 	function contextArtifactReference(path: string) {
-		return contextArtifactByPath.get(path) ?? null;
+		return contextArtifactByPath[path] ?? null;
 	}
 
 	function canOpenArtifactReference(path: string) {
@@ -762,6 +752,22 @@
 
 	function canCopyArtifactPath() {
 		return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+	}
+
+	function openExternalHref(href: string) {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		window.open(href, '_blank', 'noopener,noreferrer');
+	}
+
+	function followDirectHref(href: string) {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		window.location.href = href;
 	}
 
 	async function copyArtifactPath(path: string) {
@@ -868,12 +874,12 @@
 	}
 
 	async function loadArtifactReferenceStatus(path: string): Promise<ArtifactReferenceStatus> {
-		const cachedStatus = artifactReferenceStatusCache.get(path);
+		const cachedStatus = artifactReferenceStatusCache[path];
 		if (cachedStatus) {
 			return cachedStatus;
 		}
 
-		const pendingStatus = pendingArtifactReferenceRequests.get(path);
+		const pendingStatus = pendingArtifactReferenceRequests[path];
 		if (pendingStatus) {
 			return pendingStatus;
 		}
@@ -902,12 +908,12 @@
 			})
 			.catch(() => 'error' as const)
 			.then((status) => {
-				artifactReferenceStatusCache.set(path, status);
-				pendingArtifactReferenceRequests.delete(path);
+				artifactReferenceStatusCache[path] = status;
+				delete pendingArtifactReferenceRequests[path];
 				return status;
 			});
 
-		pendingArtifactReferenceRequests.set(path, request);
+		pendingArtifactReferenceRequests[path] = request;
 		return request;
 	}
 </script>
@@ -921,24 +927,41 @@
 				{token.value}
 			{:else if token.type === 'markdownLink'}
 				{#if isNavigableHref(token.href)}
-					<a
-						href={token.href}
-						target={token.href.startsWith('http://') || token.href.startsWith('https://')
-							? '_blank'
-							: undefined}
-						rel={token.href.startsWith('http://') || token.href.startsWith('https://')
-							? 'noreferrer'
-							: undefined}
-						title={token.href}
-						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
-					>
-						{token.label}
-					</a>
+					{#if token.href.startsWith('http://') || token.href.startsWith('https://')}
+						<button
+							type="button"
+							title={token.href}
+							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+							onclick={() => openExternalHref(token.href)}
+						>
+							{token.label}
+						</button>
+					{:else if token.href.startsWith('mailto:') || token.href.startsWith('tel:')}
+						<button
+							type="button"
+							title={token.href}
+							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+							onclick={() => followDirectHref(token.href)}
+						>
+							{token.label}
+						</button>
+					{:else}
+						<a
+							href={token.href}
+							rel="external"
+							title={token.href}
+							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+						>
+							{token.label}
+						</a>
+					{/if}
 				{:else if token.href.startsWith('/')}
 					{@const path = trimLocalPathFragment(token.href)}
 					{#if canOpenArtifactReference(path)}
 						<a
-							href={localPathHref(token.href)}
+							href={resolve(
+								`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(token.href))}`
+							)}
 							title={token.href}
 							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
 						>
@@ -946,7 +969,9 @@
 						</a>
 					{:else if canBrowseArtifactReference(path)}
 						<a
-							href={localPathBrowseHref(token.href)}
+							href={resolve(
+								`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(token.href))}`
+							)}
 							title={token.href}
 							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
 						>
@@ -971,7 +996,9 @@
 			{:else if token.type === 'localPath'}
 				{#if canOpenArtifactReference(token.path)}
 					<a
-						href={localPathHref(token.reference)}
+						href={resolve(
+							`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(token.reference))}`
+						)}
 						title={token.reference}
 						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
 					>
@@ -979,7 +1006,9 @@
 					</a>
 				{:else if canBrowseArtifactReference(token.path)}
 					<a
-						href={localPathBrowseHref(token.reference)}
+						href={resolve(
+							`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(token.reference))}`
+						)}
 						title={token.reference}
 						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
 					>
@@ -994,14 +1023,13 @@
 					</span>
 				{/if}
 			{:else}
-				<a
-					href={token.value}
-					target="_blank"
-					rel="noreferrer"
+				<button
+					type="button"
 					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700 bg-slate-950/80 px-1.5 py-0.5 align-baseline font-mono text-[0.84em] text-sky-300 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/80 hover:text-sky-200"
+					onclick={() => openExternalHref(token.value)}
 				>
 					{token.value}
-				</a>
+				</button>
 			{/if}
 		{/each}
 		{#if lineIndex < lines.length - 1}
@@ -1103,6 +1131,7 @@
 											{#if context}
 												<a
 													href={context.href}
+													rel="external"
 													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 												>
 													{context.actionLabel ?? 'Jump'}
@@ -1158,14 +1187,18 @@
 													</button>
 												{/if}
 												<a
-													href={localPathHref(reference.reference)}
+													href={resolve(
+														`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(reference.reference))}`
+													)}
 													class="rounded-full border border-emerald-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-emerald-200 uppercase transition hover:border-emerald-700/90 hover:text-emerald-100"
 												>
 													Download
 												</a>
 											{:else if canBrowseArtifactReference(reference.path)}
 												<a
-													href={localPathBrowseHref(reference.reference)}
+													href={resolve(
+														`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(reference.reference))}`
+													)}
 													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 												>
 													Browse
@@ -1179,6 +1212,7 @@
 											</span>
 											<a
 												href={reference.href}
+												rel="external"
 												class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 											>
 												Open
@@ -1189,14 +1223,13 @@
 											>
 												External
 											</span>
-											<a
-												href={reference.href}
-												target="_blank"
-												rel="noreferrer"
+											<button
+												type="button"
 												class="rounded-full border border-slate-700 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
+												onclick={() => openExternalHref(reference.href)}
 											>
 												Open
-											</a>
+											</button>
 										{/if}
 									</div>
 								</div>
@@ -1260,24 +1293,22 @@
 	bodyClass="space-y-4"
 	closeLabel="Close preview"
 >
-	{#snippet children()}
-		{#if previewState.status === 'loading'}
-			<p class="text-sm text-slate-300">Loading preview…</p>
-		{:else if previewState.status === 'error'}
-			<p class="text-sm text-amber-300">{previewState.errorMessage}</p>
-		{:else if previewState.kind === 'image' && previewState.content}
-			<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-				<img
-					src={previewState.content}
-					alt={previewState.label}
-					class="mx-auto max-h-[70vh] w-auto rounded-xl"
-				/>
-			</div>
-		{:else if previewState.kind === 'text'}
-			<pre
-				class="ui-wrap-anywhere overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm leading-7 whitespace-pre-wrap text-slate-200">{previewState.content}</pre>
-		{:else}
-			<p class="text-sm text-slate-400">No preview is available for this artifact.</p>
-		{/if}
-	{/snippet}
+	{#if previewState.status === 'loading'}
+		<p class="text-sm text-slate-300">Loading preview…</p>
+	{:else if previewState.status === 'error'}
+		<p class="text-sm text-amber-300">{previewState.errorMessage}</p>
+	{:else if previewState.kind === 'image' && previewState.content}
+		<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+			<img
+				src={previewState.content}
+				alt={previewState.label}
+				class="mx-auto max-h-[70vh] w-auto rounded-xl"
+			/>
+		</div>
+	{:else if previewState.kind === 'text'}
+		<pre
+			class="ui-wrap-anywhere overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm leading-7 whitespace-pre-wrap text-slate-200">{previewState.content}</pre>
+	{:else}
+		<p class="text-sm text-slate-400">No preview is available for this artifact.</p>
+	{/if}
 </AppDialog>

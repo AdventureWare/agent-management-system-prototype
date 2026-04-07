@@ -1,5 +1,4 @@
 <script lang="ts">
-	import AppButton from '$lib/components/AppButton.svelte';
 	import { Dialog } from '@skeletonlabs/skeleton-svelte';
 	import type { Snippet } from 'svelte';
 
@@ -51,8 +50,12 @@
 						{/if}
 					</div>
 
-					<Dialog.CloseTrigger aria-label={closeLabel}>
-						<AppButton ariaLabel={closeLabel} size="icon" variant="ghost">×</AppButton>
+					<Dialog.CloseTrigger
+						aria-label={closeLabel}
+						title={closeLabel}
+						class="ui-button ui-button-ghost ui-button-icon"
+					>
+						×
 					</Dialog.CloseTrigger>
 				</div>
 

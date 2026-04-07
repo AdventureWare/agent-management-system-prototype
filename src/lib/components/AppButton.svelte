@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
 
 	type ButtonVariant =
@@ -70,7 +71,7 @@
 {#if href}
 	<a
 		class={classes}
-		href={disabled ? undefined : href}
+		href={disabled ? undefined : resolve(href)}
 		aria-disabled={disabled ? 'true' : undefined}
 		tabindex={disabled ? -1 : undefined}
 		{target}

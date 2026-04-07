@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import type {
 		ArtifactBrowserData,
 		ArtifactDirectoryEntry,
@@ -10,7 +9,6 @@
 		browser?: ArtifactBrowserData | null;
 		emptyLabel?: string;
 	};
-
 	let { browser = null, emptyLabel = 'No files or folders found yet.' }: Props = $props();
 
 	function formatSize(sizeBytes: number | null) {
@@ -42,11 +40,7 @@
 	}
 
 	function downloadHref(path: string) {
-		return resolve(`/api/artifacts/file?path=${encodeURIComponent(path)}`);
-	}
-
-	function browseHref(path: string) {
-		return resolve(`/app/artifacts?path=${encodeURIComponent(path)}`);
+		return `/api/artifacts/file?path=${encodeURIComponent(path)}`;
 	}
 
 	function itemHref(item: ArtifactKnownOutput | ArtifactDirectoryEntry) {
@@ -55,6 +49,14 @@
 		}
 
 		return 'href' in item && item.href ? item.href : downloadHref(item.path);
+	}
+
+	function openExternalHref(href: string) {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		window.open(href, '_blank', 'noopener,noreferrer');
 	}
 
 	function rootStateLabel(browserData: ArtifactBrowserData) {
@@ -144,16 +146,32 @@
 								</p>
 							</div>
 							{#if itemHref(output)}
-								<a
-									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-									href={itemHref(output) || undefined}
-								>
-									Download
-								</a>
+								{#if itemHref(output)?.startsWith('http://') || itemHref(output)?.startsWith('https://')}
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+										type="button"
+										onclick={() => {
+											const href = itemHref(output);
+											if (href) openExternalHref(href);
+										}}
+									>
+										Download
+									</button>
+								{:else}
+									<a
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+										href={itemHref(output) ||
+											`/api/artifacts/file?path=${encodeURIComponent(output.path)}`}
+										rel="external"
+									>
+										Download
+									</a>
+								{/if}
 							{:else if output.kind === 'directory' && output.exists}
 								<a
 									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-									href={browseHref(output.path)}
+									href={`/app/artifacts?path=${encodeURIComponent(output.path)}`}
+									rel="external"
 								>
 									Browse
 								</a>
@@ -197,16 +215,32 @@
 								</p>
 							</div>
 							{#if itemHref(entry)}
-								<a
-									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-									href={itemHref(entry) || undefined}
-								>
-									Download
-								</a>
+								{#if itemHref(entry)?.startsWith('http://') || itemHref(entry)?.startsWith('https://')}
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+										type="button"
+										onclick={() => {
+											const href = itemHref(entry);
+											if (href) openExternalHref(href);
+										}}
+									>
+										Download
+									</button>
+								{:else}
+									<a
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+										href={itemHref(entry) ||
+											`/api/artifacts/file?path=${encodeURIComponent(entry.path)}`}
+										rel="external"
+									>
+										Download
+									</a>
+								{/if}
 							{:else if entry.kind === 'directory'}
 								<a
 									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-									href={browseHref(entry.path)}
+									href={`/app/artifacts?path=${encodeURIComponent(entry.path)}`}
+									rel="external"
 								>
 									Browse
 								</a>

@@ -38,8 +38,9 @@
 	let hasActiveRecentRun = $derived(data.recentRuns.some(runIsActive));
 
 	$effect(() => {
-		props.data;
-		refreshedData = null;
+		if (props.data) {
+			refreshedData = null;
+		}
 	});
 
 	$effect(() => {

@@ -1,13 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
-import {
-	AREA_OPTIONS,
-	PRIORITY_OPTIONS,
-	TASK_APPROVAL_MODE_OPTIONS,
-	TASK_RISK_LEVEL_OPTIONS,
-	TASK_STATUS_OPTIONS
-} from '$lib/types/control-plane';
+import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
 	createTask,
@@ -31,92 +24,19 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
+import { isValidTaskDate, readCreateTaskForm, readCreateTaskPrefill } from '$lib/server/task-form';
 import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
+import { buildTaskGoalOptions } from '$lib/server/task-goal-options';
 import {
 	applyGoalRelationships,
 	getGoalLinkedProjectIds,
 	getGoalLinkedTaskIds
 } from '$lib/server/goal-relationships';
-import type { ControlPlaneData, Goal, Project, Role, Task } from '$lib/types/control-plane';
-
-function readTaskForm(form: FormData) {
-	const parseNameList = (value: FormDataEntryValue | null) => [
-		...new Set(
-			(value?.toString() ?? '')
-				.split(',')
-				.map((entry) => entry.trim())
-				.filter(Boolean)
-		)
-	];
-	const parseIdList = (values: FormDataEntryValue[]) => [
-		...new Set(values.map((value) => value.toString().trim()).filter(Boolean))
-	];
-	const parseOption = <T extends readonly string[]>(
-		options: T,
-		value: FormDataEntryValue | null,
-		fallback: T[number]
-	): T[number] => {
-		const normalized = value?.toString().trim() ?? '';
-		return options.includes(normalized as T[number]) ? (normalized as T[number]) : fallback;
-	};
-	const parseBoolean = (value: FormDataEntryValue | null, fallback: boolean) => {
-		const normalized = value?.toString().trim().toLowerCase() ?? '';
-
-		if (normalized === 'true') {
-			return true;
-		}
-
-		if (normalized === 'false') {
-			return false;
-		}
-
-		return fallback;
-	};
-	const parseOptionalSandbox = (value: FormDataEntryValue | null): AgentSandbox | null => {
-		const normalized = value?.toString().trim() ?? '';
-		return AGENT_SANDBOX_OPTIONS.includes(normalized as AgentSandbox)
-			? (normalized as AgentSandbox)
-			: null;
-	};
-
-	return {
-		name: form.get('name')?.toString().trim() ?? '',
-		instructions: form.get('instructions')?.toString().trim() ?? '',
-		successCriteria: form.get('successCriteria')?.toString().trim() ?? '',
-		readyCondition: form.get('readyCondition')?.toString().trim() ?? '',
-		expectedOutcome: form.get('expectedOutcome')?.toString().trim() ?? '',
-		projectId: form.get('projectId')?.toString().trim() ?? '',
-		parentTaskId: form.get('parentTaskId')?.toString().trim() ?? '',
-		delegationObjective: form.get('delegationObjective')?.toString().trim() ?? '',
-		delegationInputContext: form.get('delegationInputContext')?.toString().trim() ?? '',
-		delegationExpectedDeliverable:
-			form.get('delegationExpectedDeliverable')?.toString().trim() ?? '',
-		delegationDoneCondition: form.get('delegationDoneCondition')?.toString().trim() ?? '',
-		delegationIntegrationNotes: form.get('delegationIntegrationNotes')?.toString().trim() ?? '',
-		assigneeWorkerId: form.get('assigneeWorkerId')?.toString().trim() ?? '',
-		targetDate: form.get('targetDate')?.toString().trim() ?? '',
-		goalId: form.get('goalId')?.toString().trim() ?? '',
-		area: parseOption(AREA_OPTIONS, form.get('area'), 'product'),
-		priority: parseOption(PRIORITY_OPTIONS, form.get('priority'), 'medium'),
-		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, form.get('riskLevel'), 'medium'),
-		approvalMode: parseOption(TASK_APPROVAL_MODE_OPTIONS, form.get('approvalMode'), 'none'),
-		requiredThreadSandbox: parseOptionalSandbox(form.get('requiredThreadSandbox')),
-		requiresReview: parseBoolean(form.get('requiresReview'), true),
-		desiredRoleId: form.get('desiredRoleId')?.toString().trim() ?? '',
-		blockedReason: form.get('blockedReason')?.toString().trim() ?? '',
-		dependencyTaskIds: parseIdList(form.getAll('dependencyTaskIds')),
-		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
-		requiredToolNames: parseNameList(form.get('requiredToolNames'))
-	};
-}
-
-function isValidDate(value: string) {
-	return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
+import type { ControlPlaneData, Role, Task } from '$lib/types/control-plane';
 
 function readCreateTaskSubmitMode(form: FormData) {
 	return form.get('submitMode')?.toString() === 'createAndRun' ? 'createAndRun' : 'create';
@@ -175,83 +95,6 @@ function getDefaultDraftRole(data: ControlPlaneData): Role | null {
 	return data.roles.find((role) => role.id === 'role_coordinator') ?? data.roles[0] ?? null;
 }
 
-function getDefaultDraftArtifactPath(project: Project) {
-	return project.defaultArtifactRoot || project.projectRootFolder || '';
-}
-
-const ROOT_GOAL_PARENT_KEY = '__root__';
-
-function buildTaskGoalOptions(goals: Goal[]) {
-	const goalIds = new Set(goals.map((goal) => goal.id));
-	const childrenByParent = new Map<string, Goal[]>();
-
-	for (const goal of goals) {
-		const parentKey =
-			goal.parentGoalId && goalIds.has(goal.parentGoalId)
-				? goal.parentGoalId
-				: ROOT_GOAL_PARENT_KEY;
-		const siblings = childrenByParent.get(parentKey) ?? [];
-		siblings.push(goal);
-		childrenByParent.set(parentKey, siblings);
-	}
-
-	for (const siblings of childrenByParent.values()) {
-		siblings.sort((left, right) => left.name.localeCompare(right.name));
-	}
-
-	const orderedGoals: Array<{
-		id: string;
-		name: string;
-		label: string;
-		depth: number;
-		parentGoalId: string | null;
-		status: Goal['status'];
-		area: Goal['area'];
-	}> = [];
-	const visitedGoalIds = new Set<string>();
-
-	function visitChildren(parentKey: string, depth: number) {
-		for (const goal of childrenByParent.get(parentKey) ?? []) {
-			if (visitedGoalIds.has(goal.id)) {
-				continue;
-			}
-
-			visitedGoalIds.add(goal.id);
-			orderedGoals.push({
-				id: goal.id,
-				name: goal.name,
-				label: `${depth > 0 ? `${'  '.repeat(depth)}- ` : ''}${goal.name}`,
-				depth,
-				parentGoalId: goal.parentGoalId ?? null,
-				status: goal.status,
-				area: goal.area
-			});
-			visitChildren(goal.id, depth + 1);
-		}
-	}
-
-	visitChildren(ROOT_GOAL_PARENT_KEY, 0);
-
-	for (const goal of [...goals].sort((left, right) => left.name.localeCompare(right.name))) {
-		if (visitedGoalIds.has(goal.id)) {
-			continue;
-		}
-
-		orderedGoals.push({
-			id: goal.id,
-			name: goal.name,
-			label: goal.name,
-			depth: 0,
-			parentGoalId: goal.parentGoalId ?? null,
-			status: goal.status,
-			area: goal.area
-		});
-		visitChildren(goal.id, 1);
-	}
-
-	return orderedGoals;
-}
-
 function prependCreatedTask(data: ControlPlaneData, task: Task, goalId: string) {
 	const nextData = {
 		...data,
@@ -275,77 +118,6 @@ function prependCreatedTask(data: ControlPlaneData, task: Task, goalId: string) 
 		projectIds: getGoalLinkedProjectIds(nextData, goal),
 		taskIds: getGoalLinkedTaskIds(nextData, goal)
 	});
-}
-
-function readCreateTaskPrefill(url: URL) {
-	const open = url.searchParams.get('create') === '1';
-	const parseOption = <T extends readonly string[]>(
-		options: T,
-		value: string | null,
-		fallback: T[number]
-	): T[number] => {
-		const normalized = value?.trim() ?? '';
-		return options.includes(normalized as T[number]) ? (normalized as T[number]) : fallback;
-	};
-	const parseBoolean = (value: string | null, fallback: boolean) => {
-		const normalized = value?.trim().toLowerCase() ?? '';
-
-		if (normalized === 'true') {
-			return true;
-		}
-
-		if (normalized === 'false') {
-			return false;
-		}
-
-		return fallback;
-	};
-	const parseQueryIdList = (value: string | null) => [
-		...new Set(
-			(value?.trim() ?? '')
-				.split(',')
-				.map((entry) => entry.trim())
-				.filter(Boolean)
-		)
-	];
-
-	return {
-		open,
-		projectId: url.searchParams.get('projectId')?.trim() ?? '',
-		parentTaskId: url.searchParams.get('parentTaskId')?.trim() ?? '',
-		delegationObjective: url.searchParams.get('delegationObjective')?.trim() ?? '',
-		delegationInputContext: url.searchParams.get('delegationInputContext')?.trim() ?? '',
-		delegationExpectedDeliverable:
-			url.searchParams.get('delegationExpectedDeliverable')?.trim() ?? '',
-		delegationDoneCondition: url.searchParams.get('delegationDoneCondition')?.trim() ?? '',
-		delegationIntegrationNotes: url.searchParams.get('delegationIntegrationNotes')?.trim() ?? '',
-		name: url.searchParams.get('name')?.trim() ?? '',
-		instructions: url.searchParams.get('instructions')?.trim() ?? '',
-		successCriteria: url.searchParams.get('successCriteria')?.trim() ?? '',
-		readyCondition: url.searchParams.get('readyCondition')?.trim() ?? '',
-		expectedOutcome: url.searchParams.get('expectedOutcome')?.trim() ?? '',
-		requiredThreadSandbox: url.searchParams.get('requiredThreadSandbox')?.trim() ?? '',
-		assigneeWorkerId: url.searchParams.get('assigneeWorkerId')?.trim() ?? '',
-		targetDate: (() => {
-			const value = url.searchParams.get('targetDate')?.trim() ?? '';
-			return value && isValidDate(value) ? value : '';
-		})(),
-		goalId: url.searchParams.get('goalId')?.trim() ?? '',
-		area: parseOption(AREA_OPTIONS, url.searchParams.get('area'), 'product'),
-		priority: parseOption(PRIORITY_OPTIONS, url.searchParams.get('priority'), 'medium'),
-		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, url.searchParams.get('riskLevel'), 'medium'),
-		approvalMode: parseOption(
-			TASK_APPROVAL_MODE_OPTIONS,
-			url.searchParams.get('approvalMode'),
-			'none'
-		),
-		requiresReview: parseBoolean(url.searchParams.get('requiresReview'), true),
-		desiredRoleId: url.searchParams.get('desiredRoleId')?.trim() ?? '',
-		blockedReason: url.searchParams.get('blockedReason')?.trim() ?? '',
-		dependencyTaskIds: parseQueryIdList(url.searchParams.get('dependencyTaskIds')),
-		requiredCapabilityNames: url.searchParams.get('requiredCapabilityNames')?.trim() ?? '',
-		requiredToolNames: url.searchParams.get('requiredToolNames')?.trim() ?? ''
-	};
 }
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -432,7 +204,7 @@ export const actions: Actions = {
 			dependencyTaskIds,
 			requiredCapabilityNames,
 			requiredToolNames
-		} = readTaskForm(form);
+		} = readCreateTaskForm(form);
 		const submitMode = readCreateTaskSubmitMode(form);
 		const uploads = readTaskAttachments(form);
 		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> = {
@@ -472,7 +244,7 @@ export const actions: Actions = {
 			});
 		}
 
-		if (targetDate && !isValidDate(targetDate)) {
+		if (targetDate && !isValidTaskDate(targetDate)) {
 			return failTaskCreate(400, {
 				message: 'Target date must use YYYY-MM-DD format.',
 				...failureContext
@@ -731,7 +503,7 @@ export const actions: Actions = {
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
 		const { name, instructions, projectId, assigneeWorkerId, targetDate, requiredThreadSandbox } =
-			readTaskForm(form);
+			readCreateTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
@@ -743,7 +515,7 @@ export const actions: Actions = {
 			});
 		}
 
-		if (targetDate && !isValidDate(targetDate)) {
+		if (targetDate && !isValidTaskDate(targetDate)) {
 			return fail(400, { message: 'Target date must use YYYY-MM-DD format.' });
 		}
 
@@ -806,7 +578,7 @@ export const actions: Actions = {
 	launchTaskSession: async ({ request }) => {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
-		const { name, instructions, projectId, assigneeWorkerId } = readTaskForm(form);
+		const { name, instructions, projectId, assigneeWorkerId } = readCreateTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });

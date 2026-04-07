@@ -69,6 +69,8 @@ export type AgentRun = {
 	mode: 'start' | 'message';
 	prompt: string;
 	requestedThreadId: string | null;
+	sourceAgentThreadId?: string | null;
+	sourceAgentThreadName?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	logPath: string;

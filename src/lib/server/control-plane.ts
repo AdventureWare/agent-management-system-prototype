@@ -377,14 +377,6 @@ function normalizePositiveNumber(value: unknown) {
 	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function normalizeNonNegativeInteger(value: unknown, fallback = 0) {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-		return fallback;
-	}
-
-	return Math.round(value);
-}
-
 function normalizeProvider(provider: LegacyProvider): Provider {
 	const providerKindValue = typeof provider.kind === 'string' ? provider.kind : '';
 	const kind: ProviderKind = isProviderKind(providerKindValue) ? providerKindValue : 'cloud';

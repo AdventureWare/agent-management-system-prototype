@@ -1,23 +1,31 @@
 import { json } from '@sveltejs/kit';
-import { sendAgentThreadMessage } from '$lib/server/agent-threads';
+import { contactAgentThread, sendAgentThreadMessage } from '$lib/server/agent-threads';
 
 export const POST = async ({ params, request }) => {
 	const contentType = request.headers.get('content-type') ?? '';
 	let prompt = '';
 	let attachments: File[] = [];
+	let sourceThreadId = '';
 
 	if (contentType.includes('application/json')) {
 		const body = (await request.json()) as {
 			prompt?: string;
+			sourceThreadId?: string;
 		};
 
 		prompt = body.prompt?.trim() ?? '';
+		sourceThreadId = body.sourceThreadId?.trim() ?? '';
 	} else {
 		const form = await request.formData();
 		prompt = form.get('prompt')?.toString().trim() ?? '';
+		sourceThreadId = form.get('sourceThreadId')?.toString().trim() ?? '';
 		attachments = form
 			.getAll('attachments')
 			.filter((value): value is File => value instanceof File && value.size > 0);
+	}
+
+	if (sourceThreadId && !prompt) {
+		return json({ error: 'prompt is required when contacting another thread.' }, { status: 400 });
 	}
 
 	if (!prompt && attachments.length === 0) {
@@ -25,7 +33,13 @@ export const POST = async ({ params, request }) => {
 	}
 
 	try {
-		const result = await sendAgentThreadMessage(params.threadId, { prompt, attachments });
+		const result = sourceThreadId
+			? await contactAgentThread(sourceThreadId, {
+					targetAgentThreadId: params.threadId,
+					prompt,
+					attachments
+				})
+			: await sendAgentThreadMessage(params.threadId, { prompt, attachments });
 		return json(
 			{
 				...result,

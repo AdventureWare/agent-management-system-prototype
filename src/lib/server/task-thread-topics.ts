@@ -580,7 +580,6 @@ export function deriveThreadCategorization(input: ThreadTopicInput) {
 	for (const task of input.relatedTasks) {
 		const titleWeight = task.isPrimary ? 5 : 3;
 		const summaryWeight = task.isPrimary ? 3 : 2;
-		const structuredWeight = task.isPrimary ? 4 : 2;
 
 		sources.push({ text: task.title, weight: titleWeight });
 		sources.push({ text: task.summary, weight: summaryWeight });

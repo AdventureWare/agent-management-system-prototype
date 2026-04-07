@@ -73,11 +73,23 @@
 		actionLabel?: string;
 	};
 
+	type ThreadContactTarget = {
+		id: string;
+		name: string;
+		threadState: AgentThreadDetail['threadState'];
+		latestRunStatus: AgentThreadDetail['latestRunStatus'];
+		threadSummary: string;
+		relatedTaskTitles: string[];
+		canContact: boolean;
+		disabledReason: string;
+	};
+
 	let {
 		thread: sessionProp,
 		sandboxOptions,
 		threadFocusTask = null,
 		taskResponseAction = null,
+		threadContactTargets = [],
 		responseContextArtifacts = [],
 		form = null,
 		backHref = resolve('/app/threads')
@@ -86,6 +98,7 @@
 		sandboxOptions: readonly string[];
 		threadFocusTask?: ThreadFocusTask | null;
 		taskResponseAction?: TaskResponseAction | null;
+		threadContactTargets?: ThreadContactTarget[];
 		responseContextArtifacts?: ResponseContextArtifact[];
 		form?: {
 			ok?: boolean;
@@ -113,6 +126,11 @@
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
+	let contactTargetThreadId = $state('');
+	let contactPrompt = $state('');
+	let contactState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(
+		null
+	);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	let threadDetailRoot = $state<HTMLElement | null>(null);
 	let threadHeaderShrinkProgress = $state(0);
@@ -177,6 +195,12 @@
 	let runNumberById = $derived.by(
 		() => new Map(chronologicalRuns.map((run, index) => [run.id, index + 1]))
 	);
+	let contactTargetById = $derived.by<Map<string, ThreadContactTarget>>(
+		() =>
+			new Map(
+				threadContactTargets.map((target: ThreadContactTarget) => [target.id, target] as const)
+			)
+	);
 	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
 	let combinedResponseContextArtifacts = $derived.by(() => [
@@ -191,6 +215,9 @@
 	]);
 	let latestContextRun = $derived.by(() => session?.latestRun ?? session?.runs[0] ?? null);
 	let latestInstructionNeedsClamp = $derived((latestContextRun?.prompt?.trim().length ?? 0) > 180);
+	let selectedContactTarget = $derived.by<ThreadContactTarget | null>(
+		() => contactTargetById.get(contactTargetThreadId) ?? null
+	);
 	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
 		if (threadFocusTask) {
 			return threadFocusTask;
@@ -375,6 +402,22 @@
 			conversationHistoryExpanded = false;
 			expandedConversationRunIds = [];
 			previousConversationThreadId = currentThreadId;
+		}
+	});
+
+	$effect(() => {
+		const preferredTarget =
+			threadContactTargets.find((target: ThreadContactTarget) => target.canContact) ??
+			threadContactTargets[0] ??
+			null;
+
+		if (!preferredTarget) {
+			contactTargetThreadId = '';
+			return;
+		}
+
+		if (!contactTargetById.has(contactTargetThreadId)) {
+			contactTargetThreadId = preferredTarget.id;
 		}
 	});
 
@@ -712,6 +755,83 @@
 		}
 	}
 
+	async function submitThreadContact(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (!session || !selectedContactTarget) {
+			return;
+		}
+
+		const prompt = contactPrompt.trim();
+
+		if (!prompt) {
+			contactState = {
+				status: 'error',
+				message: 'Prompt is required.'
+			};
+			return;
+		}
+
+		if (!selectedContactTarget.canContact) {
+			contactState = {
+				status: 'error',
+				message:
+					selectedContactTarget.disabledReason || 'This thread cannot accept a contact request.'
+			};
+			return;
+		}
+
+		if (contactState?.status === 'sending') {
+			return;
+		}
+
+		contactState = {
+			status: 'sending',
+			message: 'Queueing thread contact...'
+		};
+
+		try {
+			const response = await fetch(
+				resolve(`/api/agents/threads/${selectedContactTarget.id}/messages`),
+				{
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json'
+					},
+					body: JSON.stringify({
+						prompt,
+						sourceThreadId: session.id
+					})
+				}
+			);
+			const payload = (await response.json()) as { error?: string };
+
+			if (!response.ok) {
+				throw new Error(payload.error ?? 'Could not contact the selected thread.');
+			}
+
+			contactPrompt = '';
+			contactState = {
+				status: 'success',
+				message: `Contact request queued for ${selectedContactTarget.name}.`
+			};
+			pageNotice = {
+				tone: 'success',
+				message: `Queued a cross-thread contact request for ${selectedContactTarget.name}.`
+			};
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Could not contact the selected thread.';
+			contactState = {
+				status: 'error',
+				message
+			};
+			pageNotice = {
+				tone: 'error',
+				message
+			};
+		}
+	}
+
 	function selectRun(runId: string) {
 		selectedRunId = runId;
 	}
@@ -796,6 +916,10 @@
 
 	function runModeLabel(run: AgentRunDetail) {
 		return run.mode === 'message' ? 'Follow-up' : 'Start';
+	}
+
+	function sourceThreadLabel(run: AgentRunDetail) {
+		return run.sourceAgentThreadName ?? run.sourceAgentThreadId ?? '';
 	}
 
 	function runQueuedLabel(run: AgentRunDetail) {
@@ -1053,6 +1177,17 @@
 			</a>
 		</div>
 	</div>
+{/snippet}
+
+{#snippet threadContactBadge(run: AgentRunDetail)}
+	{#if run.sourceAgentThreadId}
+		<a
+			class="inline-flex max-w-full items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-amber-200"
+			href={resolve(`/app/threads/${run.sourceAgentThreadId}`)}
+		>
+			Contact from {sourceThreadLabel(run)}
+		</a>
+	{/if}
 {/snippet}
 
 {#snippet sessionStatus(detail: AgentThreadDetail, showFocusTask: boolean)}
@@ -1379,9 +1514,12 @@
 												class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
 											>
 												<div class="min-w-0">
-													<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-														Latest instruction
-													</p>
+													<div class="flex flex-wrap items-center gap-2">
+														<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+															Latest instruction
+														</p>
+														{@render threadContactBadge(latestContextRun)}
+													</div>
 													{#if latestInstructionExpanded}
 														<div class="mt-3">
 															<ThreadMessageContent text={latestContextRun.prompt} tone="muted" />
@@ -1514,6 +1652,12 @@
 									value={selectedHistoricalRun.requestedThreadId ?? 'Start a new thread'}
 								/>
 							</div>
+
+							{#if selectedHistoricalRun.sourceAgentThreadId}
+								<div class="flex flex-wrap items-center gap-2">
+									{@render threadContactBadge(selectedHistoricalRun)}
+								</div>
+							{/if}
 
 							<div class="space-y-3">
 								<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
@@ -1663,6 +1807,7 @@
 									</div>
 
 									<div class="mt-3 flex flex-wrap items-center gap-2">
+										{@render threadContactBadge(run)}
 										<AppButton
 											size="sm"
 											type="button"
@@ -1923,6 +2068,105 @@
 										</AppButton>
 									</form>
 								</div>
+							</DetailSection>
+
+							<DetailSection
+								eyebrow="Coordination"
+								title="Contact another thread"
+								description="Use this when this thread needs instructions, context, or an assignment from another thread. The selected thread receives a structured request with this thread’s name, linked task context, summary, and latest saved response."
+								bodyClass="space-y-4"
+							>
+								{#if threadContactTargets.length === 0}
+									<p
+										class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
+									>
+										No other threads are available yet. Start or import another thread before using
+										cross-thread contact.
+									</p>
+								{:else}
+									<form class="space-y-3" onsubmit={submitThreadContact}>
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Target thread
+											</span>
+											<select
+												bind:value={contactTargetThreadId}
+												class="select text-white"
+												disabled={contactState?.status === 'sending'}
+											>
+												{#each threadContactTargets as target (target.id)}
+													<option value={target.id}>{target.name}</option>
+												{/each}
+											</select>
+										</label>
+
+										{#if selectedContactTarget}
+											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<div class="flex flex-wrap items-center gap-2">
+													<span
+														class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(selectedContactTarget.threadState)}`}
+													>
+														{formatThreadStateLabel(selectedContactTarget.threadState)}
+													</span>
+													<span
+														class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(selectedContactTarget.latestRunStatus)}`}
+													>
+														latest run {selectedContactTarget.latestRunStatus}
+													</span>
+												</div>
+												<p class="ui-wrap-anywhere mt-3 text-sm text-slate-300">
+													{selectedContactTarget.threadSummary}
+												</p>
+												{#if selectedContactTarget.relatedTaskTitles.length > 0}
+													<p class="ui-wrap-anywhere mt-3 text-xs text-slate-500">
+														Linked tasks: {selectedContactTarget.relatedTaskTitles.join(', ')}
+													</p>
+												{/if}
+												{#if selectedContactTarget.disabledReason}
+													<p class="ui-wrap-anywhere mt-3 text-sm text-amber-200/90">
+														{selectedContactTarget.disabledReason}
+													</p>
+												{/if}
+											</div>
+										{/if}
+
+										<textarea
+											bind:value={contactPrompt}
+											class="min-h-32 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
+											placeholder="Ask another thread for the instruction, context, or assignment this thread needs."
+											disabled={!selectedContactTarget?.canContact ||
+												contactState?.status === 'sending'}
+										></textarea>
+
+										{#if contactState}
+											<p
+												class={[
+													'ui-wrap-anywhere text-sm',
+													contactState.status === 'error'
+														? 'text-rose-300'
+														: contactState.status === 'success'
+															? 'text-emerald-300'
+															: 'text-sky-300'
+												]}
+											>
+												{contactState.message}
+											</p>
+										{/if}
+
+										<AppButton
+											class="w-full justify-center sm:w-[15.5rem]"
+											type="submit"
+											variant="accent"
+											disabled={!selectedContactTarget?.canContact ||
+												!contactPrompt.trim() ||
+												contactState?.status === 'sending'}
+										>
+											{contactState?.status === 'sending'
+												? 'Queueing...'
+												: 'Contact selected thread'}
+										</AppButton>
+									</form>
+								{/if}
 							</DetailSection>
 
 							{#if taskResponseAction}

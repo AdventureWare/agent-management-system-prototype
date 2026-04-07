@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentRunDetail, AgentThreadDetail } from '$lib/types/agent-thread';
 import {
+	buildAgentThreadContactPrompt,
 	deriveRunState,
 	extractThreadIdFromOutputLine,
 	isAbandonedThreadDetail,
@@ -514,6 +515,116 @@ describe('agent session helpers', () => {
 				]
 			})
 		).toContain('Path: /tmp/session/attachments/brief.md');
+	});
+
+	it('builds structured cross-thread contact prompts with source context', () => {
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.'
+			})
+		).toContain('Source thread: UI implementation thread (thread_source)');
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.'
+			})
+		).toContain('Linked task context: Implement cross-thread messaging');
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.'
+			})
+		).toContain(
+			'Requested help:\nNeed assignment guidance for which thread should own outbound coordination.'
+		);
 	});
 
 	it('hides abandoned managed sessions that never produced a real thread', () => {

@@ -31,7 +31,8 @@
 		"db:migrate": "node scripts/app-db.mjs migrate",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"test:unit": "vitest",
+		"test:unit": "vitest --project server",
+		"test:unit:browser": "VITEST_BROWSER=1 vitest --project client",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
 		"test:e2e": "playwright test"
 	},

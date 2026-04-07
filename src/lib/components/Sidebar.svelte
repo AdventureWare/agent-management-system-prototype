@@ -20,9 +20,8 @@
 	} from '@lucide/svelte';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
 
-	let { children, operatorAuthEnabled = false } = $props<{
+	let { children } = $props<{
 		children?: import('svelte').Snippet;
-		operatorAuthEnabled?: boolean;
 	}>();
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {

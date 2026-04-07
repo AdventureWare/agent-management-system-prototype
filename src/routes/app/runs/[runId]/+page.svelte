@@ -36,8 +36,9 @@
 	});
 
 	$effect(() => {
-		props.data;
-		refreshedData = null;
+		if (props.data) {
+			refreshedData = null;
+		}
 	});
 
 	$effect(() => {

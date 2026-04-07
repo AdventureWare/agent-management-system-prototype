@@ -398,7 +398,6 @@
 			staleFilterCounts
 		};
 	});
-	let filteredTasks = $derived(taskCollections.filteredTasks);
 	let activeTasks = $derived(taskCollections.activeTasks);
 	let completedTasks = $derived(taskCollections.completedTasks);
 	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);

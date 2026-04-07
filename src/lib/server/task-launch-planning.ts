@@ -1,0 +1,402 @@
+import {
+	createRun,
+	getPendingApprovalForTask,
+	resolveThreadSandbox,
+	selectExecutionProvider,
+	updateControlPlane
+} from '$lib/server/control-plane';
+import {
+	getAgentThread,
+	sendAgentThreadMessage,
+	startAgentThread
+} from '$lib/server/agent-threads';
+import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
+import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
+import {
+	buildTaskThreadName,
+	buildTaskThreadPrompt,
+	buildPromptDigest
+} from '$lib/server/task-threads';
+import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
+import { isValidTaskDate, type TaskDetailFormInput } from '$lib/server/task-form';
+import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';
+import type { AgentSandbox } from '$lib/types/agent-thread';
+
+export class TaskLaunchPlanError extends Error {
+	status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.status = status;
+	}
+}
+
+export type TaskLaunchPlan = {
+	task: Task;
+	project: Project;
+	effectiveGoalId: string;
+	effectiveName: string;
+	effectiveInstructions: string;
+	effectiveSuccessCriteria: string;
+	effectiveReadyCondition: string;
+	effectiveExpectedOutcome: string;
+	effectiveDelegationPacket: Task['delegationPacket'] | null;
+	effectivePriority: Task['priority'];
+	effectiveRiskLevel: Task['riskLevel'];
+	effectiveApprovalMode: Task['approvalMode'];
+	effectiveRequiredThreadSandbox: AgentSandbox | null;
+	effectiveRequiresReview: boolean;
+	effectiveDesiredRoleId: string;
+	assigneeWorker: Worker | null;
+	effectiveWorker: Worker | null;
+	effectiveRequiredCapabilityNames: string[];
+	effectiveRequiredToolNames: string[];
+	effectiveDependencyTaskIds: string[];
+	effectiveTargetDate: string | null;
+	provider: ControlPlaneData['providers'][number] | null;
+	prompt: string;
+	retrievedKnowledgeItems: Awaited<ReturnType<typeof loadRelevantSelfImprovementKnowledgeItems>>;
+	compatibleAssignedThread: Awaited<ReturnType<typeof getAgentThread>> | null;
+	compatibleLatestRunThread: Awaited<ReturnType<typeof getAgentThread>> | null;
+};
+
+async function loadTaskRetrievedKnowledge(task: Task, project: Project | null) {
+	return loadRelevantSelfImprovementKnowledgeItems({
+		task,
+		project,
+		limit: 3
+	});
+}
+
+function selectTaskThreadForSandbox(
+	thread: Awaited<ReturnType<typeof getAgentThread>> | null,
+	requiredSandbox: AgentSandbox | null
+) {
+	if (!thread) {
+		return null;
+	}
+
+	if (requiredSandbox && thread.sandbox !== requiredSandbox) {
+		return null;
+	}
+
+	return thread;
+}
+
+export async function buildTaskLaunchPlan(
+	current: ControlPlaneData,
+	task: Task,
+	input: TaskDetailFormInput
+): Promise<TaskLaunchPlan> {
+	const effectiveName = input.name || task.title;
+	const effectiveInstructions = input.instructions || task.summary;
+	const effectiveSuccessCriteria = input.successCriteria;
+	const effectiveReadyCondition = input.readyCondition;
+	const effectiveExpectedOutcome = input.expectedOutcome;
+	const effectiveDelegationPacket =
+		task.parentTaskId && input.hasDelegationPacketFields
+			? {
+					objective: input.delegationObjective,
+					inputContext: input.delegationInputContext,
+					expectedDeliverable: input.delegationExpectedDeliverable,
+					doneCondition: input.delegationDoneCondition,
+					integrationNotes: input.delegationIntegrationNotes
+				}
+			: (task.delegationPacket ?? null);
+	const effectiveProjectId = input.projectId || task.projectId;
+	const effectivePriority = input.hasPriority ? input.priority : task.priority;
+	const effectiveRiskLevel = input.hasRiskLevel ? input.riskLevel : task.riskLevel;
+	const effectiveApprovalMode = input.hasApprovalMode ? input.approvalMode : task.approvalMode;
+	const effectiveRequiredThreadSandbox = input.hasRequiredThreadSandbox
+		? input.requiredThreadSandbox
+		: (task.requiredThreadSandbox ?? null);
+	const effectiveRequiresReview = input.hasRequiresReview
+		? input.requiresReview
+		: task.requiresReview;
+	const selectedGoal = input.goalId
+		? (current.goals.find((candidate) => candidate.id === input.goalId) ?? null)
+		: null;
+	const effectiveGoalId = input.hasGoalId ? (selectedGoal?.id ?? '') : task.goalId;
+	const selectedDesiredRole = input.desiredRoleId
+		? (current.roles.find((candidate) => candidate.id === input.desiredRoleId) ?? null)
+		: null;
+	const effectiveDesiredRoleId =
+		input.hasDesiredRoleId && (input.desiredRoleId === '' || selectedDesiredRole)
+			? input.desiredRoleId
+			: task.desiredRoleId;
+	const assigneeWorker = input.assigneeWorkerId
+		? (current.workers.find((candidate) => candidate.id === input.assigneeWorkerId) ?? null)
+		: null;
+	const effectiveWorker =
+		(input.hasAssigneeWorkerId ? assigneeWorker : null) ??
+		(task.assigneeWorkerId
+			? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+			: null);
+	const effectiveRequiredCapabilityNames = input.hasRequiredCapabilityNames
+		? input.requiredCapabilityNames
+		: (task.requiredCapabilityNames ?? []);
+	const effectiveRequiredToolNames = input.hasRequiredToolNames
+		? input.requiredToolNames
+		: (task.requiredToolNames ?? []);
+	const effectiveDependencyTaskIds = input.hasDependencyTaskSelection
+		? input.dependencyTaskIds
+		: task.dependencyTaskIds;
+	const effectiveTargetDate = input.hasTargetDate
+		? input.targetDate || null
+		: (task.targetDate ?? null);
+	const project = current.projects.find((candidate) => candidate.id === effectiveProjectId) ?? null;
+
+	if (!project) {
+		throw new TaskLaunchPlanError(400, 'Task project not found.');
+	}
+
+	if (input.goalId && !selectedGoal) {
+		throw new TaskLaunchPlanError(400, 'Goal not found.');
+	}
+
+	if (input.assigneeWorkerId && !assigneeWorker) {
+		throw new TaskLaunchPlanError(400, 'Worker not found.');
+	}
+
+	if (input.hasDesiredRoleId && input.desiredRoleId && !selectedDesiredRole) {
+		throw new TaskLaunchPlanError(400, 'Desired role not found.');
+	}
+
+	const invalidDependencyIds = effectiveDependencyTaskIds.filter(
+		(dependencyTaskId) =>
+			dependencyTaskId === task.id ||
+			!current.tasks.some((candidate) => candidate.id === dependencyTaskId)
+	);
+
+	if (invalidDependencyIds.length > 0) {
+		throw new TaskLaunchPlanError(
+			400,
+			'One or more selected dependencies are no longer available.'
+		);
+	}
+
+	if (effectiveTargetDate && !isValidTaskDate(effectiveTargetDate)) {
+		throw new TaskLaunchPlanError(400, 'Target date must use YYYY-MM-DD format.');
+	}
+
+	if (!project.projectRootFolder) {
+		throw new TaskLaunchPlanError(
+			400,
+			'This task cannot launch a work thread until its project has a root folder.'
+		);
+	}
+
+	if (getPendingApprovalForTask(current, task.id)?.mode === 'before_run') {
+		throw new TaskLaunchPlanError(
+			409,
+			'This task is waiting on before-run approval before a work thread can start.'
+		);
+	}
+
+	const taskKnowledge = await loadTaskRetrievedKnowledge(
+		{
+			...task,
+			title: effectiveName,
+			summary: effectiveInstructions,
+			projectId: effectiveProjectId
+		},
+		project
+	);
+
+	const prompt = buildTaskThreadPrompt({
+		taskName: effectiveName,
+		taskInstructions: effectiveInstructions,
+		successCriteria: effectiveSuccessCriteria,
+		readyCondition: effectiveReadyCondition,
+		expectedOutcome: effectiveExpectedOutcome,
+		delegationPacket: effectiveDelegationPacket,
+		projectName: project.name,
+		projectRootFolder: project.projectRootFolder,
+		defaultArtifactRoot: project.defaultArtifactRoot,
+		additionalWritableRoots: project.additionalWritableRoots ?? [],
+		availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
+			.slice(0, 12)
+			.map((skill) => skill.id),
+		relevantKnowledgeItems: taskKnowledge
+	});
+	const provider = selectExecutionProvider(current, effectiveWorker);
+	const sandbox = resolveThreadSandbox({
+		task: { requiredThreadSandbox: effectiveRequiredThreadSandbox },
+		worker: effectiveWorker,
+		project,
+		provider
+	});
+	const assignedThread = task.agentThreadId ? await getAgentThread(task.agentThreadId) : null;
+	const latestRun = task.latestRunId
+		? (current.runs.find((run) => run.id === task.latestRunId) ?? null)
+		: null;
+	const latestRunThread =
+		latestRun?.agentThreadId && latestRun.agentThreadId !== task.agentThreadId
+			? await getAgentThread(latestRun.agentThreadId)
+			: null;
+	const threadContext = selectProjectTaskThreadContext(project, {
+		assignedThread: selectTaskThreadForSandbox(assignedThread, effectiveRequiredThreadSandbox),
+		latestRunThread: selectTaskThreadForSandbox(latestRunThread, effectiveRequiredThreadSandbox)
+	});
+	const compatibleAssignedThread = threadContext.assignedThread;
+
+	if (compatibleAssignedThread?.hasActiveRun) {
+		throw new TaskLaunchPlanError(
+			409,
+			'This task is assigned to a busy work thread. Wait for that run to finish or change the thread assignment first.'
+		);
+	}
+
+	const workspaceIssue = getWorkspaceExecutionIssue({
+		cwd: project.projectRootFolder,
+		additionalWritableRoots: project.additionalWritableRoots ?? [],
+		sandbox,
+		scopeLabel: 'Project root'
+	});
+
+	if (workspaceIssue) {
+		throw new TaskLaunchPlanError(400, workspaceIssue);
+	}
+
+	return {
+		task,
+		project,
+		effectiveGoalId,
+		effectiveName,
+		effectiveInstructions,
+		effectiveSuccessCriteria,
+		effectiveReadyCondition,
+		effectiveExpectedOutcome,
+		effectiveDelegationPacket,
+		effectivePriority,
+		effectiveRiskLevel,
+		effectiveApprovalMode,
+		effectiveRequiredThreadSandbox,
+		effectiveRequiresReview,
+		effectiveDesiredRoleId,
+		assigneeWorker,
+		effectiveWorker,
+		effectiveRequiredCapabilityNames,
+		effectiveRequiredToolNames,
+		effectiveDependencyTaskIds,
+		effectiveTargetDate,
+		provider,
+		prompt,
+		retrievedKnowledgeItems: taskKnowledge,
+		compatibleAssignedThread,
+		compatibleLatestRunThread: threadContext.latestRunThread
+	};
+}
+
+export async function launchTaskFromPlan(
+	taskId: string,
+	plan: TaskLaunchPlan
+): Promise<{ threadId: string | null }> {
+	let agentThreadId =
+		plan.compatibleAssignedThread?.id ?? plan.compatibleLatestRunThread?.id ?? null;
+	let codexThreadId =
+		(plan.compatibleAssignedThread ?? plan.compatibleLatestRunThread)?.threadId ?? null;
+	let reusedThreadMode: 'assigned' | 'latest' | null = null;
+
+	if (plan.compatibleAssignedThread?.canResume) {
+		await sendAgentThreadMessage(plan.compatibleAssignedThread.id, plan.prompt);
+		agentThreadId = plan.compatibleAssignedThread.id;
+		codexThreadId = plan.compatibleAssignedThread.threadId;
+		reusedThreadMode = 'assigned';
+	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
+		await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, plan.prompt);
+		agentThreadId = plan.compatibleLatestRunThread.id;
+		codexThreadId = plan.compatibleLatestRunThread.threadId;
+		reusedThreadMode = 'latest';
+	} else {
+		const session = await startAgentThread({
+			name: buildTaskThreadName({
+				projectName: plan.project.name,
+				taskName: plan.effectiveName,
+				taskId: plan.task.id
+			}),
+			cwd: plan.project.projectRootFolder,
+			additionalWritableRoots: plan.project.additionalWritableRoots ?? [],
+			prompt: plan.prompt,
+			sandbox: resolveThreadSandbox({
+				task: { requiredThreadSandbox: plan.effectiveRequiredThreadSandbox },
+				worker: plan.effectiveWorker,
+				project: plan.project,
+				provider: plan.provider
+			}),
+			model: null
+		});
+
+		agentThreadId = session.agentThreadId;
+		codexThreadId = null;
+	}
+
+	const now = new Date().toISOString();
+	const providerId = plan.provider?.id ?? null;
+	const run = createRun({
+		taskId,
+		workerId: plan.effectiveWorker?.id ?? null,
+		providerId,
+		status: 'running',
+		startedAt: now,
+		threadId: codexThreadId,
+		agentThreadId,
+		promptDigest: buildPromptDigest(plan.prompt),
+		artifactPaths:
+			plan.project.defaultArtifactRoot || plan.project.projectRootFolder
+				? [plan.project.defaultArtifactRoot || plan.project.projectRootFolder]
+				: [],
+		summary:
+			reusedThreadMode === 'assigned'
+				? 'Queued in the task’s assigned work thread.'
+				: reusedThreadMode === 'latest'
+					? 'Queued in the task’s latest compatible work thread.'
+					: 'Started a new work thread from the task detail page.',
+		lastHeartbeatAt: now
+	});
+
+	await updateControlPlane((data) => ({
+		...data,
+		runs: [run, ...data.runs],
+		tasks: data.tasks.map((candidate) =>
+			candidate.id === taskId
+				? {
+						...candidate,
+						title: plan.effectiveName,
+						summary: plan.effectiveInstructions,
+						successCriteria: plan.effectiveSuccessCriteria,
+						readyCondition: plan.effectiveReadyCondition,
+						expectedOutcome: plan.effectiveExpectedOutcome,
+						projectId: plan.project.id,
+						goalId: plan.effectiveGoalId,
+						assigneeWorkerId: plan.assigneeWorker?.id ?? candidate.assigneeWorkerId,
+						priority: plan.effectivePriority,
+						riskLevel: plan.effectiveRiskLevel,
+						approvalMode: plan.effectiveApprovalMode,
+						requiredThreadSandbox: plan.effectiveRequiredThreadSandbox,
+						requiresReview: plan.effectiveRequiresReview,
+						desiredRoleId: plan.effectiveDesiredRoleId,
+						requiredCapabilityNames: plan.effectiveRequiredCapabilityNames,
+						requiredToolNames: plan.effectiveRequiredToolNames,
+						blockedReason: '',
+						dependencyTaskIds: plan.effectiveDependencyTaskIds,
+						targetDate: plan.effectiveTargetDate,
+						agentThreadId,
+						delegationAcceptance: null,
+						artifactPath:
+							candidate.artifactPath ||
+							plan.project.defaultArtifactRoot ||
+							plan.project.projectRootFolder ||
+							'',
+						status: 'in_progress',
+						updatedAt: now
+					}
+				: candidate
+		)
+	}));
+
+	return {
+		threadId: agentThreadId
+	};
+}

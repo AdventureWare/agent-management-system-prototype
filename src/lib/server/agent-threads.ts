@@ -228,6 +228,60 @@ function createRunId() {
 	return `run_${randomUUID()}`;
 }
 
+function compactThreadContactText(value: string, maxLength: number) {
+	const normalized = normalizeMessageText(value);
+
+	if (normalized.length <= maxLength) {
+		return normalized;
+	}
+
+	return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function summarizeSourceThreadTasks(detail: Pick<AgentThreadDetail, 'relatedTasks'>) {
+	const primaryTask =
+		detail.relatedTasks.find((task) => task.isPrimary) ?? detail.relatedTasks[0] ?? null;
+
+	if (!primaryTask) {
+		return '';
+	}
+
+	const otherTaskCount = Math.max(detail.relatedTasks.length - 1, 0);
+
+	return otherTaskCount > 0
+		? `${primaryTask.title} (+${otherTaskCount} more linked task${otherTaskCount === 1 ? '' : 's'})`
+		: primaryTask.title;
+}
+
+export function buildAgentThreadContactPrompt(input: {
+	sourceThread: Pick<
+		AgentThreadDetail,
+		'id' | 'name' | 'threadSummary' | 'relatedTasks' | 'latestRun'
+	>;
+	prompt: string;
+}) {
+	const sourceContext =
+		input.sourceThread.latestRun?.lastMessage?.trim() ||
+		input.sourceThread.latestRun?.prompt?.trim() ||
+		'';
+	const linkedTaskSummary = summarizeSourceThreadTasks(input.sourceThread);
+	const sections = [
+		'Another agent thread is contacting you for coordination.',
+		`Source thread: ${input.sourceThread.name} (${input.sourceThread.id})`,
+		linkedTaskSummary ? `Linked task context: ${linkedTaskSummary}` : '',
+		input.sourceThread.threadSummary.trim()
+			? `Source thread status: ${compactThreadContactText(input.sourceThread.threadSummary, 280)}`
+			: '',
+		sourceContext
+			? `Latest saved context from the source thread:\n${compactThreadContactText(sourceContext, 900)}`
+			: '',
+		`Requested help:\n${normalizeMessageText(input.prompt)}`,
+		`Reply in this thread with the instructions, context, assignment, or answer the source thread needs. Reference source thread ${input.sourceThread.id} when that handoff context matters.`
+	].filter(Boolean);
+
+	return sections.join('\n\n');
+}
+
 function getRunPaths(agentThreadId: string, runId: string) {
 	const runDir = resolve(AGENT_THREADS_ROOT, agentThreadId, 'runs', runId);
 
@@ -1087,6 +1141,9 @@ function deriveActiveRunCompletionFromEvidence(run: AgentRunDetail, now = Date.n
 	const startupAuthFailure = isStartupAuthFailure(run, now);
 	const startupStdinStall = isStartupStdinStall(run, now);
 	const exitInfo = getRunExitInfo(run);
+	const withinStartupGraceWindow =
+		(run.mode === 'start' && hasAuthRefreshStartupFailure(run) && !startupAuthFailure) ||
+		(run.mode === 'start' && hasStartupStdinWait(run) && !startupStdinStall);
 
 	if (startupAuthFailure) {
 		return {
@@ -1129,7 +1186,8 @@ function deriveActiveRunCompletionFromEvidence(run: AgentRunDetail, now = Date.n
 	if (
 		typeof run.state.pid === 'number' &&
 		Number.isFinite(run.state.pid) &&
-		!isPidAlive(run.state.pid)
+		!isPidAlive(run.state.pid) &&
+		!withinStartupGraceWindow
 	) {
 		return {
 			...run.state,
@@ -2213,6 +2271,8 @@ export async function startAgentThread(input: {
 		mode: 'start',
 		prompt: input.prompt,
 		requestedThreadId: null,
+		sourceAgentThreadId: null,
+		sourceAgentThreadName: null,
 		createdAt: now,
 		updatedAt: now,
 		logPath: paths.logPath,
@@ -2281,6 +2341,10 @@ export async function sendAgentThreadMessage(
 		| {
 				prompt: string;
 				attachments?: File[];
+				sourceThread?: {
+					id: string;
+					name: string;
+				} | null;
 		  }
 ) {
 	const db = await loadAgentThreadsDb();
@@ -2288,6 +2352,7 @@ export async function sendAgentThreadMessage(
 	const prompt = typeof input === 'string' ? input : input.prompt;
 	const uploads =
 		typeof input === 'string' ? [] : (input.attachments ?? []).filter((file) => file.size > 0);
+	const sourceThread = typeof input === 'string' ? null : (input.sourceThread ?? null);
 
 	if (!session) {
 		const nativeThread = await getNativeCodexThread(agentThreadId);
@@ -2365,6 +2430,8 @@ export async function sendAgentThreadMessage(
 		mode: 'message',
 		prompt: nextPrompt,
 		requestedThreadId: detail.threadId,
+		sourceAgentThreadId: sourceThread?.id ?? null,
+		sourceAgentThreadName: sourceThread?.name ?? null,
 		createdAt: now,
 		updatedAt: now,
 		logPath: paths.logPath,
@@ -2403,6 +2470,67 @@ export async function sendAgentThreadMessage(
 		agentThreadId,
 		runId
 	};
+}
+
+export async function contactAgentThread(
+	sourceAgentThreadId: string,
+	input: {
+		targetAgentThreadId: string;
+		prompt: string;
+		attachments?: File[];
+	}
+) {
+	const targetAgentThreadId = input.targetAgentThreadId.trim();
+	const prompt = input.prompt.trim();
+
+	if (!targetAgentThreadId) {
+		throw new Error('Target thread is required.');
+	}
+
+	if (!prompt) {
+		throw new Error('Prompt is required.');
+	}
+
+	if (sourceAgentThreadId === targetAgentThreadId) {
+		throw new Error('A thread cannot contact itself.');
+	}
+
+	const [sourceThread, targetThread] = await Promise.all([
+		getAgentThread(sourceAgentThreadId),
+		getAgentThread(targetAgentThreadId)
+	]);
+
+	if (!sourceThread) {
+		throw new Error('Source thread not found.');
+	}
+
+	if (!targetThread) {
+		throw new Error('Target thread not found.');
+	}
+
+	if (targetThread.archivedAt) {
+		throw new Error('Archived threads cannot receive cross-thread contact requests.');
+	}
+
+	if (targetThread.hasActiveRun) {
+		throw new Error(`Target thread "${targetThread.name}" already has an active run.`);
+	}
+
+	if (!targetThread.canResume) {
+		throw new Error(`Target thread "${targetThread.name}" cannot accept a follow-up right now.`);
+	}
+
+	return sendAgentThreadMessage(targetAgentThreadId, {
+		prompt: buildAgentThreadContactPrompt({
+			sourceThread,
+			prompt
+		}),
+		attachments: input.attachments,
+		sourceThread: {
+			id: sourceThread.id,
+			name: sourceThread.name
+		}
+	});
 }
 
 export async function recoverAgentThread(agentThreadId: string) {

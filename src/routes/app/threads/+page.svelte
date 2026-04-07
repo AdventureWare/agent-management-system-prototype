@@ -22,8 +22,6 @@
 	import { fromStore } from 'svelte/store';
 	import { fade } from 'svelte/transition';
 
-	type ArchiveAction = 'archive' | 'unarchive';
-
 	let { data } = $props<{
 		data: { threads?: AgentThreadDetail[] };
 	}>();
@@ -111,8 +109,6 @@
 			archivedCount
 		};
 	});
-	let filteredSessions = $derived(sessionCollections.filteredSessions);
-	let unarchivedSessions = $derived(sessionCollections.unarchivedSessions);
 	let archivedSessions = $derived(sessionCollections.archivedSessions);
 	let activeSessions = $derived(sessionCollections.activeSessions);
 	let historicalSessions = $derived(sessionCollections.historicalSessions);

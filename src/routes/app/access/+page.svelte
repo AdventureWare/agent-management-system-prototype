@@ -158,6 +158,7 @@
 							<a
 								class="block rounded-2xl border border-slate-800 bg-slate-950/50 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
 								href={event.scopeHref}
+								rel="external"
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div class="min-w-0 flex-1">
@@ -225,7 +226,11 @@
 										{item.path || 'Not configured'}
 									</p>
 									<p class="mt-2 text-sm text-slate-500">
-										<a class="text-sky-300 hover:text-sky-200" href={item.projectHref}>
+										<a
+											class="text-sky-300 hover:text-sky-200"
+											href={item.projectHref}
+											rel="external"
+										>
 											{item.projectName}
 										</a>
 									</p>
@@ -264,6 +269,7 @@
 						<a
 							class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
 							href={project.projectHref}
+							rel="external"
 						>
 							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div class="min-w-0 flex-1">
@@ -318,6 +324,7 @@
 					<a
 						class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
 						href={provider.providerHref}
+						rel="external"
 					>
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
@@ -366,6 +373,7 @@
 					<a
 						class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
 						href={worker.workerHref}
+						rel="external"
 					>
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">

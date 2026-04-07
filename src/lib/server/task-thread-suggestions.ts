@@ -485,9 +485,20 @@ export function buildTaskThreadSuggestions(
 	const suggestedThread = candidateThreads.find((candidate) => candidate.isSuggested) ?? null;
 
 	return {
-		candidateThreads: candidateThreads.map(
-			({ score: _score, isAssigned: _isAssigned, ...candidate }) => candidate
-		),
+		candidateThreads: candidateThreads.map((candidate) => ({
+			id: candidate.id,
+			name: candidate.name,
+			topicLabels: candidate.topicLabels,
+			categorization: candidate.categorization,
+			matchedContext: candidate.matchedContext,
+			threadState: candidate.threadState,
+			canResume: candidate.canResume,
+			hasActiveRun: candidate.hasActiveRun,
+			relatedTasks: candidate.relatedTasks,
+			previewText: candidate.previewText,
+			isSuggested: candidate.isSuggested,
+			suggestionReason: candidate.suggestionReason
+		})),
 		suggestedThread
 	};
 }

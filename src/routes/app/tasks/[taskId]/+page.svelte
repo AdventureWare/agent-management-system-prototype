@@ -150,8 +150,9 @@
 	let taskInstructionsNeedClamp = $derived(data.task.summary.trim().length > 360);
 
 	$effect(() => {
-		props.data;
-		refreshedData = null;
+		if (props.data) {
+			refreshedData = null;
+		}
 	});
 
 	function isActiveThreadState(state: string | null | undefined) {

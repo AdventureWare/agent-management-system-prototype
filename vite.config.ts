@@ -8,6 +8,7 @@ const remotePreviewAllowedHosts = (process.env.AMS_REMOTE_PREVIEW_ALLOWED_HOSTS 
 	.split(',')
 	.map((value) => value.trim())
 	.filter(Boolean);
+const enableBrowserTests = process.env.VITEST_BROWSER === '1';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
@@ -16,19 +17,26 @@ export default defineConfig({
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
-			{
-				extends: './vite.config.ts',
-				test: {
-					name: 'client',
-					browser: {
-						enabled: true,
-						provider: playwright(),
-						instances: [{ browser: 'chromium', headless: true }]
-					},
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					exclude: ['src/lib/server/**']
-				}
-			},
+			...(enableBrowserTests
+				? [
+						{
+							extends: './vite.config.ts',
+							test: {
+								name: 'client',
+								browser: {
+									enabled: true,
+									api: {
+										host: '127.0.0.1'
+									},
+									provider: playwright(),
+									instances: [{ browser: 'chromium' as const, headless: true }]
+								},
+								include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+								exclude: ['src/lib/server/**']
+							}
+						}
+					]
+				: []),
 
 			{
 				extends: './vite.config.ts',
