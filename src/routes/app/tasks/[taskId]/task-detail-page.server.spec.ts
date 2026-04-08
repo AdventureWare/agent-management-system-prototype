@@ -240,8 +240,9 @@ vi.mock('$lib/server/control-plane', () => ({
 			data.providers[0] ??
 			null
 	),
-	getExecutionSurfaces: vi.fn((data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>) =>
-		data.executionSurfaces ?? data.workers
+	getExecutionSurfaces: vi.fn(
+		(data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>) =>
+			data.executionSurfaces ?? data.workers
 	),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = syncTaskExecutionStateLike(

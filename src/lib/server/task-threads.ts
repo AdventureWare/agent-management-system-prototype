@@ -72,7 +72,9 @@ export function buildTaskThreadPrompt(input: {
 	}
 
 	if (input.requiredPromptSkillNames?.length) {
-		contextLines.push(`Prefer installed skills for this task: ${input.requiredPromptSkillNames.join(', ')}`);
+		contextLines.push(
+			`Prefer installed skills for this task: ${input.requiredPromptSkillNames.join(', ')}`
+		);
 	}
 
 	const roleLines = input.preferredRole

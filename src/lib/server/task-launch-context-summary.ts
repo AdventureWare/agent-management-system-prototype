@@ -69,14 +69,13 @@ export function buildTaskLaunchContextSummary(
 		? listInstalledCodexSkills(input.project.projectRootFolder)
 		: [];
 	const installedSkillNames = installedSkills.map((skill) => skill.id);
-	const { role, effectivePromptSkillNames: requiredPromptSkillNames } = resolveTaskRolePromptContext(
-		{
+	const { role, effectivePromptSkillNames: requiredPromptSkillNames } =
+		resolveTaskRolePromptContext({
 			roles: data.roles,
 			desiredRoleId: input.task.desiredRoleId,
 			projectRootFolder: input.project?.projectRootFolder ?? '',
 			taskPromptSkillNames: input.task.requiredPromptSkillNames ?? []
-		}
-	);
+		});
 
 	return {
 		role: role

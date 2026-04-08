@@ -169,9 +169,7 @@
 		const desiredRoleId = desiredRoleIdInput ?? null;
 		return roles.some((role) => role.id === desiredRoleId);
 	});
-	let selectedDesiredRole = $derived(
-		roles.find((role) => role.id === desiredRoleIdInput) ?? null
-	);
+	let selectedDesiredRole = $derived(roles.find((role) => role.id === desiredRoleIdInput) ?? null);
 	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
@@ -529,11 +527,13 @@
 						placeholder="frontend-sveltekit, docs-writer"
 					/>
 					<p class="mt-2 text-xs text-slate-500">
-						Use a comma-separated list for installed Codex skills this task should prefer in its thread prompt.
+						Use a comma-separated list for installed Codex skills this task should prefer in its
+						thread prompt.
 					</p>
 					{#if projectInstalledSkills.length === 0}
 						<p class="mt-2 text-xs text-slate-500">
-							No installed project skills are registered for this workspace yet. These labels stay advisory for now.
+							No installed project skills are registered for this workspace yet. These labels stay
+							advisory for now.
 						</p>
 					{:else}
 						<div class="mt-3 flex flex-wrap gap-2">
@@ -763,7 +763,8 @@
 						{/each}
 					</select>
 					<p class="mt-2 text-xs text-slate-500">
-						Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills.
+						Optional. When set, launch uses the role for routing, prompt instructions, and any
+						role-declared skills.
 					</p>
 				</label>
 
@@ -782,12 +783,11 @@
 			</div>
 
 			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-					Role preview
-				</p>
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Role preview</p>
 				{#if !desiredRoleIdInput}
 					<p class="mt-2 text-sm text-slate-400">
-						No role preference is set. The task can still launch and route by assignee and declared requirements alone.
+						No role preference is set. The task can still launch and route by assignee and declared
+						requirements alone.
 					</p>
 				{:else if selectedDesiredRole}
 					<div class="mt-3 space-y-3">

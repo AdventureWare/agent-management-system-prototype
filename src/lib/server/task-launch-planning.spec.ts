@@ -56,7 +56,10 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 	};
 }
 
-function buildFixture(taskOverrides: Partial<Task> = {}): { current: ControlPlaneData; task: Task } {
+function buildFixture(taskOverrides: Partial<Task> = {}): {
+	current: ControlPlaneData;
+	task: Task;
+} {
 	mkdirSync('/tmp/project/agent_output', { recursive: true });
 
 	const task: Task = {

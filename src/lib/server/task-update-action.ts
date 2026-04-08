@@ -1,9 +1,5 @@
-import {
-	canonicalizeExecutionRequirementNames
-} from '$lib/execution-requirements';
-import {
-	listInstalledCodexSkills
-} from '$lib/server/codex-skills';
+import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
+import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import {
 	createDecision,
 	loadControlPlane,

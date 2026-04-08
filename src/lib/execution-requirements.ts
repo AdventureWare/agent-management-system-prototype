@@ -54,8 +54,7 @@ export function canonicalizeExecutionRequirementNames(names: string[], knownName
 				.map((name) => name.trim())
 				.filter(Boolean)
 				.map((name) => {
-					const canonicalName =
-						knownNameMap.get(normalizeExecutionRequirementName(name)) ?? name;
+					const canonicalName = knownNameMap.get(normalizeExecutionRequirementName(name)) ?? name;
 					return [normalizeExecutionRequirementName(canonicalName), canonicalName] as const;
 				})
 		).values()

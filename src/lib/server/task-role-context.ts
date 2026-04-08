@@ -18,10 +18,9 @@ export function resolveTaskRolePromptContext(input: {
 	projectRootFolder: string | null | undefined;
 	taskPromptSkillNames?: string[];
 }) {
-	const role =
-		input.desiredRoleId?.trim()
-			? (input.roles.find((candidate) => candidate.id === input.desiredRoleId) ?? null)
-			: null;
+	const role = input.desiredRoleId?.trim()
+		? (input.roles.find((candidate) => candidate.id === input.desiredRoleId) ?? null)
+		: null;
 	const installedSkillNames = listInstalledCodexSkills(input.projectRootFolder).map(
 		(skill) => skill.id
 	);

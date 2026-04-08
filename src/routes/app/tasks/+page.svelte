@@ -2339,7 +2339,8 @@
 												{/each}
 											</select>
 											<span class="mt-2 block text-xs text-slate-500">
-												Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills.
+												Optional. When set, launch uses the role for routing, prompt instructions,
+												and any role-declared skills.
 											</span>
 										</label>
 
@@ -2365,7 +2366,8 @@
 										</p>
 										{#if !createTaskDesiredRoleId}
 											<p class="mt-2 text-sm text-slate-400">
-												No role preference is set. The task can still launch and route by assignee and declared requirements alone.
+												No role preference is set. The task can still launch and route by assignee
+												and declared requirements alone.
 											</p>
 										{:else if createTaskSelectedRole}
 											<div class="mt-3 space-y-3">
@@ -2379,7 +2381,9 @@
 												</div>
 												<div class="grid gap-3 lg:grid-cols-3">
 													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+														<p
+															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+														>
 															Role skills
 														</p>
 														<p class="mt-2 text-sm text-slate-300">
@@ -2389,7 +2393,9 @@
 														</p>
 													</div>
 													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+														<p
+															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+														>
 															Role tools
 														</p>
 														<p class="mt-2 text-sm text-slate-300">
@@ -2399,7 +2405,9 @@
 														</p>
 													</div>
 													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+														<p
+															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+														>
 															Role MCPs
 														</p>
 														<p class="mt-2 text-sm text-slate-300">

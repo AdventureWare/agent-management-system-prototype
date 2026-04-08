@@ -430,8 +430,8 @@
 											{projectSkills.missingRequestedSkillCount > 0
 												? `${projectSkills.missingRequestedSkillCount} requested prompt skill${projectSkills.missingRequestedSkillCount === 1 ? '' : 's'} are not installed for this project workspace.`
 												: projectSkills.totalCount === 0
-												? 'No installed skills discovered for this project yet.'
-												: `${projectSkills.totalCount} installed skill${projectSkills.totalCount === 1 ? '' : 's'} discovered.`}
+													? 'No installed skills discovered for this project yet.'
+													: `${projectSkills.totalCount} installed skill${projectSkills.totalCount === 1 ? '' : 's'} discovered.`}
 										</p>
 									</div>
 									<span
@@ -467,15 +467,11 @@
 										<p class="mt-2 text-sm text-white">{projectSkills.globalCount}</p>
 									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-											Requested
-										</p>
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Requested</p>
 										<p class="mt-2 text-sm text-white">{projectSkills.requestedSkillCount}</p>
 									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-											Missing
-										</p>
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Missing</p>
 										<p class="mt-2 text-sm text-white">
 											{projectSkills.missingRequestedSkillCount}
 										</p>
@@ -518,7 +514,8 @@
 										{/each}
 									</div>
 									<p class="mt-2 text-xs text-amber-200">
-										Task-requested prompt skills that are not currently installed for this project workspace.
+										Task-requested prompt skills that are not currently installed for this project
+										workspace.
 									</p>
 								{/if}
 							</a>

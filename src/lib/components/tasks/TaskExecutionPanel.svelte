@@ -399,7 +399,11 @@
 							{launchContext.role.description || 'No role description recorded.'}
 						</p>
 						<p class="mt-2 text-sm text-slate-300">
-							Role system prompt: {boolLabel(launchContext.role.hasSystemPrompt, 'Included', 'None')}
+							Role system prompt: {boolLabel(
+								launchContext.role.hasSystemPrompt,
+								'Included',
+								'None'
+							)}
 						</p>
 						<p class="mt-2 text-sm text-slate-300">
 							Role skills: {launchContext.role.skillIds.length > 0
@@ -418,7 +422,8 @@
 						</p>
 					{:else}
 						<p class="mt-3 text-sm text-slate-400">
-							No preferred role is set for this task. Execution routing can still proceed without one.
+							No preferred role is set for this task. Execution routing can still proceed without
+							one.
 						</p>
 					{/if}
 				</div>

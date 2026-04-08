@@ -25,10 +25,7 @@ import {
 	buildPromptDigest
 } from '$lib/server/task-threads';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
-import {
-	describeWorkerTaskFit,
-	getWorkerAssignmentSuggestions
-} from '$lib/server/worker-api';
+import { describeWorkerTaskFit, getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
 import { isValidTaskDate, type TaskDetailFormInput } from '$lib/server/task-form';
 import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';
 import type { AgentSandbox } from '$lib/types/agent-thread';
