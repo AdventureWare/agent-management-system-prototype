@@ -285,13 +285,11 @@
 		</div>
 
 		<div class="px-6 py-6">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-				Launch context
-			</p>
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Launch context</p>
 			<h3 class="mt-2 text-xl font-semibold text-white">What a new thread will inherit</h3>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
-				This mirrors the current launch plan so users can inspect the worker, provider,
-				sandbox, installed skills, and prompt inputs before starting work.
+				This mirrors the current launch plan so users can inspect the worker, provider, sandbox,
+				installed skills, and prompt inputs before starting work.
 			</p>
 
 			<div class="mt-5 grid gap-4 xl:grid-cols-2">
@@ -392,8 +390,8 @@
 						Installed skills in prompt
 					</p>
 					<p class="mt-3 text-sm text-slate-300">
-						{launchContext.project.totalInstalledSkillCount} installed skill{launchContext.project.totalInstalledSkillCount ===
-						1
+						{launchContext.project.totalInstalledSkillCount} installed skill{launchContext.project
+							.totalInstalledSkillCount === 1
 							? ''
 							: 's'} discovered for this project.
 					</p>

@@ -1,7 +1,4 @@
-import {
-	resolveThreadSandbox,
-	selectExecutionProvider
-} from '$lib/server/control-plane';
+import { resolveThreadSandbox, selectExecutionProvider } from '$lib/server/control-plane';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';

@@ -451,9 +451,8 @@
 								Capability coverage
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
-								Capabilities combine worker skills and provider-declared capabilities so you can
-								see which labels are merely listed versus currently backed by live execution
-								surfaces.
+								Capabilities combine worker skills and provider-declared capabilities so you can see
+								which labels are merely listed versus currently backed by live execution surfaces.
 							</p>
 						</div>
 						<span
@@ -480,8 +479,8 @@
 												{capability.onlineSupportedWorkerCount} online worker{capability.onlineSupportedWorkerCount ===
 												1
 													? ''
-													: 's'} can currently cover this label through direct worker
-												skills or provider metadata.
+													: 's'} can currently cover this label through direct worker skills or provider
+												metadata.
 											</p>
 										</div>
 										<span
@@ -585,9 +584,7 @@
 											<p class="mt-2 text-sm text-white">{tool.connectedProviderCount}</p>
 										</div>
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Workers
-											</p>
+											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Workers</p>
 											<p class="mt-2 text-sm text-white">{tool.workerCount}</p>
 										</div>
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">

@@ -824,29 +824,30 @@ describe('task detail page server actions', () => {
 				createdChildCount: 2
 			})
 		);
-		expect(controlPlaneState.saved?.tasks.filter((task) => task.parentTaskId === 'task_1')).toEqual([
-			expect.objectContaining({
-				title: 'Research current worker constraints',
-				desiredRoleId: 'role_reviewer',
-				parentTaskId: 'task_1',
-				successCriteria: 'The parent can decide whether worker routing changes are needed.',
-				expectedOutcome: 'A short design note with the current limits and gaps.',
-				delegationPacket: expect.objectContaining({
-					objective: 'Produce a bounded analysis of worker constraints.',
-					doneCondition:
-						'The parent can decide whether worker routing changes are needed.',
-					inputContext: expect.stringContaining('Parent task: Attach a brief')
+		expect(controlPlaneState.saved?.tasks.filter((task) => task.parentTaskId === 'task_1')).toEqual(
+			[
+				expect.objectContaining({
+					title: 'Research current worker constraints',
+					desiredRoleId: 'role_reviewer',
+					parentTaskId: 'task_1',
+					successCriteria: 'The parent can decide whether worker routing changes are needed.',
+					expectedOutcome: 'A short design note with the current limits and gaps.',
+					delegationPacket: expect.objectContaining({
+						objective: 'Produce a bounded analysis of worker constraints.',
+						doneCondition: 'The parent can decide whether worker routing changes are needed.',
+						inputContext: expect.stringContaining('Parent task: Attach a brief')
+					})
+				}),
+				expect.objectContaining({
+					title: 'Draft orchestration UI copy',
+					desiredRoleId: 'role_coordinator',
+					parentTaskId: 'task_1',
+					delegationPacket: expect.objectContaining({
+						objective: 'Define the parent-facing orchestration prompts.'
+					})
 				})
-			}),
-			expect.objectContaining({
-				title: 'Draft orchestration UI copy',
-				desiredRoleId: 'role_coordinator',
-				parentTaskId: 'task_1',
-				delegationPacket: expect.objectContaining({
-					objective: 'Define the parent-facing orchestration prompts.'
-				})
-			})
-		]);
+			]
+		);
 		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
 			expect.objectContaining({
 				taskId: 'task_1',

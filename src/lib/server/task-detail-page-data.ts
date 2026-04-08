@@ -73,7 +73,9 @@ export async function loadTaskDetailPageData(taskId: string) {
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
 	const availableSkillSummary = summarizeInstalledSkills(availableSkills);
-	const assignedWorker = task.assigneeWorkerId ? (workerMap.get(task.assigneeWorkerId) ?? null) : null;
+	const assignedWorker = task.assigneeWorkerId
+		? (workerMap.get(task.assigneeWorkerId) ?? null)
+		: null;
 	const recentDecisions = buildRecentTaskDecisionViews(
 		data.decisions ?? [],
 		task.id,

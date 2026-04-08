@@ -226,7 +226,10 @@ export function buildExecutionCapabilityCatalog(
 					}))
 				};
 			})
-			.sort((left, right) => right.totalCount - left.totalCount || left.projectName.localeCompare(right.projectName)),
+			.sort(
+				(left, right) =>
+					right.totalCount - left.totalCount || left.projectName.localeCompare(right.projectName)
+			),
 		capabilities: finalizeCapabilityEntries(capabilityEntries),
 		tools: finalizeToolEntries(toolEntries)
 	};
