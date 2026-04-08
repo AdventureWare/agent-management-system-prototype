@@ -1,15 +1,33 @@
 import { json } from '@sveltejs/kit';
 import { contactAgentThread, sendAgentThreadMessage } from '$lib/server/agent-threads';
+import type { AgentThreadContactContextItem } from '$lib/types/agent-thread';
+
+function isAgentThreadContactContextItem(value: unknown): value is AgentThreadContactContextItem {
+	if (!value || typeof value !== 'object') {
+		return false;
+	}
+
+	const candidate = value as Partial<AgentThreadContactContextItem>;
+	return (
+		typeof candidate.id === 'string' &&
+		typeof candidate.kind === 'string' &&
+		typeof candidate.label === 'string' &&
+		typeof candidate.detail === 'string' &&
+		(candidate.path === null || typeof candidate.path === 'string') &&
+		(candidate.href === null || typeof candidate.href === 'string')
+	);
+}
 
 export const POST = async ({ params, request }) => {
 	const contentType = request.headers.get('content-type') ?? '';
-	let prompt = '';
 	let attachments: File[] = [];
-	let sourceThreadId = '';
-	let contactType = '';
-	let contextSummary = '';
-	let replyRequested = true;
-	let replyToContactId = '';
+	let prompt: string;
+	let sourceThreadId: string;
+	let contactType: string;
+	let contextSummary: string;
+	let contextItems: AgentThreadContactContextItem[];
+	let replyRequested: boolean;
+	let replyToContactId: string;
 
 	if (contentType.includes('application/json')) {
 		const body = (await request.json()) as {
@@ -17,6 +35,7 @@ export const POST = async ({ params, request }) => {
 			sourceThreadId?: string;
 			contactType?: string;
 			contextSummary?: string;
+			contextItems?: unknown[];
 			replyRequested?: boolean;
 			replyToContactId?: string;
 		};
@@ -25,6 +44,9 @@ export const POST = async ({ params, request }) => {
 		sourceThreadId = body.sourceThreadId?.trim() ?? '';
 		contactType = body.contactType?.trim() ?? '';
 		contextSummary = body.contextSummary?.trim() ?? '';
+		contextItems = Array.isArray(body.contextItems)
+			? body.contextItems.filter(isAgentThreadContactContextItem)
+			: [];
 		replyRequested = body.replyRequested !== false;
 		replyToContactId = body.replyToContactId?.trim() ?? '';
 	} else {
@@ -33,6 +55,17 @@ export const POST = async ({ params, request }) => {
 		sourceThreadId = form.get('sourceThreadId')?.toString().trim() ?? '';
 		contactType = form.get('contactType')?.toString().trim() ?? '';
 		contextSummary = form.get('contextSummary')?.toString().trim() ?? '';
+		contextItems = form
+			.getAll('contextItems')
+			.map((value) => value.toString())
+			.flatMap((value) => {
+				try {
+					const parsed = JSON.parse(value);
+					return isAgentThreadContactContextItem(parsed) ? [parsed] : [];
+				} catch {
+					return [];
+				}
+			});
 		replyRequested = form.get('replyRequested')?.toString().trim() !== 'false';
 		replyToContactId = form.get('replyToContactId')?.toString().trim() ?? '';
 		attachments = form
@@ -56,6 +89,7 @@ export const POST = async ({ params, request }) => {
 					attachments,
 					contactType: contactType || 'question',
 					contextSummary: contextSummary || null,
+					contextItems,
 					replyRequested,
 					replyToContactId: replyToContactId || null
 				})

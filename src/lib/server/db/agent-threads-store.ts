@@ -14,11 +14,15 @@ const AGENT_THREAD_COLLECTIONS = ['contacts', 'runs', 'threads'] as const satisf
 type AgentThreadCollection = (typeof AGENT_THREAD_COLLECTIONS)[number];
 type AgentThreadRecordPayload = AgentThread | AgentRun | AgentThreadContact;
 type AgentThreadRecordRow = {
-	collection: AgentThreadCollection;
+	collection: string;
 	id: string;
 	position: number;
 	payload: string;
 };
+
+function isAgentThreadCollection(value: string): value is AgentThreadCollection {
+	return AGENT_THREAD_COLLECTIONS.includes(value as AgentThreadCollection);
+}
 
 function emptyAgentThreadsDb(): AgentThreadsDb {
 	return {
@@ -62,6 +66,13 @@ export function loadAgentThreadsFromSqlite(): AgentThreadsDb {
 		const data = emptyAgentThreadsDb();
 
 		for (const row of rows) {
+			if (!isAgentThreadCollection(row.collection)) {
+				console.warn(
+					`[agent-threads-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
+				);
+				continue;
+			}
+
 			const collection = data[row.collection] as AgentThreadRecordPayload[];
 			collection.push(JSON.parse(row.payload) as AgentThreadRecordPayload);
 		}

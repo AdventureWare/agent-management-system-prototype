@@ -130,4 +130,41 @@ describe('control-plane sqlite backend', () => {
 			name: 'Seeded role'
 		});
 	});
+
+	it('ignores stale sqlite rows with unknown collections while loading', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+
+		await updateControlPlane((data) => ({
+			...data,
+			roles: [
+				{
+					id: 'role_coordinator',
+					name: 'Coordinator',
+					area: 'shared',
+					description: 'Coordinates queued work'
+				}
+			]
+		}));
+
+		const db = new Database(resolve(root, 'data', 'app.sqlite'));
+		db.prepare(
+			`
+				insert into control_plane_records (collection, id, position, payload)
+				values (?, ?, ?, ?)
+			`
+		).run('legacyRecords', 'legacy_record', 999, JSON.stringify({ id: 'legacy_record' }));
+		db.close();
+
+		const loaded = await loadControlPlane();
+
+		expect(loaded.roles.map((role) => role.id)).toEqual(['role_coordinator']);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining('Ignoring unknown sqlite collection "legacyRecords"')
+		);
+	});
 });

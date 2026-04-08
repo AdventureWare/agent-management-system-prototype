@@ -11,9 +11,26 @@ import {
 } from '$lib/server/control-plane';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 
+const ACTIVE_RUN_STATUSES = new Set(['queued', 'starting', 'running']);
+
 function readThreadSandboxOverride(value: FormDataEntryValue | null) {
 	const raw = value?.toString().trim() ?? '';
 	return raw ? parseAgentSandbox(raw, 'workspace-write') : null;
+}
+
+function parseListField(value: FormDataEntryValue | null) {
+	return (
+		value
+			?.toString()
+			.split(',')
+			.map((item) => item.trim())
+			.filter(Boolean) ?? []
+	);
+}
+
+function parsePositiveInteger(value: FormDataEntryValue | null) {
+	const parsed = Number.parseInt(value?.toString() ?? '', 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function readWorkerForm(form: FormData) {
@@ -22,14 +39,10 @@ function readWorkerForm(form: FormData) {
 		providerId: form.get('providerId')?.toString().trim() ?? '',
 		roleId: form.get('roleId')?.toString().trim() ?? '',
 		note: form.get('note')?.toString().trim() ?? '',
-		tags:
-			form
-				.get('tags')
-				?.toString()
-				.split(',')
-				.map((tag) => tag.trim())
-				.filter(Boolean) ?? [],
+		tags: parseListField(form.get('tags')),
+		skills: parseListField(form.get('skills')),
 		capacity: Number.parseInt(form.get('capacity')?.toString() ?? '1', 10),
+		maxConcurrentRuns: parsePositiveInteger(form.get('maxConcurrentRuns')),
 		location: parseWorkerLocation(form.get('location')?.toString() ?? '', 'cloud'),
 		status: parseWorkerStatus(form.get('status')?.toString() ?? '', 'idle'),
 		threadSandboxOverride: readThreadSandboxOverride(form.get('threadSandboxOverride'))
@@ -47,6 +60,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const provider = providerMap.get(worker.providerId) ?? null;
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+	const activeRunCount = data.runs.filter(
+		(run) => run.workerId === worker.id && ACTIVE_RUN_STATUSES.has(run.status)
+	).length;
 	const recentRuns = data.runs
 		.filter((run) => run.workerId === worker.id)
 		.map((run) => ({
@@ -71,7 +87,16 @@ export const load: PageServerLoad = async ({ params }) => {
 			...worker,
 			providerName: provider?.name ?? 'Unknown provider',
 			providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
-			roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role'
+			roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
+			providerCapabilities: provider?.capabilities ?? [],
+			effectiveCapabilities: [
+				...new Set([...(worker.skills ?? []), ...(provider?.capabilities ?? [])])
+			],
+			activeRunCount,
+			effectiveConcurrencyLimit:
+				typeof worker.maxConcurrentRuns === 'number' && Number.isFinite(worker.maxConcurrentRuns)
+					? Math.max(1, worker.maxConcurrentRuns)
+					: worker.capacity
 		},
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),

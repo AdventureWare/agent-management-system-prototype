@@ -45,11 +45,15 @@ type ControlPlaneRecordPayload =
 	| Decision;
 
 type ControlPlaneRecordRow = {
-	collection: ControlPlaneCollection;
+	collection: string;
 	id: string;
 	position: number;
 	payload: string;
 };
+
+function isControlPlaneCollection(value: string): value is ControlPlaneCollection {
+	return CONTROL_PLANE_COLLECTIONS.includes(value as ControlPlaneCollection);
+}
 
 function emptyControlPlaneData(): ControlPlaneData {
 	return {
@@ -101,6 +105,13 @@ export function loadControlPlaneFromSqlite(): ControlPlaneData {
 		const data = emptyControlPlaneData();
 
 		for (const row of rows) {
+			if (!isControlPlaneCollection(row.collection)) {
+				console.warn(
+					`[control-plane-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
+				);
+				continue;
+			}
+
 			const collection = data[row.collection] as ControlPlaneRecordPayload[];
 			collection.push(JSON.parse(row.payload) as ControlPlaneRecordPayload);
 		}

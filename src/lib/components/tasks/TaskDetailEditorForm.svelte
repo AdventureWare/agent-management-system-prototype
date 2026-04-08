@@ -2,6 +2,10 @@
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import {
+		appendExecutionRequirementName,
+		findUnknownExecutionRequirementNames
+	} from '$lib/execution-requirements';
+	import {
 		AGENT_SANDBOX_OPTIONS,
 		formatAgentSandboxLabel,
 		type AgentSandbox
@@ -105,6 +109,19 @@
 		isSelected: boolean;
 	};
 
+	type ExecutionRequirementInventoryEntry = {
+		name: string;
+		workerCount: number;
+		providerCount: number;
+	};
+
+	type ExecutionRequirementInventory = {
+		capabilities: ExecutionRequirementInventoryEntry[];
+		tools: ExecutionRequirementInventoryEntry[];
+		capabilityNames: string[];
+		toolNames: string[];
+	};
+
 	let {
 		task,
 		projects,
@@ -114,7 +131,8 @@
 		assignmentSuggestions,
 		roles,
 		dependencyTasksCount,
-		availableDependencyTasks
+		availableDependencyTasks,
+		executionRequirementInventory
 	}: {
 		task: TaskEditorView;
 		projects: ProjectOption[];
@@ -125,19 +143,64 @@
 		roles: RoleOption[];
 		dependencyTasksCount: number;
 		availableDependencyTasks: AvailableDependencyTaskView[];
+		executionRequirementInventory: ExecutionRequirementInventory;
 	} = $props();
 
 	let visibleAssignmentSuggestions = $derived(assignmentSuggestions.slice(0, 4));
 	let eligibleAssignmentSuggestionCount = $derived(
 		assignmentSuggestions.filter((suggestion) => suggestion.eligible).length
 	);
-	let desiredRoleExists = $derived(roles.some((role) => role.id === (task.desiredRoleId ?? null)));
+	let desiredRoleExists = $derived.by(() => {
+		const desiredRoleId = task.desiredRoleId ?? null;
+		return roles.some((role) => role.id === desiredRoleId);
+	});
+	let requiredCapabilityNamesInput = $state('');
+	let requiredToolNamesInput = $state('');
+	let initializedRequirementInputTaskKey = $state('');
+	let unknownCapabilityNames = $derived(
+		findUnknownExecutionRequirementNames(
+			requiredCapabilityNamesInput,
+			executionRequirementInventory.capabilityNames
+		)
+	);
+	let unknownToolNames = $derived(
+		findUnknownExecutionRequirementNames(
+			requiredToolNamesInput,
+			executionRequirementInventory.toolNames
+		)
+	);
 
 	function assignmentSuggestionClass(eligible: boolean) {
 		return eligible
 			? 'border-emerald-900/70 bg-emerald-950/30'
 			: 'border-slate-800 bg-slate-950/70';
 	}
+
+	function formatInventoryCoverageLabel(entry: { workerCount: number; providerCount: number }) {
+		const parts: string[] = [];
+
+		if (entry.workerCount > 0) {
+			parts.push(`${entry.workerCount} worker${entry.workerCount === 1 ? '' : 's'}`);
+		}
+
+		if (entry.providerCount > 0) {
+			parts.push(`${entry.providerCount} provider${entry.providerCount === 1 ? '' : 's'}`);
+		}
+
+		return parts.join(' · ') || 'No current coverage';
+	}
+
+	$effect(() => {
+		const taskKey = `${task.createdAt}:${task.projectId}`;
+
+		if (initializedRequirementInputTaskKey === taskKey) {
+			return;
+		}
+
+		requiredCapabilityNamesInput = (task.requiredCapabilityNames ?? []).join(', ');
+		requiredToolNamesInput = (task.requiredToolNames ?? []).join(', ');
+		initializedRequirementInputTaskKey = taskKey;
+	});
 </script>
 
 <form id="task-update-form" method="POST" action="?/updateTask">
@@ -433,29 +496,106 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required capabilities</span>
 					<input
+						bind:value={requiredCapabilityNamesInput}
 						class="input text-white"
+						list="task-detail-capability-inventory"
 						name="requiredCapabilityNames"
 						placeholder="research, svelte, ios"
-						value={(task.requiredCapabilityNames ?? []).join(', ')}
 					/>
 					<p class="mt-2 text-xs text-slate-500">
 						Use a comma-separated list for capabilities or skills the task needs.
 					</p>
+					{#if executionRequirementInventory.capabilities.length === 0}
+						<p class="mt-2 text-xs text-slate-500">
+							No worker or provider capability inventory is registered yet. These labels stay
+							free-form for now.
+						</p>
+					{:else}
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each executionRequirementInventory.capabilities as capability (capability.name)}
+								<button
+									type="button"
+									class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+									title={formatInventoryCoverageLabel(capability)}
+									onclick={() => {
+										requiredCapabilityNamesInput = appendExecutionRequirementName(
+											requiredCapabilityNamesInput,
+											capability.name
+										);
+									}}
+								>
+									{capability.name}
+								</button>
+							{/each}
+						</div>
+						<p class="mt-2 text-xs text-slate-500">
+							Select a known label to append it from the current worker and provider inventory.
+						</p>
+					{/if}
+					{#if executionRequirementInventory.capabilities.length > 0 && unknownCapabilityNames.length > 0}
+						<p class="mt-2 text-xs text-amber-300">
+							Not in the current inventory: {unknownCapabilityNames.join(', ')}
+						</p>
+					{/if}
 				</label>
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
 					<input
+						bind:value={requiredToolNamesInput}
 						class="input text-white"
+						list="task-detail-tool-inventory"
 						name="requiredToolNames"
 						placeholder="codex, xcodebuild"
-						value={(task.requiredToolNames ?? []).join(', ')}
 					/>
 					<p class="mt-2 text-xs text-slate-500">
 						Use a comma-separated list for tools or runtimes the task must use.
 					</p>
+					{#if executionRequirementInventory.tools.length === 0}
+						<p class="mt-2 text-xs text-slate-500">
+							No provider launcher inventory is registered yet. These labels stay free-form for now.
+						</p>
+					{:else}
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each executionRequirementInventory.tools as tool (tool.name)}
+								<button
+									type="button"
+									class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+									title={formatInventoryCoverageLabel(tool)}
+									onclick={() => {
+										requiredToolNamesInput = appendExecutionRequirementName(
+											requiredToolNamesInput,
+											tool.name
+										);
+									}}
+								>
+									{tool.name}
+								</button>
+							{/each}
+						</div>
+						<p class="mt-2 text-xs text-slate-500">
+							Select a known launcher label to append it from the current provider inventory.
+						</p>
+					{/if}
+					{#if executionRequirementInventory.tools.length > 0 && unknownToolNames.length > 0}
+						<p class="mt-2 text-xs text-amber-300">
+							Not in the current inventory: {unknownToolNames.join(', ')}
+						</p>
+					{/if}
 				</label>
 			</div>
+
+			<datalist id="task-detail-capability-inventory">
+				{#each executionRequirementInventory.capabilityNames as capabilityName (capabilityName)}
+					<option value={capabilityName}></option>
+				{/each}
+			</datalist>
+
+			<datalist id="task-detail-tool-inventory">
+				{#each executionRequirementInventory.toolNames as toolName (toolName)}
+					<option value={toolName}></option>
+				{/each}
+			</datalist>
 		</section>
 
 		<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">

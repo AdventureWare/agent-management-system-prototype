@@ -32,12 +32,32 @@ import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import { buildTaskGoalOptions } from '$lib/server/task-goal-options';
 import { assistTaskWriting } from '$lib/server/task-writing-assist';
+import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import {
 	applyGoalRelationships,
 	getGoalLinkedProjectIds,
 	getGoalLinkedTaskIds
 } from '$lib/server/goal-relationships';
+import {
+	approveTaskApproval,
+	approveTaskReview,
+	rejectTaskApproval,
+	requestTaskReviewChanges,
+	TaskGovernanceActionError
+} from '$lib/server/task-governance';
 import type { ControlPlaneData, Role, Task } from '$lib/types/control-plane';
+
+function readTaskId(form: FormData) {
+	return form.get('taskId')?.toString().trim() ?? '';
+}
+
+function handleGovernanceActionError(caughtError: unknown) {
+	if (caughtError instanceof TaskGovernanceActionError) {
+		return fail(caughtError.status, { message: caughtError.message });
+	}
+
+	throw caughtError;
+}
 
 function readCreateTaskSubmitMode(form: FormData) {
 	return form.get('submitMode')?.toString() === 'createAndRun' ? 'createAndRun' : 'create';
@@ -193,6 +213,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		})
 		.sort((left, right) => left.projectId.localeCompare(right.projectId));
+	const executionRequirementInventory = buildExecutionRequirementInventory(data);
 
 	return {
 		deleted: url.searchParams.get('deleted') === '1',
@@ -203,6 +224,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		availableDependencyTasks,
 		projectSkillSummaries,
+		executionRequirementInventory,
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
 		tasks: taskWorkItems
@@ -739,7 +761,7 @@ export const actions: Actions = {
 		const compatibleAssignedThread = threadContext.assignedThread;
 		const compatibleLatestRunThread = threadContext.latestRunThread;
 		let agentThreadId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
-		let codexThreadId = (compatibleAssignedThread ?? compatibleLatestRunThread)?.threadId ?? null;
+		let codexThreadId!: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 		if (compatibleAssignedThread?.hasActiveRun) {
@@ -865,6 +887,62 @@ export const actions: Actions = {
 			taskId,
 			threadId: agentThreadId
 		};
+	},
+
+	approveReview: async ({ request }) => {
+		const taskId = readTaskId(await request.formData());
+
+		if (!taskId) {
+			return fail(400, { message: 'Task ID is required.' });
+		}
+
+		try {
+			return await approveTaskReview(taskId, 'task queue');
+		} catch (caughtError) {
+			return handleGovernanceActionError(caughtError);
+		}
+	},
+
+	requestChanges: async ({ request }) => {
+		const taskId = readTaskId(await request.formData());
+
+		if (!taskId) {
+			return fail(400, { message: 'Task ID is required.' });
+		}
+
+		try {
+			return await requestTaskReviewChanges(taskId, 'task queue');
+		} catch (caughtError) {
+			return handleGovernanceActionError(caughtError);
+		}
+	},
+
+	approveApproval: async ({ request }) => {
+		const taskId = readTaskId(await request.formData());
+
+		if (!taskId) {
+			return fail(400, { message: 'Task ID is required.' });
+		}
+
+		try {
+			return await approveTaskApproval(taskId, 'task queue');
+		} catch (caughtError) {
+			return handleGovernanceActionError(caughtError);
+		}
+	},
+
+	rejectApproval: async ({ request }) => {
+		const taskId = readTaskId(await request.formData());
+
+		if (!taskId) {
+			return fail(400, { message: 'Task ID is required.' });
+		}
+
+		try {
+			return await rejectTaskApproval(taskId);
+		} catch (caughtError) {
+			return handleGovernanceActionError(caughtError);
+		}
 	},
 
 	deleteTasks: async ({ request }) => {

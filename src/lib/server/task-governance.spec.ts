@@ -413,6 +413,14 @@ describe('task-governance helpers', () => {
 					threadActivityAgeMs: null,
 					threadActivityAgeLabel: 'No activity yet'
 				}
+			}),
+			createTaskWorkItem({
+				id: 'task_manual_review',
+				title: 'Manual review task',
+				goalId: 'goal_1',
+				status: 'review',
+				requiresReview: true,
+				approvalMode: 'none'
 			})
 		]);
 
@@ -420,7 +428,10 @@ describe('task-governance helpers', () => {
 
 		expect(result.reviewItems.map((item) => item.id)).toEqual(['task_review']);
 		expect(result.approvalItems.map((item) => item.id)).toEqual(['task_approval']);
-		expect(result.escalationItems.map((item) => item.id)).toEqual(['task_stale']);
+		expect(result.escalationItems.map((item) => item.id)).toEqual([
+			'task_stale',
+			'task_manual_review'
+		]);
 		expect(result.escalationItems[0]?.escalationReasons).toEqual(
 			expect.arrayContaining([
 				'Waiting on operator input.',
@@ -428,6 +439,9 @@ describe('task-governance helpers', () => {
 				'Latest run heartbeat has been quiet for 45m ago.'
 			])
 		);
+		expect(result.escalationItems[1]?.escalationReasons).toEqual([
+			'Task is in review and needs operator follow-up.'
+		]);
 		expect(result.summary).toEqual(
 			expect.objectContaining({
 				reviewCount: 1,
@@ -435,7 +449,7 @@ describe('task-governance helpers', () => {
 				blockedCount: 1,
 				dependencyCount: 1,
 				staleCount: 1,
-				escalationCount: 1
+				escalationCount: 2
 			})
 		);
 	});

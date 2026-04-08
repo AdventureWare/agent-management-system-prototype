@@ -9,12 +9,30 @@ import {
 	updateControlPlane
 } from '$lib/server/control-plane';
 
+const ACTIVE_RUN_STATUSES = new Set(['queued', 'starting', 'running']);
+
+function parseListField(value: FormDataEntryValue | null) {
+	return (
+		value
+			?.toString()
+			.split(',')
+			.map((item) => item.trim())
+			.filter(Boolean) ?? []
+	);
+}
+
+function parsePositiveInteger(value: FormDataEntryValue | null) {
+	const parsed = Number.parseInt(value?.toString() ?? '', 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const assignedTaskCounts = new Map<string, number>();
 	const latestRunByWorker = new Map<string, string>();
+	const activeRunCounts = new Map<string, number>();
 
 	for (const task of data.tasks) {
 		if (!task.assigneeWorkerId) {
@@ -29,21 +47,39 @@ export const load: PageServerLoad = async () => {
 
 	for (const run of [...data.runs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
 		if (!run.workerId || latestRunByWorker.has(run.workerId)) {
-			continue;
+			// Keep counting active runs below even if this worker already has a latest timestamp.
+		} else {
+			latestRunByWorker.set(run.workerId, run.updatedAt);
 		}
 
-		latestRunByWorker.set(run.workerId, run.updatedAt);
+		if (run.workerId && ACTIVE_RUN_STATUSES.has(run.status)) {
+			activeRunCounts.set(run.workerId, (activeRunCounts.get(run.workerId) ?? 0) + 1);
+		}
 	}
 
 	return {
 		workers: [...data.workers]
-			.map((worker) => ({
-				...worker,
-				providerName: providerMap.get(worker.providerId)?.name ?? 'Unknown provider',
-				roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
-				assignedTaskCount: assignedTaskCounts.get(worker.id) ?? 0,
-				latestRunAt: latestRunByWorker.get(worker.id) ?? null
-			}))
+			.map((worker) => {
+				const provider = providerMap.get(worker.providerId) ?? null;
+				const workerSkills = worker.skills ?? [];
+				const providerCapabilities = provider?.capabilities ?? [];
+
+				return {
+					...worker,
+					providerName: provider?.name ?? 'Unknown provider',
+					roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
+					assignedTaskCount: assignedTaskCounts.get(worker.id) ?? 0,
+					activeRunCount: activeRunCounts.get(worker.id) ?? 0,
+					latestRunAt: latestRunByWorker.get(worker.id) ?? null,
+					providerCapabilities,
+					effectiveCapabilities: [...new Set([...workerSkills, ...providerCapabilities])],
+					effectiveConcurrencyLimit:
+						typeof worker.maxConcurrentRuns === 'number' &&
+						Number.isFinite(worker.maxConcurrentRuns)
+							? Math.max(1, worker.maxConcurrentRuns)
+							: worker.capacity
+				};
+			})
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
@@ -59,14 +95,10 @@ export const actions: Actions = {
 		const providerId = form.get('providerId')?.toString().trim() ?? '';
 		const roleId = form.get('roleId')?.toString().trim() ?? '';
 		const note = form.get('note')?.toString().trim() ?? '';
-		const tags =
-			form
-				.get('tags')
-				?.toString()
-				.split(',')
-				.map((tag) => tag.trim())
-				.filter(Boolean) ?? [];
+		const tags = parseListField(form.get('tags'));
+		const skills = parseListField(form.get('skills'));
 		const capacity = Number.parseInt(form.get('capacity')?.toString() ?? '1', 10);
+		const maxConcurrentRuns = parsePositiveInteger(form.get('maxConcurrentRuns'));
 		const location = parseWorkerLocation(form.get('location')?.toString() ?? '', 'cloud');
 		const status = parseWorkerStatus(form.get('status')?.toString() ?? '', 'idle');
 
@@ -85,7 +117,9 @@ export const actions: Actions = {
 					status,
 					note,
 					capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 1,
-					tags
+					tags,
+					skills,
+					maxConcurrentRuns
 				}),
 				...data.workers
 			]

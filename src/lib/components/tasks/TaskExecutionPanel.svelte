@@ -29,6 +29,21 @@
 		linkThread?: TaskThreadLink | null;
 	};
 
+	type ExecutionPreflightView = {
+		hasDeclaredRequirements: boolean;
+		eligibleWorkerCount: number;
+		fullCoverageWorkerCount: number;
+		uncoveredCapabilityNames: string[];
+		uncoveredToolNames: string[];
+		currentAssignee: {
+			workerName: string;
+			withinConcurrencyLimit: boolean;
+			missingCapabilityNames: string[];
+			missingToolNames: string[];
+			hasFullCoverage: boolean;
+		} | null;
+	};
+
 	type CandidateThreadView = {
 		id: string;
 		name: string;
@@ -70,6 +85,7 @@
 
 	let {
 		task,
+		executionPreflight,
 		retrievedKnowledgeItems,
 		suggestedThread,
 		candidateThreads,
@@ -77,6 +93,7 @@
 		threadActionLabel
 	}: {
 		task: TaskExecutionView;
+		executionPreflight: ExecutionPreflightView;
 		retrievedKnowledgeItems: RetrievedKnowledgeItemView[];
 		suggestedThread: SuggestedThreadView | null;
 		candidateThreads: CandidateThreadView[];
@@ -127,6 +144,18 @@
 			? `Related tasks: ${thread.relatedTasks.map((linkedTask) => linkedTask.title).join(', ')}`
 			: 'No tasks linked yet.';
 	}
+
+	let hasCoverageWarnings = $derived(
+		executionPreflight.uncoveredCapabilityNames.length > 0 ||
+			executionPreflight.uncoveredToolNames.length > 0 ||
+			Boolean(
+				executionPreflight.currentAssignee &&
+				(!executionPreflight.currentAssignee.hasFullCoverage ||
+					!executionPreflight.currentAssignee.withinConcurrencyLimit)
+			) ||
+			(executionPreflight.hasDeclaredRequirements &&
+				executionPreflight.fullCoverageWorkerCount === 0)
+	);
 </script>
 
 <div id="task-detail-panel-execution" role="tabpanel" aria-labelledby="task-detail-tab-execution">
@@ -138,6 +167,75 @@
 		tone="sky"
 		bodyClass="divide-y divide-slate-800/90 p-0"
 	>
+		<div class="px-6 py-6">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+				Launch preflight
+			</p>
+			<h3 class="mt-2 text-xl font-semibold text-white">Current capability coverage</h3>
+			<p class="mt-2 max-w-2xl text-sm text-slate-400">
+				This is a read-only check against the current worker and provider metadata before you launch
+				new work.
+			</p>
+
+			<div
+				class={`mt-5 rounded-2xl border p-4 ${hasCoverageWarnings ? 'border-amber-900/50 bg-amber-950/15' : 'border-emerald-900/40 bg-emerald-950/15'}`}
+			>
+				<p class={`text-sm ${hasCoverageWarnings ? 'text-amber-100' : 'text-emerald-100'}`}>
+					{#if !executionPreflight.hasDeclaredRequirements}
+						No required capabilities or tools are declared for this task yet.
+					{:else if executionPreflight.fullCoverageWorkerCount > 0}
+						{executionPreflight.fullCoverageWorkerCount} worker{executionPreflight.fullCoverageWorkerCount ===
+						1
+							? ''
+							: 's'} currently cover all declared capability and tool requirements.
+					{:else}
+						No worker currently covers all declared capability and tool requirements.
+					{/if}
+				</p>
+				<p class="mt-2 text-sm text-slate-300">
+					Eligible now: {executionPreflight.eligibleWorkerCount} worker{executionPreflight.eligibleWorkerCount ===
+					1
+						? ''
+						: 's'}
+				</p>
+
+				{#if executionPreflight.uncoveredCapabilityNames.length > 0}
+					<p class="mt-3 text-sm text-amber-100">
+						Uncovered capabilities: {executionPreflight.uncoveredCapabilityNames.join(', ')}
+					</p>
+				{/if}
+
+				{#if executionPreflight.uncoveredToolNames.length > 0}
+					<p class="mt-2 text-sm text-amber-100">
+						Uncovered tools: {executionPreflight.uncoveredToolNames.join(', ')}
+					</p>
+				{/if}
+
+				{#if executionPreflight.currentAssignee}
+					<p class="mt-3 text-sm text-slate-300">
+						Assigned worker: {executionPreflight.currentAssignee.workerName}
+					</p>
+					{#if !executionPreflight.currentAssignee.withinConcurrencyLimit}
+						<p class="mt-2 text-sm text-amber-100">
+							The assigned worker is already at its concurrency limit.
+						</p>
+					{/if}
+					{#if executionPreflight.currentAssignee.missingCapabilityNames.length > 0}
+						<p class="mt-2 text-sm text-amber-100">
+							Assigned worker is missing capabilities:
+							{executionPreflight.currentAssignee.missingCapabilityNames.join(', ')}
+						</p>
+					{/if}
+					{#if executionPreflight.currentAssignee.missingToolNames.length > 0}
+						<p class="mt-2 text-sm text-amber-100">
+							Assigned worker is missing tools:
+							{executionPreflight.currentAssignee.missingToolNames.join(', ')}
+						</p>
+					{/if}
+				{/if}
+			</div>
+		</div>
+
 		<div class="px-6 py-6">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
 				Published knowledge

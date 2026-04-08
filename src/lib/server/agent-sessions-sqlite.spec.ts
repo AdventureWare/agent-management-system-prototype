@@ -48,6 +48,16 @@ function writeAgentThreadsJson(root: string, options: { includeContact?: boolean
 							targetAgentThreadName: 'Target thread',
 							contactType: 'question',
 							contextSummary: 'Need architecture guidance on contact routing.',
+							contextItems: [
+								{
+									id: 'run:run_seeded',
+									kind: 'run',
+									label: 'Latest thread response',
+									detail: 'Most recent saved thread context.',
+									path: '/tmp/seeded/message.txt',
+									href: null
+								}
+							],
 							prompt: 'Need architecture guidance.',
 							replyRequested: true,
 							replyToContactId: null,
@@ -170,5 +180,36 @@ describe('agent sessions sqlite backend', () => {
 			sourceAgentThreadId: 'thread_seeded',
 			targetAgentThreadId: 'thread_target'
 		});
+	});
+
+	it('ignores stale sqlite rows with unknown collections while loading', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		vi.stubEnv('CODEX_HOME', resolve(root, '.codex'));
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		writeAgentThreadsJson(root, { includeContact: true });
+
+		const { loadAgentThreadsDb } = await importAgentThreadsModule();
+		await loadAgentThreadsDb();
+
+		const sqlite = new Database(resolve(root, 'data', 'app.sqlite'));
+		sqlite
+			.prepare(
+				`
+					insert into agent_thread_records (collection, id, position, payload)
+					values (?, ?, ?, ?)
+				`
+			)
+			.run('legacyRecords', 'legacy_record', 999, JSON.stringify({ id: 'legacy_record' }));
+		sqlite.close();
+
+		const db = await loadAgentThreadsDb();
+
+		expect(db.threads.map((session) => session.id)).toEqual(['thread_seeded']);
+		expect(db.contacts?.map((contact) => contact.id)).toEqual(['contact_seeded']);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining('Ignoring unknown sqlite collection "legacyRecords"')
+		);
 	});
 });

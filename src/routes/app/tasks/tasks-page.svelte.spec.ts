@@ -190,10 +190,12 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect.element(page.getByTestId('task-mobile-card-task_mobile')).toBeInTheDocument();
-		await expect.element(page.getByRole('link', { name: 'Open task' })).toBeInTheDocument();
+		const mobileCard = page.getByTestId('task-mobile-card-task_mobile');
+
+		await expect.element(mobileCard).toBeInTheDocument();
+		await expect.element(mobileCard.getByRole('link', { name: 'Open task' })).toBeInTheDocument();
 		await expect
-			.element(page.getByRole('link', { name: 'Review latest thread' }))
+			.element(mobileCard.getByRole('link', { name: 'Review assigned thread' }))
 			.toBeInTheDocument();
 	});
 
@@ -218,7 +220,7 @@ describe('/app/tasks/+page.svelte', () => {
 
 		expect(document.querySelector('[data-testid="task-detail-panel"]')).toBeNull();
 		expect(document.body.textContent).toContain('Open task');
-		expect(document.body.textContent).toContain('Review latest thread');
+		expect(document.body.textContent).toContain('Review assigned thread');
 		expect(
 			Array.from(document.querySelectorAll('button')).some(
 				(button) => button.textContent?.trim() === 'More'
@@ -264,8 +266,14 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Create task', exact: true }))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Improve with AI' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
+
+		const assistButton = document.querySelector(
+			'form[action="?/createTask"] button[formaction="?/assistTaskWriting"]'
+		) as HTMLButtonElement | null;
+
+		expect(assistButton).not.toBeNull();
+		expect(assistButton?.textContent?.trim()).toBe('Improve with AI');
 	});
 
 	it('renders a goal selector and removes the queue snapshot pane from the create form', async () => {
@@ -346,12 +354,18 @@ describe('/app/tasks/+page.svelte', () => {
 
 		await expect.element(page.getByText('Advanced intake')).toBeInTheDocument();
 		await expect.element(page.getByText('Defaults stay lightweight')).toBeInTheDocument();
-		await expect.element(page.getByText('Priority')).not.toBeInTheDocument();
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="priority"]')
+		).toBeNull();
 
 		await page.getByRole('button', { name: 'Show advanced' }).click();
 
-		await expect.element(page.getByText('Priority')).toBeInTheDocument();
-		await expect.element(page.getByText('Blocker notes')).toBeInTheDocument();
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="priority"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('form[action="?/createTask"] textarea[name="blockedReason"]')
+		).not.toBeNull();
 		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
 	});
 
@@ -504,13 +518,17 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect.element(page.getByText('Urgent')).toBeInTheDocument();
-		await expect.element(page.getByText('High risk')).toBeInTheDocument();
-		await expect.element(page.getByText('Review optional')).toBeInTheDocument();
-		await expect.element(page.getByText('Role Reviewer')).toBeInTheDocument();
-		await expect.element(page.getByText('Awaiting stakeholder sign-off.')).toBeInTheDocument();
+		const routedTaskCard = page.getByTestId('task-mobile-card-task_routed');
+
+		await expect.element(routedTaskCard.getByText('Urgent')).toBeInTheDocument();
+		await expect.element(routedTaskCard.getByText('High risk')).toBeInTheDocument();
+		await expect.element(routedTaskCard.getByText('Review optional')).toBeInTheDocument();
+		await expect.element(routedTaskCard.getByText('Role Reviewer')).toBeInTheDocument();
 		await expect
-			.element(page.getByText('Depends on: Existing dependency task'))
+			.element(routedTaskCard.getByText('Awaiting stakeholder sign-off.'))
+			.toBeInTheDocument();
+		await expect
+			.element(routedTaskCard.getByText('Depends on: Existing dependency task'))
 			.toBeInTheDocument();
 	});
 
@@ -558,19 +576,16 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect
-			.element(page.getByText('Stale in-progress task', { exact: true }))
-			.toBeInTheDocument();
-		await expect.element(page.getByText('Fresh ready task', { exact: true })).toBeInTheDocument();
+		const staleTaskCard = page.getByTestId('task-mobile-card-task_stale');
+		const freshTaskCard = page.getByTestId('task-mobile-card-task_fresh');
 
-		await page.getByRole('button', { name: /Stale in-progress \(1\)/i }).click();
+		await expect.element(staleTaskCard).toBeInTheDocument();
+		await expect.element(freshTaskCard).toBeInTheDocument();
 
-		await expect
-			.element(page.getByText('Stale in-progress task', { exact: true }))
-			.toBeInTheDocument();
-		await expect
-			.element(page.getByText('Fresh ready task', { exact: true }))
-			.not.toBeInTheDocument();
+		await page.getByRole('button', { name: /Stale WIP \(1\)/i }).click();
+
+		await expect.element(staleTaskCard).toBeInTheDocument();
+		await expect.element(freshTaskCard).not.toBeInTheDocument();
 	});
 
 	it('shows the target date in the queue when a task has one', async () => {
@@ -582,7 +597,11 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect.element(page.getByText('Target Apr 18, 2026')).toBeInTheDocument();
+		await expect
+			.element(
+				page.getByTestId('task-mobile-card-task_target_date').getByText('Target Apr 18, 2026')
+			)
+			.toBeInTheDocument();
 	});
 
 	it('switches between active and completed task views with local tabs', async () => {
@@ -599,18 +618,15 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect.element(page.getByText('Active queue item', { exact: true })).toBeInTheDocument();
-		await expect
-			.element(page.getByText('Completed queue item', { exact: true }))
-			.not.toBeInTheDocument();
+		const activeTaskCard = page.getByTestId('task-mobile-card-task_active');
+		const completedTaskCard = page.getByTestId('task-mobile-card-task_done');
+
+		await expect.element(activeTaskCard).toBeInTheDocument();
+		await expect.element(completedTaskCard).not.toBeInTheDocument();
 
 		await page.getByRole('tab', { name: /Completed work 1/i }).click();
 
-		await expect
-			.element(page.getByText('Completed queue item', { exact: true }))
-			.toBeInTheDocument();
-		await expect
-			.element(page.getByText('Active queue item', { exact: true }))
-			.not.toBeInTheDocument();
+		await expect.element(completedTaskCard).toBeInTheDocument();
+		await expect.element(activeTaskCard).not.toBeInTheDocument();
 	});
 });

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { dev } from '$app/environment';
 import { error } from '@sveltejs/kit';
+import { normalizeExecutionRequirementName } from '$lib/execution-requirements';
 import {
 	createRun,
 	getPendingApprovalForTask,
@@ -86,16 +87,12 @@ export function authenticateWorker(data: ControlPlaneData, workerId: string, wor
 	return worker;
 }
 
-function normalizeMatchKey(value: string) {
-	return value.trim().toLowerCase();
-}
-
 function getWorkerCapabilityKeys(data: ControlPlaneData, worker: Worker) {
 	const provider = data.providers.find((candidate) => candidate.id === worker.providerId) ?? null;
 
 	return new Set(
 		[...(worker.skills ?? []), ...(provider?.capabilities ?? [])]
-			.map(normalizeMatchKey)
+			.map(normalizeExecutionRequirementName)
 			.filter(Boolean)
 	);
 }
@@ -103,7 +100,9 @@ function getWorkerCapabilityKeys(data: ControlPlaneData, worker: Worker) {
 function getWorkerToolKeys(data: ControlPlaneData, worker: Worker) {
 	const provider = data.providers.find((candidate) => candidate.id === worker.providerId) ?? null;
 
-	return new Set([provider?.launcher ?? ''].map(normalizeMatchKey).filter(Boolean));
+	return new Set(
+		[provider?.launcher ?? ''].map(normalizeExecutionRequirementName).filter(Boolean)
+	);
 }
 
 function getWorkerAssignedOpenTaskCount(data: ControlPlaneData, worker: Worker) {
@@ -152,10 +151,10 @@ export function describeWorkerTaskFit(
 	const concurrencyLimit = getWorkerEffectiveConcurrencyLimit(worker);
 	const withinConcurrencyLimit = activeRunCount < concurrencyLimit;
 	const missingCapabilityNames = (task.requiredCapabilityNames ?? []).filter(
-		(name) => !capabilityKeys.has(normalizeMatchKey(name))
+		(name) => !capabilityKeys.has(normalizeExecutionRequirementName(name))
 	);
 	const missingToolNames = (task.requiredToolNames ?? []).filter(
-		(name) => !toolKeys.has(normalizeMatchKey(name))
+		(name) => !toolKeys.has(normalizeExecutionRequirementName(name))
 	);
 
 	return {

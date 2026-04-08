@@ -36,6 +36,7 @@
 		AgentRunDetail,
 		AgentRunStatus,
 		AgentThreadContact,
+		AgentThreadContactContextItem,
 		AgentThreadDetail
 	} from '$lib/types/agent-thread';
 	import { onMount, tick } from 'svelte';
@@ -88,6 +89,11 @@
 		name: string;
 		handle: string;
 		contactLabel: string;
+		projectLabel: string;
+		roleLabel: string;
+		primaryTaskTitle: string;
+		relatedTaskCount: number;
+		lastActivityLabel: string;
 		threadState: AgentThreadDetail['threadState'];
 		latestRunStatus: AgentThreadDetail['latestRunStatus'];
 		threadSummary: string;
@@ -95,6 +101,10 @@
 		canContact: boolean;
 		disabledReason: string;
 		routingReason: string;
+	};
+
+	type ContactContextItemOption = AgentThreadContactContextItem & {
+		defaultSelected: boolean;
 	};
 
 	let {
@@ -146,8 +156,13 @@
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
 	let contactTargetThreadId = $state('');
 	let contactTargetQuery = $state('');
+	let contactTargetBrowseMode = $state<'top' | 'all'>('top');
+	let contactProjectFilter = $state('all');
+	let contactRoleFilter = $state('all');
+	let contactAvailabilityFilter = $state<'all' | 'available'>('available');
 	let contactType = $state<(typeof AGENT_THREAD_CONTACT_TYPE_OPTIONS)[number]>('question');
 	let contactContextSummary = $state('');
+	let selectedContactContextItemIds = $state.raw<string[]>([]);
 	let contactPrompt = $state('');
 	let contactState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(
 		null
@@ -226,32 +241,69 @@
 				threadContactTargets.map((target: ThreadContactTarget) => [target.id, target] as const)
 			)
 	);
+	let contactProjectOptions = $derived.by<string[]>(() =>
+		[
+			...new Set<string>(
+				threadContactTargets
+					.map((target: ThreadContactTarget) => target.projectLabel.trim())
+					.filter((label: string) => label.length > 0)
+			)
+		].sort((left: string, right: string) => left.localeCompare(right))
+	);
+	let contactRoleOptions = $derived.by<string[]>(() =>
+		[
+			...new Set<string>(
+				threadContactTargets
+					.map((target: ThreadContactTarget) => target.roleLabel.trim())
+					.filter((label: string) => label.length > 0)
+			)
+		].sort((left: string, right: string) => left.localeCompare(right))
+	);
 	let visibleContactTargets = $derived.by<ThreadContactTarget[]>(() => {
 		const query = contactTargetQuery.trim().toLowerCase();
 
-		if (!query) {
-			return threadContactTargets;
-		}
+		return threadContactTargets.filter((target: ThreadContactTarget) => {
+			if (contactAvailabilityFilter === 'available' && !target.canContact) {
+				return false;
+			}
 
-		return threadContactTargets.filter((target: ThreadContactTarget) =>
-			[
+			if (contactProjectFilter !== 'all' && target.projectLabel !== contactProjectFilter) {
+				return false;
+			}
+
+			if (contactRoleFilter !== 'all' && target.roleLabel !== contactRoleFilter) {
+				return false;
+			}
+
+			if (!query) {
+				return true;
+			}
+
+			return [
 				target.name,
 				target.handle,
 				target.contactLabel,
+				target.projectLabel,
+				target.roleLabel,
+				target.primaryTaskTitle,
+				target.lastActivityLabel,
 				target.threadSummary,
 				target.routingReason,
 				...target.relatedTaskTitles
 			]
 				.join(' ')
 				.toLowerCase()
-				.includes(query)
-		);
+				.includes(query);
+		});
 	});
 	let suggestedContactTargets = $derived.by<ThreadContactTarget[]>(() =>
 		visibleContactTargets.slice(0, 3)
 	);
 	let bestVisibleContactTarget = $derived.by<ThreadContactTarget | null>(
 		() => visibleContactTargets[0] ?? null
+	);
+	let browsableContactTargets = $derived.by<ThreadContactTarget[]>(() =>
+		contactTargetBrowseMode === 'all' ? visibleContactTargets : visibleContactTargets.slice(0, 12)
 	);
 	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
@@ -287,6 +339,22 @@
 	);
 	$effect(() => {
 		threadContactsState = threadContacts;
+	});
+	$effect(() => {
+		const nextBrowseMode = contactTargetQuery.trim() ? 'all' : 'top';
+
+		if (contactTargetBrowseMode !== nextBrowseMode) {
+			contactTargetBrowseMode = nextBrowseMode;
+		}
+	});
+	$effect(() => {
+		if (contactProjectFilter !== 'all' && !contactProjectOptions.includes(contactProjectFilter)) {
+			contactProjectFilter = 'all';
+		}
+
+		if (contactRoleFilter !== 'all' && !contactRoleOptions.includes(contactRoleFilter)) {
+			contactRoleFilter = 'all';
+		}
 	});
 	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
 		if (threadFocusTask) {
@@ -326,6 +394,73 @@
 			isPrimary: primaryTask.isPrimary,
 			source: 'linked'
 		};
+	});
+	let availableContactContextItems = $derived.by<ContactContextItemOption[]>(() => {
+		const items: ContactContextItemOption[] = [];
+
+		if (focusTask) {
+			items.push({
+				id: `focus-task:${focusTask.id}`,
+				kind: 'task',
+				label: focusTask.title,
+				detail: focusTask.summary || `Current task (${focusTask.status}).`,
+				path: null,
+				href: resolve(`/app/tasks/${focusTask.id}`),
+				defaultSelected: true
+			});
+		}
+
+		if (latestContextRun) {
+			items.push({
+				id: `run:${latestContextRun.id}`,
+				kind: 'run',
+				label: 'Latest thread response',
+				detail:
+					latestContextRun.lastMessage?.trim() ||
+					latestContextRun.prompt?.trim() ||
+					'Most recent saved thread context.',
+				path: latestContextRun.messagePath || latestContextRun.logPath || null,
+				href: null,
+				defaultSelected: true
+			});
+		}
+
+		for (const artifact of combinedResponseContextArtifacts) {
+			items.push({
+				id: `artifact:${artifact.path}`,
+				kind: artifact.sourceLabel === 'Thread attachment' ? 'thread_attachment' : 'task_artifact',
+				label: artifact.label,
+				detail: artifact.sourceLabel,
+				path: artifact.path,
+				href: artifact.href ? resolve(artifact.href) : null,
+				defaultSelected: false
+			});
+		}
+
+		return items.filter(
+			(item, index, contextItems) =>
+				contextItems.findIndex((candidate) => candidate.id === item.id) === index
+		);
+	});
+	$effect(() => {
+		const validIds = selectedContactContextItemIds.filter((id) =>
+			availableContactContextItems.some((item) => item.id === id)
+		);
+
+		if (validIds.length > 0) {
+			if (!sameStringArray(validIds, selectedContactContextItemIds)) {
+				selectedContactContextItemIds = validIds;
+			}
+			return;
+		}
+
+		const defaultIds = availableContactContextItems
+			.filter((item) => item.defaultSelected)
+			.map((item) => item.id);
+
+		if (!sameStringArray(defaultIds, selectedContactContextItemIds)) {
+			selectedContactContextItemIds = defaultIds;
+		}
 	});
 	let selectedHistoricalRun = $derived.by(() => {
 		if (!selectedRun) {
@@ -904,6 +1039,16 @@
 		}
 
 		const prompt = contactPrompt.trim();
+		const contextItems = availableContactContextItems
+			.filter((item) => selectedContactContextItemIds.includes(item.id))
+			.map(({ id, kind, label, detail, path, href }) => ({
+				id,
+				kind,
+				label,
+				detail,
+				path,
+				href
+			}));
 
 		if (!prompt) {
 			contactState = {
@@ -942,6 +1087,7 @@
 					sourceThreadId: session.id,
 					contactType,
 					contextSummary: contactContextSummary.trim(),
+					contextItems,
 					replyRequested: true
 				})
 			});
@@ -953,6 +1099,7 @@
 
 			contactPrompt = '';
 			contactContextSummary = '';
+			selectedContactContextItemIds = [];
 			contactType = 'question';
 			await refreshThread({ force: true });
 			contactState = {
@@ -1083,6 +1230,10 @@
 
 	function runModeLabel(run: AgentRunDetail) {
 		return run.mode === 'message' ? 'Follow-up' : 'Start';
+	}
+
+	function sameStringArray(left: string[], right: string[]) {
+		return left.length === right.length && left.every((value, index) => value === right[index]);
 	}
 
 	function sourceThreadLabel(run: AgentRunDetail) {
@@ -2373,6 +2524,57 @@
 											</p>
 										</label>
 
+										<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_12rem_auto]">
+											<label class="block">
+												<span class="mb-2 block text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Project
+												</span>
+												<select bind:value={contactProjectFilter} class="select text-white">
+													<option value="all">All projects</option>
+													{#each contactProjectOptions as option (option)}
+														<option value={option}>{option}</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Role
+												</span>
+												<select bind:value={contactRoleFilter} class="select text-white">
+													<option value="all">All roles</option>
+													{#each contactRoleOptions as option (option)}
+														<option value={option}>{option}</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Availability
+												</span>
+												<select bind:value={contactAvailabilityFilter} class="select text-white">
+													<option value="available">Available only</option>
+													<option value="all">All threads</option>
+												</select>
+											</label>
+
+											<div class="flex items-end">
+												<AppButton
+													class="w-full"
+													type="button"
+													variant="ghost"
+													onclick={() => {
+														contactProjectFilter = 'all';
+														contactRoleFilter = 'all';
+														contactAvailabilityFilter = 'available';
+													}}
+												>
+													Reset filters
+												</AppButton>
+											</div>
+										</div>
+
 										{#if bestVisibleContactTarget}
 											<div class="rounded-lg border border-sky-900/40 bg-sky-950/20 p-4">
 												<div class="flex flex-wrap items-start justify-between gap-3">
@@ -2448,24 +2650,6 @@
 											</div>
 										{/if}
 
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Target thread
-											</span>
-											<select
-												bind:value={contactTargetThreadId}
-												class="select text-white"
-												disabled={contactState?.status === 'sending' ||
-													visibleContactTargets.length === 0}
-											>
-												{#each visibleContactTargets as target (target.id)}
-													<option value={target.id}>
-														{target.contactLabel} - {target.name}
-													</option>
-												{/each}
-											</select>
-										</label>
-
 										{#if visibleContactTargets.length === 0}
 											<p
 												class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400"
@@ -2473,6 +2657,130 @@
 												No threads match that search yet. Try a broader role, project, task, or
 												handle hint.
 											</p>
+										{:else}
+											<div class="space-y-3">
+												<div class="flex flex-wrap items-center justify-between gap-3">
+													<div>
+														<p class="text-sm font-medium text-white">Browse matching threads</p>
+														<p class="text-xs text-slate-500">
+															Showing {browsableContactTargets.length} of {visibleContactTargets.length}
+															match{visibleContactTargets.length === 1 ? '' : 'es'}
+														</p>
+													</div>
+													<div class="flex flex-wrap gap-2">
+														<button
+															class={[
+																'rounded-full border px-3 py-2 text-xs transition',
+																contactTargetBrowseMode === 'top'
+																	? 'border-sky-500/60 bg-sky-950/40 text-sky-100'
+																	: 'border-slate-700 bg-slate-950/50 text-slate-300 hover:border-sky-600/50 hover:text-sky-100'
+															]}
+															type="button"
+															onclick={() => {
+																contactTargetBrowseMode = 'top';
+															}}
+														>
+															Top 12
+														</button>
+														<button
+															class={[
+																'rounded-full border px-3 py-2 text-xs transition',
+																contactTargetBrowseMode === 'all'
+																	? 'border-sky-500/60 bg-sky-950/40 text-sky-100'
+																	: 'border-slate-700 bg-slate-950/50 text-slate-300 hover:border-sky-600/50 hover:text-sky-100'
+															]}
+															type="button"
+															onclick={() => {
+																contactTargetBrowseMode = 'all';
+															}}
+														>
+															Show all
+														</button>
+													</div>
+												</div>
+
+												<div class="max-h-96 space-y-2 overflow-y-auto pr-1">
+													{#each browsableContactTargets as target (target.id)}
+														<button
+															class={[
+																'w-full rounded-xl border p-4 text-left transition',
+																target.id === contactTargetThreadId
+																	? 'border-sky-500/60 bg-sky-950/25'
+																	: 'border-slate-800 bg-black/20 hover:border-sky-700/50 hover:bg-slate-950/40'
+															]}
+															type="button"
+															onclick={() => {
+																contactTargetThreadId = target.id;
+															}}
+														>
+															<div class="flex flex-wrap items-start justify-between gap-3">
+																<div class="min-w-0">
+																	<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																		{target.contactLabel}
+																	</p>
+																	<p class="ui-wrap-anywhere mt-1 text-xs text-slate-400">
+																		{target.handle}
+																	</p>
+																	<div class="mt-2 flex flex-wrap items-center gap-2">
+																		{#if target.projectLabel}
+																			<span class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase">
+																				{target.projectLabel}
+																			</span>
+																		{/if}
+																		{#if target.roleLabel}
+																			<span class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase">
+																				{target.roleLabel}
+																			</span>
+																		{/if}
+																	</div>
+																	{#if target.primaryTaskTitle}
+																		<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
+																			{target.primaryTaskTitle}
+																		</p>
+																	{/if}
+																</div>
+																<div class="flex flex-wrap items-center gap-2">
+																	<span
+																		class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(target.threadState)}`}
+																	>
+																		{formatThreadStateLabel(target.threadState)}
+																	</span>
+																	<span
+																		class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(target.latestRunStatus)}`}
+																	>
+																		{target.latestRunStatus}
+																	</span>
+																</div>
+															</div>
+															<div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+																<span>Last active {target.lastActivityLabel}</span>
+																{#if target.relatedTaskCount > 0}
+																	<span>
+																		{target.relatedTaskCount} linked task{target.relatedTaskCount === 1
+																			? ''
+																			: 's'}
+																	</span>
+																{/if}
+																{#if target.canContact}
+																	<span class="text-emerald-300">Available</span>
+																{:else}
+																	<span class="text-amber-200">
+																		{target.disabledReason || 'Unavailable'}
+																	</span>
+																{/if}
+															</div>
+															<p class="ui-wrap-anywhere mt-3 text-sm text-slate-300">
+																{target.threadSummary}
+															</p>
+															{#if target.routingReason}
+																<p class="ui-wrap-anywhere mt-2 text-xs text-sky-200/90">
+																	Why this stands out: {target.routingReason}
+																</p>
+															{/if}
+														</button>
+													{/each}
+												</div>
+											</div>
 										{/if}
 
 										{#if selectedContactTarget}
@@ -2551,6 +2859,53 @@
 											</label>
 										</div>
 
+										{#if availableContactContextItems.length > 0}
+											<div class="space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
+												<div class="flex flex-wrap items-center justify-between gap-2">
+													<p class="text-sm font-medium text-white">Shared context bundle</p>
+													<p class="text-xs text-slate-500">
+														{selectedContactContextItemIds.length} selected
+													</p>
+												</div>
+												<div class="space-y-2">
+													{#each availableContactContextItems as item (item.id)}
+														<label
+															class="flex gap-3 rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-3"
+														>
+															<input
+																bind:group={selectedContactContextItemIds}
+																class="mt-1"
+																type="checkbox"
+																value={item.id}
+																disabled={!selectedContactTarget?.canContact ||
+																	contactState?.status === 'sending'}
+															/>
+															<div class="min-w-0">
+																<div class="flex flex-wrap items-center gap-2">
+																	<p class="ui-wrap-anywhere text-sm text-slate-100">
+																		{item.label}
+																	</p>
+																	<span
+																		class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-400 uppercase"
+																	>
+																		{item.kind.replace(/_/g, ' ')}
+																	</span>
+																</div>
+																<p class="ui-wrap-anywhere mt-1 text-xs text-slate-400">
+																	{item.detail}
+																</p>
+																{#if item.path}
+																	<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
+																		{item.path}
+																	</p>
+																{/if}
+															</div>
+														</label>
+													{/each}
+												</div>
+											</div>
+										{/if}
+
 										<textarea
 											bind:value={contactPrompt}
 											class="min-h-32 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
@@ -2615,6 +2970,30 @@
 												<p class="ui-wrap-anywhere mt-3 text-xs text-sky-200/90">
 													Context: {contact.contextSummary}
 												</p>
+											{/if}
+											{#if contact.contextItems.length > 0}
+												<div class="mt-3 space-y-2">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Shared context
+													</p>
+													{#each contact.contextItems as item (item.id)}
+														<div
+															class="rounded-lg border border-slate-800/70 bg-black/20 px-3 py-2"
+														>
+															<p class="ui-wrap-anywhere text-xs text-slate-200">
+																{item.label}
+															</p>
+															<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
+																{item.detail}
+															</p>
+															{#if item.path}
+																<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
+																	{item.path}
+																</p>
+															{/if}
+														</div>
+													{/each}
+												</div>
 											{/if}
 											<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
 												{contact.prompt}

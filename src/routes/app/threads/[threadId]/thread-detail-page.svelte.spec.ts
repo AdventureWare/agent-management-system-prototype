@@ -119,6 +119,11 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 						name: 'Coordinator thread',
 						handle: 'coordination.project-1.task-2',
 						contactLabel: 'Coordination · task_2 · ready',
+						projectLabel: 'Agent Management System Prototype',
+						roleLabel: 'Coordination',
+						primaryTaskTitle: 'Coordinate implementation',
+						relatedTaskCount: 1,
+						lastActivityLabel: 'just now',
 						threadState: 'ready',
 						latestRunStatus: 'completed',
 						threadSummary: 'Handles coordination and assignment decisions.',
@@ -138,6 +143,17 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 						targetAgentThreadName: 'Coordinator thread',
 						contactType: 'request_assignment',
 						contextSummary: 'Need a clear owner before shipping the coordination update.',
+						contextItems: [
+							{
+								id: 'focus-task:task_1',
+								kind: 'task',
+								label: 'Task info pane in thread detail page',
+								detail:
+									'Replace the current text/content of the Current Task pane in the Thread Detail page so it shows the task name and instructions/summary instead.',
+								path: null,
+								href: '/app/tasks/task_1'
+							}
+						],
 						prompt: 'Need assignment confirmation before shipping this update.',
 						replyRequested: true,
 						replyToContactId: null,
@@ -162,6 +178,7 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Contact another thread');
 		expect(document.body.textContent).toContain('Coordinator thread');
 		expect(document.body.textContent).toContain('Coordination · task_2 · ready');
+		expect(document.body.textContent).toContain('Browse matching threads');
 		expect(document.body.textContent).toContain('Routing hint');
 		expect(document.body.textContent).toContain('Contact inbox and outbox');
 		expect(document.body.textContent).toContain('Awaiting reply 1');

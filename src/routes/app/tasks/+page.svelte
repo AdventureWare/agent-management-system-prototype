@@ -3,8 +3,18 @@
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
+	import {
+		appendExecutionRequirementName,
+		findUnknownExecutionRequirementNames
+	} from '$lib/execution-requirements';
 	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import { collectTaskLinkedThreads, mergeTaskThreadState } from '$lib/client/task-thread-state';
+	import {
+		getTaskApprovalPolicyLabel,
+		getTaskPendingApprovalBadgeLabel,
+		getTaskReviewBadgeLabel,
+		getTaskReviewRequirementLabel
+	} from '$lib/task-governance-ui';
 	import { getTaskThreadActionLabel, getTaskThreadReviewHref } from '$lib/task-thread-context';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
@@ -84,6 +94,24 @@
 	let taskWritingAssistChangeSummary = $derived(
 		taskWritingAssistSuccess ? (form?.assistChangeSummary?.toString() ?? '') : ''
 	);
+	let governanceSuccessMessage = $derived.by(() => {
+		if (!form?.ok) {
+			return null;
+		}
+
+		switch (form.successAction) {
+			case 'approveReview':
+				return 'Review approved.';
+			case 'requestChanges':
+				return 'Changes requested and task moved back to blocked.';
+			case 'approveApproval':
+				return 'Approval gate cleared.';
+			case 'rejectApproval':
+				return 'Approval rejected and task moved to blocked.';
+			default:
+				return null;
+		}
+	});
 	let createdAttachmentCount = $derived(
 		form?.ok && (form?.successAction === 'createTask' || form?.successAction === 'createTaskAndRun')
 			? Number(form.attachmentCount ?? 0)
@@ -189,6 +217,20 @@
 		}
 
 		return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function formatInventoryCoverageLabel(entry: { workerCount: number; providerCount: number }) {
+		const parts: string[] = [];
+
+		if (entry.workerCount > 0) {
+			parts.push(`${entry.workerCount} worker${entry.workerCount === 1 ? '' : 's'}`);
+		}
+
+		if (entry.providerCount > 0) {
+			parts.push(`${entry.providerCount} provider${entry.providerCount === 1 ? '' : 's'}`);
+		}
+
+		return parts.join(' · ') || 'No current coverage';
 	}
 
 	function createAttachmentKey(file: File) {
@@ -444,6 +486,10 @@
 	let visibleTaskRowIdSet = $derived(new Set(visibleTaskRows.map((task) => task.id)));
 	let staleTaskCount = $derived(taskCollections.staleTaskCount);
 	let staleFilterCounts = $derived(taskCollections.staleFilterCounts);
+	let queuePanelTask = $derived.by(() => {
+		const rowTaskId = queueDetailPanel?.rowTaskId ?? null;
+		return rowTaskId ? (tasks.find((task) => task.id === rowTaskId) ?? null) : null;
+	});
 	let activePanelRowTaskId = $derived(queueDetailPanel?.rowTaskId ?? '');
 	let embeddedQueueDetailPanelHref = $derived(
 		queueDetailPanel ? buildEmbeddedPanelHref(queueDetailPanel.href) : ''
@@ -593,6 +639,18 @@
 	let createTaskDependencyCount = $derived(createTaskDependencyTaskIds.length);
 	let createTaskDesiredRoleName = $derived(
 		data.roles.find((role) => role.id === createTaskDesiredRoleId)?.name ?? createTaskDesiredRoleId
+	);
+	let createTaskUnknownCapabilityNames = $derived(
+		findUnknownExecutionRequirementNames(
+			createTaskRequiredCapabilityNames,
+			data.executionRequirementInventory.capabilityNames
+		)
+	);
+	let createTaskUnknownToolNames = $derived(
+		findUnknownExecutionRequirementNames(
+			createTaskRequiredToolNames,
+			data.executionRequirementInventory.toolNames
+		)
 	);
 	let createTaskAdvancedSummary = $derived.by(() => {
 		const parts: string[] = [];
@@ -1091,14 +1149,14 @@
 									<span
 										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 									>
-										{formatTaskApprovalModeLabel(task.approvalMode)}
+										{getTaskApprovalPolicyLabel(task.approvalMode)}
 									</span>
 								{/if}
 								{#if !task.requiresReview}
 									<span
 										class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 									>
-										Review optional
+										{getTaskReviewRequirementLabel(task.requiresReview)}
 									</span>
 								{/if}
 								{#if task.desiredRoleId}
@@ -1112,14 +1170,14 @@
 									<span
 										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 									>
-										Review open
+										{getTaskReviewBadgeLabel(task.openReview.status)}
 									</span>
 								{/if}
 								{#if task.pendingApproval}
 									<span
 										class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 									>
-										Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
+										{getTaskPendingApprovalBadgeLabel(task.pendingApproval.mode)}
 									</span>
 								{/if}
 								{#each task.freshness.staleSignals as signal (signal)}
@@ -1297,14 +1355,14 @@
 													<span
 														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 													>
-														{formatTaskApprovalModeLabel(task.approvalMode)}
+														{getTaskApprovalPolicyLabel(task.approvalMode)}
 													</span>
 												{/if}
 												{#if !task.requiresReview}
 													<span
 														class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 													>
-														Review optional
+														{getTaskReviewRequirementLabel(task.requiresReview)}
 													</span>
 												{/if}
 												{#if task.desiredRoleId}
@@ -1318,14 +1376,14 @@
 													<span
 														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 													>
-														Review open
+														{getTaskReviewBadgeLabel(task.openReview.status)}
 													</span>
 												{/if}
 												{#if task.pendingApproval}
 													<span
 														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
 													>
-														Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
+														{getTaskPendingApprovalBadgeLabel(task.pendingApproval.mode)}
 													</span>
 												{/if}
 												{#each task.freshness.staleSignals as signal (signal)}
@@ -1460,6 +1518,10 @@
 							</AppButton>
 						</div>
 
+						{#if queuePanelTask}
+							{@render governanceActions(queuePanelTask)}
+						{/if}
+
 						<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80">
 							<iframe
 								class="h-[78vh] min-h-[42rem] w-full bg-slate-950"
@@ -1477,6 +1539,58 @@
 			</div>
 		</div>
 	</DataTableSection>
+{/snippet}
+
+{#snippet governanceActions(task: TaskRow)}
+	{#if task.openReview || task.pendingApproval}
+		<div class="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-4">
+			<p class="text-xs font-semibold tracking-[0.16em] text-amber-300 uppercase">
+				Next governance action
+			</p>
+			<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+				{#if task.openReview}
+					<form method="POST" action="?/approveReview">
+						<input type="hidden" name="taskId" value={task.id} />
+						<button
+							class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+							type="submit"
+						>
+							Approve review
+						</button>
+					</form>
+					<form method="POST" action="?/requestChanges">
+						<input type="hidden" name="taskId" value={task.id} />
+						<button
+							class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+							type="submit"
+						>
+							Request changes
+						</button>
+					</form>
+				{/if}
+				{#if task.pendingApproval}
+					<form method="POST" action="?/approveApproval">
+						<input type="hidden" name="taskId" value={task.id} />
+						<button
+							class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+							type="submit"
+						>
+							Approve gate
+						</button>
+					</form>
+					<form method="POST" action="?/rejectApproval">
+						<input type="hidden" name="taskId" value={task.id} />
+						<button
+							class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+							type="submit"
+						>
+							Reject gate
+						</button>
+					</form>
+				{/if}
+			</div>
+		</div>
+	{/if}
 {/snippet}
 
 <AppPage width="full" class="min-w-0">
@@ -1549,6 +1663,13 @@
 				{deleteCount === 1
 					? 'Task deleted and removed from the queue.'
 					: `${deleteCount} tasks deleted and removed from the queue.`}
+			</p>
+		{:else if governanceSuccessMessage}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				{governanceSuccessMessage}
 			</p>
 		{/if}
 
@@ -2207,10 +2328,44 @@
 									class="input text-white placeholder:text-slate-500"
 									name="requiredCapabilityNames"
 									placeholder="planning, citations, svelte"
+									list="task-create-capability-inventory"
 								/>
 								<span class="mt-2 block text-xs text-slate-500">
 									Comma-separated abilities the task needs, regardless of who does it.
 								</span>
+								{#if data.executionRequirementInventory.capabilities.length === 0}
+									<span class="mt-2 block text-xs text-slate-500">
+										No worker or provider capability inventory is registered yet. These labels stay
+										free-form for now.
+									</span>
+								{:else}
+									<div class="mt-3 flex flex-wrap gap-2">
+										{#each data.executionRequirementInventory.capabilities as capability (capability.name)}
+											<button
+												type="button"
+												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+												title={formatInventoryCoverageLabel(capability)}
+												onclick={() => {
+													createTaskRequiredCapabilityNames = appendExecutionRequirementName(
+														createTaskRequiredCapabilityNames,
+														capability.name
+													);
+												}}
+											>
+												{capability.name}
+											</button>
+										{/each}
+									</div>
+									<span class="mt-2 block text-xs text-slate-500">
+										Select a known label to append it from the current worker and provider
+										inventory.
+									</span>
+								{/if}
+								{#if data.executionRequirementInventory.capabilities.length > 0 && createTaskUnknownCapabilityNames.length > 0}
+									<span class="mt-2 block text-xs text-amber-300">
+										Not in the current inventory: {createTaskUnknownCapabilityNames.join(', ')}
+									</span>
+								{/if}
 							</label>
 
 							<label class="block">
@@ -2220,12 +2375,58 @@
 									class="input text-white placeholder:text-slate-500"
 									name="requiredToolNames"
 									placeholder="codex, playwright"
+									list="task-create-tool-inventory"
 								/>
 								<span class="mt-2 block text-xs text-slate-500">
 									Comma-separated tools or execution surfaces needed for this work.
 								</span>
+								{#if data.executionRequirementInventory.tools.length === 0}
+									<span class="mt-2 block text-xs text-slate-500">
+										No provider launcher inventory is registered yet. These labels stay free-form
+										for now.
+									</span>
+								{:else}
+									<div class="mt-3 flex flex-wrap gap-2">
+										{#each data.executionRequirementInventory.tools as tool (tool.name)}
+											<button
+												type="button"
+												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+												title={formatInventoryCoverageLabel(tool)}
+												onclick={() => {
+													createTaskRequiredToolNames = appendExecutionRequirementName(
+														createTaskRequiredToolNames,
+														tool.name
+													);
+												}}
+											>
+												{tool.name}
+											</button>
+										{/each}
+									</div>
+									<span class="mt-2 block text-xs text-slate-500">
+										Select a known launcher label to append it from the current provider
+										inventory.
+									</span>
+								{/if}
+								{#if data.executionRequirementInventory.tools.length > 0 && createTaskUnknownToolNames.length > 0}
+									<span class="mt-2 block text-xs text-amber-300">
+										Not in the current inventory: {createTaskUnknownToolNames.join(', ')}
+									</span>
+								{/if}
 							</label>
 						</div>
+
+						<datalist id="task-create-capability-inventory">
+							{#each data.executionRequirementInventory.capabilityNames as capabilityName (capabilityName)}
+								<option value={capabilityName}></option>
+							{/each}
+						</datalist>
+
+						<datalist id="task-create-tool-inventory">
+							{#each data.executionRequirementInventory.toolNames as toolName (toolName)}
+								<option value={toolName}></option>
+							{/each}
+						</datalist>
 
 						<label class="block">
 							<span class="mb-2 flex flex-wrap items-center justify-between gap-3">

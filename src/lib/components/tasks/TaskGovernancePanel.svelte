@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import { getTaskApprovalSummary, getTaskReviewSummary } from '$lib/task-governance-ui';
 	import {
 		approvalStatusToneClass,
 		formatDecisionTypeLabel,
@@ -115,9 +116,7 @@
 								Open review
 							</p>
 							<p class="mt-2 text-sm text-white">
-								{task.openReview
-									? task.openReview.summary || 'Waiting on reviewer decision.'
-									: 'No open review'}
+								{task.openReview ? getTaskReviewSummary(task.openReview.summary) : 'No open review'}
 							</p>
 						</div>
 						{#if task.openReview}
@@ -159,8 +158,7 @@
 							</p>
 							<p class="mt-2 text-sm text-white">
 								{task.pendingApproval
-									? task.pendingApproval.summary ||
-										`Waiting on ${formatTaskApprovalModeLabel(task.pendingApproval.mode)} approval.`
+									? getTaskApprovalSummary(task.pendingApproval.mode, task.pendingApproval.summary)
 									: 'No pending approval'}
 							</p>
 						</div>

@@ -264,6 +264,34 @@
 				</label>
 			</div>
 
+			<div class="grid gap-4 sm:grid-cols-2">
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Skills</span>
+					<input
+						class="input text-white"
+						name="skills"
+						value={(data.worker.skills ?? []).join(', ')}
+					/>
+					<p class="mt-2 text-xs text-slate-500">
+						Worker-specific skills used for routing and coverage checks.
+					</p>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Max concurrent runs</span>
+					<input
+						class="input text-white"
+						name="maxConcurrentRuns"
+						type="number"
+						min="1"
+						value={data.worker.maxConcurrentRuns ?? ''}
+					/>
+					<p class="mt-2 text-xs text-slate-500">
+						Leave blank to use the worker capacity as the concurrency limit.
+					</p>
+				</label>
+			</div>
+
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Thread sandbox override</span>
 				<select class="select text-white" name="threadSandboxOverride">
@@ -309,6 +337,67 @@
 		</form>
 
 		<div class="space-y-6">
+			<section class="card border border-slate-800 bg-slate-950/70 p-6">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+							Capability summary
+						</p>
+						<h2 class="mt-2 text-xl font-semibold text-white">Current execution surface</h2>
+					</div>
+				</div>
+
+				<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Worker skills
+						</p>
+						<p class="mt-2 text-sm text-white">
+							{data.worker.skills.length > 0 ? data.worker.skills.join(', ') : 'None listed'}
+						</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Provider capabilities
+						</p>
+						<p class="mt-2 text-sm text-white">
+							{data.worker.providerCapabilities.length > 0
+								? data.worker.providerCapabilities.join(', ')
+								: 'None listed'}
+						</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Effective concurrency
+						</p>
+						<p class="mt-2 text-sm text-white">
+							{data.worker.activeRunCount} active / {data.worker.effectiveConcurrencyLimit} allowed
+						</p>
+					</div>
+					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Thread sandbox
+						</p>
+						<p class="mt-2 text-sm text-white">
+							{data.worker.threadSandboxOverride ??
+								`Provider default (${data.worker.providerDefaultThreadSandbox})`}
+						</p>
+					</div>
+				</div>
+
+				{#if data.worker.effectiveCapabilities.length > 0}
+					<div class="mt-4 flex flex-wrap gap-2">
+						{#each data.worker.effectiveCapabilities as capability (capability)}
+							<span
+								class="ui-wrap-anywhere rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+							>
+								{capability}
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section class="card border border-slate-800 bg-slate-950/70 p-6">
 				<div class="flex items-start justify-between gap-3">
 					<div>

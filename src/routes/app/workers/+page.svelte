@@ -23,8 +23,10 @@
 	let workerLocation = $state('cloud');
 	let workerStatus = $state('idle');
 	let workerCapacity = $state('1');
+	let workerMaxConcurrentRuns = $state('');
 	let workerNote = $state('');
 	let workerTags = $state('');
+	let workerSkills = $state('');
 	let query = $state('');
 
 	function modalShouldStartOpen() {
@@ -60,7 +62,10 @@
 			worker.roleName,
 			worker.location,
 			worker.status,
-			worker.tags.join(' ')
+			worker.tags.join(' '),
+			(worker.skills ?? []).join(' '),
+			(worker.providerCapabilities ?? []).join(' '),
+			(worker.effectiveCapabilities ?? []).join(' ')
 		]
 			.join(' ')
 			.toLowerCase()
@@ -113,8 +118,10 @@
 			location: string;
 			status: string;
 			capacity: string;
+			maxConcurrentRuns: string;
 			note: string;
 			tags: string;
+			skills: string;
 		}>(CREATE_WORKER_DRAFT_KEY);
 
 		if (savedDraft) {
@@ -124,8 +131,10 @@
 			workerLocation = normalizeWorkerLocation(savedDraft.location);
 			workerStatus = normalizeWorkerStatus(savedDraft.status);
 			workerCapacity = savedDraft.capacity ?? '1';
+			workerMaxConcurrentRuns = savedDraft.maxConcurrentRuns ?? '';
 			workerNote = savedDraft.note ?? '';
 			workerTags = savedDraft.tags ?? '';
+			workerSkills = savedDraft.skills ?? '';
 			isCreateModalOpen = true;
 		}
 
@@ -149,8 +158,10 @@
 			location: workerLocation === defaultWorkerLocation() ? '' : workerLocation,
 			status: workerStatus === defaultWorkerStatus() ? '' : workerStatus,
 			capacity: workerCapacity === '1' ? '' : workerCapacity,
+			maxConcurrentRuns: workerMaxConcurrentRuns,
 			note: workerNote,
-			tags: workerTags
+			tags: workerTags,
+			skills: workerSkills
 		});
 	});
 </script>
@@ -264,6 +275,12 @@
 								<p class="mt-2 text-lg font-semibold text-white">{worker.capacity}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Concurrency</p>
+								<p class="mt-2 text-lg font-semibold text-white">
+									{worker.activeRunCount} / {worker.effectiveConcurrencyLimit}
+								</p>
+							</div>
+							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Assigned tasks</p>
 								<p class="mt-2 text-lg font-semibold text-white">{worker.assignedTaskCount}</p>
 							</div>
@@ -282,6 +299,27 @@
 										class="ui-wrap-anywhere rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
 									>
 										{tag}
+									</span>
+								{/each}
+							</div>
+						{/if}
+
+						{#if (worker.skills?.length ?? 0) > 0 || (worker.providerCapabilities?.length ?? 0) > 0}
+							<div class="mt-4 flex flex-wrap gap-2">
+								{#each worker.skills ?? [] as skill (skill)}
+									<span
+										class="ui-wrap-anywhere rounded-full border border-sky-900/60 bg-sky-950/20 px-2 py-1 text-xs text-sky-100"
+									>
+										{skill}
+										<span class="text-sky-300/70"> · worker</span>
+									</span>
+								{/each}
+								{#each worker.providerCapabilities ?? [] as capability (capability)}
+									<span
+										class="ui-wrap-anywhere rounded-full border border-emerald-900/60 bg-emerald-950/20 px-2 py-1 text-xs text-emerald-100"
+									>
+										{capability}
+										<span class="text-emerald-300/70"> · provider</span>
 									</span>
 								{/each}
 							</div>
@@ -359,6 +397,30 @@
 						name="capacity"
 						type="number"
 						min="1"
+					/>
+				</label>
+			</div>
+
+			<div class="grid gap-4 sm:grid-cols-2">
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Skills</span>
+					<input
+						bind:value={workerSkills}
+						class="input text-white placeholder:text-slate-500"
+						name="skills"
+						placeholder="planning, svelte, citations"
+					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200"> Max concurrent runs </span>
+					<input
+						bind:value={workerMaxConcurrentRuns}
+						class="input text-white placeholder:text-slate-500"
+						name="maxConcurrentRuns"
+						type="number"
+						min="1"
+						placeholder="Use capacity"
 					/>
 				</label>
 			</div>

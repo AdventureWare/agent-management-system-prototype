@@ -168,7 +168,8 @@ function readJsonFile(path, createDefault) {
 		return JSON.parse(readFileSync(path, 'utf8'));
 	} catch (error) {
 		throw new Error(
-			`Failed to parse ${path}: ${error instanceof Error ? error.message : String(error)}`
+			`Failed to parse ${path}: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error }
 		);
 	}
 }

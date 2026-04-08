@@ -279,7 +279,16 @@ describe('task-detail-page-data', () => {
 		getTaskAttachmentRoot.mockReset();
 		getTaskAttachmentRoot.mockReturnValue('/tmp/project/agent_output/task_1');
 		getWorkerAssignmentSuggestions.mockReset();
-		getWorkerAssignmentSuggestions.mockReturnValue([{ workerId: 'worker_a' }]);
+		getWorkerAssignmentSuggestions.mockReturnValue([
+			{
+				workerId: 'worker_a',
+				workerName: 'Worker A',
+				eligible: true,
+				withinConcurrencyLimit: true,
+				missingCapabilityNames: [],
+				missingToolNames: []
+			}
+		]);
 		buildAssignmentSuggestionViews.mockReset();
 		buildAssignmentSuggestionViews.mockReturnValue([{ workerId: 'worker_a', eligible: true }]);
 		buildParentTaskView.mockReset();

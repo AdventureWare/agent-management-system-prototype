@@ -26,6 +26,8 @@ export const POST = async ({ request }) => {
 		capacity?: number;
 		note?: string;
 		tags?: string[];
+		skills?: string[];
+		maxConcurrentRuns?: number | null;
 		threadSandboxOverride?: string | null;
 	};
 
@@ -67,6 +69,15 @@ export const POST = async ({ request }) => {
 					: 1,
 			note: body.note?.trim() ?? '',
 			tags: Array.isArray(body.tags) ? body.tags.map((tag) => tag.trim()).filter(Boolean) : [],
+			skills: Array.isArray(body.skills)
+				? body.skills.map((skill) => skill.trim()).filter(Boolean)
+				: [],
+			maxConcurrentRuns:
+				typeof body.maxConcurrentRuns === 'number' &&
+				Number.isFinite(body.maxConcurrentRuns) &&
+				body.maxConcurrentRuns > 0
+					? body.maxConcurrentRuns
+					: null,
 			threadSandboxOverride:
 				typeof body.threadSandboxOverride === 'string' &&
 				body.threadSandboxOverride.trim().length > 0

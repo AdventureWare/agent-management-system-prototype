@@ -7,9 +7,11 @@ import {
 import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
 import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
 import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
+import { buildTaskExecutionPreflight } from '$lib/server/task-execution-preflight';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	buildAssignmentSuggestionViews,
@@ -75,12 +77,15 @@ export async function loadTaskDetailPageData(taskId: string) {
 		task.id,
 		formatRelativeTime
 	);
+	const rawAssignmentSuggestions = getWorkerAssignmentSuggestions(data, task);
 	const assignmentSuggestions = buildAssignmentSuggestionViews(
-		getWorkerAssignmentSuggestions(data, task),
+		rawAssignmentSuggestions,
 		data.roles,
 		data.providers,
 		task.assigneeWorkerId
 	);
+	const executionPreflight = buildTaskExecutionPreflight(task, rawAssignmentSuggestions);
+	const executionRequirementInventory = buildExecutionRequirementInventory(data);
 	const [retrievedKnowledgeItems, artifactBrowser] = await Promise.all([
 		loadRelevantSelfImprovementKnowledgeItems({
 			task,
@@ -126,6 +131,8 @@ export async function loadTaskDetailPageData(taskId: string) {
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
 		assignmentSuggestions,
+		executionPreflight,
+		executionRequirementInventory,
 		recentDecisions,
 		statusOptions: TASK_STATUS_OPTIONS,
 		relatedRuns,

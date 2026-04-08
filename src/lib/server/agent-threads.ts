@@ -31,6 +31,7 @@ import {
 	type AgentRunDetail,
 	type AgentRunStatus,
 	type AgentThreadAttachment,
+	type AgentThreadContactContextItem,
 	type AgentThreadTaskLink,
 	type AgentThreadContactType,
 	type AgentThreadState,
@@ -81,6 +82,47 @@ function isAgentThreadContactType(value: string): value is AgentThreadContactTyp
 
 function isAgentThreadContactStatus(value: string): value is AgentThreadContact['status'] {
 	return AGENT_THREAD_CONTACT_STATUS_OPTIONS.includes(value as AgentThreadContact['status']);
+}
+
+function normalizeAgentThreadContactContextItems(items: unknown): AgentThreadContactContextItem[] {
+	if (!Array.isArray(items)) {
+		return [];
+	}
+
+	return items
+		.filter((item) => Boolean(item) && typeof item === 'object')
+		.map((item, index) => {
+			const candidate = item as Partial<AgentThreadContactContextItem>;
+			const id =
+				typeof candidate.id === 'string' && candidate.id.trim()
+					? candidate.id.trim()
+					: `context_item_${index + 1}`;
+			const kind =
+				candidate.kind === 'task' ||
+				candidate.kind === 'run' ||
+				candidate.kind === 'thread_attachment' ||
+				candidate.kind === 'task_artifact'
+					? candidate.kind
+					: 'task_artifact';
+			const label =
+				typeof candidate.label === 'string' && candidate.label.trim()
+					? candidate.label.trim()
+					: 'Shared context';
+			const detail =
+				typeof candidate.detail === 'string' && candidate.detail.trim()
+					? candidate.detail.trim()
+					: '';
+			const path =
+				typeof candidate.path === 'string' && candidate.path.trim() ? candidate.path.trim() : null;
+			const href =
+				typeof candidate.href === 'string' && candidate.href.trim() ? candidate.href.trim() : null;
+
+			return { id, kind, label, detail, path, href } satisfies AgentThreadContactContextItem;
+		})
+		.filter(
+			(item, index, normalized) =>
+				normalized.findIndex((candidate) => candidate.id === item.id) === index
+		);
 }
 
 function getAgentThreadsStorageBackend() {
@@ -254,6 +296,7 @@ function normalizeAgentThreadsDb(parsed: Partial<AgentThreadsDb>): AgentThreadsD
 						typeof candidate.contextSummary === 'string' && candidate.contextSummary.trim()
 							? candidate.contextSummary.trim()
 							: null,
+					contextItems: normalizeAgentThreadContactContextItems(candidate.contextItems),
 					prompt: typeof candidate.prompt === 'string' ? candidate.prompt : '',
 					replyRequested: candidate.replyRequested !== false,
 					replyToContactId:
@@ -389,6 +432,7 @@ export function buildAgentThreadContactPrompt(input: {
 	prompt: string;
 	contactType?: AgentThreadContactType;
 	contextSummary?: string | null;
+	contextItems?: AgentThreadContactContextItem[];
 	contactId?: string | null;
 	replyRequested?: boolean;
 	replyToContactId?: string | null;
@@ -398,6 +442,15 @@ export function buildAgentThreadContactPrompt(input: {
 		input.sourceThread.latestRun?.prompt?.trim() ||
 		'';
 	const linkedTaskSummary = summarizeSourceThreadTasks(input.sourceThread);
+	const contextBundleLines = (input.contextItems ?? []).map((item) =>
+		[
+			`- ${item.label} [${item.kind}]`,
+			item.detail ? `  ${compactThreadContactText(item.detail, 220)}` : '',
+			item.path ? `  Path: ${item.path}` : ''
+		]
+			.filter(Boolean)
+			.join('\n')
+	);
 	const sections = [
 		'Another agent thread is contacting you for coordination.',
 		`Source thread: ${input.sourceThread.name} (${input.sourceThread.id})`,
@@ -408,6 +461,9 @@ export function buildAgentThreadContactPrompt(input: {
 			: '',
 		input.contextSummary?.trim()
 			? `Focused context note:\n${compactThreadContactText(input.contextSummary, 420)}`
+			: '',
+		contextBundleLines.length > 0
+			? `Explicit context bundle:\n${contextBundleLines.join('\n')}`
 			: '',
 		sourceContext
 			? `Latest saved context from the source thread:\n${compactThreadContactText(sourceContext, 900)}`
@@ -3110,6 +3166,7 @@ export async function contactAgentThread(
 		attachments?: File[];
 		contactType?: AgentThreadContactType | string | null;
 		contextSummary?: string | null;
+		contextItems?: AgentThreadContactContextItem[];
 		replyRequested?: boolean;
 		replyToContactId?: string | null;
 	}
@@ -3121,6 +3178,7 @@ export async function contactAgentThread(
 			? input.contactType
 			: 'question';
 	const contextSummary = input.contextSummary?.trim() || null;
+	const contextItems = normalizeAgentThreadContactContextItems(input.contextItems);
 	const replyRequested = input.replyRequested !== false;
 	const replyToContactId = input.replyToContactId?.trim() || null;
 
@@ -3167,6 +3225,7 @@ export async function contactAgentThread(
 			prompt,
 			contactType,
 			contextSummary,
+			contextItems,
 			contactId,
 			replyRequested,
 			replyToContactId
@@ -3192,6 +3251,7 @@ export async function contactAgentThread(
 				targetAgentThreadName: targetThread.name,
 				contactType,
 				contextSummary,
+				contextItems,
 				prompt,
 				replyRequested,
 				replyToContactId,

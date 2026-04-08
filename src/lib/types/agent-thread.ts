@@ -117,6 +117,7 @@ export type AgentThreadContact = {
 	targetAgentThreadName: string;
 	contactType: AgentThreadContactType;
 	contextSummary: string | null;
+	contextItems: AgentThreadContactContextItem[];
 	prompt: string;
 	replyRequested: boolean;
 	replyToContactId: string | null;
@@ -125,6 +126,15 @@ export type AgentThreadContact = {
 	targetRunId: string | null;
 	createdAt: string;
 	updatedAt: string;
+};
+
+export type AgentThreadContactContextItem = {
+	id: string;
+	kind: 'task' | 'run' | 'thread_attachment' | 'task_artifact';
+	label: string;
+	detail: string;
+	path: string | null;
+	href: string | null;
 };
 
 export type AgentRunState = {

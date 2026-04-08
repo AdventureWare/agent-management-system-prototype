@@ -9,9 +9,25 @@ const remotePreviewAllowedHosts = (process.env.AMS_REMOTE_PREVIEW_ALLOWED_HOSTS 
 	.map((value) => value.trim())
 	.filter(Boolean);
 const enableBrowserTests = process.env.VITEST_BROWSER === '1';
+const ignoredRuntimeWatchGlobs = [
+	'**/data/**',
+	'**/agent_output/**',
+	'**/output/**',
+	'**/screenshots/**',
+	'**/.playwright-cli/**',
+	'**/.playwright-mcp/**',
+	'**/.kwipoo-app-link',
+	'**/.kwipoo-app-link/**'
+];
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	server: {
+		watch: {
+			// Ignore live runtime artifacts so Vite only watches source files during dev.
+			ignored: ignoredRuntimeWatchGlobs
+		}
+	},
 	preview:
 		remotePreviewAllowedHosts.length > 0 ? { allowedHosts: remotePreviewAllowedHosts } : undefined,
 	test: {

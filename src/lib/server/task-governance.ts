@@ -79,6 +79,10 @@ function buildStaleReason(task: TaskWorkItem, signal: TaskStaleSignalKey) {
 function buildEscalationReasons(task: TaskWorkItem) {
 	const reasons: string[] = [];
 
+	if (task.status === 'review' && !task.openReview && !task.pendingApproval) {
+		reasons.push('Task is in review and needs operator follow-up.');
+	}
+
 	if (task.status === 'blocked') {
 		reasons.push(task.blockedReason || 'Task is blocked and needs operator review.');
 	}
@@ -128,7 +132,10 @@ export async function loadGovernanceInboxData(): Promise<GovernanceInboxData> {
 			(task) =>
 				!task.openReview &&
 				!task.pendingApproval &&
-				(task.status === 'blocked' || task.hasUnmetDependencies || task.freshness.isStale)
+				(task.status === 'review' ||
+					task.status === 'blocked' ||
+					task.hasUnmetDependencies ||
+					task.freshness.isStale)
 		)
 		.sort((left, right) => {
 			if (left.escalationReasons.length !== right.escalationReasons.length) {

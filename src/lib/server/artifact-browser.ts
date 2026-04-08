@@ -176,7 +176,7 @@ export async function buildArtifactBrowser(
 	const maxEntries = input.maxEntries ?? 24;
 	const knownOutputInputs = [...(input.knownOutputs ?? [])];
 	let browsePath: string | null = null;
-	let rootKind: ArtifactBrowserData['rootKind'] = 'missing';
+	let rootKind!: ArtifactBrowserData['rootKind'];
 	let inspectingParentDirectory = false;
 	let errorMessage = '';
 

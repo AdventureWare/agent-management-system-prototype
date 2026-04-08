@@ -1,4 +1,5 @@
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
+import { parseExecutionRequirementNames } from '$lib/execution-requirements';
 import {
 	AREA_OPTIONS,
 	PRIORITY_OPTIONS,
@@ -163,8 +164,12 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		desiredRoleId: readTrimmedValue(form.get('desiredRoleId')),
 		blockedReason: readTrimmedValue(form.get('blockedReason')),
 		dependencyTaskIds: parseIdList(form.getAll('dependencyTaskIds')),
-		requiredCapabilityNames: parseNameList(form.get('requiredCapabilityNames')),
-		requiredToolNames: parseNameList(form.get('requiredToolNames'))
+		requiredCapabilityNames: parseExecutionRequirementNames(
+			readTrimmedValue(form.get('requiredCapabilityNames'))
+		),
+		requiredToolNames: parseExecutionRequirementNames(
+			readTrimmedValue(form.get('requiredToolNames'))
+		)
 	};
 }
 

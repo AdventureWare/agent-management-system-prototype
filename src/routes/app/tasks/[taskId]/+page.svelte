@@ -319,6 +319,7 @@
 			roles={data.roles ?? []}
 			dependencyTasksCount={data.dependencyTasks.length}
 			availableDependencyTasks={data.availableDependencyTasks ?? []}
+			executionRequirementInventory={data.executionRequirementInventory}
 		/>
 
 		<div class="space-y-6">
@@ -357,6 +358,7 @@
 			{:else if selectedDetailPanel === 'execution'}
 				<TaskExecutionPanel
 					task={data.task}
+					executionPreflight={data.executionPreflight}
 					retrievedKnowledgeItems={data.retrievedKnowledgeItems ?? []}
 					suggestedThread={data.suggestedThread}
 					candidateThreads={data.candidateThreads}

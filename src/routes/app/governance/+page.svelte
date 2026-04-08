@@ -5,6 +5,12 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
+		getTaskApprovalPolicyLabel,
+		getTaskApprovalSummary,
+		getTaskReviewRequirementLabel,
+		getTaskReviewSummary
+	} from '$lib/task-governance-ui';
+	import {
 		approvalStatusToneClass,
 		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
@@ -79,12 +85,16 @@
 		</span>
 		{#if item.requiresReview}
 			<span class="badge border border-sky-800/70 bg-sky-950/40 text-sky-200">
-				review required
+				{getTaskReviewRequirementLabel(item.requiresReview)}
+			</span>
+		{:else}
+			<span class="badge border border-slate-700 bg-slate-950/70 text-slate-300">
+				{getTaskReviewRequirementLabel(item.requiresReview)}
 			</span>
 		{/if}
 		{#if item.approvalMode !== 'none'}
 			<span class="badge border border-amber-800/70 bg-amber-950/40 text-amber-200">
-				approval {formatTaskApprovalModeLabel(item.approvalMode)}
+				{getTaskApprovalPolicyLabel(item.approvalMode)}
 			</span>
 		{/if}
 	</div>
@@ -193,7 +203,7 @@
 						<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Review note</p>
 							<p class="mt-2 text-sm text-white">
-								{item.openReview?.summary || 'Waiting on reviewer decision.'}
+								{getTaskReviewSummary(item.openReview?.summary)}
 							</p>
 						</div>
 
@@ -262,8 +272,10 @@
 						<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Approval note</p>
 							<p class="mt-2 text-sm text-white">
-								{item.pendingApproval?.summary ||
-									`Waiting on ${formatTaskApprovalModeLabel(item.approvalMode)} approval.`}
+								{getTaskApprovalSummary(
+									item.pendingApproval?.mode ?? item.approvalMode,
+									item.pendingApproval?.summary
+								)}
 							</p>
 						</div>
 

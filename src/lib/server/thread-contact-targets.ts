@@ -9,6 +9,11 @@ export type ThreadContactTargetView = {
 	name: string;
 	handle: string;
 	contactLabel: string;
+	projectLabel: string;
+	roleLabel: string;
+	primaryTaskTitle: string;
+	relatedTaskCount: number;
+	lastActivityLabel: string;
 	threadState: AgentThreadDetail['threadState'];
 	latestRunStatus: AgentThreadDetail['latestRunStatus'];
 	threadSummary: string;
@@ -26,6 +31,12 @@ export function buildThreadContactTarget(thread: AgentThreadDetail): ThreadConta
 		name: thread.name,
 		handle: thread.handle ?? thread.id,
 		contactLabel: thread.contactLabel ?? thread.name,
+		projectLabel: thread.categorization?.projectLabels[0]?.trim() ?? '',
+		roleLabel: thread.categorization?.roleLabels[0]?.trim() ?? '',
+		primaryTaskTitle:
+			thread.relatedTasks.find((task) => task.isPrimary)?.title ?? thread.relatedTasks[0]?.title ?? '',
+		relatedTaskCount: thread.relatedTasks.length,
+		lastActivityLabel: thread.lastActivityLabel,
 		threadState: thread.threadState,
 		latestRunStatus: thread.latestRunStatus,
 		threadSummary: thread.threadSummary,
