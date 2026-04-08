@@ -24,13 +24,40 @@ export const AGENT_THREAD_STATE_OPTIONS = [
 	'unavailable'
 ] as const;
 
+export const AGENT_THREAD_CONTACT_TYPE_OPTIONS = [
+	'question',
+	'request_context',
+	'request_assignment',
+	'handoff',
+	'review_request',
+	'status_update'
+] as const;
+
+export const AGENT_THREAD_CONTACT_STATUS_OPTIONS = ['sent', 'awaiting_reply', 'answered'] as const;
+
 export type AgentSandbox = (typeof AGENT_SANDBOX_OPTIONS)[number];
 export type AgentRunStatus = (typeof AGENT_RUN_STATUS_OPTIONS)[number];
 export type AgentThreadState = (typeof AGENT_THREAD_STATE_OPTIONS)[number];
 export type AgentThreadOrigin = 'managed' | 'external';
+export type AgentThreadContactType = (typeof AGENT_THREAD_CONTACT_TYPE_OPTIONS)[number];
+export type AgentThreadContactStatus = (typeof AGENT_THREAD_CONTACT_STATUS_OPTIONS)[number];
 
 export function formatAgentSandboxLabel(sandbox: AgentSandbox): string {
 	return sandbox.replace(/-/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+export function formatAgentThreadContactTypeLabel(contactType: AgentThreadContactType): string {
+	return contactType
+		.split('_')
+		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+		.join(' ');
+}
+
+export function formatAgentThreadContactStatusLabel(status: AgentThreadContactStatus): string {
+	return status
+		.split('_')
+		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+		.join(' ');
 }
 
 export type AgentThread = {
@@ -38,6 +65,7 @@ export type AgentThread = {
 	name: string;
 	cwd: string;
 	additionalWritableRoots?: string[];
+	handleAlias?: string | null;
 	sandbox: AgentSandbox;
 	model: string | null;
 	threadId: string | null;
@@ -71,12 +99,32 @@ export type AgentRun = {
 	requestedThreadId: string | null;
 	sourceAgentThreadId?: string | null;
 	sourceAgentThreadName?: string | null;
+	contactId?: string | null;
+	replyToContactId?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	logPath: string;
 	statePath: string;
 	messagePath: string;
 	configPath: string;
+};
+
+export type AgentThreadContact = {
+	id: string;
+	sourceAgentThreadId: string;
+	sourceAgentThreadName: string;
+	targetAgentThreadId: string;
+	targetAgentThreadName: string;
+	contactType: AgentThreadContactType;
+	contextSummary: string | null;
+	prompt: string;
+	replyRequested: boolean;
+	replyToContactId: string | null;
+	status: AgentThreadContactStatus;
+	resolvedByContactId: string | null;
+	targetRunId: string | null;
+	createdAt: string;
+	updatedAt: string;
 };
 
 export type AgentRunState = {
@@ -92,6 +140,7 @@ export type AgentRunState = {
 export type AgentThreadsDb = {
 	threads: AgentThread[];
 	runs: AgentRun[];
+	contacts?: AgentThreadContact[];
 };
 
 export type AgentRunDetail = AgentRun & {
@@ -112,6 +161,10 @@ export type AgentTimelineStep = {
 export type AgentThreadDetail = AgentThread & {
 	origin: AgentThreadOrigin;
 	threadId: string | null;
+	handle?: string;
+	contactLabel?: string;
+	routingScore?: number;
+	routingReason?: string;
 	topicLabels?: string[];
 	categorization?: ThreadCategorization;
 	threadState: AgentThreadState;

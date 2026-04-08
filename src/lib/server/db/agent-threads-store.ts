@@ -1,11 +1,18 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
-import type { AgentRun, AgentThread, AgentThreadsDb } from '$lib/types/agent-thread';
+import type {
+	AgentRun,
+	AgentThread,
+	AgentThreadContact,
+	AgentThreadsDb
+} from '$lib/types/agent-thread';
 
-const AGENT_THREAD_COLLECTIONS = ['threads', 'runs'] as const satisfies Array<keyof AgentThreadsDb>;
+const AGENT_THREAD_COLLECTIONS = ['contacts', 'runs', 'threads'] as const satisfies Array<
+	keyof AgentThreadsDb
+>;
 
 type AgentThreadCollection = (typeof AGENT_THREAD_COLLECTIONS)[number];
-type AgentThreadRecordPayload = AgentThread | AgentRun;
+type AgentThreadRecordPayload = AgentThread | AgentRun | AgentThreadContact;
 type AgentThreadRecordRow = {
 	collection: AgentThreadCollection;
 	id: string;
@@ -16,7 +23,8 @@ type AgentThreadRecordRow = {
 function emptyAgentThreadsDb(): AgentThreadsDb {
 	return {
 		threads: [],
-		runs: []
+		runs: [],
+		contacts: []
 	};
 }
 

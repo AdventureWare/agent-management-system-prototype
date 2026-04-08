@@ -193,8 +193,37 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect.element(page.getByTestId('task-mobile-card-task_mobile')).toBeInTheDocument();
 		await expect.element(page.getByRole('link', { name: 'Open task' })).toBeInTheDocument();
 		await expect
-			.element(page.getByRole('link', { name: 'Open latest thread' }))
+			.element(page.getByRole('link', { name: 'Review latest thread' }))
 			.toBeInTheDocument();
+	});
+
+	it('keeps the desktop queue in table view and renders action menus for panel opening', () => {
+		renderPage([
+			createTask({
+				id: 'task_preview',
+				title: 'Preview the queue row beside the table',
+				summary: 'Keep the current task context visible while scanning adjacent rows.',
+				linkThread: {
+					id: 'thread_preview',
+					name: 'Preview thread',
+					threadState: 'ready'
+				}
+			}),
+			createTask({
+				id: 'task_secondary',
+				title: 'Secondary queue row',
+				summary: 'Another task in the queue for comparison.'
+			})
+		]);
+
+		expect(document.querySelector('[data-testid="task-detail-panel"]')).toBeNull();
+		expect(document.body.textContent).toContain('Open task');
+		expect(document.body.textContent).toContain('Review latest thread');
+		expect(
+			Array.from(document.querySelectorAll('button')).some(
+				(button) => button.textContent?.trim() === 'More'
+			)
+		).toBe(true);
 	});
 
 	it('keeps the task index toolbar sticky while the queue scrolls', () => {
@@ -235,6 +264,7 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Create task', exact: true }))
 			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Improve with AI' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
 	});
 
@@ -425,6 +455,37 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(nameInput?.value).toBe('Follow-up: Default task');
 		expect(instructionsInput?.value).toBe('Create a new task from detail context.');
 		expect(goalSelect?.value).toBe('goal_1');
+	});
+
+	it('keeps the create dialog open and shows the rewritten instructions after writing assist', async () => {
+		renderPage([], {
+			ok: true,
+			formContext: 'taskCreate',
+			successAction: 'assistTaskWriting',
+			reopenCreateModal: true,
+			projectId: 'project_1',
+			name: 'Rewrite this task',
+			instructions:
+				'## Objective\nClarify the task.\n\n## Deliverable\nReturn a tighter agent-facing brief.',
+			assistChangeSummary:
+				'Rewrote the draft into a clearer execution brief with explicit deliverable and constraints.'
+		});
+
+		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+		await expect
+			.element(
+				page.getByText(
+					'Rewrote the draft into a clearer execution brief with explicit deliverable and constraints.'
+				)
+			)
+			.toBeInTheDocument();
+
+		const instructionsInput = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(instructionsInput?.value).toContain('## Objective');
+		expect(instructionsInput?.value).toContain('Return a tighter agent-facing brief.');
 	});
 
 	it('shows routing metadata directly in queue rows', async () => {

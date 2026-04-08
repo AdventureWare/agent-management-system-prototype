@@ -9,6 +9,7 @@
 	sandboxOptions={data.sandboxOptions}
 	threadFocusTask={data.threadFocusTask}
 	taskResponseAction={data.taskResponseAction}
+	threadContacts={data.threadContacts}
 	threadContactTargets={data.threadContactTargets}
 	responseContextArtifacts={data.responseContextArtifacts}
 	{form}

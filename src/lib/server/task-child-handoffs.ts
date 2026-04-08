@@ -35,6 +35,10 @@ export async function acceptTaskChildHandoff(parentTaskId: string, form: FormDat
 	const childTaskId = readChildTaskId(form);
 	const { parentTask, childTask } = await resolveParentChildPair(parentTaskId, childTaskId);
 
+	if (childTask.delegationAcceptance) {
+		throw new TaskChildHandoffActionError(409, 'This child handoff has already been accepted.');
+	}
+
 	if (childTask.status !== 'done') {
 		throw new TaskChildHandoffActionError(
 			409,
@@ -83,6 +87,21 @@ export async function acceptTaskChildHandoff(parentTaskId: string, form: FormDat
 export async function requestTaskChildHandoffChanges(parentTaskId: string, form: FormData) {
 	const childTaskId = readChildTaskId(form);
 	const { childTask } = await resolveParentChildPair(parentTaskId, childTaskId);
+
+	if (childTask.delegationAcceptance) {
+		throw new TaskChildHandoffActionError(
+			409,
+			'Accepted child handoffs cannot be returned for follow-up.'
+		);
+	}
+
+	if (childTask.status !== 'done') {
+		throw new TaskChildHandoffActionError(
+			409,
+			'Only completed child tasks can be returned for follow-up.'
+		);
+	}
+
 	const now = new Date().toISOString();
 	const blockedReason =
 		form.get('summary')?.toString().trim() ||

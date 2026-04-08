@@ -29,6 +29,11 @@
 		name,
 		value,
 		onclick,
+		onpointerdown,
+		onpointerup,
+		onpointercancel,
+		onpointerleave,
+		oncontextmenu,
 		class: className = ''
 	} = $props<{
 		children?: Snippet;
@@ -47,6 +52,11 @@
 		name?: string;
 		value?: string;
 		onclick?: ((event: MouseEvent) => void) | null;
+		onpointerdown?: ((event: PointerEvent) => void) | null;
+		onpointerup?: ((event: PointerEvent) => void) | null;
+		onpointercancel?: ((event: PointerEvent) => void) | null;
+		onpointerleave?: ((event: PointerEvent) => void) | null;
+		oncontextmenu?: ((event: MouseEvent) => void) | null;
 		class?: string;
 	}>();
 
@@ -79,6 +89,11 @@
 		{title}
 		aria-label={ariaLabel}
 		onclick={onclick ?? undefined}
+		onpointerdown={onpointerdown ?? undefined}
+		onpointerup={onpointerup ?? undefined}
+		onpointercancel={onpointercancel ?? undefined}
+		onpointerleave={onpointerleave ?? undefined}
+		oncontextmenu={oncontextmenu ?? undefined}
 	>
 		{@render content()}
 	</a>
@@ -94,6 +109,11 @@
 		{value}
 		aria-label={ariaLabel}
 		onclick={onclick ?? undefined}
+		onpointerdown={onpointerdown ?? undefined}
+		onpointerup={onpointerup ?? undefined}
+		onpointercancel={onpointercancel ?? undefined}
+		onpointerleave={onpointerleave ?? undefined}
+		oncontextmenu={oncontextmenu ?? undefined}
 	>
 		{@render content()}
 	</button>

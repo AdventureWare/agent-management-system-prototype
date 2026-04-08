@@ -27,7 +27,17 @@
 		formatTaskStatusLabel,
 		reviewStatusToneClass
 	} from '$lib/types/control-plane';
-	import type { AgentRunDetail, AgentRunStatus, AgentThreadDetail } from '$lib/types/agent-thread';
+	import {
+		AGENT_THREAD_CONTACT_TYPE_OPTIONS,
+		formatAgentThreadContactStatusLabel,
+		formatAgentThreadContactTypeLabel
+	} from '$lib/types/agent-thread';
+	import type {
+		AgentRunDetail,
+		AgentRunStatus,
+		AgentThreadContact,
+		AgentThreadDetail
+	} from '$lib/types/agent-thread';
 	import { onMount, tick } from 'svelte';
 	import { fromStore } from 'svelte/store';
 	import { fade } from 'svelte/transition';
@@ -76,12 +86,15 @@
 	type ThreadContactTarget = {
 		id: string;
 		name: string;
+		handle: string;
+		contactLabel: string;
 		threadState: AgentThreadDetail['threadState'];
 		latestRunStatus: AgentThreadDetail['latestRunStatus'];
 		threadSummary: string;
 		relatedTaskTitles: string[];
 		canContact: boolean;
 		disabledReason: string;
+		routingReason: string;
 	};
 
 	let {
@@ -89,6 +102,7 @@
 		sandboxOptions,
 		threadFocusTask = null,
 		taskResponseAction = null,
+		threadContacts = [],
 		threadContactTargets = [],
 		responseContextArtifacts = [],
 		form = null,
@@ -98,6 +112,7 @@
 		sandboxOptions: readonly string[];
 		threadFocusTask?: ThreadFocusTask | null;
 		taskResponseAction?: TaskResponseAction | null;
+		threadContacts?: AgentThreadContact[];
 		threadContactTargets?: ThreadContactTarget[];
 		responseContextArtifacts?: ResponseContextArtifact[];
 		form?: {
@@ -120,13 +135,19 @@
 	let conversationHistoryExpanded = $state(false);
 	let expandedConversationRunIds = $state.raw<string[]>([]);
 	let latestInstructionExpanded = $state(false);
+	let followUpComposerRoot = $state<HTMLElement | null>(null);
+	let followUpPromptField = $state<HTMLTextAreaElement | null>(null);
 	let followUpAttachmentInput = $state<HTMLInputElement | null>(null);
 	let followUpPrompt = $state('');
 	let pendingFollowUpAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
+	let threadContactsState = $state.raw<AgentThreadContact[]>([]);
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
 	let contactTargetThreadId = $state('');
+	let contactTargetQuery = $state('');
+	let contactType = $state<(typeof AGENT_THREAD_CONTACT_TYPE_OPTIONS)[number]>('question');
+	let contactContextSummary = $state('');
 	let contactPrompt = $state('');
 	let contactState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(
 		null
@@ -134,6 +155,7 @@
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	let threadDetailRoot = $state<HTMLElement | null>(null);
 	let threadHeaderShrinkProgress = $state(0);
+	let replyEntryRequested = $state(false);
 	let session = $derived.by<AgentThreadDetail | null>(
 		() => threadStoreState.current.byId[sessionProp.id] ?? sessionProp
 	);
@@ -149,6 +171,9 @@
 		form?.ok &&
 			form?.successAction === 'moveLatestRequestToNewThread' &&
 			form?.previousThreadId === session?.id
+	);
+	let updateThreadHandleAliasSuccess = $derived(
+		form?.ok && form?.successAction === 'updateThreadHandleAlias' && form?.threadId === session?.id
 	);
 	let updateThreadSandboxSuccess = $derived(
 		form?.ok && form?.successAction === 'updateThreadSandbox' && form?.threadId === session?.id
@@ -201,6 +226,33 @@
 				threadContactTargets.map((target: ThreadContactTarget) => [target.id, target] as const)
 			)
 	);
+	let visibleContactTargets = $derived.by<ThreadContactTarget[]>(() => {
+		const query = contactTargetQuery.trim().toLowerCase();
+
+		if (!query) {
+			return threadContactTargets;
+		}
+
+		return threadContactTargets.filter((target: ThreadContactTarget) =>
+			[
+				target.name,
+				target.handle,
+				target.contactLabel,
+				target.threadSummary,
+				target.routingReason,
+				...target.relatedTaskTitles
+			]
+				.join(' ')
+				.toLowerCase()
+				.includes(query)
+		);
+	});
+	let suggestedContactTargets = $derived.by<ThreadContactTarget[]>(() =>
+		visibleContactTargets.slice(0, 3)
+	);
+	let bestVisibleContactTarget = $derived.by<ThreadContactTarget | null>(
+		() => visibleContactTargets[0] ?? null
+	);
 	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
 	let combinedResponseContextArtifacts = $derived.by(() => [
@@ -218,6 +270,24 @@
 	let selectedContactTarget = $derived.by<ThreadContactTarget | null>(
 		() => contactTargetById.get(contactTargetThreadId) ?? null
 	);
+	let orderedThreadContacts = $derived.by(() =>
+		[...threadContactsState].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+	);
+	let sentThreadContacts = $derived.by(() =>
+		orderedThreadContacts.filter((contact) => contact.sourceAgentThreadId === session?.id)
+	);
+	let receivedThreadContacts = $derived.by(() =>
+		orderedThreadContacts.filter((contact) => contact.targetAgentThreadId === session?.id)
+	);
+	let awaitingReplyContacts = $derived.by(() =>
+		sentThreadContacts.filter((contact) => contact.status === 'awaiting_reply')
+	);
+	let resolvedSentThreadContacts = $derived.by(() =>
+		sentThreadContacts.filter((contact) => contact.status !== 'awaiting_reply')
+	);
+	$effect(() => {
+		threadContactsState = threadContacts;
+	});
 	let focusTask = $derived.by<ThreadFocusTask | null>(() => {
 		if (threadFocusTask) {
 			return threadFocusTask;
@@ -299,6 +369,25 @@
 		return true;
 	});
 
+	function urlRequestsReplyEntry() {
+		if (typeof window === 'undefined') {
+			return false;
+		}
+
+		const url = new URL(window.location.href);
+		const composeParam = url.searchParams.get('compose')?.trim().toLowerCase() ?? '';
+
+		return composeParam === '1' || composeParam === 'true' || url.hash === '#reply';
+	}
+
+	function syncReplyEntryIntentFromLocation() {
+		replyEntryRequested = urlRequestsReplyEntry();
+
+		if (replyEntryRequested) {
+			selectedSidebarView = 'follow_up';
+		}
+	}
+
 	function findScrollContainer(node: HTMLElement | null) {
 		const appShellScrollContainer = node?.closest('[data-app-shell-scroll-container="true"]');
 
@@ -321,9 +410,27 @@
 		return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
 	}
 
+	async function focusFollowUpComposer() {
+		await tick();
+
+		followUpComposerRoot?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+		if (followUpPromptField && !followUpPromptField.disabled) {
+			followUpPromptField.focus();
+			const caretPosition = followUpPrompt.length;
+			followUpPromptField.setSelectionRange(caretPosition, caretPosition);
+			return;
+		}
+
+		followUpComposerRoot?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+	}
+
 	onMount(() => {
 		let cancelled = false;
 		let cleanup: (() => void) | undefined;
+		const syncReplyEntryIntent = () => {
+			syncReplyEntryIntentFromLocation();
+		};
 
 		void tick().then(() => {
 			if (cancelled) {
@@ -365,9 +472,15 @@
 			};
 		});
 
+		syncReplyEntryIntent();
+		window.addEventListener('hashchange', syncReplyEntryIntent);
+		window.addEventListener('popstate', syncReplyEntryIntent);
+
 		return () => {
 			cancelled = true;
 			cleanup?.();
+			window.removeEventListener('hashchange', syncReplyEntryIntent);
+			window.removeEventListener('popstate', syncReplyEntryIntent);
 		};
 	});
 
@@ -407,8 +520,8 @@
 
 	$effect(() => {
 		const preferredTarget =
-			threadContactTargets.find((target: ThreadContactTarget) => target.canContact) ??
-			threadContactTargets[0] ??
+			visibleContactTargets.find((target: ThreadContactTarget) => target.canContact) ??
+			visibleContactTargets[0] ??
 			null;
 
 		if (!preferredTarget) {
@@ -416,7 +529,7 @@
 			return;
 		}
 
-		if (!contactTargetById.has(contactTargetThreadId)) {
+		if (!visibleContactTargets.some((target) => target.id === contactTargetThreadId)) {
 			contactTargetThreadId = preferredTarget.id;
 		}
 	});
@@ -444,6 +557,22 @@
 		return () => {
 			window.clearInterval(intervalId);
 		};
+	});
+
+	let previousReplyEntryFocusKey = '';
+
+	$effect(() => {
+		const replyEntryFocusKey =
+			replyEntryRequested && selectedSidebarView === 'follow_up' && session
+				? `${session.id}:${session.canResume ? 'ready' : 'blocked'}`
+				: '';
+
+		if (!replyEntryFocusKey || replyEntryFocusKey === previousReplyEntryFocusKey) {
+			return;
+		}
+
+		previousReplyEntryFocusKey = replyEntryFocusKey;
+		void focusFollowUpComposer();
 	});
 
 	$effect(() => {
@@ -601,11 +730,25 @@
 			throw new Error('Thread not found.');
 		}
 
-		const thread = (await fetchAgentThread(session.id)) ?? null;
+		const [thread, contactResponse] = await Promise.all([
+			fetchAgentThread(session.id),
+			fetch(resolve(`/api/agents/threads/${session.id}/contacts?limit=12`), {
+				cache: 'no-store'
+			})
+		]);
 
 		if (thread) {
 			agentThreadStore.seedThread(thread);
 		}
+
+		if (!contactResponse.ok) {
+			throw new Error('Could not refresh thread contacts.');
+		}
+
+		const contactPayload = (await contactResponse.json()) as {
+			contacts?: AgentThreadContact[];
+		};
+		threadContactsState = contactPayload.contacts ?? [];
 	}
 
 	async function refreshThread(options: { force?: boolean } = {}) {
@@ -755,10 +898,8 @@
 		}
 	}
 
-	async function submitThreadContact(event: SubmitEvent) {
-		event.preventDefault();
-
-		if (!session || !selectedContactTarget) {
+	async function queueThreadContact(target: ThreadContactTarget | null) {
+		if (!session || !target) {
 			return;
 		}
 
@@ -772,11 +913,10 @@
 			return;
 		}
 
-		if (!selectedContactTarget.canContact) {
+		if (!target.canContact) {
 			contactState = {
 				status: 'error',
-				message:
-					selectedContactTarget.disabledReason || 'This thread cannot accept a contact request.'
+				message: target.disabledReason || 'This thread cannot accept a contact request.'
 			};
 			return;
 		}
@@ -785,25 +925,26 @@
 			return;
 		}
 
+		contactTargetThreadId = target.id;
 		contactState = {
 			status: 'sending',
 			message: 'Queueing thread contact...'
 		};
 
 		try {
-			const response = await fetch(
-				resolve(`/api/agents/threads/${selectedContactTarget.id}/messages`),
-				{
-					method: 'POST',
-					headers: {
-						'content-type': 'application/json'
-					},
-					body: JSON.stringify({
-						prompt,
-						sourceThreadId: session.id
-					})
-				}
-			);
+			const response = await fetch(resolve(`/api/agents/threads/${target.id}/messages`), {
+				method: 'POST',
+				headers: {
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({
+					prompt,
+					sourceThreadId: session.id,
+					contactType,
+					contextSummary: contactContextSummary.trim(),
+					replyRequested: true
+				})
+			});
 			const payload = (await response.json()) as { error?: string };
 
 			if (!response.ok) {
@@ -811,13 +952,16 @@
 			}
 
 			contactPrompt = '';
+			contactContextSummary = '';
+			contactType = 'question';
+			await refreshThread({ force: true });
 			contactState = {
 				status: 'success',
-				message: `Contact request queued for ${selectedContactTarget.name}.`
+				message: `Contact request queued for ${target.name}.`
 			};
 			pageNotice = {
 				tone: 'success',
-				message: `Queued a cross-thread contact request for ${selectedContactTarget.name}.`
+				message: `Queued a cross-thread contact request for ${target.name}.`
 			};
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Could not contact the selected thread.';
@@ -830,6 +974,11 @@
 				message
 			};
 		}
+	}
+
+	async function submitThreadContact(event: SubmitEvent) {
+		event.preventDefault();
+		await queueThreadContact(selectedContactTarget);
 	}
 
 	function selectRun(runId: string) {
@@ -892,6 +1041,24 @@
 			default:
 				return 'border border-slate-700 bg-slate-900 text-slate-300';
 		}
+	}
+
+	function contactStatusClass(status: AgentThreadContact['status']) {
+		switch (status) {
+			case 'awaiting_reply':
+				return 'border border-amber-800/70 bg-amber-950/40 text-amber-200';
+			case 'answered':
+				return 'border border-emerald-800/70 bg-emerald-950/40 text-emerald-200';
+			case 'sent':
+			default:
+				return 'border border-slate-700 bg-slate-900 text-slate-300';
+		}
+	}
+
+	function contactDirectionLabel(contact: AgentThreadContact) {
+		return contact.sourceAgentThreadId === session?.id
+			? `Sent to ${contact.targetAgentThreadName}`
+			: `Received from ${contact.sourceAgentThreadName}`;
 	}
 
 	function threadLabel(detail: AgentThreadDetail) {
@@ -1368,6 +1535,18 @@
 						<div class="thread-detail-header-meta space-y-4">
 							<div class="flex flex-wrap items-center gap-2">
 								<span
+									class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/30 px-2 py-1 text-center text-[11px] leading-none text-sky-200"
+								>
+									{session!.handle ?? session!.id}
+								</span>
+								{#if session!.handleAlias}
+									<span
+										class="inline-flex items-center justify-center rounded-full border border-emerald-900/70 bg-emerald-950/30 px-2 py-1 text-center text-[11px] leading-none text-emerald-200 uppercase"
+									>
+										Custom handle
+									</span>
+								{/if}
+								<span
 									class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(session!.threadState ?? session!.threadState ?? 'idle')}`}
 								>
 									{formatThreadStateLabel(session!.threadState ?? session!.threadState ?? 'idle')}
@@ -1405,6 +1584,11 @@
 									</p>
 								{/if}
 
+								<p class="ui-wrap-anywhere max-w-4xl text-xs text-slate-500">
+									Contact label: {session!.contactLabel ??
+										formatThreadStateLabel(session!.threadState)}
+								</p>
+
 								<p class="ui-wrap-anywhere max-w-4xl text-xs text-slate-500">{session!.cwd}</p>
 							</div>
 						</div>
@@ -1432,6 +1616,14 @@
 					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
 					Thread sandbox updated. Future follow-up runs will use the new access mode.
+				</p>
+			{/if}
+
+			{#if updateThreadHandleAliasSuccess}
+				<p
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+				>
+					Thread handle alias updated.
 				</p>
 			{/if}
 
@@ -1840,7 +2032,9 @@
 					</DetailSection>
 				</div>
 
-				<div class="order-1 space-y-6 xl:order-2">
+				<div
+					class="order-1 space-y-6 xl:sticky xl:top-6 xl:order-2 xl:max-h-[calc(100vh-3rem)] xl:self-start xl:overflow-y-auto xl:pr-1"
+				>
 					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
 						<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 							<div class="min-w-0">
@@ -1882,13 +2076,85 @@
 								description="Reply in the same thread once you have enough context. Attached files are saved onto the thread and included for the next run."
 								bodyClass="space-y-3"
 							>
-								{#if focusTask}
-									{@render focusTaskCard(focusTask, {
-										label: 'Working on',
-										description: 'Keep this visible while composing the next instruction.',
-										compact: true
-									})}
-								{/if}
+								<div
+									id="reply"
+									bind:this={followUpComposerRoot}
+									class="space-y-3 rounded-xl border border-slate-800 bg-black/20 p-4"
+								>
+									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+										<div>
+											<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+												Reply context
+											</p>
+											<p class="mt-2 text-sm text-slate-400">
+												Review the current task, latest instruction, and saved response without
+												leaving the composer.
+											</p>
+										</div>
+										{#if latestContextRun}
+											<span
+												class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(latestContextRun))}`}
+											>
+												{latestRunStatus(latestContextRun)}
+											</span>
+										{/if}
+									</div>
+
+									{#if focusTask}
+										{@render focusTaskCard(focusTask, {
+											label: 'Working on',
+											description:
+												'Keep this task visible while you review the last turn and draft the next instruction.',
+											compact: true
+										})}
+									{/if}
+
+									{#if latestContextRun}
+										<div class="space-y-3">
+											<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+												<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+													Latest instruction
+												</p>
+												<p
+													class="ui-wrap-anywhere ui-clamp-3 mt-2 text-sm whitespace-pre-wrap text-slate-300"
+												>
+													{latestContextRun.prompt}
+												</p>
+											</div>
+
+											<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+												<div class="flex flex-wrap items-center justify-between gap-2">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Most recent response
+													</p>
+													<p class="text-xs text-slate-500">
+														{formatTimestamp(latestContextRun.createdAt)}
+													</p>
+												</div>
+												<div class="mt-2 max-h-52 overflow-auto pr-1">
+													{#if shouldShowActiveResponsePlaceholder(latestContextRun)}
+														<p class="ui-wrap-anywhere text-sm text-slate-400">
+															The current run is still working. The saved response appears here as
+															soon as it is written.
+														</p>
+													{:else}
+														<ThreadMessageContent
+															text={responseText(latestContextRun)}
+															tone="muted"
+														/>
+													{/if}
+												</div>
+											</div>
+										</div>
+									{:else}
+										<p
+											class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400"
+										>
+											No saved response is available yet. The composer stays ready here once the
+											thread has something to review.
+										</p>
+									{/if}
+								</div>
 
 								<form
 									id="thread-follow-up-form"
@@ -1897,6 +2163,7 @@
 									onpaste={handleFollowUpAttachmentPaste}
 								>
 									<textarea
+										bind:this={followUpPromptField}
 										bind:value={followUpPrompt}
 										class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
 										name="prompt"
@@ -2087,21 +2354,137 @@
 									<form class="space-y-3" onsubmit={submitThreadContact}>
 										<label class="block">
 											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Find a thread
+											</span>
+											<input
+												bind:value={contactTargetQuery}
+												class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+												type="text"
+												placeholder="Search by handle, role, project, task, or summary."
+												spellcheck="false"
+												autocomplete="off"
+												disabled={contactState?.status === 'sending'}
+											/>
+											<p class="mt-2 text-xs text-slate-500">
+												{visibleContactTargets.length} matching thread{visibleContactTargets.length ===
+												1
+													? ''
+													: 's'}
+											</p>
+										</label>
+
+										{#if bestVisibleContactTarget}
+											<div class="rounded-lg border border-sky-900/40 bg-sky-950/20 p-4">
+												<div class="flex flex-wrap items-start justify-between gap-3">
+													<div class="min-w-0">
+														<p class="text-xs tracking-[0.16em] text-sky-300 uppercase">
+															Best match
+														</p>
+														<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+															{bestVisibleContactTarget.contactLabel}
+														</p>
+														<p class="ui-wrap-anywhere mt-1 text-xs text-slate-400">
+															{bestVisibleContactTarget.handle}
+														</p>
+														<p class="ui-wrap-anywhere mt-2 text-xs text-sky-100/90">
+															{bestVisibleContactTarget.routingReason ||
+																bestVisibleContactTarget.threadSummary}
+														</p>
+													</div>
+													<div class="flex flex-wrap gap-2">
+														<AppButton
+															type="button"
+															variant="neutral"
+															disabled={bestVisibleContactTarget.id === contactTargetThreadId}
+															onclick={() => {
+																contactTargetThreadId = bestVisibleContactTarget.id;
+															}}
+														>
+															{bestVisibleContactTarget.id === contactTargetThreadId
+																? 'Using best match'
+																: 'Use best match'}
+														</AppButton>
+														<AppButton
+															type="button"
+															variant="accent"
+															disabled={!bestVisibleContactTarget.canContact ||
+																!contactPrompt.trim() ||
+																contactState?.status === 'sending'}
+															onclick={() => queueThreadContact(bestVisibleContactTarget)}
+														>
+															Contact best match
+														</AppButton>
+													</div>
+												</div>
+											</div>
+										{/if}
+
+										{#if suggestedContactTargets.length > 1}
+											<div class="space-y-2">
+												<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Top matches
+												</p>
+												<div class="flex flex-wrap gap-2">
+													{#each suggestedContactTargets as target (target.id)}
+														<button
+															class={[
+																'rounded-full border px-3 py-2 text-left text-xs transition',
+																target.id === contactTargetThreadId
+																	? 'border-sky-500/60 bg-sky-950/40 text-sky-100'
+																	: 'border-slate-700 bg-slate-950/50 text-slate-300 hover:border-sky-600/50 hover:text-sky-100'
+															]}
+															type="button"
+															onclick={() => {
+																contactTargetThreadId = target.id;
+															}}
+														>
+															<span class="block font-medium">{target.contactLabel}</span>
+															<span class="mt-1 block text-[11px] text-slate-400">
+																{target.routingReason || target.handle}
+															</span>
+														</button>
+													{/each}
+												</div>
+											</div>
+										{/if}
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
 												Target thread
 											</span>
 											<select
 												bind:value={contactTargetThreadId}
 												class="select text-white"
-												disabled={contactState?.status === 'sending'}
+												disabled={contactState?.status === 'sending' ||
+													visibleContactTargets.length === 0}
 											>
-												{#each threadContactTargets as target (target.id)}
-													<option value={target.id}>{target.name}</option>
+												{#each visibleContactTargets as target (target.id)}
+													<option value={target.id}>
+														{target.contactLabel} - {target.name}
+													</option>
 												{/each}
 											</select>
 										</label>
 
+										{#if visibleContactTargets.length === 0}
+											<p
+												class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400"
+											>
+												No threads match that search yet. Try a broader role, project, task, or
+												handle hint.
+											</p>
+										{/if}
+
 										{#if selectedContactTarget}
 											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+												<p
+													class="ui-wrap-anywhere text-xs tracking-[0.2em] text-slate-500 uppercase"
+												>
+													{selectedContactTarget.handle}
+												</p>
+												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
+													{selectedContactTarget.contactLabel}
+												</p>
 												<div class="flex flex-wrap items-center gap-2">
 													<span
 														class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${sessionStatusClass(selectedContactTarget.threadState)}`}
@@ -2117,6 +2500,11 @@
 												<p class="ui-wrap-anywhere mt-3 text-sm text-slate-300">
 													{selectedContactTarget.threadSummary}
 												</p>
+												{#if selectedContactTarget.routingReason}
+													<p class="ui-wrap-anywhere mt-3 text-xs text-sky-200/90">
+														Routing hint: {selectedContactTarget.routingReason}
+													</p>
+												{/if}
 												{#if selectedContactTarget.relatedTaskTitles.length > 0}
 													<p class="ui-wrap-anywhere mt-3 text-xs text-slate-500">
 														Linked tasks: {selectedContactTarget.relatedTaskTitles.join(', ')}
@@ -2129,6 +2517,39 @@
 												{/if}
 											</div>
 										{/if}
+
+										<div class="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Contact type
+												</span>
+												<select
+													bind:value={contactType}
+													class="select text-white"
+													disabled={!selectedContactTarget?.canContact ||
+														contactState?.status === 'sending'}
+												>
+													{#each AGENT_THREAD_CONTACT_TYPE_OPTIONS as option (option)}
+														<option value={option}>
+															{formatAgentThreadContactTypeLabel(option)}
+														</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Focused context note
+												</span>
+												<textarea
+													bind:value={contactContextSummary}
+													class="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
+													placeholder="Optional: narrow the ask to the exact file, decision, blocker, or artifact that matters."
+													disabled={!selectedContactTarget?.canContact ||
+														contactState?.status === 'sending'}
+												></textarea>
+											</label>
+										</div>
 
 										<textarea
 											bind:value={contactPrompt}
@@ -2166,6 +2587,110 @@
 												: 'Contact selected thread'}
 										</AppButton>
 									</form>
+
+									{#snippet contactCard(contact: AgentThreadContact)}
+										<div class="rounded-lg border border-slate-800/80 bg-slate-950/40 p-3">
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0">
+													<p class="text-xs text-slate-500">
+														{contactDirectionLabel(contact)} · {timestampFormatter.format(
+															new Date(contact.createdAt)
+														)}
+													</p>
+													<div class="mt-2 flex flex-wrap items-center gap-2">
+														<span
+															class="inline-flex items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none text-slate-200 uppercase"
+														>
+															{formatAgentThreadContactTypeLabel(contact.contactType)}
+														</span>
+														<span
+															class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${contactStatusClass(contact.status)}`}
+														>
+															{formatAgentThreadContactStatusLabel(contact.status)}
+														</span>
+													</div>
+												</div>
+											</div>
+											{#if contact.contextSummary}
+												<p class="ui-wrap-anywhere mt-3 text-xs text-sky-200/90">
+													Context: {contact.contextSummary}
+												</p>
+											{/if}
+											<p class="ui-wrap-anywhere mt-2 text-sm text-slate-200">
+												{contact.prompt}
+											</p>
+											<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+												Contact {contact.id}
+												{#if contact.replyToContactId}
+													· Reply to {contact.replyToContactId}
+												{/if}
+												{#if contact.resolvedByContactId}
+													· Answered by {contact.resolvedByContactId}
+												{/if}
+												{#if contact.replyRequested}
+													· Reply requested
+												{/if}
+											</p>
+										</div>
+									{/snippet}
+
+									{#if orderedThreadContacts.length > 0}
+										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+											<div class="flex flex-wrap items-center justify-between gap-3">
+												<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Contact inbox and outbox
+												</p>
+												<div class="flex flex-wrap gap-2 text-[11px] uppercase">
+													<span
+														class="rounded-full border border-amber-800/60 bg-amber-950/30 px-2 py-1 text-amber-200"
+													>
+														Awaiting reply {awaitingReplyContacts.length}
+													</span>
+													<span
+														class="rounded-full border border-slate-700 px-2 py-1 text-slate-300"
+													>
+														Received {receivedThreadContacts.length}
+													</span>
+													<span
+														class="rounded-full border border-slate-700 px-2 py-1 text-slate-300"
+													>
+														Sent {sentThreadContacts.length}
+													</span>
+												</div>
+											</div>
+
+											<div class="mt-4 space-y-4">
+												{#if awaitingReplyContacts.length > 0}
+													<div class="space-y-3">
+														<p class="text-xs tracking-[0.16em] text-amber-200 uppercase">
+															Awaiting reply
+														</p>
+														{#each awaitingReplyContacts as contact (contact.id)}
+															{@render contactCard(contact)}
+														{/each}
+													</div>
+												{/if}
+
+												{#if receivedThreadContacts.length > 0}
+													<div class="space-y-3">
+														<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Inbox</p>
+														{#each receivedThreadContacts as contact (contact.id)}
+															{@render contactCard(contact)}
+														{/each}
+													</div>
+												{/if}
+
+												{#if resolvedSentThreadContacts.length > 0}
+													<div class="space-y-3">
+														<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">Outbox</p>
+														{#each resolvedSentThreadContacts as contact (contact.id)}
+															{@render contactCard(contact)}
+														{/each}
+													</div>
+												{/if}
+											</div>
+										</div>
+									{/if}
 								{/if}
 							</DetailSection>
 
@@ -2350,6 +2875,36 @@
 									{/if}
 								</DetailSection>
 							{/if}
+
+							<form method="POST" action="?/updateThreadHandleAlias">
+								<DetailSection
+									eyebrow="Identity"
+									title="Stable handle alias"
+									description="Optional durable contact handle. Use this when you want an explicit routing name like coordination.main or frontend.owner instead of the derived handle."
+								>
+									<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+										<label class="block min-w-[18rem] flex-1">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Handle alias
+											</span>
+											<input
+												class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+												type="text"
+												name="handleAlias"
+												value={session.handleAlias ?? ''}
+												placeholder="coordination.main"
+												spellcheck="false"
+												autocomplete="off"
+											/>
+											<p class="mt-2 text-xs text-slate-500">
+												Letters, numbers, dots, and hyphens only. Leave blank to restore the derived
+												handle.
+											</p>
+										</label>
+										<AppButton type="submit" variant="primary">Save handle alias</AppButton>
+									</div>
+								</DetailSection>
+							</form>
 
 							<form method="POST" action="?/updateThreadSandbox">
 								<DetailSection

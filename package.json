@@ -11,6 +11,7 @@
 		"app:server:start": "node --env-file-if-exists=.env.local scripts/operator-server.mjs start",
 		"app:server:stop": "node --env-file-if-exists=.env.local scripts/operator-server.mjs stop",
 		"app:server:status": "node --env-file-if-exists=.env.local scripts/operator-server.mjs status",
+		"agent:threads": "node --env-file-if-exists=.env.local scripts/agent-thread-cli.mjs",
 		"app:launchd:install": "node --env-file-if-exists=.env.local scripts/operator-launchd.mjs install",
 		"app:launchd:uninstall": "node --env-file-if-exists=.env.local scripts/operator-launchd.mjs uninstall",
 		"app:launchd:status": "node --env-file-if-exists=.env.local scripts/operator-launchd.mjs status",

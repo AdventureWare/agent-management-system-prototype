@@ -32,6 +32,29 @@ export function buildTaskThreadPrompt(input: {
 		`Project: ${input.projectName}`,
 		`Project root: ${input.projectRootFolder}`
 	];
+	const coordinationLines = [
+		'Thread coordination:',
+		'If you need instructions, context, or assignment from another thread, you can contact it directly from the shell in this managed run.',
+		'When you list threads, use each thread handle and contact label to infer the right target before sending a message.',
+		'Prefer filtered thread lookup first so you only inspect contactable threads that best match your current thread and task context.',
+		'Managed run environment variables:',
+		'- AMS_AGENT_THREAD_ID: the current thread id',
+		'- AMS_AGENT_API_BASE_URL: local operator API base URL',
+		'- AMS_AGENT_API_TOKEN: bearer token for the thread API',
+		'Use the helper CLI from the project root instead of composing raw curl commands:',
+		'Resolve the best thread to contact first:',
+		'node scripts/agent-thread-cli.mjs best-target',
+		'List available threads when you need to inspect multiple options:',
+		'node scripts/agent-thread-cli.mjs list --can-contact',
+		'Resolve a fuzzy or partial handle into ranked candidates when needed:',
+		'node scripts/agent-thread-cli.mjs resolve <query> --can-contact',
+		'The contact helper accepts either an exact thread id or an exact handle alias.',
+		'You can further narrow routing with q, role, project, taskId, and limit query params.',
+		'Contact another thread and ask it to reply back here if needed:',
+		'node scripts/agent-thread-cli.mjs contact <targetThreadIdOrHandle> --type <question|request_context|request_assignment|handoff|review_request|status_update> --context "<focused context note>" --prompt "Need <instruction/context/assignment>. Reply back to thread $AMS_AGENT_THREAD_ID if needed."',
+		'If you are replying to a prior contact, include --reply-to <contactId> so the original request is marked answered.',
+		'Use `node scripts/agent-thread-cli.mjs contacts` to inspect the recent contact log for the current thread.'
+	];
 
 	if (input.defaultArtifactRoot) {
 		contextLines.push(`Default artifact root: ${input.defaultArtifactRoot}`);
@@ -98,6 +121,8 @@ export function buildTaskThreadPrompt(input: {
 					...knowledgeLines.filter(Boolean)
 				]
 			: []),
+		'',
+		...coordinationLines,
 		'',
 		'Work from the project root, make the requested changes, and report progress and outcomes clearly.'
 	].join('\n');

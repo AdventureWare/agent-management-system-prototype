@@ -114,8 +114,18 @@ export async function updateTaskThreadAssignment(taskId: string, form: FormData)
 		throw new TaskDetailMutationActionError(404, 'Task not found.');
 	}
 
-	if (agentThreadId) {
-		const session = await getAgentThread(agentThreadId);
+	const nextAgentThreadId = agentThreadId || null;
+
+	if (nextAgentThreadId === task.agentThreadId) {
+		return {
+			ok: true,
+			successAction: 'updateTaskThread' as const,
+			taskId
+		};
+	}
+
+	if (nextAgentThreadId) {
+		const session = await getAgentThread(nextAgentThreadId);
 
 		if (!session) {
 			throw new TaskDetailMutationActionError(400, 'Selected work thread was not found.');
@@ -123,12 +133,9 @@ export async function updateTaskThreadAssignment(taskId: string, form: FormData)
 	}
 
 	const now = new Date().toISOString();
-	const decisionSummary =
-		(agentThreadId || null) === task.agentThreadId
-			? null
-			: agentThreadId
-				? `Updated task thread assignment to ${agentThreadId}.`
-				: 'Cleared the task thread assignment.';
+	const decisionSummary = nextAgentThreadId
+		? `Updated task thread assignment to ${nextAgentThreadId}.`
+		: 'Cleared the task thread assignment.';
 
 	await updateControlPlane((data) => ({
 		...data,
@@ -136,22 +143,20 @@ export async function updateTaskThreadAssignment(taskId: string, form: FormData)
 			candidate.id === taskId
 				? {
 						...candidate,
-						agentThreadId: agentThreadId || null,
+						agentThreadId: nextAgentThreadId,
 						updatedAt: now
 					}
 				: candidate
 		),
-		decisions: decisionSummary
-			? [
-					createDecision({
-						taskId,
-						decisionType: 'task_thread_updated',
-						summary: decisionSummary,
-						createdAt: now
-					}),
-					...(data.decisions ?? [])
-				]
-			: (data.decisions ?? [])
+		decisions: [
+			createDecision({
+				taskId,
+				decisionType: 'task_thread_updated',
+				summary: decisionSummary,
+				createdAt: now
+			}),
+			...(data.decisions ?? [])
+		]
 	}));
 
 	return {

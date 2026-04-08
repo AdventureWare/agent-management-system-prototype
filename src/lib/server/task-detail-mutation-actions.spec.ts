@@ -221,6 +221,72 @@ describe('task-detail-mutation-actions', () => {
 		);
 	});
 
+	it('treats an unchanged thread assignment as a no-op', async () => {
+		getAgentThread.mockResolvedValue(null);
+
+		const form = new FormData();
+		form.set('agentThreadId', 'thread_existing');
+
+		const result = await updateTaskThreadAssignment('task_1', form);
+
+		expect(result).toEqual({
+			ok: true,
+			successAction: 'updateTaskThread',
+			taskId: 'task_1'
+		});
+		expect(getAgentThread).not.toHaveBeenCalled();
+		expect(updateControlPlane).not.toHaveBeenCalled();
+		expect(createDecision).not.toHaveBeenCalled();
+		expect(current.tasks[0]?.agentThreadId).toBe('thread_existing');
+	});
+
+	it('treats clearing an already-empty thread assignment as a no-op', async () => {
+		current = {
+			...current,
+			tasks: [createTask({ agentThreadId: null })]
+		};
+
+		const form = new FormData();
+		form.set('agentThreadId', '');
+
+		const result = await updateTaskThreadAssignment('task_1', form);
+
+		expect(result).toEqual({
+			ok: true,
+			successAction: 'updateTaskThread',
+			taskId: 'task_1'
+		});
+		expect(getAgentThread).not.toHaveBeenCalled();
+		expect(updateControlPlane).not.toHaveBeenCalled();
+		expect(createDecision).not.toHaveBeenCalled();
+		expect(current.tasks[0]?.agentThreadId).toBeNull();
+	});
+
+	it('clears the task thread and records a decision', async () => {
+		const form = new FormData();
+		form.set('agentThreadId', '');
+
+		const result = await updateTaskThreadAssignment('task_1', form);
+
+		expect(result).toEqual({
+			ok: true,
+			successAction: 'updateTaskThread',
+			taskId: 'task_1'
+		});
+		expect(current.tasks[0]).toEqual(
+			expect.objectContaining({
+				agentThreadId: null
+			})
+		);
+		expect(current.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_thread_updated',
+				summary: 'Cleared the task thread assignment.'
+			})
+		);
+	});
+
 	it('rejects an unknown thread assignment', async () => {
 		getAgentThread.mockResolvedValue(null);
 

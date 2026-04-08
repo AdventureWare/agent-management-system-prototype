@@ -1,17 +1,59 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentRunDetail, AgentThreadDetail } from '$lib/types/agent-thread';
 import {
+	buildAgentThreadContactLabel,
 	buildAgentThreadContactPrompt,
+	buildAgentThreadHandle,
 	deriveRunState,
 	extractThreadIdFromOutputLine,
 	isAbandonedThreadDetail,
+	normalizeAgentThreadHandleAlias,
 	parseAgentSandbox,
+	rankAgentThreadsForRouting,
 	reconcileControlPlaneThreadMessage,
 	reconcileControlPlaneThreadState
 } from './agent-threads';
 import { buildThreadAttachmentPrompt } from './agent-thread-attachments';
 import { buildCodexArgs } from '../../../scripts/agent-thread-runner-args.mjs';
 import type { ControlPlaneData } from '$lib/types/control-plane';
+
+function buildAgentThreadDetailFixture(
+	overrides: Partial<AgentThreadDetail> & Pick<AgentThreadDetail, 'id' | 'name'>
+): AgentThreadDetail {
+	return {
+		id: overrides.id,
+		name: overrides.name,
+		cwd: overrides.cwd ?? '/tmp/agent-management-system-prototype',
+		additionalWritableRoots: [],
+		sandbox: 'workspace-write',
+		model: null,
+		threadId: overrides.threadId ?? `codex_${overrides.id}`,
+		attachments: [],
+		archivedAt: overrides.archivedAt ?? null,
+		createdAt: overrides.createdAt ?? '2026-04-07T12:00:00.000Z',
+		updatedAt: overrides.updatedAt ?? '2026-04-07T12:05:00.000Z',
+		origin: overrides.origin ?? 'managed',
+		handle: overrides.handle ?? `${overrides.id}.handle`,
+		contactLabel: overrides.contactLabel ?? overrides.name,
+		routingScore: overrides.routingScore,
+		routingReason: overrides.routingReason,
+		topicLabels: overrides.topicLabels ?? [],
+		categorization: overrides.categorization,
+		threadState: overrides.threadState ?? 'ready',
+		latestRunStatus: overrides.latestRunStatus ?? 'completed',
+		hasActiveRun: overrides.hasActiveRun ?? false,
+		canResume: overrides.canResume ?? true,
+		runCount: overrides.runCount ?? 1,
+		lastActivityAt: overrides.lastActivityAt ?? '2026-04-07T12:05:00.000Z',
+		lastActivityLabel: overrides.lastActivityLabel ?? 'just now',
+		threadSummary: overrides.threadSummary ?? 'Ready for follow-up.',
+		lastExitCode: overrides.lastExitCode ?? 0,
+		runTimeline: overrides.runTimeline ?? [],
+		relatedTasks: overrides.relatedTasks ?? [],
+		latestRun: overrides.latestRun ?? null,
+		runs: overrides.runs ?? []
+	};
+}
 
 describe('agent session helpers', () => {
 	it('extracts thread ids from codex json lines', () => {
@@ -620,11 +662,449 @@ describe('agent session helpers', () => {
 						state: null
 					}
 				},
-				prompt: 'Need assignment guidance for which thread should own outbound coordination.'
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.',
+				contactType: 'request_assignment',
+				contextSummary:
+					'Decide which thread owns outbound coordination before the UI thread proceeds.',
+				contactId: 'contact_1',
+				replyRequested: true,
+				replyToContactId: 'contact_0'
 			})
 		).toContain(
 			'Requested help:\nNeed assignment guidance for which thread should own outbound coordination.'
 		);
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.',
+				contactType: 'request_assignment',
+				contextSummary:
+					'Decide which thread owns outbound coordination before the UI thread proceeds.',
+				contactId: 'contact_1',
+				replyRequested: true,
+				replyToContactId: 'contact_0'
+			})
+		).toContain('Coordination type: Request Assignment');
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.',
+				contactType: 'request_assignment',
+				contextSummary:
+					'Decide which thread owns outbound coordination before the UI thread proceeds.',
+				contactId: 'contact_1',
+				replyRequested: true,
+				replyToContactId: 'contact_0'
+			})
+		).toContain(
+			'Focused context note:\nDecide which thread owns outbound coordination before the UI thread proceeds.'
+		);
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.',
+				contactId: 'contact_1',
+				replyRequested: true,
+				replyToContactId: 'contact_0'
+			})
+		).toContain('Replying to contact: contact_0');
+		expect(
+			buildAgentThreadContactPrompt({
+				sourceThread: {
+					id: 'thread_source',
+					name: 'UI implementation thread',
+					threadSummary: 'Waiting on architecture guidance before continuing the implementation.',
+					relatedTasks: [
+						{
+							id: 'task_1',
+							title: 'Implement cross-thread messaging',
+							status: 'in_progress',
+							isPrimary: true
+						}
+					],
+					latestRun: {
+						id: 'run_1',
+						agentThreadId: 'thread_source',
+						mode: 'message',
+						prompt: 'Review the implementation plan and continue.',
+						requestedThreadId: 'codex_thread_source',
+						createdAt: '2026-04-07T12:01:00.000Z',
+						updatedAt: '2026-04-07T12:05:00.000Z',
+						logPath: '/tmp/log.txt',
+						statePath: '/tmp/state.json',
+						messagePath: '/tmp/message.txt',
+						configPath: '/tmp/config.json',
+						lastMessage: 'Implemented the API path but need guidance on the coordination model.',
+						logTail: [],
+						activityAt: '2026-04-07T12:05:00.000Z',
+						state: null
+					}
+				},
+				prompt: 'Need assignment guidance for which thread should own outbound coordination.',
+				contactId: 'contact_1',
+				replyRequested: true
+			})
+		).toContain('set replyToContactId=contact_1');
+	});
+
+	it('builds a stable thread handle and readable contact label', () => {
+		expect(
+			buildAgentThreadHandle({
+				threadId: 'thread_123',
+				cwd: '/tmp/agent-management-system-prototype',
+				relatedTasks: [
+					{
+						id: 'task_142',
+						title: 'Implement cross-thread contact',
+						status: 'in_progress',
+						isPrimary: true
+					}
+				],
+				categorization: {
+					labels: [],
+					projectIds: ['project_1'],
+					projectLabels: ['Agent Management System Prototype'],
+					goalIds: [],
+					goalLabels: [],
+					areaLabels: ['product'],
+					focusLabels: [],
+					entityLabels: [],
+					roleLabels: ['Frontend'],
+					capabilityLabels: [],
+					toolLabels: [],
+					keywordLabels: []
+				}
+			})
+		).toBe('frontend.agent-management-system-prototype.task-142');
+		expect(
+			buildAgentThreadContactLabel({
+				handle: 'frontend.agent-management-system-prototype.task-142',
+				threadState: 'ready',
+				relatedTasks: [
+					{
+						id: 'task_142',
+						title: 'Implement cross-thread contact',
+						status: 'in_progress',
+						isPrimary: true
+					}
+				],
+				categorization: {
+					labels: [],
+					projectIds: ['project_1'],
+					projectLabels: ['Agent Management System Prototype'],
+					goalIds: [],
+					goalLabels: [],
+					areaLabels: ['product'],
+					focusLabels: [],
+					entityLabels: [],
+					roleLabels: ['Frontend'],
+					capabilityLabels: [],
+					toolLabels: [],
+					keywordLabels: []
+				}
+			})
+		).toBe('Frontend · task_142 · ready');
+	});
+
+	it('normalizes and prefers explicit handle aliases', () => {
+		expect(normalizeAgentThreadHandleAlias(' Coordination.Main  ')).toBe('coordination.main');
+		expect(
+			buildAgentThreadHandle({
+				threadId: 'thread_123',
+				cwd: '/tmp/agent-management-system-prototype',
+				handleAlias: 'coordination.main',
+				relatedTasks: [],
+				categorization: null
+			})
+		).toBe('coordination.main');
+	});
+
+	it('ranks routing targets using source thread context and contactability', () => {
+		const sourceThread = buildAgentThreadDetailFixture({
+			id: 'thread_source',
+			name: 'Source thread',
+			handle: 'frontend.agent-management-system-prototype.task-100',
+			contactLabel: 'Frontend · task_100 · ready',
+			relatedTasks: [
+				{ id: 'task_100', title: 'Coordinate work', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_1'],
+				projectLabels: ['Agent Management System Prototype'],
+				goalIds: ['goal_1'],
+				goalLabels: ['Cross-thread coordination'],
+				areaLabels: ['product'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Frontend'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+		const bestTarget = buildAgentThreadDetailFixture({
+			id: 'thread_target_best',
+			name: 'Frontend implementation thread',
+			handle: 'frontend.agent-management-system-prototype.task-142',
+			contactLabel: 'Frontend · task_142 · ready',
+			relatedTasks: [
+				{ id: 'task_142', title: 'Implement contact UI', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_1'],
+				projectLabels: ['Agent Management System Prototype'],
+				goalIds: ['goal_1'],
+				goalLabels: ['Cross-thread coordination'],
+				areaLabels: ['product'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Frontend'],
+				capabilityLabels: ['Svelte'],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+		const weakerTarget = buildAgentThreadDetailFixture({
+			id: 'thread_target_weaker',
+			name: 'Backend review thread',
+			handle: 'backend.other-project.task-9',
+			contactLabel: 'Backend · task_9 · ready',
+			cwd: '/tmp/other-project',
+			relatedTasks: [
+				{ id: 'task_9', title: 'Review logs', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_2'],
+				projectLabels: ['Other Project'],
+				goalIds: [],
+				goalLabels: [],
+				areaLabels: ['platform'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Backend'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+		const busyTarget = buildAgentThreadDetailFixture({
+			id: 'thread_target_busy',
+			name: 'Busy frontend thread',
+			handle: 'frontend.agent-management-system-prototype.task-143',
+			contactLabel: 'Frontend · task_143 · working',
+			threadState: 'working',
+			hasActiveRun: true,
+			canResume: false,
+			relatedTasks: [
+				{ id: 'task_143', title: 'Ship change', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_1'],
+				projectLabels: ['Agent Management System Prototype'],
+				goalIds: ['goal_1'],
+				goalLabels: ['Cross-thread coordination'],
+				areaLabels: ['product'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Frontend'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+
+		const ranked = rankAgentThreadsForRouting(
+			[sourceThread, weakerTarget, busyTarget, bestTarget],
+			{ sourceThreadId: 'thread_source' }
+		);
+
+		expect(ranked.map((thread) => thread.id)).toEqual([
+			'thread_target_best',
+			'thread_target_busy',
+			'thread_target_weaker'
+		]);
+		expect(ranked[0]?.routingReason).toMatch(
+			/Shares project (Agent Management System Prototype|project_1)/
+		);
+		expect(ranked[0]?.routingReason).toContain('Shares role Frontend');
+	});
+
+	it('filters routing targets by role, project, task, and contactability', () => {
+		const matchingTarget = buildAgentThreadDetailFixture({
+			id: 'thread_target_match',
+			name: 'Frontend task thread',
+			handle: 'frontend.agent-management-system-prototype.task-142',
+			contactLabel: 'Frontend · task_142 · ready',
+			relatedTasks: [
+				{ id: 'task_142', title: 'Implement contact UI', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_1'],
+				projectLabels: ['Agent Management System Prototype'],
+				goalIds: [],
+				goalLabels: [],
+				areaLabels: ['product'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Frontend'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+		const nonMatchingTarget = buildAgentThreadDetailFixture({
+			id: 'thread_target_other',
+			name: 'Research thread',
+			handle: 'research.other-project.task-7',
+			contactLabel: 'Research · task_7 · ready',
+			cwd: '/tmp/other-project',
+			relatedTasks: [{ id: 'task_7', title: 'Research options', status: 'todo', isPrimary: true }],
+			categorization: {
+				labels: [],
+				projectIds: ['project_2'],
+				projectLabels: ['Other Project'],
+				goalIds: [],
+				goalLabels: [],
+				areaLabels: ['research'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Research'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+		const blockedMatch = buildAgentThreadDetailFixture({
+			id: 'thread_target_blocked',
+			name: 'Blocked frontend task thread',
+			handle: 'frontend.agent-management-system-prototype.task-142',
+			contactLabel: 'Frontend · task_142 · working',
+			threadState: 'working',
+			hasActiveRun: true,
+			canResume: false,
+			relatedTasks: [
+				{ id: 'task_142', title: 'Implement contact UI', status: 'in_progress', isPrimary: true }
+			],
+			categorization: {
+				labels: [],
+				projectIds: ['project_1'],
+				projectLabels: ['Agent Management System Prototype'],
+				goalIds: [],
+				goalLabels: [],
+				areaLabels: ['product'],
+				focusLabels: [],
+				entityLabels: [],
+				roleLabels: ['Frontend'],
+				capabilityLabels: [],
+				toolLabels: [],
+				keywordLabels: []
+			}
+		});
+
+		const ranked = rankAgentThreadsForRouting([nonMatchingTarget, blockedMatch, matchingTarget], {
+			role: 'frontend',
+			project: 'agent-management-system-prototype',
+			taskId: 'task_142',
+			canContact: true,
+			limit: 1
+		});
+
+		expect(ranked).toHaveLength(1);
+		expect(ranked[0]?.id).toBe('thread_target_match');
+		expect(ranked[0]?.routingReason).toContain('Linked to task task_142');
+		expect(ranked[0]?.routingReason).toContain('Matches project Agent Management System Prototype');
 	});
 
 	it('hides abandoned managed sessions that never produced a real thread', () => {

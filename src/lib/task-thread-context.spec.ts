@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentThreadDetail } from '$lib/types/agent-thread';
-import { isActiveTaskThread, selectTaskThreadContext } from './task-thread-context';
+import {
+	getTaskThreadActionLabel,
+	getTaskThreadReviewHref,
+	isActiveTaskThread,
+	selectTaskThreadContext
+} from './task-thread-context';
 
 function createSession(
 	id: string,
@@ -65,5 +70,35 @@ describe('task thread context', () => {
 		expect(selection.statusThread?.id).toBe('assigned');
 		expect(selection.linkThread?.id).toBe('assigned');
 		expect(selection.linkThreadKind).toBe('assigned');
+	});
+
+	it('builds a stable thread action label from shared thread context', () => {
+		expect(
+			getTaskThreadActionLabel({
+				statusThread: createSession('assigned', 'working'),
+				linkThread: createSession('assigned', 'working'),
+				linkThreadKind: 'assigned'
+			})
+		).toBe('Review active thread');
+
+		expect(
+			getTaskThreadActionLabel({
+				statusThread: createSession('assigned', 'ready'),
+				linkThread: createSession('latest', 'ready'),
+				linkThreadKind: 'latest'
+			})
+		).toBe('Review latest thread');
+
+		expect(
+			getTaskThreadActionLabel({
+				statusThread: createSession('assigned', 'ready'),
+				linkThread: createSession('assigned', 'ready'),
+				linkThreadKind: 'assigned'
+			})
+		).toBe('Review assigned thread');
+	});
+
+	it('builds a reply-oriented thread href for task surfaces', () => {
+		expect(getTaskThreadReviewHref('thread_123')).toBe('/app/threads/thread_123#reply');
 	});
 });

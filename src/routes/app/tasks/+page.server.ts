@@ -31,6 +31,7 @@ import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import { buildTaskGoalOptions } from '$lib/server/task-goal-options';
+import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import {
 	applyGoalRelationships,
 	getGoalLinkedProjectIds,
@@ -52,9 +53,46 @@ function getActionErrorMessage(error: unknown, fallback: string) {
 	return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
+function buildTaskCreateFormContext(
+	input: ReturnType<typeof readCreateTaskForm>,
+	submitMode: 'create' | 'createAndRun'
+) {
+	return {
+		formContext: 'taskCreate' as const,
+		name: input.name,
+		instructions: input.instructions,
+		successCriteria: input.successCriteria,
+		readyCondition: input.readyCondition,
+		expectedOutcome: input.expectedOutcome,
+		projectId: input.projectId,
+		parentTaskId: input.parentTaskId,
+		delegationObjective: input.delegationObjective,
+		delegationInputContext: input.delegationInputContext,
+		delegationExpectedDeliverable: input.delegationExpectedDeliverable,
+		delegationDoneCondition: input.delegationDoneCondition,
+		delegationIntegrationNotes: input.delegationIntegrationNotes,
+		assigneeWorkerId: input.assigneeWorkerId,
+		targetDate: input.targetDate,
+		goalId: input.goalId,
+		area: input.area,
+		priority: input.priority,
+		riskLevel: input.riskLevel,
+		approvalMode: input.approvalMode,
+		requiredThreadSandbox: input.requiredThreadSandbox,
+		requiresReview: input.requiresReview,
+		desiredRoleId: input.desiredRoleId,
+		blockedReason: input.blockedReason,
+		dependencyTaskIds: input.dependencyTaskIds,
+		requiredCapabilityNames: input.requiredCapabilityNames,
+		requiredToolNames: input.requiredToolNames,
+		submitMode
+	};
+}
+
 function failTaskCreate(
 	status: number,
 	payload: {
+		formContext: 'taskCreate';
 		message: string;
 		name: string;
 		instructions: string;
@@ -85,10 +123,7 @@ function failTaskCreate(
 		submitMode: 'create' | 'createAndRun';
 	}
 ) {
-	return fail(status, {
-		formContext: 'taskCreate',
-		...payload
-	});
+	return fail(status, payload);
 }
 
 function getDefaultDraftRole(data: ControlPlaneData): Role | null {
@@ -177,6 +212,7 @@ export const load: PageServerLoad = async ({ url }) => {
 export const actions: Actions = {
 	createTask: async ({ request }) => {
 		const form = await request.formData();
+		const createTaskInput = readCreateTaskForm(form);
 		const {
 			name,
 			instructions,
@@ -204,38 +240,11 @@ export const actions: Actions = {
 			dependencyTaskIds,
 			requiredCapabilityNames,
 			requiredToolNames
-		} = readCreateTaskForm(form);
+		} = createTaskInput;
 		const submitMode = readCreateTaskSubmitMode(form);
 		const uploads = readTaskAttachments(form);
-		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> = {
-			name,
-			instructions,
-			successCriteria,
-			readyCondition,
-			expectedOutcome,
-			projectId,
-			parentTaskId,
-			delegationObjective,
-			delegationInputContext,
-			delegationExpectedDeliverable,
-			delegationDoneCondition,
-			delegationIntegrationNotes,
-			assigneeWorkerId,
-			targetDate,
-			goalId,
-			area,
-			priority,
-			riskLevel,
-			approvalMode,
-			requiredThreadSandbox,
-			requiresReview,
-			desiredRoleId,
-			blockedReason,
-			dependencyTaskIds,
-			requiredCapabilityNames,
-			requiredToolNames,
-			submitMode
-		};
+		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> =
+			buildTaskCreateFormContext(createTaskInput, submitMode);
 
 		if (!name || !instructions || !projectId) {
 			return failTaskCreate(400, {
@@ -496,6 +505,72 @@ export const actions: Actions = {
 			threadId: session.agentThreadId,
 			attachmentCount: attachments.length
 		};
+	},
+
+	assistTaskWriting: async ({ request }) => {
+		const form = await request.formData();
+		const createTaskInput = readCreateTaskForm(form);
+		const submitMode = readCreateTaskSubmitMode(form);
+		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> =
+			buildTaskCreateFormContext(createTaskInput, submitMode);
+
+		if (!createTaskInput.instructions) {
+			return failTaskCreate(400, {
+				message: 'Add draft instructions before requesting writing assist.',
+				...failureContext
+			});
+		}
+
+		const current = await loadControlPlane();
+		const project =
+			current.projects.find((candidate) => candidate.id === createTaskInput.projectId) ?? null;
+		const goal = current.goals.find((candidate) => candidate.id === createTaskInput.goalId) ?? null;
+		const parentTask =
+			current.tasks.find((candidate) => candidate.id === createTaskInput.parentTaskId) ?? null;
+
+		try {
+			const result = await assistTaskWriting({
+				cwd: project?.projectRootFolder || process.cwd(),
+				projectName: project?.name ?? null,
+				taskName: createTaskInput.name,
+				goalLabel: goal?.name ?? null,
+				parentTaskTitle: parentTask?.title ?? null,
+				existingInstructions: createTaskInput.instructions,
+				successCriteria: createTaskInput.successCriteria,
+				readyCondition: createTaskInput.readyCondition,
+				expectedOutcome: createTaskInput.expectedOutcome,
+				delegationObjective: createTaskInput.delegationObjective,
+				delegationInputContext: createTaskInput.delegationInputContext,
+				delegationExpectedDeliverable: createTaskInput.delegationExpectedDeliverable,
+				delegationDoneCondition: createTaskInput.delegationDoneCondition,
+				delegationIntegrationNotes: createTaskInput.delegationIntegrationNotes,
+				blockedReason: createTaskInput.blockedReason,
+				requiredCapabilityNames: createTaskInput.requiredCapabilityNames,
+				requiredToolNames: createTaskInput.requiredToolNames,
+				availableSkillNames: listInstalledCodexSkills(project?.projectRootFolder ?? '')
+					.slice(0, 12)
+					.map((skill) => skill.id)
+			});
+
+			return {
+				ok: true,
+				successAction: 'assistTaskWriting',
+				reopenCreateModal: true,
+				assistChangeSummary: result.changeSummary,
+				...buildTaskCreateFormContext(
+					{
+						...createTaskInput,
+						instructions: result.instructions
+					},
+					submitMode
+				)
+			};
+		} catch (error) {
+			return failTaskCreate(400, {
+				message: getActionErrorMessage(error, 'Could not rewrite the task instructions.'),
+				...failureContext
+			});
+		}
 	},
 
 	updateTask: async ({ request }) => {

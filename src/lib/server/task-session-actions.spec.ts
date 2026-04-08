@@ -31,7 +31,6 @@ const recoverAgentThread = vi.hoisted(() => vi.fn());
 const buildStalledRecoveryState = vi.hoisted(() => vi.fn());
 const buildTaskLaunchPlan = vi.hoisted(() => vi.fn());
 const launchTaskFromPlan = vi.hoisted(() => vi.fn());
-const selectProjectTaskThreadContext = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/control-plane', () => ({
 	createDecision,
@@ -59,10 +58,6 @@ vi.mock('$lib/server/task-launch-planning', () => ({
 	},
 	buildTaskLaunchPlan,
 	launchTaskFromPlan
-}));
-
-vi.mock('$lib/server/task-thread-compatibility', () => ({
-	selectProjectTaskThreadContext
 }));
 
 import {
@@ -161,10 +156,6 @@ describe('task-session-actions', () => {
 		buildTaskLaunchPlan.mockResolvedValue({ id: 'plan_1' });
 		launchTaskFromPlan.mockReset();
 		launchTaskFromPlan.mockResolvedValue({ threadId: 'thread_new' });
-		selectProjectTaskThreadContext.mockReset();
-		selectProjectTaskThreadContext.mockReturnValue({
-			statusThread: { id: 'thread_assigned' }
-		});
 	});
 
 	it('launches a ready task through the shared launch planner', async () => {
@@ -219,6 +210,7 @@ describe('task-session-actions', () => {
 	it('recovers a stalled task and records a recovery decision', async () => {
 		current = {
 			...current,
+			tasks: [createTask({ status: 'in_progress' })],
 			runs: [
 				{
 					id: 'run_active',
@@ -257,5 +249,114 @@ describe('task-session-actions', () => {
 				decisionType: 'task_recovered'
 			})
 		);
+	});
+
+	it('evaluates stalled recovery against the active run thread instead of the assigned thread', async () => {
+		current = {
+			...current,
+			tasks: [createTask({ status: 'in_progress', agentThreadId: 'thread_reassigned' })],
+			runs: [
+				{
+					id: 'run_active',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-04-01T10:00:00.000Z',
+					updatedAt: '2026-04-01T10:05:00.000Z',
+					startedAt: '2026-04-01T10:00:00.000Z',
+					endedAt: null,
+					threadId: null,
+					agentThreadId: 'thread_active_run',
+					promptDigest: 'digest',
+					artifactPaths: [],
+					summary: '',
+					lastHeartbeatAt: '2026-04-01T10:05:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+		getAgentThread.mockImplementation(async (threadId: string) =>
+			threadId === 'thread_active_run'
+				? { id: 'thread_active_run', threadState: 'working' }
+				: { id: 'thread_reassigned', threadState: 'working' }
+		);
+
+		await recoverTaskSession('task_1', new FormData());
+
+		expect(buildStalledRecoveryState).toHaveBeenCalledWith(
+			expect.objectContaining({
+				task: expect.objectContaining({ id: 'task_1', agentThreadId: 'thread_reassigned' }),
+				activeRun: expect.objectContaining({
+					id: 'run_active',
+					agentThreadId: 'thread_active_run'
+				}),
+				activeRunThread: expect.objectContaining({ id: 'thread_active_run' })
+			})
+		);
+	});
+
+	it('rejects recovery when the active run is not linked to a recoverable thread', async () => {
+		current = {
+			...current,
+			tasks: [createTask({ status: 'in_progress' })],
+			runs: [
+				{
+					id: 'run_active',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-04-01T10:00:00.000Z',
+					updatedAt: '2026-04-01T10:05:00.000Z',
+					startedAt: '2026-04-01T10:00:00.000Z',
+					endedAt: null,
+					threadId: null,
+					agentThreadId: null,
+					promptDigest: 'digest',
+					artifactPaths: [],
+					summary: '',
+					lastHeartbeatAt: '2026-04-01T10:05:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+
+		await expect(recoverTaskSession('task_1', new FormData())).rejects.toMatchObject({
+			status: 409,
+			message: 'The active run is not linked to a recoverable work thread.'
+		} satisfies Pick<TaskSessionActionError, 'status' | 'message'>);
+	});
+
+	it('rejects recovery when the task is no longer in progress', async () => {
+		current = {
+			...current,
+			tasks: [createTask({ status: 'done' })],
+			runs: [
+				{
+					id: 'run_active',
+					taskId: 'task_1',
+					workerId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-04-01T10:00:00.000Z',
+					updatedAt: '2026-04-01T10:05:00.000Z',
+					startedAt: '2026-04-01T10:00:00.000Z',
+					endedAt: null,
+					threadId: null,
+					agentThreadId: 'thread_assigned',
+					promptDigest: 'digest',
+					artifactPaths: [],
+					summary: '',
+					lastHeartbeatAt: '2026-04-01T10:05:00.000Z',
+					errorSummary: ''
+				}
+			]
+		};
+
+		await expect(recoverTaskSession('task_1', new FormData())).rejects.toMatchObject({
+			status: 409,
+			message: 'Only tasks that are still In Progress can be recovered automatically.'
+		} satisfies Pick<TaskSessionActionError, 'status' | 'message'>);
 	});
 });

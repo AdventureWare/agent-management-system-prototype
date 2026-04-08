@@ -193,4 +193,76 @@ describe('task-child-handoffs', () => {
 			message: 'Only completed child tasks can be accepted into the parent.'
 		} satisfies Pick<TaskChildHandoffActionError, 'status' | 'message'>);
 	});
+
+	it('rejects accepting a child handoff that was already accepted', async () => {
+		current = {
+			...current,
+			tasks: current.tasks.map((task) =>
+				task.id === 'task_child'
+					? {
+							...task,
+							delegationAcceptance: {
+								summary: 'Already integrated.',
+								acceptedAt: '2026-04-01T10:30:00.000Z'
+							}
+						}
+					: task
+			)
+		};
+
+		const form = new FormData();
+		form.set('childTaskId', 'task_child');
+
+		await expect(acceptTaskChildHandoff('task_parent', form)).rejects.toMatchObject({
+			status: 409,
+			message: 'This child handoff has already been accepted.'
+		} satisfies Pick<TaskChildHandoffActionError, 'status' | 'message'>);
+	});
+
+	it('rejects requesting follow-up when the child task is not completed', async () => {
+		current = {
+			...current,
+			tasks: current.tasks.map((task) =>
+				task.id === 'task_child'
+					? {
+							...task,
+							status: 'in_progress'
+						}
+					: task
+			)
+		};
+
+		const form = new FormData();
+		form.set('childTaskId', 'task_child');
+
+		await expect(requestTaskChildHandoffChanges('task_parent', form)).rejects.toMatchObject({
+			status: 409,
+			message: 'Only completed child tasks can be returned for follow-up.'
+		} satisfies Pick<TaskChildHandoffActionError, 'status' | 'message'>);
+	});
+
+	it('rejects requesting follow-up after the child handoff was accepted', async () => {
+		current = {
+			...current,
+			tasks: current.tasks.map((task) =>
+				task.id === 'task_child'
+					? {
+							...task,
+							delegationAcceptance: {
+								summary: 'Already integrated.',
+								acceptedAt: '2026-04-01T10:30:00.000Z'
+							}
+						}
+					: task
+			)
+		};
+
+		const form = new FormData();
+		form.set('childTaskId', 'task_child');
+
+		await expect(requestTaskChildHandoffChanges('task_parent', form)).rejects.toMatchObject({
+			status: 409,
+			message: 'Accepted child handoffs cannot be returned for follow-up.'
+		} satisfies Pick<TaskChildHandoffActionError, 'status' | 'message'>);
+	});
 });

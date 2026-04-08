@@ -136,6 +136,14 @@ const listInstalledCodexSkillsMock = vi.hoisted(() =>
 		}
 	])
 );
+const assistTaskWritingMock = vi.hoisted(() =>
+	vi.fn(async () => ({
+		instructions:
+			'## Objective\nShip a clearer task brief.\n\n## Deliverable\nRewrite the operator-facing instructions so execution is easier.\n\n## Constraints\nPreserve the original intent and do not invent requirements.',
+		changeSummary:
+			'Rewrote the draft into a clearer execution brief with explicit deliverable and constraints.'
+	}))
+);
 
 function syncTaskExecutionStateLike(data: ControlPlaneData) {
 	return {
@@ -241,6 +249,10 @@ vi.mock('$lib/server/codex-skills', () => ({
 	listInstalledCodexSkills: listInstalledCodexSkillsMock
 }));
 
+vi.mock('$lib/server/task-writing-assist', () => ({
+	assistTaskWriting: assistTaskWritingMock
+}));
+
 vi.mock('$lib/server/task-execution-workspace', () => ({
 	getWorkspaceExecutionIssue: getWorkspaceExecutionIssueMock
 }));
@@ -255,6 +267,7 @@ describe('tasks page server actions', () => {
 		buildTaskThreadNameMock.mockClear();
 		buildTaskThreadPromptMock.mockClear();
 		listInstalledCodexSkillsMock.mockClear();
+		assistTaskWritingMock.mockClear();
 		createRunMock.mockClear();
 		createTaskMock.mockClear();
 		startAgentThreadMock.mockClear();
@@ -395,6 +408,86 @@ describe('tasks page server actions', () => {
 				runCount: 0
 			})
 		);
+	});
+
+	it('rewrites task instructions in place without creating a task', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('goalId', 'goal_queue_quality');
+		form.set('parentTaskId', 'task_existing');
+		form.set('name', 'Tighten task draft');
+		form.set('instructions', 'make this clearer for the agent');
+		form.set('successCriteria', 'The rewritten brief is easier to execute.');
+		form.set('requiredToolNames', 'codex, playwright');
+
+		const result = await actions.assistTaskWriting({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(assistTaskWritingMock).toHaveBeenCalledWith({
+			cwd: '/tmp/project',
+			projectName: 'Agent Management System Prototype',
+			taskName: 'Tighten task draft',
+			goalLabel: 'Reduce task intake friction',
+			parentTaskTitle: 'Existing task already in queue',
+			existingInstructions: 'make this clearer for the agent',
+			successCriteria: 'The rewritten brief is easier to execute.',
+			readyCondition: '',
+			expectedOutcome: '',
+			delegationObjective: '',
+			delegationInputContext: '',
+			delegationExpectedDeliverable: '',
+			delegationDoneCondition: '',
+			delegationIntegrationNotes: '',
+			blockedReason: '',
+			requiredCapabilityNames: [],
+			requiredToolNames: ['codex', 'playwright'],
+			availableSkillNames: ['skill-installer', 'web-design-guidelines']
+		});
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				formContext: 'taskCreate',
+				successAction: 'assistTaskWriting',
+				reopenCreateModal: true,
+				name: 'Tighten task draft',
+				projectId: 'project_ams',
+				instructions:
+					'## Objective\nShip a clearer task brief.\n\n## Deliverable\nRewrite the operator-facing instructions so execution is easier.\n\n## Constraints\nPreserve the original intent and do not invent requirements.',
+				assistChangeSummary:
+					'Rewrote the draft into a clearer execution brief with explicit deliverable and constraints.'
+			})
+		);
+		expect(createTaskMock).not.toHaveBeenCalled();
+		expect(createRunMock).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved).toBeNull();
+	});
+
+	it('rejects writing assist requests that do not include instructions', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Tighten task draft');
+
+		const result = await actions.assistTaskWriting({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				formContext: 'taskCreate',
+				message: 'Add draft instructions before requesting writing assist.',
+				name: 'Tighten task draft',
+				projectId: 'project_ams'
+			}
+		});
+		expect(assistTaskWritingMock).not.toHaveBeenCalled();
 	});
 
 	it('creates a queued task with advanced routing and governance metadata', async () => {

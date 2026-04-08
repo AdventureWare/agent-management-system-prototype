@@ -90,4 +90,54 @@ describe('task thread naming', () => {
 			})
 		).toContain('Delegation packet:');
 	});
+
+	it('includes thread coordination instructions for managed runs', () => {
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('AMS_AGENT_THREAD_ID');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('node scripts/agent-thread-cli.mjs best-target');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('node scripts/agent-thread-cli.mjs list --can-contact');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('node scripts/agent-thread-cli.mjs resolve <query> --can-contact');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain(
+			'node scripts/agent-thread-cli.mjs contact <targetThreadIdOrHandle> --type <question|request_context|request_assignment|handoff|review_request|status_update> --context'
+		);
+	});
 });

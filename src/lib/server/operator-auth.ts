@@ -11,6 +11,14 @@ export type OperatorAuthConfig = {
 	sessionSecret: string;
 };
 
+function safeEqual(value: string, expected: string) {
+	try {
+		return timingSafeEqual(Buffer.from(value, 'utf8'), Buffer.from(expected, 'utf8'));
+	} catch {
+		return false;
+	}
+}
+
 function base64UrlEncode(value: string) {
 	return Buffer.from(value, 'utf8').toString('base64url');
 }
@@ -64,7 +72,7 @@ export function isValidOperatorSession(
 	const expectedSignature = signPayload(payload, config.sessionSecret);
 
 	try {
-		if (!timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expectedSignature, 'utf8'))) {
+		if (!safeEqual(signature, expectedSignature)) {
 			return false;
 		}
 
@@ -77,6 +85,34 @@ export function isValidOperatorSession(
 	} catch {
 		return false;
 	}
+}
+
+export function getAgentApiToken() {
+	return (
+		process.env.AMS_AGENT_API_TOKEN?.trim() ||
+		process.env.AMS_OPERATOR_SESSION_SECRET?.trim() ||
+		process.env.AMS_OPERATOR_PASSWORD?.trim() ||
+		null
+	);
+}
+
+export function isValidAgentApiToken(token: string | null | undefined) {
+	const expectedToken = getAgentApiToken();
+
+	if (!token || !expectedToken) {
+		return false;
+	}
+
+	return safeEqual(token, expectedToken);
+}
+
+export function readBearerToken(value: string | null | undefined) {
+	if (!value) {
+		return null;
+	}
+
+	const match = value.match(/^Bearer\s+(.+)$/i);
+	return match?.[1]?.trim() || null;
 }
 
 export function operatorLoginRedirect(nextPath?: string | null) {

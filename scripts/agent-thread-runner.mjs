@@ -49,6 +49,13 @@ async function writeState(statePath, patch) {
 }
 
 const config = JSON.parse(await readFile(configPath, 'utf8'));
+const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
+const agentApiToken =
+	process.env.AMS_AGENT_API_TOKEN?.trim() ||
+	process.env.AMS_OPERATOR_SESSION_SECRET?.trim() ||
+	process.env.AMS_OPERATOR_PASSWORD?.trim() ||
+	'';
+const agentApiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
 await mkdir(dirname(config.statePath), { recursive: true });
 await writeState(config.statePath, {
 	status: 'queued',
@@ -74,6 +81,9 @@ const child = spawn(config.codexBin, buildCodexArgs(config), {
 	cwd: process.cwd(),
 	env: {
 		...process.env,
+		AMS_AGENT_API_BASE_URL: agentApiBaseUrl,
+		AMS_AGENT_API_TOKEN: agentApiToken,
+		AMS_AGENT_THREAD_ID: config.agentThreadId ?? '',
 		NO_COLOR: '1'
 	},
 	// Managed runs pass the task prompt as argv. If stdin remains as a live pipe,

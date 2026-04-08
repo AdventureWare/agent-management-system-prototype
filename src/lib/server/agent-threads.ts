@@ -1,7 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { normalizePathInput } from '$lib/server/path-tools';
@@ -24,15 +24,20 @@ import {
 } from '$lib/server/agent-thread-attachments';
 import {
 	AGENT_SANDBOX_OPTIONS,
+	AGENT_THREAD_CONTACT_STATUS_OPTIONS,
+	AGENT_THREAD_CONTACT_TYPE_OPTIONS,
+	formatAgentThreadContactTypeLabel,
 	type AgentRun,
 	type AgentRunDetail,
 	type AgentRunStatus,
 	type AgentThreadAttachment,
 	type AgentThreadTaskLink,
+	type AgentThreadContactType,
 	type AgentThreadState,
 	type AgentRunState,
 	type AgentSandbox,
 	type AgentThread,
+	type AgentThreadContact,
 	type AgentThreadDetail,
 	type AgentThreadOrigin,
 	type AgentTimelineStep,
@@ -61,12 +66,21 @@ let nativeThreadCache: {
 function defaultDb(): AgentThreadsDb {
 	return {
 		threads: [],
-		runs: []
+		runs: [],
+		contacts: []
 	};
 }
 
 function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
+}
+
+function isAgentThreadContactType(value: string): value is AgentThreadContactType {
+	return AGENT_THREAD_CONTACT_TYPE_OPTIONS.includes(value as AgentThreadContactType);
+}
+
+function isAgentThreadContactStatus(value: string): value is AgentThreadContact['status'] {
+	return AGENT_THREAD_CONTACT_STATUS_OPTIONS.includes(value as AgentThreadContact['status']);
 }
 
 function getAgentThreadsStorageBackend() {
@@ -84,6 +98,8 @@ async function ensureAgentThreadsDb() {
 
 function normalizeAgentThreadsDb(parsed: Partial<AgentThreadsDb>): AgentThreadsDb {
 	const storedThreads = Array.isArray(parsed.threads) ? parsed.threads : [];
+	const storedRuns = Array.isArray(parsed.runs) ? parsed.runs : [];
+	const storedContacts = Array.isArray(parsed.contacts) ? parsed.contacts : [];
 
 	return {
 		threads: storedThreads
@@ -97,6 +113,10 @@ function normalizeAgentThreadsDb(parsed: Partial<AgentThreadsDb>): AgentThreadsD
 					id: typeof candidate.id === 'string' ? candidate.id : createAgentThreadId(),
 					name: typeof candidate.name === 'string' ? candidate.name : 'Untitled thread',
 					cwd,
+					handleAlias:
+						typeof candidate.handleAlias === 'string' && candidate.handleAlias.trim()
+							? normalizeAgentThreadHandleAlias(candidate.handleAlias)
+							: null,
 					additionalWritableRoots: normalizeAdditionalWritableRoots(
 						cwd,
 						Array.isArray(candidate.additionalWritableRoots)
@@ -154,7 +174,111 @@ function normalizeAgentThreadsDb(parsed: Partial<AgentThreadsDb>): AgentThreadsD
 						typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString()
 				};
 			}),
-		runs: Array.isArray(parsed.runs) ? parsed.runs : []
+		runs: storedRuns
+			.filter((run) => Boolean(run) && typeof run === 'object')
+			.map((run) => {
+				const candidate = run as Partial<AgentRun>;
+
+				return {
+					...candidate,
+					id: typeof candidate.id === 'string' ? candidate.id : createRunId(),
+					agentThreadId: typeof candidate.agentThreadId === 'string' ? candidate.agentThreadId : '',
+					mode: candidate.mode === 'start' ? 'start' : 'message',
+					prompt: typeof candidate.prompt === 'string' ? candidate.prompt : '',
+					requestedThreadId:
+						typeof candidate.requestedThreadId === 'string' && candidate.requestedThreadId.trim()
+							? candidate.requestedThreadId
+							: null,
+					sourceAgentThreadId:
+						typeof candidate.sourceAgentThreadId === 'string' &&
+						candidate.sourceAgentThreadId.trim()
+							? candidate.sourceAgentThreadId
+							: null,
+					sourceAgentThreadName:
+						typeof candidate.sourceAgentThreadName === 'string' &&
+						candidate.sourceAgentThreadName.trim()
+							? candidate.sourceAgentThreadName
+							: null,
+					contactId:
+						typeof candidate.contactId === 'string' && candidate.contactId.trim()
+							? candidate.contactId
+							: null,
+					replyToContactId:
+						typeof candidate.replyToContactId === 'string' && candidate.replyToContactId.trim()
+							? candidate.replyToContactId
+							: null,
+					createdAt:
+						typeof candidate.createdAt === 'string'
+							? candidate.createdAt
+							: new Date().toISOString(),
+					updatedAt:
+						typeof candidate.updatedAt === 'string'
+							? candidate.updatedAt
+							: new Date().toISOString(),
+					logPath: typeof candidate.logPath === 'string' ? candidate.logPath : '',
+					statePath: typeof candidate.statePath === 'string' ? candidate.statePath : '',
+					messagePath: typeof candidate.messagePath === 'string' ? candidate.messagePath : '',
+					configPath: typeof candidate.configPath === 'string' ? candidate.configPath : ''
+				} satisfies AgentRun;
+			}),
+		contacts: storedContacts
+			.filter((contact) => Boolean(contact) && typeof contact === 'object')
+			.map((contact) => {
+				const candidate = contact as Partial<AgentThreadContact>;
+				const createdAt =
+					typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString();
+
+				return {
+					id:
+						typeof candidate.id === 'string' && candidate.id.trim()
+							? candidate.id
+							: createContactId(),
+					sourceAgentThreadId:
+						typeof candidate.sourceAgentThreadId === 'string' ? candidate.sourceAgentThreadId : '',
+					sourceAgentThreadName:
+						typeof candidate.sourceAgentThreadName === 'string'
+							? candidate.sourceAgentThreadName
+							: 'Unknown source thread',
+					targetAgentThreadId:
+						typeof candidate.targetAgentThreadId === 'string' ? candidate.targetAgentThreadId : '',
+					targetAgentThreadName:
+						typeof candidate.targetAgentThreadName === 'string'
+							? candidate.targetAgentThreadName
+							: 'Unknown target thread',
+					contactType:
+						typeof candidate.contactType === 'string' &&
+						isAgentThreadContactType(candidate.contactType)
+							? candidate.contactType
+							: 'question',
+					contextSummary:
+						typeof candidate.contextSummary === 'string' && candidate.contextSummary.trim()
+							? candidate.contextSummary.trim()
+							: null,
+					prompt: typeof candidate.prompt === 'string' ? candidate.prompt : '',
+					replyRequested: candidate.replyRequested !== false,
+					replyToContactId:
+						typeof candidate.replyToContactId === 'string' && candidate.replyToContactId.trim()
+							? candidate.replyToContactId
+							: null,
+					status:
+						typeof candidate.status === 'string' && isAgentThreadContactStatus(candidate.status)
+							? candidate.status
+							: candidate.replyRequested !== false
+								? 'awaiting_reply'
+								: 'sent',
+					resolvedByContactId:
+						typeof candidate.resolvedByContactId === 'string' &&
+						candidate.resolvedByContactId.trim()
+							? candidate.resolvedByContactId
+							: null,
+					targetRunId:
+						typeof candidate.targetRunId === 'string' && candidate.targetRunId.trim()
+							? candidate.targetRunId
+							: null,
+					createdAt,
+					updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : createdAt
+				} satisfies AgentThreadContact;
+			})
 	};
 }
 
@@ -228,6 +352,10 @@ function createRunId() {
 	return `run_${randomUUID()}`;
 }
 
+function createContactId() {
+	return `contact_${randomUUID()}`;
+}
+
 function compactThreadContactText(value: string, maxLength: number) {
 	const normalized = normalizeMessageText(value);
 
@@ -259,6 +387,11 @@ export function buildAgentThreadContactPrompt(input: {
 		'id' | 'name' | 'threadSummary' | 'relatedTasks' | 'latestRun'
 	>;
 	prompt: string;
+	contactType?: AgentThreadContactType;
+	contextSummary?: string | null;
+	contactId?: string | null;
+	replyRequested?: boolean;
+	replyToContactId?: string | null;
 }) {
 	const sourceContext =
 		input.sourceThread.latestRun?.lastMessage?.trim() ||
@@ -268,15 +401,23 @@ export function buildAgentThreadContactPrompt(input: {
 	const sections = [
 		'Another agent thread is contacting you for coordination.',
 		`Source thread: ${input.sourceThread.name} (${input.sourceThread.id})`,
+		`Coordination type: ${formatAgentThreadContactTypeLabel(input.contactType ?? 'question')}`,
 		linkedTaskSummary ? `Linked task context: ${linkedTaskSummary}` : '',
 		input.sourceThread.threadSummary.trim()
 			? `Source thread status: ${compactThreadContactText(input.sourceThread.threadSummary, 280)}`
 			: '',
+		input.contextSummary?.trim()
+			? `Focused context note:\n${compactThreadContactText(input.contextSummary, 420)}`
+			: '',
 		sourceContext
 			? `Latest saved context from the source thread:\n${compactThreadContactText(sourceContext, 900)}`
 			: '',
+		input.contactId ? `Contact id: ${input.contactId}` : '',
+		input.replyToContactId ? `Replying to contact: ${input.replyToContactId}` : '',
 		`Requested help:\n${normalizeMessageText(input.prompt)}`,
-		`Reply in this thread with the instructions, context, assignment, or answer the source thread needs. Reference source thread ${input.sourceThread.id} when that handoff context matters.`
+		input.replyRequested
+			? `Reply in this thread with the instructions, context, assignment, or answer the source thread needs. If you need to send a message back, contact source thread ${input.sourceThread.id} and set replyToContactId=${input.contactId ?? '<contactId>'}.`
+			: `Reply in this thread with the instructions, context, assignment, or answer the source thread needs. Reference source thread ${input.sourceThread.id} when that handoff context matters.`
 	].filter(Boolean);
 
 	return sections.join('\n\n');
@@ -1329,6 +1470,378 @@ function buildStandardizedManagedThreadName(
 	});
 }
 
+function normalizeThreadHandleSegment(value: string | null | undefined) {
+	return (value ?? '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+}
+
+export function normalizeAgentThreadHandleAlias(value: string | null | undefined) {
+	return (value ?? '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9.-]+/g, '-')
+		.replace(/\.{2,}/g, '.')
+		.replace(/-{2,}/g, '-')
+		.replace(/\.-|-\./g, '.')
+		.replace(/^[.-]+|[.-]+$/g, '');
+}
+
+function getPrimaryRelatedTask(relatedTasks: AgentThreadTaskLink[]) {
+	return relatedTasks.find((task) => task.isPrimary) ?? relatedTasks[0] ?? null;
+}
+
+export function buildAgentThreadHandle(input: {
+	threadId: string;
+	cwd: string;
+	handleAlias?: string | null;
+	relatedTasks: AgentThreadTaskLink[];
+	categorization: AgentThreadDetail['categorization'] | null;
+}) {
+	const aliasedHandle = normalizeAgentThreadHandleAlias(input.handleAlias);
+
+	if (aliasedHandle) {
+		return aliasedHandle;
+	}
+
+	const primaryTask = getPrimaryRelatedTask(input.relatedTasks);
+	const roleSegment = normalizeThreadHandleSegment(
+		input.categorization?.roleLabels[0] ?? 'general'
+	);
+	const projectSegment =
+		normalizeThreadHandleSegment(input.categorization?.projectLabels[0]) ||
+		normalizeThreadHandleSegment(basename(input.cwd)) ||
+		'workspace';
+	const taskSegment =
+		normalizeThreadHandleSegment(primaryTask?.id) ||
+		normalizeThreadHandleSegment(input.threadId) ||
+		'thread';
+
+	return [roleSegment || 'general', projectSegment, taskSegment].join('.');
+}
+
+export function buildAgentThreadContactLabel(input: {
+	handle: string;
+	threadState: AgentThreadState;
+	relatedTasks: AgentThreadTaskLink[];
+	categorization: AgentThreadDetail['categorization'] | null;
+}) {
+	const primaryTask = getPrimaryRelatedTask(input.relatedTasks);
+	const roleLabel = input.categorization?.roleLabels[0]?.trim() ?? '';
+	const projectLabel = input.categorization?.projectLabels[0]?.trim() ?? '';
+	const parts = [roleLabel, primaryTask?.id ?? projectLabel, input.threadState].filter(Boolean);
+
+	return parts.length > 0 ? parts.join(' · ') : input.handle;
+}
+
+function normalizeThreadRoutingTerm(value: string | null | undefined) {
+	return (value ?? '').trim().toLowerCase();
+}
+
+function normalizeThreadRoutingTerms(values: Array<string | null | undefined>) {
+	return [...new Set(values.map((value) => normalizeThreadRoutingTerm(value)).filter(Boolean))];
+}
+
+function buildThreadRoutingTerms(thread: AgentThreadDetail) {
+	return normalizeThreadRoutingTerms([
+		thread.id,
+		thread.name,
+		thread.handle,
+		thread.contactLabel,
+		thread.threadSummary,
+		thread.cwd,
+		basename(thread.cwd),
+		...thread.relatedTasks.flatMap((task) => [task.id, task.title]),
+		...(thread.categorization?.projectIds ?? []),
+		...(thread.categorization?.projectLabels ?? []),
+		...(thread.categorization?.goalIds ?? []),
+		...(thread.categorization?.goalLabels ?? []),
+		...(thread.categorization?.roleLabels ?? []),
+		...(thread.categorization?.capabilityLabels ?? []),
+		...(thread.categorization?.toolLabels ?? []),
+		...(thread.categorization?.keywordLabels ?? [])
+	]);
+}
+
+function buildThreadRoleTerms(thread: AgentThreadDetail) {
+	return normalizeThreadRoutingTerms([
+		...(thread.categorization?.roleLabels ?? []),
+		thread.handle?.split('.')[0] ?? null
+	]);
+}
+
+function buildThreadProjectTerms(thread: AgentThreadDetail) {
+	return normalizeThreadRoutingTerms([
+		...(thread.categorization?.projectIds ?? []),
+		...(thread.categorization?.projectLabels ?? []),
+		basename(thread.cwd),
+		thread.handle?.split('.')[1] ?? null
+	]);
+}
+
+function buildThreadGoalTerms(thread: AgentThreadDetail) {
+	return normalizeThreadRoutingTerms([
+		...(thread.categorization?.goalIds ?? []),
+		...(thread.categorization?.goalLabels ?? [])
+	]);
+}
+
+function buildThreadTaskTerms(thread: AgentThreadDetail) {
+	return normalizeThreadRoutingTerms([
+		...thread.relatedTasks.flatMap((task) => [task.id, task.title]),
+		thread.handle?.split('.')[2] ?? null
+	]);
+}
+
+function doesThreadMatchRoutingTerm(terms: string[], query: string) {
+	return terms.some((term) => term === query || term.includes(query) || query.includes(term));
+}
+
+function intersectThreadRoutingTerms(left: string[], right: string[]) {
+	const rightTerms = new Set(right);
+
+	return left.filter((term) => rightTerms.has(term));
+}
+
+function canThreadAcceptContact(thread: AgentThreadDetail) {
+	return !thread.archivedAt && !thread.hasActiveRun && thread.canResume;
+}
+
+export function getAgentThreadContactAvailability(thread: AgentThreadDetail) {
+	if (thread.archivedAt) {
+		return {
+			canContact: false,
+			disabledReason: 'Archived threads cannot receive cross-thread contact requests.'
+		};
+	}
+
+	if (thread.hasActiveRun) {
+		return {
+			canContact: false,
+			disabledReason: 'Wait for the active run to finish before contacting this thread.'
+		};
+	}
+
+	if (!thread.canResume) {
+		return {
+			canContact: false,
+			disabledReason: 'This thread cannot accept a follow-up right now.'
+		};
+	}
+
+	return {
+		canContact: true,
+		disabledReason: ''
+	};
+}
+
+function formatThreadRoutingValue(value: string | null | undefined) {
+	const normalized = (value ?? '').trim();
+
+	return normalized.length > 0 ? normalized : null;
+}
+
+export function rankAgentThreadsForRouting(
+	threads: AgentThreadDetail[],
+	options: {
+		q?: string | null;
+		role?: string | null;
+		project?: string | null;
+		taskId?: string | null;
+		sourceThreadId?: string | null;
+		canContact?: boolean;
+		limit?: number | null;
+	} = {}
+): AgentThreadDetail[] {
+	const normalizedQuery = normalizeThreadRoutingTerm(options.q);
+	const normalizedRole = normalizeThreadRoutingTerm(options.role);
+	const normalizedProject = normalizeThreadRoutingTerm(options.project);
+	const normalizedTaskId = normalizeThreadRoutingTerm(options.taskId);
+	const normalizedSourceThreadId = normalizeThreadRoutingTerm(options.sourceThreadId);
+	const sourceThread =
+		normalizedSourceThreadId.length > 0
+			? (threads.find(
+					(thread) => normalizeThreadRoutingTerm(thread.id) === normalizedSourceThreadId
+				) ?? null)
+			: null;
+
+	const rankedThreads = threads
+		.filter((thread) =>
+			normalizedSourceThreadId.length > 0
+				? normalizeThreadRoutingTerm(thread.id) !== normalizedSourceThreadId
+				: true
+		)
+		.filter((thread) => (options.canContact ? canThreadAcceptContact(thread) : true))
+		.flatMap((thread): AgentThreadDetail[] => {
+			const roleTerms = buildThreadRoleTerms(thread);
+			const projectTerms = buildThreadProjectTerms(thread);
+			const goalTerms = buildThreadGoalTerms(thread);
+			const taskTerms = buildThreadTaskTerms(thread);
+			const searchTerms = buildThreadRoutingTerms(thread);
+
+			if (normalizedRole && !doesThreadMatchRoutingTerm(roleTerms, normalizedRole)) {
+				return [];
+			}
+
+			if (normalizedProject && !doesThreadMatchRoutingTerm(projectTerms, normalizedProject)) {
+				return [];
+			}
+
+			if (normalizedTaskId && !doesThreadMatchRoutingTerm(taskTerms, normalizedTaskId)) {
+				return [];
+			}
+
+			if (normalizedQuery && !doesThreadMatchRoutingTerm(searchTerms, normalizedQuery)) {
+				return [];
+			}
+
+			let routingScore = 0;
+			const reasons: Array<{ score: number; text: string }> = [];
+			const addReason = (score: number, text: string | null | undefined) => {
+				if (!text) {
+					return;
+				}
+
+				routingScore += score;
+				reasons.push({ score, text });
+			};
+
+			if (normalizedTaskId) {
+				addReason(
+					120,
+					`Linked to task ${formatThreadRoutingValue(
+						thread.relatedTasks.find((task) =>
+							doesThreadMatchRoutingTerm(
+								normalizeThreadRoutingTerms([task.id, task.title]),
+								normalizedTaskId
+							)
+						)?.id ?? options.taskId
+					)}`
+				);
+			}
+
+			if (normalizedProject) {
+				addReason(
+					80,
+					`Matches project ${formatThreadRoutingValue(
+						thread.categorization?.projectLabels[0] ??
+							thread.categorization?.projectIds[0] ??
+							basename(thread.cwd) ??
+							options.project
+					)}`
+				);
+			}
+
+			if (normalizedRole) {
+				addReason(
+					60,
+					`Matches role ${formatThreadRoutingValue(
+						thread.categorization?.roleLabels[0] ?? options.role
+					)}`
+				);
+			}
+
+			if (normalizedQuery) {
+				addReason(
+					30,
+					`Matches search ${JSON.stringify(formatThreadRoutingValue(options.q) ?? options.q ?? '')}`
+				);
+			}
+
+			if (sourceThread) {
+				const sharedProject =
+					intersectThreadRoutingTerms(projectTerms, buildThreadProjectTerms(sourceThread))[0] ??
+					null;
+				const sharedRole =
+					intersectThreadRoutingTerms(roleTerms, buildThreadRoleTerms(sourceThread))[0] ?? null;
+				const sharedGoal =
+					intersectThreadRoutingTerms(goalTerms, buildThreadGoalTerms(sourceThread))[0] ?? null;
+
+				if (sharedProject) {
+					addReason(
+						45,
+						`Shares project ${formatThreadRoutingValue(
+							thread.categorization?.projectLabels[0] ??
+								sourceThread.categorization?.projectLabels[0] ??
+								sharedProject
+						)}`
+					);
+				}
+
+				if (sharedRole) {
+					addReason(
+						30,
+						`Shares role ${formatThreadRoutingValue(
+							thread.categorization?.roleLabels.find(
+								(label) => normalizeThreadRoutingTerm(label) === sharedRole
+							) ??
+								sourceThread.categorization?.roleLabels.find(
+									(label) => normalizeThreadRoutingTerm(label) === sharedRole
+								) ??
+								sharedRole
+						)}`
+					);
+				}
+
+				if (sharedGoal) {
+					addReason(
+						20,
+						`Shares goal ${formatThreadRoutingValue(
+							thread.categorization?.goalLabels[0] ??
+								sourceThread.categorization?.goalLabels[0] ??
+								sharedGoal
+						)}`
+					);
+				}
+			}
+
+			if (canThreadAcceptContact(thread)) {
+				addReason(10, 'Can accept contact now');
+			} else {
+				routingScore -= 15;
+			}
+
+			const routingReason = reasons
+				.sort((left, right) => right.score - left.score)
+				.slice(0, 2)
+				.map((reason) => reason.text)
+				.join('; ');
+
+			return [
+				{
+					...thread,
+					routingScore,
+					routingReason
+				} satisfies AgentThreadDetail
+			];
+		})
+		.sort((left, right) => {
+			if ((right.routingScore ?? 0) !== (left.routingScore ?? 0)) {
+				return (right.routingScore ?? 0) - (left.routingScore ?? 0);
+			}
+
+			if (canThreadAcceptContact(left) !== canThreadAcceptContact(right)) {
+				return canThreadAcceptContact(left) ? -1 : 1;
+			}
+
+			const leftActivity = left.lastActivityAt ?? left.updatedAt;
+			const rightActivity = right.lastActivityAt ?? right.updatedAt;
+
+			if (rightActivity !== leftActivity) {
+				return rightActivity.localeCompare(leftActivity);
+			}
+
+			return left.name.localeCompare(right.name);
+		});
+
+	if (options.limit && options.limit > 0) {
+		return rankedThreads.slice(0, options.limit);
+	}
+
+	return rankedThreads;
+}
+
 function finalizeThreadDetail(input: {
 	session: AgentThread;
 	runDetails: AgentRunDetail[];
@@ -1401,10 +1914,25 @@ function finalizeThreadDetail(input: {
 						})
 						.filter((task): task is NonNullable<typeof task> => Boolean(task))
 				});
+	const handle = buildAgentThreadHandle({
+		threadId: input.session.id,
+		cwd: input.session.cwd,
+		handleAlias: input.session.handleAlias,
+		relatedTasks,
+		categorization
+	});
+	const contactLabel = buildAgentThreadContactLabel({
+		handle,
+		threadState,
+		relatedTasks,
+		categorization
+	});
 
 	return {
 		...input.session,
 		name,
+		handle,
+		contactLabel,
 		attachments: input.session.attachments ?? [],
 		origin: input.origin,
 		threadId,
@@ -2142,6 +2670,29 @@ export async function getAgentThread(
 	return finalizeSingleDetail(await buildExternalThreadDetail(nativeThread, [], taskContext));
 }
 
+export async function listAgentThreadContacts(
+	options: {
+		threadId?: string | null;
+		limit?: number | null;
+	} = {}
+) {
+	const db = await loadAgentThreadsDb();
+	const contacts = (db.contacts ?? [])
+		.filter((contact) =>
+			options.threadId?.trim()
+				? contact.sourceAgentThreadId === options.threadId ||
+					contact.targetAgentThreadId === options.threadId
+				: true
+		)
+		.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+	if (options.limit && options.limit > 0) {
+		return contacts.slice(0, options.limit);
+	}
+
+	return contacts;
+}
+
 export async function setAgentThreadsArchived(agentThreadIds: string[], archived: boolean) {
 	const normalizedIds = [
 		...new Set(agentThreadIds.map((agentThreadId) => agentThreadId.trim()).filter(Boolean))
@@ -2202,7 +2753,8 @@ export async function setAgentThreadsArchived(agentThreadIds: string[], archived
 
 	await saveAgentThreadsDb({
 		threads: nextSessions,
-		runs: db.runs
+		runs: db.runs,
+		contacts: db.contacts ?? []
 	});
 
 	return changedSessionIds;
@@ -2273,6 +2825,8 @@ export async function startAgentThread(input: {
 		requestedThreadId: null,
 		sourceAgentThreadId: null,
 		sourceAgentThreadName: null,
+		contactId: null,
+		replyToContactId: null,
 		createdAt: now,
 		updatedAt: now,
 		logPath: paths.logPath,
@@ -2284,7 +2838,8 @@ export async function startAgentThread(input: {
 	await writeRunnerConfig({ session, run, threadId: null });
 	await updateAgentThreadsDb((db) => ({
 		threads: [session, ...db.threads],
-		runs: [run, ...db.runs]
+		runs: [run, ...db.runs],
+		contacts: db.contacts ?? []
 	}));
 	launchRunner(run.configPath);
 
@@ -2321,13 +2876,80 @@ export async function updateAgentThreadSandbox(agentThreadId: string, sandbox: A
 				threads: current.threads.map((candidate) =>
 					candidate.id === agentThreadId ? updatedSession : candidate
 				),
-				runs: current.runs
+				runs: current.runs,
+				contacts: current.contacts ?? []
 			};
 		}
 
 		return {
 			threads: [updatedSession, ...current.threads],
-			runs: current.runs
+			runs: current.runs,
+			contacts: current.contacts ?? []
+		};
+	});
+
+	return updatedSession;
+}
+
+export async function updateAgentThreadHandleAlias(
+	agentThreadId: string,
+	handleAlias: string | null | undefined
+) {
+	const normalizedHandleAlias = normalizeAgentThreadHandleAlias(handleAlias);
+
+	if (handleAlias?.trim() && !normalizedHandleAlias) {
+		throw new Error('Handle alias must include at least one letter or number.');
+	}
+
+	const [db, nativeThread, threads] = await Promise.all([
+		loadAgentThreadsDb(),
+		getNativeCodexThread(agentThreadId),
+		listAgentThreads({ includeArchived: true })
+	]);
+	const existingSession = db.threads.find((candidate) => candidate.id === agentThreadId) ?? null;
+
+	if (!existingSession && !nativeThread) {
+		throw new Error('Thread not found.');
+	}
+
+	if (normalizedHandleAlias) {
+		const conflictingThread =
+			threads.find(
+				(thread) => thread.id !== agentThreadId && thread.handle === normalizedHandleAlias
+			) ?? null;
+
+		if (conflictingThread) {
+			throw new Error(
+				`Handle alias "${normalizedHandleAlias}" is already used by "${conflictingThread.name}".`
+			);
+		}
+	}
+
+	const now = new Date().toISOString();
+	const baseSession = existingSession ?? materializeNativeThread(nativeThread as NativeCodexThread);
+	const updatedSession: AgentThread = {
+		...baseSession,
+		handleAlias: normalizedHandleAlias || null,
+		updatedAt: now
+	};
+
+	await updateAgentThreadsDb((current) => {
+		const existingIndex = current.threads.findIndex((candidate) => candidate.id === agentThreadId);
+
+		if (existingIndex >= 0) {
+			return {
+				threads: current.threads.map((candidate) =>
+					candidate.id === agentThreadId ? updatedSession : candidate
+				),
+				runs: current.runs,
+				contacts: current.contacts ?? []
+			};
+		}
+
+		return {
+			threads: [updatedSession, ...current.threads],
+			runs: current.runs,
+			contacts: current.contacts ?? []
 		};
 	});
 
@@ -2345,6 +2967,8 @@ export async function sendAgentThreadMessage(
 					id: string;
 					name: string;
 				} | null;
+				contactId?: string | null;
+				replyToContactId?: string | null;
 		  }
 ) {
 	const db = await loadAgentThreadsDb();
@@ -2353,6 +2977,8 @@ export async function sendAgentThreadMessage(
 	const uploads =
 		typeof input === 'string' ? [] : (input.attachments ?? []).filter((file) => file.size > 0);
 	const sourceThread = typeof input === 'string' ? null : (input.sourceThread ?? null);
+	const contactId = typeof input === 'string' ? null : (input.contactId ?? null);
+	const replyToContactId = typeof input === 'string' ? null : (input.replyToContactId ?? null);
 
 	if (!session) {
 		const nativeThread = await getNativeCodexThread(agentThreadId);
@@ -2370,7 +2996,8 @@ export async function sendAgentThreadMessage(
 
 			return {
 				threads: [importedSession, ...current.threads],
-				runs: current.runs
+				runs: current.runs,
+				contacts: current.contacts ?? []
 			};
 		});
 	}
@@ -2432,6 +3059,8 @@ export async function sendAgentThreadMessage(
 		requestedThreadId: detail.threadId,
 		sourceAgentThreadId: sourceThread?.id ?? null,
 		sourceAgentThreadName: sourceThread?.name ?? null,
+		contactId,
+		replyToContactId,
 		createdAt: now,
 		updatedAt: now,
 		logPath: paths.logPath,
@@ -2452,7 +3081,8 @@ export async function sendAgentThreadMessage(
 		threads: current.threads.map((candidate) =>
 			candidate.id === agentThreadId ? nextSession : candidate
 		),
-		runs: [run, ...current.runs]
+		runs: [run, ...current.runs],
+		contacts: current.contacts ?? []
 	}));
 	const controlPlane = await loadControlPlane();
 	const reconciledControlPlane = reconcileControlPlaneThreadMessage(
@@ -2478,10 +3108,21 @@ export async function contactAgentThread(
 		targetAgentThreadId: string;
 		prompt: string;
 		attachments?: File[];
+		contactType?: AgentThreadContactType | string | null;
+		contextSummary?: string | null;
+		replyRequested?: boolean;
+		replyToContactId?: string | null;
 	}
 ) {
 	const targetAgentThreadId = input.targetAgentThreadId.trim();
 	const prompt = input.prompt.trim();
+	const contactType =
+		typeof input.contactType === 'string' && isAgentThreadContactType(input.contactType)
+			? input.contactType
+			: 'question';
+	const contextSummary = input.contextSummary?.trim() || null;
+	const replyRequested = input.replyRequested !== false;
+	const replyToContactId = input.replyToContactId?.trim() || null;
 
 	if (!targetAgentThreadId) {
 		throw new Error('Target thread is required.');
@@ -2519,18 +3160,64 @@ export async function contactAgentThread(
 	if (!targetThread.canResume) {
 		throw new Error(`Target thread "${targetThread.name}" cannot accept a follow-up right now.`);
 	}
-
-	return sendAgentThreadMessage(targetAgentThreadId, {
+	const contactId = createContactId();
+	const sendResult = await sendAgentThreadMessage(targetAgentThreadId, {
 		prompt: buildAgentThreadContactPrompt({
 			sourceThread,
-			prompt
+			prompt,
+			contactType,
+			contextSummary,
+			contactId,
+			replyRequested,
+			replyToContactId
 		}),
 		attachments: input.attachments,
 		sourceThread: {
 			id: sourceThread.id,
 			name: sourceThread.name
-		}
+		},
+		contactId,
+		replyToContactId
 	});
+
+	await updateAgentThreadsDb((current) => ({
+		threads: current.threads,
+		runs: current.runs,
+		contacts: [
+			{
+				id: contactId,
+				sourceAgentThreadId: sourceThread.id,
+				sourceAgentThreadName: sourceThread.name,
+				targetAgentThreadId: targetThread.id,
+				targetAgentThreadName: targetThread.name,
+				contactType,
+				contextSummary,
+				prompt,
+				replyRequested,
+				replyToContactId,
+				status: replyRequested ? 'awaiting_reply' : 'sent',
+				resolvedByContactId: null,
+				targetRunId: sendResult.runId,
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString()
+			},
+			...(current.contacts ?? []).map((contact) =>
+				replyToContactId && contact.id === replyToContactId
+					? {
+							...contact,
+							status: 'answered' as const,
+							resolvedByContactId: contactId,
+							updatedAt: new Date().toISOString()
+						}
+					: contact
+			)
+		]
+	}));
+
+	return {
+		...sendResult,
+		contactId
+	};
 }
 
 export async function recoverAgentThread(agentThreadId: string) {

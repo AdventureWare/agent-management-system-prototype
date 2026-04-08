@@ -85,6 +85,8 @@ import {
 	approveTaskApproval,
 	approveTaskReview,
 	loadGovernanceInboxData,
+	rejectTaskApproval,
+	requestTaskReviewChanges,
 	TaskGovernanceActionError
 } from './task-governance';
 
@@ -461,6 +463,21 @@ describe('task-governance helpers', () => {
 				blockedReason: ''
 			})
 		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_review')).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'Task closed after review approval.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_review',
+				runId: 'run_review',
+				reviewId: 'review_1',
+				decisionType: 'review_approved',
+				summary: 'Approved the open review and closed the task.'
+			})
+		);
 	});
 
 	it('approves a before-complete gate and closes the task when review is already clear', async () => {
@@ -486,10 +503,204 @@ describe('task-governance helpers', () => {
 				blockedReason: ''
 			})
 		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_approval')).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'Task closed after approval.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_approval',
+				runId: 'run_approval',
+				approvalId: 'approval_1',
+				decisionType: 'approval_approved',
+				summary: 'Approved the before_complete gate and closed the task.'
+			})
+		);
+	});
+
+	it('approves a review without closing the task when approval is still pending', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			approvals: [
+				...(controlPlaneState.current?.approvals ?? []),
+				{
+					id: 'approval_review_gate',
+					taskId: 'task_review',
+					runId: 'run_review',
+					mode: 'before_complete',
+					status: 'pending',
+					createdAt: '2026-04-07T11:06:00.000Z',
+					updatedAt: '2026-04-07T11:06:00.000Z',
+					resolvedAt: null,
+					requestedByWorkerId: null,
+					approverWorkerId: null,
+					summary: 'Still needs approval.'
+				}
+			]
+		};
+
+		await approveTaskReview('task_review', 'task detail page');
+
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_review')).toEqual(
+			expect.objectContaining({
+				status: 'review',
+				blockedReason: ''
+			})
+		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_review')).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'ready for review'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				decisionType: 'review_approved',
+				summary: 'Approved the open review.'
+			})
+		);
+	});
+
+	it('approves a before-complete gate without closing the task when review is still open', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			reviews: [
+				...(controlPlaneState.current?.reviews ?? []),
+				{
+					id: 'review_approval_gate',
+					taskId: 'task_approval',
+					runId: 'run_approval',
+					status: 'open',
+					createdAt: '2026-04-07T11:07:00.000Z',
+					updatedAt: '2026-04-07T11:07:00.000Z',
+					resolvedAt: null,
+					requestedByWorkerId: null,
+					reviewerWorkerId: null,
+					summary: 'Review still open.'
+				}
+			]
+		};
+
+		await approveTaskApproval('task_approval', 'task detail page');
+
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_approval')).toEqual(
+			expect.objectContaining({
+				status: 'review',
+				blockedReason: ''
+			})
+		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_approval')).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'waiting for approval'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				decisionType: 'approval_approved',
+				summary: 'Approved the before_complete gate.'
+			})
+		);
+	});
+
+	it('blocks the task when review changes are requested', async () => {
+		const result = await requestTaskReviewChanges('task_review', 'governance inbox');
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'requestChanges',
+				taskId: 'task_review'
+			})
+		);
+		expect(controlPlaneState.saved?.reviews[0]).toEqual(
+			expect.objectContaining({
+				status: 'changes_requested',
+				resolvedAt: expect.any(String),
+				summary: 'Changes requested during review. Sent from the governance inbox.'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_review')).toEqual(
+			expect.objectContaining({
+				status: 'blocked',
+				blockedReason: 'Changes requested during review.'
+			})
+		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_review')).toEqual(
+			expect.objectContaining({
+				status: 'blocked',
+				summary: 'Changes requested during review.',
+				errorSummary: 'Changes requested during review.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_review',
+				runId: 'run_review',
+				reviewId: 'review_1',
+				decisionType: 'review_changes_requested',
+				summary: 'Changes requested during review.'
+			})
+		);
+	});
+
+	it('blocks the task when a pending approval is rejected', async () => {
+		const result = await rejectTaskApproval('task_approval');
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'rejectApproval',
+				taskId: 'task_approval'
+			})
+		);
+		expect(controlPlaneState.saved?.approvals[0]).toEqual(
+			expect.objectContaining({
+				status: 'rejected',
+				resolvedAt: expect.any(String),
+				summary: 'before_complete approval rejected.'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.find((task) => task.id === 'task_approval')).toEqual(
+			expect.objectContaining({
+				status: 'blocked',
+				blockedReason: 'before_complete approval rejected.'
+			})
+		);
+		expect(controlPlaneState.saved?.runs.find((run) => run.id === 'run_approval')).toEqual(
+			expect.objectContaining({
+				status: 'blocked',
+				summary: 'before_complete approval rejected.',
+				errorSummary: 'before_complete approval rejected.'
+			})
+		);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_approval',
+				runId: 'run_approval',
+				approvalId: 'approval_1',
+				decisionType: 'approval_rejected',
+				summary: 'before_complete approval rejected.'
+			})
+		);
 	});
 
 	it('throws a typed error when the requested review is missing', async () => {
 		await expect(approveTaskReview('missing_task', 'governance inbox')).rejects.toBeInstanceOf(
+			TaskGovernanceActionError
+		);
+		await expect(
+			requestTaskReviewChanges('missing_task', 'governance inbox')
+		).rejects.toBeInstanceOf(TaskGovernanceActionError);
+	});
+
+	it('throws a typed error when the requested approval is missing', async () => {
+		await expect(approveTaskApproval('missing_task', 'governance inbox')).rejects.toBeInstanceOf(
+			TaskGovernanceActionError
+		);
+		await expect(rejectTaskApproval('missing_task')).rejects.toBeInstanceOf(
 			TaskGovernanceActionError
 		);
 	});

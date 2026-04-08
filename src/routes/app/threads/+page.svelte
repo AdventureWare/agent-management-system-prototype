@@ -192,6 +192,8 @@
 	function threadMatchesQuery(session: AgentThreadDetail, term: string) {
 		return [
 			session.name,
+			session.handle ?? '',
+			session.contactLabel ?? '',
 			session.cwd,
 			session.threadState,
 			formatThreadStateLabel(session.threadState),
@@ -463,6 +465,12 @@
 										<p class="ui-wrap-anywhere text-base font-semibold text-white">
 											{session.name}
 										</p>
+										<p class="ui-wrap-anywhere mt-1 text-xs text-sky-200">
+											{session.handle ?? session.id}
+										</p>
+										<p class="ui-clamp-3 mt-1 text-xs text-slate-500">
+											{session.contactLabel ?? formatThreadStateLabel(session.threadState)}
+										</p>
 										<p class="ui-clamp-3 mt-2 text-sm text-slate-400">
 											{session.model ?? 'default model'} · {session.sandbox}
 										</p>
@@ -641,6 +649,12 @@
 								<div class="ui-clamp-5 font-medium text-white">
 									{session.name}
 								</div>
+								<span class="ui-clamp-5 mt-1 block text-xs text-sky-200">
+									{session.handle ?? session.id}
+								</span>
+								<span class="ui-clamp-5 mt-1 block text-xs text-slate-500">
+									{session.contactLabel ?? formatThreadStateLabel(session.threadState)}
+								</span>
 								<span class="ui-clamp-5 mt-1 block text-xs text-slate-400">
 									{session.model ?? 'default model'} · {session.sandbox}
 								</span>

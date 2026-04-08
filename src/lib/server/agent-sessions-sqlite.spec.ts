@@ -18,7 +18,7 @@ async function importAgentThreadsModule() {
 	return import('./agent-threads');
 }
 
-function writeAgentThreadsJson(root: string) {
+function writeAgentThreadsJson(root: string, options: { includeContact?: boolean } = {}) {
 	mkdirSync(resolve(root, 'data'), { recursive: true });
 	writeFileSync(
 		resolve(root, 'data', 'agent-threads.json'),
@@ -37,7 +37,28 @@ function writeAgentThreadsJson(root: string) {
 					updatedAt: '2026-04-02T12:00:00.000Z'
 				}
 			],
-			runs: []
+			runs: [],
+			contacts: options.includeContact
+				? [
+						{
+							id: 'contact_seeded',
+							sourceAgentThreadId: 'thread_seeded',
+							sourceAgentThreadName: 'Seeded session',
+							targetAgentThreadId: 'thread_target',
+							targetAgentThreadName: 'Target thread',
+							contactType: 'question',
+							contextSummary: 'Need architecture guidance on contact routing.',
+							prompt: 'Need architecture guidance.',
+							replyRequested: true,
+							replyToContactId: null,
+							status: 'awaiting_reply',
+							resolvedByContactId: null,
+							targetRunId: 'run_target',
+							createdAt: '2026-04-02T12:00:00.000Z',
+							updatedAt: '2026-04-02T12:00:00.000Z'
+						}
+					]
+				: []
 		})
 	);
 }
@@ -117,5 +138,37 @@ describe('agent sessions sqlite backend', () => {
 
 		expect(db.threads[0]?.archivedAt).toBeTypeOf('string');
 		expect(JSON.parse(row?.payload ?? '{}').archivedAt).toBeTypeOf('string');
+	});
+
+	it('bootstraps stored contact records into sqlite', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		vi.stubEnv('CODEX_HOME', resolve(root, '.codex'));
+		writeAgentThreadsJson(root, { includeContact: true });
+
+		const { loadAgentThreadsDb } = await importAgentThreadsModule();
+		const db = await loadAgentThreadsDb();
+		const sqlite = new Database(resolve(root, 'data', 'app.sqlite'), {
+			readonly: true,
+			fileMustExist: true
+		});
+		const row = sqlite
+			.prepare<[], { payload: string }>(
+				`
+						select payload
+						from agent_thread_records
+						where collection = 'contacts' and id = 'contact_seeded'
+					`
+			)
+			.get();
+		sqlite.close();
+
+		expect(db.contacts?.map((contact) => contact.id)).toEqual(['contact_seeded']);
+		expect(JSON.parse(row?.payload ?? '{}')).toMatchObject({
+			id: 'contact_seeded',
+			sourceAgentThreadId: 'thread_seeded',
+			targetAgentThreadId: 'thread_target'
+		});
 	});
 });

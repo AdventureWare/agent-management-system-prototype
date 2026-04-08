@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createOperatorSessionValue,
+	getAgentApiToken,
 	isOperatorAuthPublicPath,
+	isValidAgentApiToken,
 	isValidOperatorSession,
 	operatorLoginRedirect,
+	readBearerToken,
 	sanitizeNextPath,
 	type OperatorAuthConfig
 } from './operator-auth';
@@ -39,5 +42,16 @@ describe('operator auth', () => {
 		expect(isOperatorAuthPublicPath('/auth/login')).toBe(true);
 		expect(isOperatorAuthPublicPath('/_app/immutable/app.js')).toBe(true);
 		expect(isOperatorAuthPublicPath('/app/home')).toBe(false);
+	});
+
+	it('accepts the configured agent api bearer token', () => {
+		process.env.AMS_AGENT_API_TOKEN = 'thread-token';
+
+		expect(getAgentApiToken()).toBe('thread-token');
+		expect(readBearerToken('Bearer thread-token')).toBe('thread-token');
+		expect(isValidAgentApiToken('thread-token')).toBe(true);
+		expect(isValidAgentApiToken('wrong-token')).toBe(false);
+
+		delete process.env.AMS_AGENT_API_TOKEN;
 	});
 });

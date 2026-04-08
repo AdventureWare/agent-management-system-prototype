@@ -17,6 +17,11 @@ export type TaskThreadSelection = TaskThreadSelectionInput & {
 	linkThreadKind: 'assigned' | 'latest' | null;
 };
 
+type TaskThreadActionInput = Pick<
+	TaskThreadSelection,
+	'statusThread' | 'linkThread' | 'linkThreadKind'
+>;
+
 export function isActiveTaskThread(thread: AgentThreadDetail | null | undefined) {
 	return Boolean(
 		thread && ACTIVE_TASK_THREAD_STATES.has(thread.threadState ?? thread.threadState ?? 'idle')
@@ -41,4 +46,20 @@ export function selectTaskThreadContext(input: TaskThreadSelectionInput): TaskTh
 				: 'latest'
 			: null
 	};
+}
+
+export function getTaskThreadActionLabel(input: TaskThreadActionInput) {
+	if (!input.linkThread) {
+		return '';
+	}
+
+	if (input.statusThread?.id === input.linkThread.id && isActiveTaskThread(input.statusThread)) {
+		return 'Review active thread';
+	}
+
+	return input.linkThreadKind === 'latest' ? 'Review latest thread' : 'Review assigned thread';
+}
+
+export function getTaskThreadReviewHref(threadId: string): `/app/threads/${string}#reply` {
+	return `/app/threads/${threadId}#reply`;
 }

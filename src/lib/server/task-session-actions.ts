@@ -7,8 +7,7 @@ import {
 	buildTaskLaunchPlan,
 	launchTaskFromPlan
 } from '$lib/server/task-launch-planning';
-import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
-import type { Run } from '$lib/types/control-plane';
+import type { Run, Task } from '$lib/types/control-plane';
 
 const ACTIVE_TASK_RUN_STATUSES = new Set<Run['status']>(['queued', 'starting', 'running']);
 
@@ -39,6 +38,15 @@ function toTaskSessionActionError(error: unknown, fallback: string) {
 	}
 
 	return new TaskSessionActionError(400, getActionErrorMessage(error, fallback));
+}
+
+function assertTaskRecoverableStatus(task: { status: Run['status'] | Task['status'] }) {
+	if (task.status !== 'in_progress') {
+		throw new TaskSessionActionError(
+			409,
+			'Only tasks that are still In Progress can be recovered automatically.'
+		);
+	}
 }
 
 export async function launchTaskSession(taskId: string, form: FormData) {
@@ -95,20 +103,16 @@ export async function recoverTaskSession(taskId: string, form: FormData) {
 		throw new TaskSessionActionError(404, 'Task not found.');
 	}
 
-	const project = current.projects.find((candidate) => candidate.id === task.projectId) ?? null;
+	assertTaskRecoverableStatus(task);
+
 	const activeTaskRun = getActiveTaskRun(current, task.id);
-	const assignedThread = task.agentThreadId ? await getAgentThread(task.agentThreadId) : null;
 	const activeRunThread = activeTaskRun?.agentThreadId
 		? await getAgentThread(activeTaskRun.agentThreadId)
 		: null;
-	const threadContext = selectProjectTaskThreadContext(project, {
-		assignedThread,
-		latestRunThread: activeRunThread
-	});
 	const stalledRecovery = buildStalledRecoveryState({
 		task,
 		activeRun: activeTaskRun,
-		statusThread: threadContext.statusThread
+		activeRunThread
 	});
 
 	if (!activeTaskRun) {
@@ -142,6 +146,8 @@ export async function recoverTaskSession(taskId: string, form: FormData) {
 	if (!refreshedTask) {
 		throw new TaskSessionActionError(404, 'Task not found after recovery.');
 	}
+
+	assertTaskRecoverableStatus(refreshedTask);
 
 	let launchPlan: Awaited<ReturnType<typeof buildTaskLaunchPlan>>;
 

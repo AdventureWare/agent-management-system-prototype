@@ -1072,8 +1072,8 @@ describe('task detail page server actions', () => {
 				tasks: [
 					{
 						...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
-						status: 'blocked',
-						blockedReason: 'Recovered stalled run.',
+						status: 'in_progress',
+						blockedReason: '',
 						updatedAt: '2026-03-30T12:45:00.000Z'
 					}
 				],

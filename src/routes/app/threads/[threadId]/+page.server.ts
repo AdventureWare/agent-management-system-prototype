@@ -1,13 +1,15 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { AGENT_SANDBOX_OPTIONS, type AgentThreadDetail } from '$lib/types/agent-thread';
+import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import {
 	getAgentThread,
+	listAgentThreadContacts,
 	listAgentThreads,
 	parseAgentSandbox,
 	recoverAgentThread,
 	sendAgentThreadMessage,
 	startAgentThread,
+	updateAgentThreadHandleAlias,
 	updateAgentThreadSandbox
 } from '$lib/server/agent-threads';
 import {
@@ -20,6 +22,7 @@ import {
 	loadControlPlane,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { buildThreadContactTargets } from '$lib/server/thread-contact-targets';
 import { buildPromptDigest } from '$lib/server/task-threads';
 import type { Approval, ControlPlaneData, Review, Run, Task } from '$lib/types/control-plane';
 
@@ -62,17 +65,6 @@ type ThreadResponseContextArtifact = {
 	href: string;
 	sourceLabel: string;
 	actionLabel: string;
-};
-
-type ThreadContactTarget = {
-	id: string;
-	name: string;
-	threadState: AgentThreadDetail['threadState'];
-	latestRunStatus: AgentThreadDetail['latestRunStatus'];
-	threadSummary: string;
-	relatedTaskTitles: string[];
-	canContact: boolean;
-	disabledReason: string;
 };
 
 function updateLatestRunForTask(runId: string | null, summary: string) {
@@ -424,43 +416,18 @@ function reopenTasksForThreadRetry(input: {
 	};
 }
 
-function buildThreadContactTargets(sourceThreadId: string, threads: AgentThreadDetail[]) {
-	return threads
-		.filter((thread) => !thread.archivedAt && thread.id !== sourceThreadId)
-		.map(
-			(thread): ThreadContactTarget => ({
-				id: thread.id,
-				name: thread.name,
-				threadState: thread.threadState,
-				latestRunStatus: thread.latestRunStatus,
-				threadSummary: thread.threadSummary,
-				relatedTaskTitles: thread.relatedTasks.map((task) => task.title),
-				canContact: !thread.hasActiveRun && thread.canResume,
-				disabledReason: thread.hasActiveRun
-					? 'Wait for the active run to finish before contacting this thread.'
-					: thread.canResume
-						? ''
-						: 'This thread cannot accept a follow-up right now.'
-			})
-		)
-		.sort((left, right) => {
-			if (left.canContact !== right.canContact) {
-				return left.canContact ? -1 : 1;
-			}
-
-			return left.name.localeCompare(right.name);
-		});
-}
-
 export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
-	const [data, thread, allThreads] = await Promise.all([
+	const [data, thread, allThreads, contacts] = await Promise.all([
 		controlPlanePromise,
 		getAgentThread(params.threadId, { controlPlane: controlPlanePromise }),
 		listAgentThreads({
 			includeArchived: false,
-			includeCategorization: false,
 			controlPlane: controlPlanePromise
+		}),
+		listAgentThreadContacts({
+			threadId: params.threadId,
+			limit: 12
 		})
 	]);
 
@@ -481,7 +448,10 @@ export const load: PageServerLoad = async ({ params }) => {
 			thread,
 			data
 		}),
-		threadContactTargets: buildThreadContactTargets(params.threadId, allThreads),
+		threadContacts: contacts,
+		threadContactTargets: buildThreadContactTargets(allThreads, {
+			sourceThreadId: params.threadId
+		}),
 		responseContextArtifacts: buildThreadResponseContextArtifacts({
 			threadId: params.threadId,
 			thread,
@@ -491,6 +461,30 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
+	updateThreadHandleAlias: async ({ params, request }) => {
+		const form = await request.formData();
+		const nextHandleAlias = form.get('handleAlias')?.toString() ?? '';
+		const thread = await getAgentThread(params.threadId);
+
+		if (!thread) {
+			return fail(404, { message: 'Thread not found.' });
+		}
+
+		try {
+			await updateAgentThreadHandleAlias(params.threadId, nextHandleAlias);
+		} catch (err) {
+			return fail(400, {
+				message: err instanceof Error ? err.message : 'Could not update the thread handle alias.'
+			});
+		}
+
+		return {
+			ok: true,
+			successAction: 'updateThreadHandleAlias',
+			threadId: params.threadId
+		};
+	},
+
 	updateThreadSandbox: async ({ params, request }) => {
 		const form = await request.formData();
 		const nextSandbox = parseAgentSandbox(form.get('sandbox')?.toString(), 'workspace-write');

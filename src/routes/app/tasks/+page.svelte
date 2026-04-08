@@ -5,6 +5,7 @@
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import { collectTaskLinkedThreads, mergeTaskThreadState } from '$lib/client/task-thread-state';
+	import { getTaskThreadActionLabel, getTaskThreadReviewHref } from '$lib/task-thread-context';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -12,6 +13,7 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
+	import QueueOpenButton from '$lib/components/QueueOpenButton.svelte';
 	import SelectionActionBar from '$lib/components/SelectionActionBar.svelte';
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
@@ -35,12 +37,21 @@
 
 	let { data, form } = $props();
 	type TaskRow = (typeof data.tasks)[number];
+	type QueueDetailPanel = {
+		kind: 'task' | 'thread';
+		href: string;
+		title: string;
+		description: string;
+		rowTaskId: string;
+	};
 
 	let query = $state('');
 	let selectedStatus = $state('all');
 	let selectedTaskView = $state<'active' | 'completed'>('active');
 	let selectedTaskIds = $state.raw<string[]>([]);
+	let selectedPreviewTaskId = $state('');
 	let selectedStaleFilters = $state.raw<TaskStaleSignalKey[]>([]);
+	let queueDetailPanel = $state<QueueDetailPanel | null>(null);
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
 	let createTaskDraftReady = $state(false);
 	let createTaskAdvancedOpen = $state(false);
@@ -54,7 +65,8 @@
 
 	function createDialogShouldStartOpen() {
 		return (
-			(form?.formContext === 'taskCreate' && !form?.ok) || data.createTaskPrefill?.open === true
+			(form?.formContext === 'taskCreate' && (form?.reopenCreateModal === true || !form?.ok)) ||
+			data.createTaskPrefill?.open === true
 		);
 	}
 
@@ -68,6 +80,10 @@
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createTask');
 	let createAndRunSuccess = $derived(form?.ok && form?.successAction === 'createTaskAndRun');
+	let taskWritingAssistSuccess = $derived(form?.ok && form?.successAction === 'assistTaskWriting');
+	let taskWritingAssistChangeSummary = $derived(
+		taskWritingAssistSuccess ? (form?.assistChangeSummary?.toString() ?? '') : ''
+	);
 	let createdAttachmentCount = $derived(
 		form?.ok && (form?.successAction === 'createTask' || form?.successAction === 'createTaskAndRun')
 			? Number(form.attachmentCount ?? 0)
@@ -107,6 +123,37 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function buildEmbeddedPanelHref(href: string) {
+		const [baseHref, hashFragment] = href.split('#');
+		const separator = baseHref.includes('?') ? '&' : '?';
+
+		return `${baseHref}${separator}embed=panel${hashFragment ? `#${hashFragment}` : ''}`;
+	}
+
+	function openTaskDetailPanel(task: TaskRow) {
+		queueDetailPanel = {
+			kind: 'task',
+			href: resolve(`/app/tasks/${task.id}`),
+			title: task.title,
+			description: 'Task detail panel',
+			rowTaskId: task.id
+		};
+	}
+
+	function openThreadDetailPanel(task: TaskRow) {
+		if (!task.linkThread) {
+			return;
+		}
+
+		queueDetailPanel = {
+			kind: 'thread',
+			href: resolve(getTaskThreadReviewHref(task.linkThread.id)),
+			title: task.linkThread.name,
+			description: `Thread linked to ${task.title}`,
+			rowTaskId: task.id
+		};
 	}
 
 	function normalizeSandboxValue(value: string | null | undefined): '' | AgentSandbox {
@@ -294,20 +341,7 @@
 	}
 
 	function threadActionLabel(task: TaskRow) {
-		if (!task.linkThread) {
-			return '';
-		}
-
-		if (task.statusThread?.id === task.linkThread.id) {
-			switch (task.statusThread.threadState ?? task.statusThread.threadState) {
-				case 'starting':
-				case 'waiting':
-				case 'working':
-					return 'Open active thread';
-			}
-		}
-
-		return task.linkThreadKind === 'latest' ? 'Open latest thread' : 'Open assigned thread';
+		return getTaskThreadActionLabel(task);
 	}
 
 	function isTaskSelected(taskId: string) {
@@ -401,9 +435,19 @@
 	let activeTasks = $derived(taskCollections.activeTasks);
 	let completedTasks = $derived(taskCollections.completedTasks);
 	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);
+	let previewTask = $derived.by(
+		() =>
+			visibleTaskRows.find((task) => task.id === selectedPreviewTaskId) ??
+			visibleTaskRows[0] ??
+			null
+	);
 	let visibleTaskRowIdSet = $derived(new Set(visibleTaskRows.map((task) => task.id)));
 	let staleTaskCount = $derived(taskCollections.staleTaskCount);
 	let staleFilterCounts = $derived(taskCollections.staleFilterCounts);
+	let activePanelRowTaskId = $derived(queueDetailPanel?.rowTaskId ?? '');
+	let embeddedQueueDetailPanelHref = $derived(
+		queueDetailPanel ? buildEmbeddedPanelHref(queueDetailPanel.href) : ''
+	);
 
 	$effect(() => {
 		const nextSelectedTaskIds = selectedTaskIds.filter((taskId) => visibleTaskRowIdSet.has(taskId));
@@ -417,6 +461,21 @@
 
 		selectedTaskIds = nextSelectedTaskIds;
 	});
+
+	$effect(() => {
+		if (!previewTask) {
+			if (selectedPreviewTaskId) {
+				selectedPreviewTaskId = '';
+			}
+
+			return;
+		}
+
+		if (selectedPreviewTaskId !== previewTask.id) {
+			selectedPreviewTaskId = previewTask.id;
+		}
+	});
+
 	let createTaskFormValues = $derived(
 		form?.formContext === 'taskCreate'
 			? {
@@ -1121,24 +1180,27 @@
 							{/if}
 
 							<div class="mt-4 flex flex-col gap-2 sm:flex-row">
-								<AppButton
+								<QueueOpenButton
 									class="w-full sm:w-auto"
 									href={resolve(`/app/tasks/${task.id}`)}
-									size="sm"
-									variant="accent"
-								>
-									Open task
-								</AppButton>
+									label="Open task"
+									panelLabel="Open task in side panel"
+									menuAriaLabel={`Open task options for ${task.title}`}
+									onOpenPanel={() => {
+										openTaskDetailPanel(task);
+									}}
+								/>
 								{#if task.linkThread}
-									<AppButton
+									<QueueOpenButton
 										class="w-full sm:w-auto"
-										href={resolve(`/app/threads/${task.linkThread.id}`)}
-										size="sm"
-										variant="accent"
-										reserveLabel="Open assigned thread"
-									>
-										{threadActionLabel(task)}
-									</AppButton>
+										href={resolve(getTaskThreadReviewHref(task.linkThread.id))}
+										label={threadActionLabel(task)}
+										panelLabel="Open thread in side panel"
+										menuAriaLabel={`Open thread options for ${task.linkThread.name}`}
+										onOpenPanel={() => {
+											openThreadDetailPanel(task);
+										}}
+									/>
 								{/if}
 							</div>
 						</div>
@@ -1147,196 +1209,273 @@
 			{/each}
 		</div>
 
-		<table class="hidden w-full min-w-[980px] divide-y divide-slate-800 text-left lg:table">
-			<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-				<tr>
-					<th class="px-3 py-3 font-medium">
-						<label class="flex items-center justify-center">
-							<span class="sr-only">Select all shown tasks</span>
-							<input
-								checked={areAllRowsSelected(rows)}
-								class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-								type="checkbox"
-								onchange={(event) => {
-									setSelectionForRows(rows, event.currentTarget.checked);
-								}}
-							/>
-						</label>
-					</th>
-					<th class="px-3 py-3 font-medium">Task</th>
-					<th class="px-3 py-3 font-medium">Project</th>
-					<th class="px-3 py-3 font-medium">Status</th>
-					<th class="px-3 py-3 font-medium">Assignee</th>
-					<th class="px-3 py-3 font-medium">Runs</th>
-					<th class="px-3 py-3 font-medium">Updated</th>
-					<th class="px-3 py-3 font-medium">Actions</th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-900/80">
-				{#each rows as task (task.id)}
-					<tr class="bg-slate-950/30 transition hover:bg-slate-900/60">
-						<td class="px-3 py-3 align-top">
-							<label class="flex items-center justify-center">
-								<span class="sr-only">Select {task.title}</span>
-								<input
-									checked={isTaskSelected(task.id)}
-									class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-									type="checkbox"
-									onchange={(event) => {
-										toggleTaskSelection(task.id, event.currentTarget.checked);
-									}}
-								/>
-							</label>
-						</td>
-						<td class="px-3 py-3 align-top">
-							<div class="max-w-sm min-w-0">
-								<p class="ui-clamp-2 font-medium text-white">{task.title}</p>
-								<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
-									{compactText(task.summary)}
-								</p>
-								<div class="mt-2 flex flex-wrap gap-2">
-									<span
-										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
-											task.priority === 'urgent'
-												? 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
-												: task.priority === 'high'
-													? 'border border-amber-900/70 bg-amber-950/40 text-amber-200'
-													: task.priority === 'low'
-														? 'border border-slate-700 bg-slate-900/80 text-slate-300'
-														: 'border border-sky-900/70 bg-sky-950/40 text-sky-200'
-										}`}
-									>
-										{formatPriorityLabel(task.priority)}
-									</span>
-									<span
-										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
-											task.riskLevel === 'high'
-												? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
-												: task.riskLevel === 'medium'
-													? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
-													: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
-										}`}
-									>
-										{formatTaskRiskLevelLabel(task.riskLevel)} risk
-									</span>
-									{#if task.approvalMode !== 'none'}
-										<span
-											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
-										>
-											{formatTaskApprovalModeLabel(task.approvalMode)}
-										</span>
-									{/if}
-									{#if !task.requiresReview}
-										<span
-											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
-										>
-											Review optional
-										</span>
-									{/if}
-									{#if task.desiredRoleId}
-										<span
-											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
-										>
-											Role {task.desiredRoleName}
-										</span>
-									{/if}
-									{#if task.openReview}
-										<span
-											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
-										>
-											Review open
-										</span>
-									{/if}
-									{#if task.pendingApproval}
-										<span
-											class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
-										>
-											Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
-										</span>
-									{/if}
-									{#each task.freshness.staleSignals as signal (signal)}
-										<span
-											class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
-										>
-											{staleBadgeLabel(task, signal)}
-										</span>
-									{/each}
-								</div>
-								{#if task.hasUnmetDependencies}
-									<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
-								{/if}
-								{#if task.blockedReason}
-									<p class="ui-clamp-2 mt-2 text-xs text-rose-200">{task.blockedReason}</p>
-								{/if}
-								{#if task.dependencyTaskNames.length > 0}
-									<p class="ui-clamp-2 mt-2 text-xs text-slate-500">
-										Depends on: {task.dependencyTaskNames.join(', ')}
-									</p>
-								{/if}
-								{#if task.targetDate}
-									<p class="mt-2 text-xs text-slate-500">
-										Target {formatDateLabel(task.targetDate)}
-									</p>
-								{/if}
-							</div>
-						</td>
-						<td class="px-3 py-3 align-top text-sm text-slate-300">
-							<p class="ui-clamp-3 max-w-40">{task.projectName}</p>
-						</td>
-						<td class="px-3 py-3 align-top">
-							<div class="min-w-52 space-y-2.5">
-								<span
-									class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
+		<div class="hidden lg:block">
+			<div
+				class={queueDetailPanel
+					? 'xl:grid xl:grid-cols-[minmax(0,0.98fr)_minmax(0,1.02fr)] xl:gap-4'
+					: ''}
+			>
+				<div class="min-w-0 overflow-x-auto">
+					<table class="w-full min-w-[840px] divide-y divide-slate-800 text-left xl:min-w-0">
+						<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+							<tr>
+								<th class="px-3 py-3 font-medium">
+									<label class="flex items-center justify-center">
+										<span class="sr-only">Select all shown tasks</span>
+										<input
+											checked={areAllRowsSelected(rows)}
+											class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+											type="checkbox"
+											onchange={(event) => {
+												setSelectionForRows(rows, event.currentTarget.checked);
+											}}
+										/>
+									</label>
+								</th>
+								<th class="px-3 py-3 font-medium">Task</th>
+								<th class="px-3 py-3 font-medium">Project</th>
+								<th class="px-3 py-3 font-medium">Status</th>
+								<th class="px-3 py-3 font-medium">Assignee</th>
+								<th class="px-3 py-3 font-medium">Runs</th>
+								<th class="px-3 py-3 font-medium">Updated</th>
+								<th class="px-3 py-3 font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-900/80">
+							{#each rows as task (task.id)}
+								<tr
+									class={[
+										'bg-slate-950/30 transition hover:bg-slate-900/60',
+										activePanelRowTaskId === task.id ? 'bg-sky-950/20' : ''
+									]}
 								>
-									{formatTaskStatusLabel(task.status)}
-								</span>
-								{#if task.statusThread}
-									<div
-										class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2"
-									>
-										<ThreadActivityIndicator compact thread={task.statusThread} />
-									</div>
-								{/if}
-							</div>
-						</td>
-						<td class="px-3 py-3 align-top text-sm text-slate-300">
-							<p class="ui-clamp-3 max-w-40">{task.assigneeName}</p>
-						</td>
-						<td class="px-3 py-3 align-top">
-							<p class="text-sm text-white">{task.runCount}</p>
-							{#if task.statusThread}
-								<p class="ui-clamp-3 mt-1 max-w-40 text-xs text-slate-500">
-									{task.statusThread.name}
+									<td class="px-3 py-3 align-top">
+										<label class="flex items-center justify-center">
+											<span class="sr-only">Select {task.title}</span>
+											<input
+												checked={isTaskSelected(task.id)}
+												class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+												type="checkbox"
+												onchange={(event) => {
+													toggleTaskSelection(task.id, event.currentTarget.checked);
+												}}
+											/>
+										</label>
+									</td>
+									<td class="px-3 py-3 align-top">
+										<div class="max-w-sm min-w-0">
+											<p class="ui-clamp-2 font-medium text-white">{task.title}</p>
+											<p class="ui-clamp-3 mt-1 text-sm text-slate-400">
+												{compactText(task.summary)}
+											</p>
+											<div class="mt-2 flex flex-wrap gap-2">
+												<span
+													class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+														task.priority === 'urgent'
+															? 'border border-rose-900/70 bg-rose-950/40 text-rose-200'
+															: task.priority === 'high'
+																? 'border border-amber-900/70 bg-amber-950/40 text-amber-200'
+																: task.priority === 'low'
+																	? 'border border-slate-700 bg-slate-900/80 text-slate-300'
+																	: 'border border-sky-900/70 bg-sky-950/40 text-sky-200'
+													}`}
+												>
+													{formatPriorityLabel(task.priority)}
+												</span>
+												<span
+													class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
+														task.riskLevel === 'high'
+															? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
+															: task.riskLevel === 'medium'
+																? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
+																: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
+													}`}
+												>
+													{formatTaskRiskLevelLabel(task.riskLevel)} risk
+												</span>
+												{#if task.approvalMode !== 'none'}
+													<span
+														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+													>
+														{formatTaskApprovalModeLabel(task.approvalMode)}
+													</span>
+												{/if}
+												{#if !task.requiresReview}
+													<span
+														class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+													>
+														Review optional
+													</span>
+												{/if}
+												{#if task.desiredRoleId}
+													<span
+														class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+													>
+														Role {task.desiredRoleName}
+													</span>
+												{/if}
+												{#if task.openReview}
+													<span
+														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+													>
+														Review open
+													</span>
+												{/if}
+												{#if task.pendingApproval}
+													<span
+														class="inline-flex items-center justify-center rounded-full border border-amber-900/70 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none text-amber-200 uppercase"
+													>
+														Approval {formatTaskApprovalModeLabel(task.pendingApproval.mode)}
+													</span>
+												{/if}
+												{#each task.freshness.staleSignals as signal (signal)}
+													<span
+														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${staleBadgeClass(signal)}`}
+													>
+														{staleBadgeLabel(task, signal)}
+													</span>
+												{/each}
+											</div>
+											{#if task.hasUnmetDependencies}
+												<p class="mt-2 text-xs text-rose-300">Blocked by unmet dependencies</p>
+											{/if}
+											{#if task.blockedReason}
+												<p class="ui-clamp-2 mt-2 text-xs text-rose-200">{task.blockedReason}</p>
+											{/if}
+											{#if task.dependencyTaskNames.length > 0}
+												<p class="ui-clamp-2 mt-2 text-xs text-slate-500">
+													Depends on: {task.dependencyTaskNames.join(', ')}
+												</p>
+											{/if}
+											{#if task.targetDate}
+												<p class="mt-2 text-xs text-slate-500">
+													Target {formatDateLabel(task.targetDate)}
+												</p>
+											{/if}
+										</div>
+									</td>
+									<td class="px-3 py-3 align-top text-sm text-slate-300">
+										<p class="ui-clamp-3 max-w-40">{task.projectName}</p>
+									</td>
+									<td class="px-3 py-3 align-top">
+										<div class="min-w-52 space-y-2.5">
+											<span
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
+											>
+												{formatTaskStatusLabel(task.status)}
+											</span>
+											{#if task.statusThread}
+												<div
+													class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 py-2"
+												>
+													<ThreadActivityIndicator compact thread={task.statusThread} />
+												</div>
+											{/if}
+										</div>
+									</td>
+									<td class="px-3 py-3 align-top text-sm text-slate-300">
+										<p class="ui-clamp-3 max-w-40">{task.assigneeName}</p>
+									</td>
+									<td class="px-3 py-3 align-top">
+										<p class="text-sm text-white">{task.runCount}</p>
+										{#if task.statusThread}
+											<p class="ui-clamp-3 mt-1 max-w-40 text-xs text-slate-500">
+												{task.statusThread.name}
+											</p>
+										{/if}
+									</td>
+									<td class="px-3 py-3 align-top">
+										<p class="text-sm text-white">{task.updatedAtLabel}</p>
+										<p class="mt-1 text-xs text-slate-500">
+											{new Date(task.updatedAt).toLocaleString()}
+										</p>
+									</td>
+									<td class="px-3 py-3 align-top">
+										<div class="flex min-w-52 flex-col items-start gap-2">
+											<QueueOpenButton
+												href={resolve(`/app/tasks/${task.id}`)}
+												label="Open task"
+												panelLabel="Open task in side panel"
+												menuAriaLabel={`Open task options for ${task.title}`}
+												onOpenPanel={() => {
+													openTaskDetailPanel(task);
+												}}
+											/>
+											{#if task.linkThread}
+												<QueueOpenButton
+													href={resolve(getTaskThreadReviewHref(task.linkThread.id))}
+													label={threadActionLabel(task)}
+													panelLabel="Open thread in side panel"
+													menuAriaLabel={`Open thread options for ${task.linkThread.name}`}
+													onOpenPanel={() => {
+														openThreadDetailPanel(task);
+													}}
+												/>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				{#if queueDetailPanel}
+					<aside
+						class="hidden min-w-0 space-y-4 rounded-2xl border border-slate-800 bg-slate-950/55 p-5 xl:block"
+						data-testid="task-detail-panel"
+					>
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+									Side panel
 								</p>
-							{/if}
-						</td>
-						<td class="px-3 py-3 align-top">
-							<p class="text-sm text-white">{task.updatedAtLabel}</p>
-							<p class="mt-1 text-xs text-slate-500">
-								{new Date(task.updatedAt).toLocaleString()}
-							</p>
-						</td>
-						<td class="px-3 py-3 align-top">
-							<div class="flex min-w-40 flex-col items-start gap-2">
-								<AppButton href={resolve(`/app/tasks/${task.id}`)} size="sm" variant="accent">
-									Open task
-								</AppButton>
-								{#if task.linkThread}
-									<AppButton
-										href={resolve(`/app/threads/${task.linkThread.id}`)}
-										size="sm"
-										variant="accent"
-										reserveLabel="Open assigned thread"
-									>
-										{threadActionLabel(task)}
-									</AppButton>
-								{/if}
+								<p class="ui-wrap-anywhere mt-2 text-xl font-semibold text-white">
+									{queueDetailPanel.title}
+								</p>
 							</div>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+							<AppButton
+								type="button"
+								size="sm"
+								variant="ghost"
+								onclick={() => {
+									queueDetailPanel = null;
+								}}
+							>
+								Close panel
+							</AppButton>
+						</div>
+
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p class="text-sm text-slate-400">{queueDetailPanel.description}</p>
+							<AppButton
+								class="w-full sm:w-auto"
+								href={queueDetailPanel.href}
+								size="sm"
+								variant="accent"
+								target="_blank"
+								rel="noreferrer noopener"
+							>
+								Open in new tab
+							</AppButton>
+						</div>
+
+						<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80">
+							<iframe
+								class="h-[78vh] min-h-[42rem] w-full bg-slate-950"
+								src={embeddedQueueDetailPanelHref}
+								title={`${queueDetailPanel.kind} detail side panel`}
+							></iframe>
+						</div>
+
+						<p class="text-xs text-slate-500">
+							The queue stays visible on the left while the full detail route remains usable here
+							for quick review and action.
+						</p>
+					</aside>
+				{/if}
+			</div>
+		</div>
 	</DataTableSection>
 {/snippet}
 
@@ -1346,7 +1485,7 @@
 			density="compact"
 			eyebrow="Tasks"
 			title="Browse the queue, then open one task"
-			description="Scan, filter, and open a task. Use the detail page for editing, launches, and deeper execution context."
+			description="Keep the queue in its default table view. Open a task or thread directly, or use the action menu to send the full detail route into a side panel without leaving the queue."
 		>
 			{#snippet actions()}
 				<AppButton
@@ -2089,7 +2228,21 @@
 						</div>
 
 						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">Instructions</span>
+							<span class="mb-2 flex flex-wrap items-center justify-between gap-3">
+								<span class="text-sm font-medium text-slate-200">Instructions</span>
+								<button
+									class="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
+									type="submit"
+									formaction="?/assistTaskWriting"
+									formmethod="POST"
+									disabled={!createTaskInstructions.trim()}
+								>
+									Improve with AI
+								</button>
+							</span>
+							<span class="mb-2 block text-xs text-slate-500">
+								Uses the current draft and task metadata to rewrite the instructions in place.
+							</span>
 							<textarea
 								bind:value={createTaskInstructions}
 								class="textarea min-h-40 text-white placeholder:text-slate-500"
@@ -2097,6 +2250,13 @@
 								placeholder="Describe the work, expected outcome, and any constraints…"
 								required
 							></textarea>
+							{#if taskWritingAssistSuccess}
+								<p
+									class="mt-3 rounded-2xl border border-emerald-900/70 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
+								>
+									{taskWritingAssistChangeSummary}
+								</p>
+							{/if}
 						</label>
 
 						<div class="space-y-3">

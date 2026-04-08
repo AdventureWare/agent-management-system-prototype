@@ -1,12 +1,30 @@
 import { json } from '@sveltejs/kit';
-import { listAgentThreads, parseAgentSandbox, startAgentThread } from '$lib/server/agent-threads';
+import {
+	listAgentThreads,
+	parseAgentSandbox,
+	rankAgentThreadsForRouting,
+	startAgentThread
+} from '$lib/server/agent-threads';
+import { buildThreadContactTarget } from '$lib/server/thread-contact-targets';
 
 export const GET = async ({ url }) => {
-	const threads = await listAgentThreads({
-		includeArchived: url.searchParams.get('includeArchived') === '1'
-	});
+	const limitValue = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
+	const threads = rankAgentThreadsForRouting(
+		await listAgentThreads({
+			includeArchived: url.searchParams.get('includeArchived') === '1'
+		}),
+		{
+			q: url.searchParams.get('q'),
+			role: url.searchParams.get('role'),
+			project: url.searchParams.get('project'),
+			taskId: url.searchParams.get('taskId'),
+			sourceThreadId: url.searchParams.get('sourceThreadId'),
+			canContact: url.searchParams.get('canContact') === '1',
+			limit: Number.isFinite(limitValue) && limitValue > 0 ? Math.min(limitValue, 100) : undefined
+		}
+	);
 
-	return json({ threads });
+	return json({ threads, targets: threads.map(buildThreadContactTarget) });
 };
 
 export const POST = async ({ request }) => {

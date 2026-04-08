@@ -13,16 +13,16 @@ const ACTIVE_TASK_RUN_STATUSES = new Set<Run['status']>(['queued', 'starting', '
 export function buildStalledRecoveryState(input: {
 	task: Task;
 	activeRun: Run | null;
-	statusThread: AgentThreadDetail | null;
+	activeRunThread: AgentThreadDetail | null;
 }) {
-	if (!input.activeRun) {
+	if (input.task.status !== 'in_progress' || !input.activeRun || !input.activeRun.agentThreadId) {
 		return null;
 	}
 
 	const freshness = buildTaskFreshness({
 		task: input.task,
 		latestRun: input.activeRun,
-		statusThread: input.statusThread
+		statusThread: input.activeRunThread
 	});
 	const staleDetails: string[] = [];
 
@@ -60,6 +60,9 @@ export function buildTaskDetailRuntimeContext(input: {
 		? (relatedRuns.find((run) => run.id === task.latestRunId) ?? null)
 		: null;
 	const activeRun = relatedRuns.find((run) => ACTIVE_TASK_RUN_STATUSES.has(run.status)) ?? null;
+	const activeRunThread = activeRun?.agentThreadId
+		? (sessionMap.get(activeRun.agentThreadId) ?? null)
+		: null;
 	const latestRunThread = latestRun?.agentThreadId
 		? (sessionMap.get(latestRun.agentThreadId) ?? null)
 		: null;
@@ -82,7 +85,7 @@ export function buildTaskDetailRuntimeContext(input: {
 	const stalledRecovery = buildStalledRecoveryState({
 		task,
 		activeRun,
-		statusThread: threadContext.statusThread
+		activeRunThread
 	});
 
 	return {
