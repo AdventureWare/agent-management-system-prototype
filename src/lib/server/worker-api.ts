@@ -103,6 +103,17 @@ function getWorkerToolKeys(data: ControlPlaneData, worker: Worker) {
 	return new Set([provider?.launcher ?? ''].map(normalizeExecutionRequirementName).filter(Boolean));
 }
 
+function getWorkerSupportedRoleIds(worker: Worker) {
+	return Array.from(
+		new Set(
+			[
+				...(worker.supportedRoleIds ?? []),
+				typeof worker.roleId === 'string' && worker.roleId.trim() ? worker.roleId.trim() : ''
+			].filter(Boolean)
+		)
+	);
+}
+
 function getWorkerAssignedOpenTaskCount(data: ControlPlaneData, worker: Worker) {
 	return data.tasks.filter((task) => task.assigneeWorkerId === worker.id && task.status !== 'done')
 		.length;
@@ -142,7 +153,9 @@ export function describeWorkerTaskFit(
 	worker: Worker,
 	task: Task
 ): WorkerTaskFit {
-	const roleEligible = worker.roleId === 'role_coordinator' || worker.roleId === task.desiredRoleId;
+	const supportedRoleIds = getWorkerSupportedRoleIds(worker);
+	const roleEligible =
+		supportedRoleIds.includes('role_coordinator') || supportedRoleIds.includes(task.desiredRoleId);
 	const capabilityKeys = getWorkerCapabilityKeys(data, worker);
 	const toolKeys = getWorkerToolKeys(data, worker);
 	const activeRunCount = getWorkerActiveRunCount(data, worker);
@@ -158,7 +171,7 @@ export function describeWorkerTaskFit(
 	return {
 		workerId: worker.id,
 		workerName: worker.name,
-		roleId: worker.roleId,
+		roleId: worker.roleId || supportedRoleIds[0] || '',
 		providerId: worker.providerId,
 		status: worker.status,
 		eligible:
@@ -166,7 +179,7 @@ export function describeWorkerTaskFit(
 			withinConcurrencyLimit &&
 			missingCapabilityNames.length === 0 &&
 			missingToolNames.length === 0,
-		exactRoleMatch: worker.roleId === task.desiredRoleId,
+		exactRoleMatch: supportedRoleIds.includes(task.desiredRoleId),
 		assignedOpenTaskCount: getWorkerAssignedOpenTaskCount(data, worker),
 		activeRunCount,
 		availableRunCapacity: Math.max(0, concurrencyLimit - activeRunCount),
@@ -316,6 +329,7 @@ export function claimTaskForWorker(data: ControlPlaneData, worker: Worker, taskI
 	const run = createRun({
 		taskId,
 		workerId: worker.id,
+		assumedRoleId: task.desiredRoleId,
 		providerId: worker.providerId,
 		status: 'running',
 		startedAt: new Date().toISOString(),

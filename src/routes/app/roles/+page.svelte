@@ -17,14 +17,14 @@
 	<PageHeader
 		eyebrow="Roles"
 		title="Assignment model"
-		description="Roles keep task intake clean. A task should request a role, not a vague kind of help. Workers then advertise which role they are actually suitable for."
+		description="Roles describe the specialized mode a task should run in. A task should request a role such as technical writer or security analyst, while execution surfaces advertise which roles they can support."
 	/>
 
 	<div class="grid gap-4 md:grid-cols-3">
 		<MetricCard
 			label="Cataloged roles"
 			value={data.roles.length}
-			detail="Distinct contracts workers can advertise against."
+			detail="Distinct specializations execution surfaces can advertise against."
 		/>
 		<MetricCard
 			label="Staffed roles"

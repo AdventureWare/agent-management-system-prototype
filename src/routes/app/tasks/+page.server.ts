@@ -491,6 +491,7 @@ export const actions: Actions = {
 		const run = createRun({
 			taskId: createdTask.id,
 			workerId: assigneeWorker?.id ?? null,
+			assumedRoleId: createdTask.desiredRoleId,
 			providerId,
 			status: 'running',
 			startedAt: now,
@@ -836,6 +837,7 @@ export const actions: Actions = {
 		const run = createRun({
 			taskId,
 			workerId: effectiveWorker?.id ?? null,
+			assumedRoleId: task.desiredRoleId,
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),

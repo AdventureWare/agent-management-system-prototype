@@ -168,9 +168,9 @@
 
 <AppPage>
 	<PageHeader
-		eyebrow="Workers"
+		eyebrow="Execution Surfaces"
 		title="Browse execution surfaces"
-		description="Workers represent the actual local or cloud surfaces that can take work. This page is now collection-first: find the right worker quickly, then drill into its detail page for routing and activity."
+		description="Execution surfaces are the actual local or cloud runtimes that can take work. This page stays collection-first so you can find the right surface quickly, then drill into its detail page for routing and activity."
 	>
 		{#snippet actions()}
 			<AppButton
@@ -180,26 +180,26 @@
 					isCreateModalOpen = true;
 				}}
 			>
-				Add worker
+				Add surface
 			</AppButton>
 		{/snippet}
 	</PageHeader>
 
 	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 		<MetricCard
-			label="Workers"
+			label="Surfaces"
 			value={workers.length}
 			detail="Reachable execution surfaces saved in the control plane."
 		/>
 		<MetricCard
-			label="Local workers"
+			label="Local surfaces"
 			value={localWorkerCount}
-			detail="Workers that can directly touch your machine and repos."
+			detail="Execution surfaces that can directly touch your machine and repos."
 		/>
 		<MetricCard
 			label="Total capacity"
 			value={totalCapacity}
-			detail={`${busyWorkerCount} workers are marked busy right now.`}
+			detail={`${busyWorkerCount} surfaces are marked busy right now.`}
 		/>
 	</div>
 
@@ -211,13 +211,13 @@
 
 	{#if createSuccess}
 		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Worker created and saved into the control plane.
+			Execution surface created and saved into the control plane.
 		</p>
 	{/if}
 
 	<CollectionToolbar
-		title="Worker directory"
-		description="Search by worker name, role, provider, note, or tags, then open one worker for full routing and execution detail."
+		title="Surface directory"
+		description="Search by surface name, role, provider, note, or tags, then open one surface for full routing and execution detail."
 	>
 		{#snippet controls()}
 			<div class="w-full xl:w-80">

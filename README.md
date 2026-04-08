@@ -36,8 +36,8 @@ The rest of the top-level surfaces are real, but mostly play supporting roles to
 
 - `Projects`: workspace and repo defaults
 - `Goals`: outcome grouping and relationship mapping
-- `Planning`: date-window review over the existing goals/tasks/workers model
-- `Workers`, `Roles`, `Providers`: routing and capacity metadata
+- `Planning`: date-window review over the existing goals/tasks/execution-surface model
+- `Execution surfaces`, `Roles`, `Providers`: routing and capacity metadata
 - `Home`: a cross-cutting operator dashboard
 
 See `docs/current-product-surfaces.md` for a route-by-route audit of what each surface is currently doing in code.

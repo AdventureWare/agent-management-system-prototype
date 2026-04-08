@@ -329,6 +329,7 @@ function reopenTasksForThreadRetry(input: {
 		return createRun({
 			taskId: task.id,
 			workerId: latestRun?.workerId ?? null,
+			assumedRoleId: latestRun?.assumedRoleId ?? task.desiredRoleId,
 			providerId: latestRun?.providerId ?? null,
 			status: 'running',
 			startedAt: now,

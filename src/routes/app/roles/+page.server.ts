@@ -11,7 +11,15 @@ export const load: PageServerLoad = async () => {
 	}
 
 	for (const worker of data.workers) {
-		workerCounts.set(worker.roleId, (workerCounts.get(worker.roleId) ?? 0) + 1);
+		const supportedRoleIds = worker.supportedRoleIds?.length
+			? worker.supportedRoleIds
+			: worker.roleId
+				? [worker.roleId]
+				: [];
+
+		for (const roleId of supportedRoleIds) {
+			workerCounts.set(roleId, (workerCounts.get(roleId) ?? 0) + 1);
+		}
 	}
 
 	return {

@@ -5,6 +5,32 @@ const loadControlPlane = vi.hoisted(() => vi.fn());
 const formatRelativeTime = vi.hoisted(() => vi.fn((value: string) => `relative:${value}`));
 const getOpenReviewForTask = vi.hoisted(() => vi.fn(() => null));
 const getPendingApprovalForTask = vi.hoisted(() => vi.fn(() => null));
+const selectExecutionProvider = vi.hoisted(() =>
+	vi.fn(
+		(data: Pick<ControlPlaneData, 'providers'>, worker?: { providerId?: string | null } | null) => {
+			if (worker?.providerId) {
+				return data.providers.find((provider) => provider.id === worker.providerId) ?? null;
+			}
+
+			return data.providers[0] ?? null;
+		}
+	)
+);
+const resolveThreadSandbox = vi.hoisted(() =>
+	vi.fn(
+		(input: {
+			task?: { requiredThreadSandbox?: string | null } | null;
+			worker?: { threadSandboxOverride?: string | null } | null;
+			project?: { defaultThreadSandbox?: string | null } | null;
+			provider?: { defaultThreadSandbox?: string | null } | null;
+		}) =>
+			input.task?.requiredThreadSandbox ??
+			input.worker?.threadSandboxOverride ??
+			input.project?.defaultThreadSandbox ??
+			input.provider?.defaultThreadSandbox ??
+			'workspace-write'
+	)
+);
 const listAgentThreads = vi.hoisted(() => vi.fn());
 const buildArtifactBrowser = vi.hoisted(() => vi.fn());
 const listInstalledCodexSkills = vi.hoisted(() => vi.fn());
@@ -23,7 +49,9 @@ vi.mock('$lib/server/control-plane', () => ({
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane
+	loadControlPlane,
+	selectExecutionProvider,
+	resolveThreadSandbox
 }));
 
 vi.mock('$lib/server/agent-threads', () => ({

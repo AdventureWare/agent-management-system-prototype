@@ -106,7 +106,9 @@
 				<li>Projects for workspace, artifact, repo, branch, and sandbox defaults.</li>
 				<li>Goals for outcome grouping and linked project/task relationships.</li>
 				<li>Planning for reviewing date windows, load, and goal commitments.</li>
-				<li>Workers, roles, and providers for routing, staffing, and execution metadata.</li>
+				<li>
+					Execution surfaces, roles, and providers for routing, staffing, and execution metadata.
+				</li>
 			</ul>
 		</section>
 	</div>

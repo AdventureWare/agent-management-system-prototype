@@ -166,6 +166,7 @@ type LegacyProvider = Partial<Provider> & {
 type LegacyWorker = Partial<Worker> & {
 	providerId?: unknown;
 	roleId?: unknown;
+	supportedRoleIds?: unknown;
 	location?: unknown;
 	status?: unknown;
 	capacity?: unknown;
@@ -217,7 +218,29 @@ function normalizeRole(role: LegacyRole): Role {
 		id: typeof role.id === 'string' ? role.id : `role_${randomUUID()}`,
 		name: typeof role.name === 'string' ? role.name : '',
 		area,
-		description: typeof role.description === 'string' ? role.description : ''
+		description: typeof role.description === 'string' ? role.description : '',
+		skillIds: normalizeStringList(role.skillIds).length
+			? normalizeStringList(role.skillIds)
+			: undefined,
+		toolIds: normalizeStringList(role.toolIds).length
+			? normalizeStringList(role.toolIds)
+			: undefined,
+		mcpIds: normalizeStringList(role.mcpIds).length ? normalizeStringList(role.mcpIds) : undefined,
+		systemPrompt:
+			typeof role.systemPrompt === 'string' && role.systemPrompt.trim().length > 0
+				? role.systemPrompt
+				: undefined,
+		qualityChecklist: normalizeStringList(role.qualityChecklist).length
+			? normalizeStringList(role.qualityChecklist)
+			: undefined,
+		approvalPolicy:
+			typeof role.approvalPolicy === 'string' && role.approvalPolicy.trim().length > 0
+				? role.approvalPolicy
+				: undefined,
+		escalationPolicy:
+			typeof role.escalationPolicy === 'string' && role.escalationPolicy.trim().length > 0
+				? role.escalationPolicy
+				: undefined
 	};
 }
 
@@ -429,6 +452,14 @@ function normalizeWorker(worker: LegacyWorker): Worker {
 				.filter(Boolean)
 		: [];
 	const skills = normalizeStringList(worker.skills);
+	const supportedRoleIds = Array.from(
+		new Set(
+			[
+				...normalizeStringList(worker.supportedRoleIds),
+				typeof worker.roleId === 'string' && worker.roleId.trim() ? worker.roleId.trim() : ''
+			].filter(Boolean)
+		)
+	);
 	const focusFactor =
 		typeof worker.focusFactor === 'number' &&
 		Number.isFinite(worker.focusFactor) &&
@@ -442,6 +473,7 @@ function normalizeWorker(worker: LegacyWorker): Worker {
 		name: typeof worker.name === 'string' ? worker.name : '',
 		providerId: typeof worker.providerId === 'string' ? worker.providerId : '',
 		roleId: typeof worker.roleId === 'string' ? worker.roleId : '',
+		supportedRoleIds,
 		location: isWorkerLocation(locationValue) ? locationValue : 'cloud',
 		status: isWorkerStatus(statusValue) ? statusValue : 'idle',
 		capacity:
@@ -567,6 +599,11 @@ function normalizeRun(run: LegacyRun): Run {
 		id: typeof run.id === 'string' ? run.id : createRunId(),
 		taskId: typeof run.taskId === 'string' ? run.taskId : '',
 		workerId: typeof run.workerId === 'string' && run.workerId.trim() ? run.workerId : null,
+		...(typeof run.assumedRoleId === 'string'
+			? {
+					assumedRoleId: run.assumedRoleId.trim() ? run.assumedRoleId : null
+				}
+			: {}),
 		providerId: typeof run.providerId === 'string' && run.providerId.trim() ? run.providerId : null,
 		status: isRunStatus(statusValue) ? statusValue : 'queued',
 		createdAt: typeof run.createdAt === 'string' ? run.createdAt : now,
@@ -1482,6 +1519,7 @@ export function createTask(input: {
 export function createRun(input: {
 	taskId: string;
 	workerId?: string | null;
+	assumedRoleId?: string | null;
 	providerId?: string | null;
 	status?: RunStatus;
 	startedAt?: string | null;
@@ -1500,6 +1538,7 @@ export function createRun(input: {
 		id: createRunId(),
 		taskId: input.taskId,
 		workerId: input.workerId ?? null,
+		...(input.assumedRoleId !== undefined ? { assumedRoleId: input.assumedRoleId ?? null } : {}),
 		providerId: input.providerId ?? null,
 		status: input.status ?? 'queued',
 		createdAt: now,
@@ -1716,6 +1755,7 @@ export function createWorker(input: {
 		name: input.name,
 		providerId: input.providerId,
 		roleId: input.roleId,
+		supportedRoleIds: input.roleId ? [input.roleId] : [],
 		location: input.location,
 		status: input.status,
 		capacity: input.capacity,

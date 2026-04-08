@@ -343,6 +343,13 @@ export type Role = {
 	name: string;
 	area: Area | 'shared';
 	description: string;
+	skillIds?: string[];
+	toolIds?: string[];
+	mcpIds?: string[];
+	systemPrompt?: string;
+	qualityChecklist?: string[];
+	approvalPolicy?: string;
+	escalationPolicy?: string;
 };
 
 export type Goal = {
@@ -374,11 +381,13 @@ export type Project = {
 	defaultThreadSandbox?: AgentSandbox | null;
 };
 
-export type Worker = {
+export type ExecutionSurface = {
 	id: string;
 	name: string;
 	providerId: string;
+	// Legacy single-role assignment kept during the execution-surface migration.
 	roleId: string;
+	supportedRoleIds?: string[];
 	location: WorkerLocation;
 	status: WorkerStatus;
 	capacity: number;
@@ -393,6 +402,8 @@ export type Worker = {
 	threadSandboxOverride: AgentSandbox | null;
 	authTokenHash: string;
 };
+
+export type Worker = ExecutionSurface;
 
 export type DelegationPacket = {
 	objective: string;
@@ -447,6 +458,7 @@ export type Run = {
 	id: string;
 	taskId: string;
 	workerId: string | null;
+	assumedRoleId?: string | null;
 	providerId: string | null;
 	status: RunStatus;
 	createdAt: string;

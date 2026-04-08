@@ -78,7 +78,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		title: 'Capacity',
 		description: 'Routing, staffing, and providers',
 		links: [
-			{ id: 'workers', label: 'Workers', href: '/app/workers' },
+			{ id: 'workers', label: 'Surfaces', href: '/app/workers' },
 			{ id: 'roles', label: 'Roles', href: '/app/roles' },
 			{ id: 'providers', label: 'Providers', href: '/app/providers' }
 		]

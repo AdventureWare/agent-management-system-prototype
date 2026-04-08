@@ -349,6 +349,7 @@ export async function launchTaskFromPlan(
 	const run = createRun({
 		taskId,
 		workerId: plan.effectiveWorker?.id ?? null,
+		assumedRoleId: plan.task.desiredRoleId,
 		providerId,
 		status: 'running',
 		startedAt: now,
