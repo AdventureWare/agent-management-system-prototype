@@ -72,6 +72,7 @@ function toAttentionPath(project: ProjectAccessEntry) {
 }
 
 function buildAccessDashboardData(data: ControlPlaneData) {
+	const executionCatalog = buildExecutionCapabilityCatalog(data);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const workerCounts = new Map<string, number>();
@@ -123,6 +124,12 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 	const workers = [...data.workers]
 		.map((worker) => {
 			const provider = providerMap.get(worker.providerId) ?? null;
+			const supportedRoleIds = Array.from(
+				new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+			);
+			const supportedRoleNames = supportedRoleIds.map(
+				(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
+			);
 			let accessState:
 				| 'healthy'
 				| 'provider_disabled'
@@ -143,8 +150,10 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 			return {
 				...worker,
 				providerName: provider?.name ?? 'Unknown provider',
-				roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
-				workerHref: `/app/workers/${worker.id}`,
+				roleName: supportedRoleNames[0] ?? 'Unknown role',
+				supportedRoleIds,
+				supportedRoleNames,
+				workerHref: `/app/execution-surfaces/${worker.id}`,
 				accessState
 			};
 		})
@@ -159,11 +168,14 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 			macosPromptCount: attentionPaths.filter(
 				(item) => item.accessStatus === 'macos_cloud_probe_blocked'
 			).length,
+			projectsMissingRequestedPromptSkillsCount: executionCatalog.projectSkills.filter(
+				(projectSkills) => projectSkills.missingRequestedSkillCount > 0
+			).length,
 			providerNeedsSetupCount: providers.filter((provider) => provider.setupStatus !== 'connected')
 				.length,
 			workerAccessIssueCount: workers.filter((worker) => worker.accessState !== 'healthy').length
 		},
-		executionCatalog: buildExecutionCapabilityCatalog(data),
+		executionCatalog,
 		projects,
 		attentionPaths,
 		providers,

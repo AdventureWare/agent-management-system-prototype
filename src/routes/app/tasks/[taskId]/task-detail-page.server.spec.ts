@@ -74,6 +74,7 @@ const createTask = vi.hoisted(() =>
 			requiredThreadSandbox?: string | null;
 			requiresReview: boolean;
 			desiredRoleId: string;
+			requiredPromptSkillNames?: string[];
 			requiredCapabilityNames?: string[];
 			requiredToolNames?: string[];
 			blockedReason?: string;
@@ -102,6 +103,7 @@ const createTask = vi.hoisted(() =>
 			desiredRoleId: input.desiredRoleId,
 			assigneeWorkerId: null,
 			agentThreadId: null,
+			requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
 			requiredToolNames: input.requiredToolNames ?? [],
 			blockedReason: input.blockedReason ?? '',
@@ -237,6 +239,9 @@ vi.mock('$lib/server/control-plane', () => ({
 			data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
 			data.providers[0] ??
 			null
+	),
+	getExecutionSurfaces: vi.fn((data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>) =>
+		data.executionSurfaces ?? data.workers
 	),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = syncTaskExecutionStateLike(

@@ -51,6 +51,7 @@
 		status: TaskStatus;
 		targetDate?: string | null;
 		assigneeWorkerId?: string | null;
+		requiredPromptSkillNames?: string[];
 		requiredCapabilityNames?: string[];
 		requiredToolNames?: string[];
 		priority: Priority;
@@ -83,6 +84,17 @@
 	type RoleOption = {
 		id: string;
 		name: string;
+		description: string;
+		skillIds?: string[];
+		toolIds?: string[];
+		mcpIds?: string[];
+		systemPrompt?: string;
+	};
+
+	type InstalledSkillOption = {
+		id: string;
+		description: string;
+		sourceLabel: string;
 	};
 
 	type AssignmentSuggestionView = {
@@ -132,7 +144,8 @@
 		roles,
 		dependencyTasksCount,
 		availableDependencyTasks,
-		executionRequirementInventory
+		executionRequirementInventory,
+		projectInstalledSkills
 	}: {
 		task: TaskEditorView;
 		projects: ProjectOption[];
@@ -144,19 +157,31 @@
 		dependencyTasksCount: number;
 		availableDependencyTasks: AvailableDependencyTaskView[];
 		executionRequirementInventory: ExecutionRequirementInventory;
+		projectInstalledSkills: InstalledSkillOption[];
 	} = $props();
 
+	let desiredRoleIdInput = $state('');
 	let visibleAssignmentSuggestions = $derived(assignmentSuggestions.slice(0, 4));
 	let eligibleAssignmentSuggestionCount = $derived(
 		assignmentSuggestions.filter((suggestion) => suggestion.eligible).length
 	);
 	let desiredRoleExists = $derived.by(() => {
-		const desiredRoleId = task.desiredRoleId ?? null;
+		const desiredRoleId = desiredRoleIdInput ?? null;
 		return roles.some((role) => role.id === desiredRoleId);
 	});
+	let selectedDesiredRole = $derived(
+		roles.find((role) => role.id === desiredRoleIdInput) ?? null
+	);
+	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
 	let initializedRequirementInputTaskKey = $state('');
+	let unknownPromptSkillNames = $derived(
+		findUnknownExecutionRequirementNames(
+			requiredPromptSkillNamesInput,
+			projectInstalledSkills.map((skill) => skill.id)
+		)
+	);
 	let unknownCapabilityNames = $derived(
 		findUnknownExecutionRequirementNames(
 			requiredCapabilityNamesInput,
@@ -197,8 +222,10 @@
 			return;
 		}
 
+		requiredPromptSkillNamesInput = (task.requiredPromptSkillNames ?? []).join(', ');
 		requiredCapabilityNamesInput = (task.requiredCapabilityNames ?? []).join(', ');
 		requiredToolNamesInput = (task.requiredToolNames ?? []).join(', ');
+		desiredRoleIdInput = task.desiredRoleId ?? '';
 		initializedRequirementInputTaskKey = taskKey;
 	});
 </script>
@@ -404,7 +431,8 @@
 			</div>
 
 			<label class="mt-4 block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Assigned worker</span>
+				<span class="mb-2 block text-sm font-medium text-slate-200">Assigned execution surface</span
+				>
 				<select class="select text-white" name="assigneeWorkerId">
 					<option value="" selected={!task.assigneeWorkerId}>Unassigned</option>
 					{#each workers as worker (worker.id)}
@@ -422,8 +450,8 @@
 							Assignment suggestions
 						</p>
 						<p class="mt-2 text-sm text-slate-400">
-							Workers are ranked by requirement fit, role match, current status, and open assigned
-							load.
+							Execution surfaces are ranked by requirement fit, role match, current status, and open
+							assigned load.
 						</p>
 					</div>
 					<p class="text-xs text-slate-500">
@@ -490,7 +518,52 @@
 				</div>
 			</div>
 
-			<div class="mt-4 grid gap-4 lg:grid-cols-2">
+			<div class="mt-4 grid gap-4 lg:grid-cols-3">
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Requested prompt skills</span>
+					<input
+						bind:value={requiredPromptSkillNamesInput}
+						class="input text-white"
+						list="task-detail-prompt-skill-inventory"
+						name="requiredPromptSkillNames"
+						placeholder="frontend-sveltekit, docs-writer"
+					/>
+					<p class="mt-2 text-xs text-slate-500">
+						Use a comma-separated list for installed Codex skills this task should prefer in its thread prompt.
+					</p>
+					{#if projectInstalledSkills.length === 0}
+						<p class="mt-2 text-xs text-slate-500">
+							No installed project skills are registered for this workspace yet. These labels stay advisory for now.
+						</p>
+					{:else}
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each projectInstalledSkills as skill (skill.id)}
+								<button
+									type="button"
+									class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+									title={skill.description || skill.sourceLabel}
+									onclick={() => {
+										requiredPromptSkillNamesInput = appendExecutionRequirementName(
+											requiredPromptSkillNamesInput,
+											skill.id
+										);
+									}}
+								>
+									{skill.id}
+								</button>
+							{/each}
+						</div>
+						<p class="mt-2 text-xs text-slate-500">
+							Select a known installed skill to append it from the current project workspace.
+						</p>
+					{/if}
+					{#if projectInstalledSkills.length > 0 && unknownPromptSkillNames.length > 0}
+						<p class="mt-2 text-xs text-amber-300">
+							Not installed in this project workspace: {unknownPromptSkillNames.join(', ')}
+						</p>
+					{/if}
+				</label>
+
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required capabilities</span>
 					<input
@@ -583,6 +656,12 @@
 				</label>
 			</div>
 
+			<datalist id="task-detail-prompt-skill-inventory">
+				{#each projectInstalledSkills as skill (skill.id)}
+					<option value={skill.id}></option>
+				{/each}
+			</datalist>
+
 			<datalist id="task-detail-capability-inventory">
 				{#each executionRequirementInventory.capabilityNames as capabilityName (capabilityName)}
 					<option value={capabilityName}></option>
@@ -672,21 +751,19 @@
 			<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span>
-					<select class="select text-white" name="desiredRoleId">
-						<option value="" selected={!task.desiredRoleId}>No role preference</option>
-						{#if task.desiredRoleId && !desiredRoleExists}
-							<option value={task.desiredRoleId} selected>
-								{task.desiredRoleName || task.desiredRoleId} (missing role)
+					<select bind:value={desiredRoleIdInput} class="select text-white" name="desiredRoleId">
+						<option value="">No role preference</option>
+						{#if desiredRoleIdInput && !desiredRoleExists}
+							<option value={desiredRoleIdInput}>
+								{task.desiredRoleName || desiredRoleIdInput} (missing role)
 							</option>
 						{/if}
 						{#each roles as role (role.id)}
-							<option value={role.id} selected={task.desiredRoleId === role.id}>
-								{role.name}
-							</option>
+							<option value={role.id}>{role.name}</option>
 						{/each}
 					</select>
 					<p class="mt-2 text-xs text-slate-500">
-						Use this when the task should route toward a role even before a worker is assigned.
+						Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills.
 					</p>
 				</label>
 
@@ -702,6 +779,67 @@
 						Record the current blocker explicitly instead of relying on status alone.
 					</p>
 				</label>
+			</div>
+
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					Role preview
+				</p>
+				{#if !desiredRoleIdInput}
+					<p class="mt-2 text-sm text-slate-400">
+						No role preference is set. The task can still launch and route by assignee and declared requirements alone.
+					</p>
+				{:else if selectedDesiredRole}
+					<div class="mt-3 space-y-3">
+						<div>
+							<p class="text-sm font-medium text-white">{selectedDesiredRole.name}</p>
+							<p class="mt-1 text-sm text-slate-400">
+								{selectedDesiredRole.description || 'No role description recorded.'}
+							</p>
+						</div>
+						<div class="grid gap-3 lg:grid-cols-3">
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Role skills
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{selectedDesiredRole.skillIds?.length
+										? selectedDesiredRole.skillIds.join(', ')
+										: 'No role skills declared.'}
+								</p>
+							</div>
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Role tools
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{selectedDesiredRole.toolIds?.length
+										? selectedDesiredRole.toolIds.join(', ')
+										: 'No role tools declared.'}
+								</p>
+							</div>
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Role MCPs
+								</p>
+								<p class="mt-2 text-sm text-slate-300">
+									{selectedDesiredRole.mcpIds?.length
+										? selectedDesiredRole.mcpIds.join(', ')
+										: 'No role MCPs declared.'}
+								</p>
+							</div>
+						</div>
+						<p class="text-xs text-slate-500">
+							{selectedDesiredRole.systemPrompt?.trim()
+								? 'This role also contributes dedicated prompt instructions at launch.'
+								: 'This role does not add dedicated prompt instructions.'}
+						</p>
+					</div>
+				{:else}
+					<p class="mt-2 text-sm text-amber-300">
+						This task references a role that is no longer available.
+					</p>
+				{/if}
 			</div>
 
 			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -901,7 +1039,26 @@
 				</div>
 			{/if}
 
-			<div class="mt-4 grid gap-4 sm:grid-cols-2">
+			<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Requested prompt skills
+					</p>
+					{#if (task.requiredPromptSkillNames ?? []).length === 0}
+						<p class="mt-2 text-sm text-slate-400">No prompt skills requested.</p>
+					{:else}
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each task.requiredPromptSkillNames ?? [] as skillName (skillName)}
+								<span
+									class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+								>
+									{skillName}
+								</span>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 						Required capabilities

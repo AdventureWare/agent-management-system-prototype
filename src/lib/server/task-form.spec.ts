@@ -35,6 +35,7 @@ describe('task-form', () => {
 		form.append('dependencyTaskIds', ' task_a ');
 		form.append('dependencyTaskIds', 'task_b');
 		form.append('dependencyTaskIds', 'task_a');
+		form.set('requiredPromptSkillNames', 'frontend-sveltekit, docs-writer, frontend-sveltekit');
 		form.set('requiredCapabilityNames', 'planning, citations, planning');
 		form.set('requiredToolNames', 'codex, playwright, codex');
 
@@ -63,6 +64,7 @@ describe('task-form', () => {
 			desiredRoleId: 'role_reviewer',
 			blockedReason: 'Waiting on cleanup window',
 			dependencyTaskIds: ['task_a', 'task_b'],
+			requiredPromptSkillNames: ['frontend-sveltekit', 'docs-writer'],
 			requiredCapabilityNames: ['planning', 'citations'],
 			requiredToolNames: ['codex', 'playwright']
 		});
@@ -98,6 +100,7 @@ describe('task-form', () => {
 			hasRequiredThreadSandbox: true,
 			hasRequiresReview: true,
 			hasDesiredRoleId: true,
+			hasRequiredPromptSkillNames: false,
 			hasRequiredCapabilityNames: true,
 			hasRequiredToolNames: false,
 			hasBlockedReason: true,
@@ -115,6 +118,7 @@ describe('task-form', () => {
 		url.searchParams.set('priority', 'high');
 		url.searchParams.set('requiresReview', 'false');
 		url.searchParams.set('dependencyTaskIds', 'task_a, task_b, task_a');
+		url.searchParams.set('requiredPromptSkillNames', 'frontend-sveltekit, docs-writer');
 		url.searchParams.set('requiredCapabilityNames', 'planning, citations');
 		url.searchParams.set('requiredToolNames', 'codex, playwright');
 
@@ -126,6 +130,7 @@ describe('task-form', () => {
 			priority: 'high',
 			requiresReview: false,
 			dependencyTaskIds: ['task_a', 'task_b'],
+			requiredPromptSkillNames: 'frontend-sveltekit, docs-writer',
 			requiredCapabilityNames: 'planning, citations',
 			requiredToolNames: 'codex, playwright'
 		});

@@ -365,8 +365,8 @@ function parseLiveActivityFromLogLine(line: string): SessionLiveActivity | null 
 function getLatestLiveActivity(session: AgentThreadDetail): SessionLiveActivity | null {
 	const lines = session.latestRun?.logTail ?? [];
 
-	for (const line of [...lines].reverse()) {
-		const activity = parseLiveActivityFromLogLine(line);
+	for (let index = lines.length - 1; index >= 0; index -= 1) {
+		const activity = parseLiveActivityFromLogLine(lines[index] ?? '');
 
 		if (activity) {
 			return activity;

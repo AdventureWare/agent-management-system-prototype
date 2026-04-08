@@ -35,9 +35,9 @@ function createTaskRecordStore() {
 				byId: mergeTaskRecord(state.byId, task)
 			}));
 		},
-		seedTasks(tasks: TaskRecord[]) {
+		seedTasks(tasks: TaskRecord[], options: { replace?: boolean } = {}) {
 			update((state) => {
-				let nextById = state.byId;
+				let nextById = options.replace ? {} : state.byId;
 
 				for (const task of tasks) {
 					nextById = mergeTaskRecord(nextById, task);

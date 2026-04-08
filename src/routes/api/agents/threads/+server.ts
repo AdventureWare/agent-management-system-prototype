@@ -11,7 +11,8 @@ export const GET = async ({ url }) => {
 	const limitValue = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
 	const threads = rankAgentThreadsForRouting(
 		await listAgentThreads({
-			includeArchived: url.searchParams.get('includeArchived') === '1'
+			includeArchived: url.searchParams.get('includeArchived') === '1',
+			includeCategorization: url.searchParams.get('includeCategorization') !== '0'
 		}),
 		{
 			q: url.searchParams.get('q'),

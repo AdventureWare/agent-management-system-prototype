@@ -24,6 +24,7 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
+import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
 import { isValidTaskDate, readCreateTaskForm, readCreateTaskPrefill } from '$lib/server/task-form';
 import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
@@ -31,6 +32,7 @@ import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import { buildTaskGoalOptions } from '$lib/server/task-goal-options';
+import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import {
@@ -103,6 +105,7 @@ function buildTaskCreateFormContext(
 		desiredRoleId: input.desiredRoleId,
 		blockedReason: input.blockedReason,
 		dependencyTaskIds: input.dependencyTaskIds,
+		requiredPromptSkillNames: input.requiredPromptSkillNames,
 		requiredCapabilityNames: input.requiredCapabilityNames,
 		requiredToolNames: input.requiredToolNames,
 		submitMode
@@ -138,6 +141,7 @@ function failTaskCreate(
 		desiredRoleId: string;
 		blockedReason: string;
 		dependencyTaskIds: string[];
+		requiredPromptSkillNames: string[];
 		requiredCapabilityNames: string[];
 		requiredToolNames: string[];
 		submitMode: 'create' | 'createAndRun';
@@ -209,6 +213,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				totalCount: installedSkills.length,
 				globalCount: installedSkills.filter((skill) => skill.global).length,
 				projectCount: installedSkills.filter((skill) => skill.project).length,
+				installedSkills,
 				previewSkills: installedSkills.slice(0, 8)
 			};
 		})
@@ -260,6 +265,7 @@ export const actions: Actions = {
 			desiredRoleId,
 			blockedReason,
 			dependencyTaskIds,
+			requiredPromptSkillNames,
 			requiredCapabilityNames,
 			requiredToolNames
 		} = createTaskInput;
@@ -283,6 +289,25 @@ export const actions: Actions = {
 		}
 
 		const current = await loadControlPlane();
+		const executionRequirementInventory = buildExecutionRequirementInventory(current);
+		const projectInstalledSkills = listInstalledCodexSkills(
+			projectId
+				? (current.projects.find((candidate) => candidate.id === projectId)?.projectRootFolder ??
+						'')
+				: ''
+		);
+		const normalizedRequiredPromptSkillNames = canonicalizeExecutionRequirementNames(
+			requiredPromptSkillNames,
+			projectInstalledSkills.map((skill) => skill.id)
+		);
+		const normalizedRequiredCapabilityNames = canonicalizeExecutionRequirementNames(
+			requiredCapabilityNames,
+			executionRequirementInventory.capabilityNames
+		);
+		const normalizedRequiredToolNames = canonicalizeExecutionRequirementNames(
+			requiredToolNames,
+			executionRequirementInventory.toolNames
+		);
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 		const goal = goalId ? current.goals.find((candidate) => candidate.id === goalId) : null;
 		const parentTask = parentTaskId
@@ -368,14 +393,10 @@ export const actions: Actions = {
 			});
 		}
 
-		const coordinatorRoleId =
-			current.roles.find((role) => role.id === 'role_coordinator')?.id ??
-			current.roles[0]?.id ??
-			'';
 		const nextGoalId = goal?.id ?? '';
 		const nextDesiredRoleId = current.roles.some((role) => role.id === desiredRoleId)
 			? desiredRoleId
-			: (assigneeWorker?.roleId ?? coordinatorRoleId);
+			: '';
 		const baseTask = createTask({
 			title: name,
 			summary: instructions,
@@ -405,8 +426,9 @@ export const actions: Actions = {
 			blockedReason,
 			dependencyTaskIds,
 			targetDate: targetDate || null,
-			requiredCapabilityNames,
-			requiredToolNames,
+			requiredPromptSkillNames: normalizedRequiredPromptSkillNames,
+			requiredCapabilityNames: normalizedRequiredCapabilityNames,
+			requiredToolNames: normalizedRequiredToolNames,
 			artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
 		});
 		const attachments =
@@ -429,6 +451,12 @@ export const actions: Actions = {
 			};
 		}
 
+		const { role: preferredRole, effectivePromptSkillNames } = resolveTaskRolePromptContext({
+			roles: current.roles,
+			desiredRoleId: createdTask.desiredRoleId,
+			projectRootFolder: project.projectRootFolder,
+			taskPromptSkillNames: createdTask.requiredPromptSkillNames ?? []
+		});
 		const prompt = buildTaskThreadPrompt({
 			taskName: name,
 			taskInstructions: instructions,
@@ -440,9 +468,9 @@ export const actions: Actions = {
 			projectRootFolder: project.projectRootFolder ?? '',
 			defaultArtifactRoot: project.defaultArtifactRoot,
 			additionalWritableRoots: project.additionalWritableRoots ?? [],
-			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
-				.slice(0, 12)
-				.map((skill) => skill.id)
+			availableSkillNames: projectInstalledSkills.slice(0, 12).map((skill) => skill.id),
+			requiredPromptSkillNames: effectivePromptSkillNames,
+			preferredRole
 		});
 		const provider = selectExecutionProvider(current, assigneeWorker);
 		const sandbox = resolveThreadSandbox({
@@ -491,7 +519,7 @@ export const actions: Actions = {
 		const run = createRun({
 			taskId: createdTask.id,
 			workerId: assigneeWorker?.id ?? null,
-			assumedRoleId: createdTask.desiredRoleId,
+			assumedRoleId: createdTask.desiredRoleId || null,
 			providerId,
 			status: 'running',
 			startedAt: now,
@@ -570,6 +598,7 @@ export const actions: Actions = {
 				blockedReason: createTaskInput.blockedReason,
 				requiredCapabilityNames: createTaskInput.requiredCapabilityNames,
 				requiredToolNames: createTaskInput.requiredToolNames,
+				requiredPromptSkillNames: createTaskInput.requiredPromptSkillNames,
 				availableSkillNames: listInstalledCodexSkills(project?.projectRootFolder ?? '')
 					.slice(0, 12)
 					.map((skill) => skill.id)
@@ -651,7 +680,6 @@ export const actions: Actions = {
 						status,
 						requiredThreadSandbox,
 						assigneeWorkerId: assigneeWorker?.id ?? null,
-						desiredRoleId: assigneeWorker?.roleId ?? task.desiredRoleId,
 						targetDate: targetDate || null,
 						delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
 						artifactPath:
@@ -725,6 +753,12 @@ export const actions: Actions = {
 			});
 		}
 
+		const { role: preferredRole, effectivePromptSkillNames } = resolveTaskRolePromptContext({
+			roles: current.roles,
+			desiredRoleId: task.desiredRoleId,
+			projectRootFolder: project.projectRootFolder,
+			taskPromptSkillNames: task.requiredPromptSkillNames ?? []
+		});
 		const prompt = buildTaskThreadPrompt({
 			taskName: effectiveName,
 			taskInstructions: effectiveInstructions,
@@ -738,7 +772,9 @@ export const actions: Actions = {
 			additionalWritableRoots: project.additionalWritableRoots ?? [],
 			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 				.slice(0, 12)
-				.map((skill) => skill.id)
+				.map((skill) => skill.id),
+			requiredPromptSkillNames: effectivePromptSkillNames,
+			preferredRole
 		});
 		const provider = selectExecutionProvider(current, effectiveWorker);
 		const sandbox = resolveThreadSandbox({
@@ -837,7 +873,7 @@ export const actions: Actions = {
 		const run = createRun({
 			taskId,
 			workerId: effectiveWorker?.id ?? null,
-			assumedRoleId: task.desiredRoleId,
+			assumedRoleId: task.desiredRoleId || null,
 			providerId,
 			status: 'running',
 			startedAt: new Date().toISOString(),
@@ -868,7 +904,6 @@ export const actions: Actions = {
 							summary: effectiveInstructions,
 							projectId: project.id,
 							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
-							desiredRoleId: assigneeWorker?.roleId ?? candidate.desiredRoleId,
 							agentThreadId,
 							delegationAcceptance: null,
 							artifactPath:

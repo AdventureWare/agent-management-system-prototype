@@ -85,10 +85,49 @@ describe('buildExecutionCapabilityCatalog', () => {
 					threadSandboxOverride: null,
 					authTokenHash: 'hash'
 				}
+			],
+			tasks: [
+				{
+					id: 'task_prompt_gap',
+					title: 'Task with prompt gap',
+					summary: 'Needs explicit prompt skills',
+					projectId: 'project_app',
+					area: 'product',
+					goalId: '',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: '',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					requiredPromptSkillNames: ['frontend-sveltekit', 'docs-writer'],
+					requiredCapabilityNames: [],
+					requiredToolNames: [],
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project-app/agent_output',
+					attachments: [],
+					createdAt: '2026-04-08T00:00:00.000Z',
+					updatedAt: '2026-04-08T00:00:00.000Z'
+				}
 			]
 		});
 
 		expect(catalog.projectSkills).toHaveLength(1);
+		expect(catalog.projectSkills[0]).toMatchObject({
+			requestedSkillCount: 2,
+			requestingTaskCount: 1,
+			missingRequestedSkillCount: 2,
+			tasksMissingRequestedSkillCount: 1,
+			missingRequestedSkills: [
+				{ id: 'docs-writer', requestingTaskCount: 1 },
+				{ id: 'frontend-sveltekit', requestingTaskCount: 1 }
+			]
+		});
 		expect(catalog.capabilities).toEqual([
 			{
 				name: 'citations',

@@ -21,6 +21,7 @@ export const POST = async ({ request }) => {
 		name?: string;
 		providerId?: string;
 		roleId?: string;
+		supportedRoleIds?: string[];
 		location?: string;
 		status?: string;
 		capacity?: number;
@@ -35,22 +36,37 @@ export const POST = async ({ request }) => {
 
 	const name = body.name?.trim() ?? '';
 	const providerId = body.providerId?.trim() ?? '';
-	const roleId = body.roleId?.trim() ?? '';
+	const supportedRoleIds = Array.from(
+		new Set(
+			[
+				...(Array.isArray(body.supportedRoleIds)
+					? body.supportedRoleIds.map((candidateRoleId) => candidateRoleId.trim()).filter(Boolean)
+					: []),
+				body.roleId?.trim() ?? ''
+			].filter(Boolean)
+		)
+	);
+	const roleId = supportedRoleIds[0] ?? '';
 
 	if (!name || !providerId || !roleId) {
-		return json({ error: 'name, providerId, and roleId are required.' }, { status: 400 });
+		return json(
+			{ error: 'name, providerId, and at least one supported role are required.' },
+			{ status: 400 }
+		);
 	}
 
 	const data = await loadControlPlane();
 	const provider = data.providers.find((candidate) => candidate.id === providerId);
-	const role = data.roles.find((candidate) => candidate.id === roleId);
+	const missingRoleId = supportedRoleIds.find(
+		(supportedRoleId) => !data.roles.some((candidate) => candidate.id === supportedRoleId)
+	);
 
 	if (!provider) {
 		return json({ error: 'Unknown providerId.' }, { status: 400 });
 	}
 
-	if (!role) {
-		return json({ error: 'Unknown roleId.' }, { status: 400 });
+	if (missingRoleId) {
+		return json({ error: `Unknown roleId: ${missingRoleId}.` }, { status: 400 });
 	}
 
 	const workerToken = createWorkerAuthToken();
@@ -61,6 +77,7 @@ export const POST = async ({ request }) => {
 			name,
 			providerId,
 			roleId,
+			supportedRoleIds,
 			location: parseWorkerLocation(body.location ?? '', 'cloud'),
 			status: parseWorkerStatus(body.status ?? '', 'idle'),
 			capacity:

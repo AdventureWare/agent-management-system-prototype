@@ -29,7 +29,11 @@ export async function loadTaskDetailPageData(taskId: string) {
 	const controlPlanePromise = loadControlPlane();
 	const [data, sessions] = await Promise.all([
 		controlPlanePromise,
-		listAgentThreads({ includeArchived: true, controlPlane: controlPlanePromise })
+		listAgentThreads({
+			includeArchived: true,
+			includeCategorization: false,
+			controlPlane: controlPlanePromise
+		})
 	]);
 	const task = data.tasks.find((candidate) => candidate.id === taskId);
 
@@ -107,7 +111,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		})
 	]);
 	const launchContext = buildTaskLaunchContextSummary(
-		{ providers: data.providers },
+		{ providers: data.providers, roles: data.roles },
 		{
 			task,
 			project,
@@ -136,6 +140,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		stalledRecovery,
 		attachmentRoot: artifactRoot,
 		availableSkills: availableSkillSummary,
+		projectInstalledSkills: availableSkills,
 		launchContext,
 		artifactBrowser,
 		project,

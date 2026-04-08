@@ -44,7 +44,7 @@
 			case 'healthy':
 				return 'Healthy';
 			case 'offline':
-				return 'Worker offline';
+				return 'Execution surface offline';
 			case 'provider_disabled':
 				return 'Provider disabled';
 			case 'provider_needs_setup':
@@ -118,13 +118,19 @@
 	}
 
 	let probeSuccess = $derived(form?.ok && form?.successAction === 'runProbe');
+	let providerAvailabilitySuccess = $derived(
+		form?.ok && form?.successAction === 'updateProviderAvailability'
+	);
+	let workerAvailabilitySuccess = $derived(
+		form?.ok && form?.successAction === 'updateWorkerAvailability'
+	);
 </script>
 
 <AppPage width="full">
 	<PageHeader
 		eyebrow="Access"
 		title="Track permissions and authorization"
-		description="A single inventory for local folder access, provider connection health, worker readiness, and the skills and execution surfaces that are currently installed or usable. This pass is still read-only and is meant to make capability gaps visible before they become run failures."
+		description="A single inventory for local folder access, provider connection health, execution-surface readiness, and the skills and execution surfaces that are currently installed or usable. It also shows where task-requested prompt skills are missing from project workspaces before those gaps turn into weak thread context."
 	>
 		{#snippet actions()}
 			<form method="POST" action="?/runProbe">
@@ -141,7 +147,23 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+	{#if providerAvailabilitySuccess}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Provider availability updated.
+		</p>
+	{/if}
+
+	{#if workerAvailabilitySuccess}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Worker availability updated.
+		</p>
+	{/if}
+
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
 		<MetricCard
 			label="Projects blocked"
 			value={data.summary.projectBlockerCount}
@@ -163,9 +185,14 @@
 			detail="Provider configs that are not yet in a connected state."
 		/>
 		<MetricCard
-			label="Worker access issues"
+			label="Prompt-skill gaps"
+			value={data.summary.projectsMissingRequestedPromptSkillsCount}
+			detail="Projects where tasks request prompt skills that are not installed."
+		/>
+		<MetricCard
+			label="Execution-surface access issues"
 			value={data.summary.workerAccessIssueCount}
-			detail="Workers blocked by provider state or offline status."
+			detail="Execution surfaces blocked by provider state or offline status."
 		/>
 	</div>
 
@@ -361,7 +388,7 @@
 			<DetailSection
 				eyebrow="Inventory"
 				title="Installed skills and execution surfaces"
-				description="Use this read-only catalog to compare project-installed skills with the capability and launcher coverage that workers and providers can currently support."
+				description="Use this catalog to compare project-installed skills with the capability and launcher coverage that execution surfaces and providers can currently support, including prompt skills tasks are already requesting."
 				bodyClass="space-y-5"
 			>
 				<div class="space-y-3">
@@ -372,7 +399,9 @@
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
 								These are the Codex skills discovered per project root. They inform prompt context
-								for new threads but are separate from worker/provider routing metadata.
+								for new threads but are separate from execution-surface/provider routing metadata.
+								Task-requested prompt skills are shown alongside the installed inventory so missing
+								context is visible before launch.
 							</p>
 						</div>
 						<span
@@ -398,19 +427,31 @@
 											{projectSkills.projectName}
 										</h3>
 										<p class="mt-2 text-sm text-slate-400">
-											{projectSkills.totalCount === 0
+											{projectSkills.missingRequestedSkillCount > 0
+												? `${projectSkills.missingRequestedSkillCount} requested prompt skill${projectSkills.missingRequestedSkillCount === 1 ? '' : 's'} are not installed for this project workspace.`
+												: projectSkills.totalCount === 0
 												? 'No installed skills discovered for this project yet.'
 												: `${projectSkills.totalCount} installed skill${projectSkills.totalCount === 1 ? '' : 's'} discovered.`}
 										</p>
 									</div>
 									<span
-										class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${projectSkills.totalCount > 0 ? 'border-sky-800/70 bg-sky-950/40 text-sky-200' : 'border-slate-700 bg-slate-950/70 text-slate-300'}`}
+										class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${
+											projectSkills.missingRequestedSkillCount > 0
+												? 'border-amber-900/70 bg-amber-950/40 text-amber-200'
+												: projectSkills.totalCount > 0
+													? 'border-sky-800/70 bg-sky-950/40 text-sky-200'
+													: 'border-slate-700 bg-slate-950/70 text-slate-300'
+										}`}
 									>
-										{projectSkills.totalCount > 0 ? 'Installed' : 'Empty'}
+										{projectSkills.missingRequestedSkillCount > 0
+											? 'Missing requested'
+											: projectSkills.totalCount > 0
+												? 'Installed'
+												: 'Empty'}
 									</span>
 								</div>
 
-								<div class="mt-4 grid gap-3 sm:grid-cols-3">
+								<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
 									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Total</p>
 										<p class="mt-2 text-sm text-white">{projectSkills.totalCount}</p>
@@ -425,7 +466,32 @@
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Global</p>
 										<p class="mt-2 text-sm text-white">{projectSkills.globalCount}</p>
 									</div>
+									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+											Requested
+										</p>
+										<p class="mt-2 text-sm text-white">{projectSkills.requestedSkillCount}</p>
+									</div>
+									<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+											Missing
+										</p>
+										<p class="mt-2 text-sm text-white">
+											{projectSkills.missingRequestedSkillCount}
+										</p>
+									</div>
 								</div>
+
+								{#if projectSkills.requestedSkillCount > 0}
+									<p class="mt-4 text-sm text-slate-400">
+										{projectSkills.requestingTaskCount} task{projectSkills.requestingTaskCount === 1
+											? ''
+											: 's'} currently request prompt skills for this project.
+										{#if projectSkills.tasksMissingRequestedSkillCount > 0}
+											{` ${projectSkills.tasksMissingRequestedSkillCount} task${projectSkills.tasksMissingRequestedSkillCount === 1 ? '' : 's'} are missing at least one requested skill.`}
+										{/if}
+									</p>
+								{/if}
 
 								{#if projectSkills.previewSkills.length > 0}
 									<div class="mt-4 flex flex-wrap gap-2">
@@ -439,6 +505,22 @@
 										{/each}
 									</div>
 								{/if}
+
+								{#if projectSkills.missingRequestedSkills.length > 0}
+									<div class="mt-4 flex flex-wrap gap-2">
+										{#each projectSkills.missingRequestedSkills as skill (skill.id)}
+											<span
+												class="rounded-full border border-amber-900/70 bg-amber-950/40 px-3 py-1 text-xs text-amber-100"
+												title={`${skill.requestingTaskCount} task${skill.requestingTaskCount === 1 ? '' : 's'} request this skill`}
+											>
+												{skill.id}
+											</span>
+										{/each}
+									</div>
+									<p class="mt-2 text-xs text-amber-200">
+										Task-requested prompt skills that are not currently installed for this project workspace.
+									</p>
+								{/if}
 							</a>
 						{/each}
 					</div>
@@ -451,8 +533,9 @@
 								Capability coverage
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
-								Capabilities combine worker skills and provider-declared capabilities so you can see
-								which labels are merely listed versus currently backed by live execution surfaces.
+								Capabilities combine execution-surface skills and provider-declared capabilities so
+								you can see which labels are merely listed versus currently backed by live execution
+								surfaces.
 							</p>
 						</div>
 						<span
@@ -466,7 +549,7 @@
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
-							No worker skills or provider capabilities are recorded yet.
+							No execution-surface skills or provider capabilities are recorded yet.
 						</p>
 					{:else}
 						<div class="space-y-3">
@@ -476,11 +559,11 @@
 										<div class="min-w-0 flex-1">
 											<h3 class="ui-wrap-anywhere font-medium text-white">{capability.name}</h3>
 											<p class="mt-2 text-sm text-slate-400">
-												{capability.onlineSupportedWorkerCount} online worker{capability.onlineSupportedWorkerCount ===
+												{capability.onlineSupportedWorkerCount} online execution surface{capability.onlineSupportedWorkerCount ===
 												1
 													? ''
-													: 's'} can currently cover this label through direct worker skills or provider
-												metadata.
+													: 's'} can currently cover this label through direct execution-surface skills
+												or provider metadata.
 											</p>
 										</div>
 										<span
@@ -493,13 +576,13 @@
 									<div class="mt-4 grid gap-3 sm:grid-cols-4">
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Worker skills
+												Surface skills
 											</p>
 											<p class="mt-2 text-sm text-white">{capability.workerSkillCount}</p>
 										</div>
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Supported workers
+												Supporting surfaces
 											</p>
 											<p class="mt-2 text-sm text-white">{capability.supportedWorkerCount}</p>
 										</div>
@@ -534,7 +617,7 @@
 							</p>
 							<p class="mt-2 text-sm text-slate-400">
 								Launchers track the execution surfaces currently declared by providers and backed by
-								workers.
+								registered surfaces.
 							</p>
 						</div>
 						<span
@@ -558,7 +641,8 @@
 										<div class="min-w-0 flex-1">
 											<h3 class="ui-wrap-anywhere font-medium text-white">{tool.name}</h3>
 											<p class="mt-2 text-sm text-slate-400">
-												{tool.onlineWorkerCount} online worker{tool.onlineWorkerCount === 1
+												{tool.onlineWorkerCount} online execution surface{tool.onlineWorkerCount ===
+												1
 													? ''
 													: 's'} are currently attached to this launcher.
 											</p>
@@ -584,12 +668,14 @@
 											<p class="mt-2 text-sm text-white">{tool.connectedProviderCount}</p>
 										</div>
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Workers</p>
+											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+												Execution surfaces
+											</p>
 											<p class="mt-2 text-sm text-white">{tool.workerCount}</p>
 										</div>
 										<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 											<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-												Online workers
+												Online surfaces
 											</p>
 											<p class="mt-2 text-sm text-white">{tool.onlineWorkerCount}</p>
 										</div>
@@ -608,11 +694,7 @@
 				bodyClass="space-y-4"
 			>
 				{#each data.providers as provider (provider.id)}
-					<a
-						class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
-						href={provider.providerHref}
-						rel="external"
-					>
+					<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
 								<h3 class="ui-wrap-anywhere font-medium text-white">{provider.name}</h3>
@@ -638,7 +720,9 @@
 								<p class="mt-2 text-sm text-white">{provider.authMode.replace('_', ' ')}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Workers</p>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Execution surfaces
+								</p>
 								<p class="mt-2 text-sm text-white">{provider.workerCount}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
@@ -646,22 +730,69 @@
 								<p class="mt-2 text-sm text-white">{provider.defaultThreadSandbox}</p>
 							</div>
 						</div>
-					</a>
+
+						<form class="mt-4 space-y-3" method="POST" action="?/updateProviderAvailability">
+							<input name="providerId" type="hidden" value={provider.id} />
+
+							<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+								<label class="block">
+									<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Quick setup status
+									</span>
+									<select class="select text-white" name="setupStatus">
+										{#each data.providerSetupStatusOptions as setupStatus (setupStatus)}
+											<option value={setupStatus} selected={provider.setupStatus === setupStatus}>
+												{formatProviderSetupStatusLabel(setupStatus)}
+											</option>
+										{/each}
+									</select>
+								</label>
+
+								<label
+									class="inline-flex items-center gap-3 self-end rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"
+								>
+									<input
+										checked={provider.enabled}
+										class="checkbox"
+										name="enabled"
+										type="checkbox"
+									/>
+									<span>Enabled</span>
+								</label>
+							</div>
+
+							<div class="flex items-center justify-between gap-3">
+								<p class="text-xs text-slate-500">
+									Use quick controls here, or open the provider detail page for full configuration.
+								</p>
+								<div class="flex flex-wrap items-center gap-2">
+									<a
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+										href={provider.providerHref}
+									>
+										Open detail
+									</a>
+									<button
+										class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-sky-700 hover:text-white"
+										type="submit"
+									>
+										Save readiness
+									</button>
+								</div>
+							</div>
+						</form>
+					</article>
 				{/each}
 			</DetailSection>
 
 			<DetailSection
-				eyebrow="Workers"
+				eyebrow="Execution surfaces"
 				title="Execution surface readiness"
-				description="Workers inherit access risk from both their own state and their backing provider."
+				description="Execution surfaces inherit access risk from both their own state and their backing provider."
 				bodyClass="space-y-4"
 			>
 				{#each data.workers as worker (worker.id)}
-					<a
-						class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
-						href={worker.workerHref}
-						rel="external"
-					>
+					<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
 								<div class="flex flex-wrap items-center gap-2">
@@ -673,7 +804,11 @@
 									</span>
 								</div>
 								<p class="mt-2 text-sm text-slate-300">{worker.providerName}</p>
-								<p class="mt-1 text-sm text-slate-500">{worker.roleName}</p>
+								<p class="mt-1 text-sm text-slate-500">
+									{worker.supportedRoleNames?.length > 0
+										? worker.supportedRoleNames.join(', ')
+										: worker.roleName}
+								</p>
 							</div>
 							<span
 								class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${accessStateClass(worker.accessState)}`}
@@ -681,7 +816,42 @@
 								{accessStateLabel(worker.accessState)}
 							</span>
 						</div>
-					</a>
+
+						<form
+							class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+							method="POST"
+							action="?/updateWorkerAvailability"
+						>
+							<input name="workerId" type="hidden" value={worker.id} />
+
+							<label class="block min-w-0 flex-1">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Quick worker status
+								</span>
+								<select class="select text-white" name="status">
+									{#each data.workerStatusOptions as status (status)}
+										<option value={status} selected={worker.status === status}>
+											{formatWorkerStatusLabel(status)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<button
+								class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-sky-700 hover:text-white"
+								type="submit"
+							>
+								Update status
+							</button>
+
+							<a
+								class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+								href={worker.workerHref}
+							>
+								Open detail
+							</a>
+						</form>
+					</article>
 				{/each}
 			</DetailSection>
 		</section>

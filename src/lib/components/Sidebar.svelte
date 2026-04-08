@@ -35,7 +35,7 @@
 		projects: FolderOpenIcon,
 		goals: TargetIcon,
 		planning: CalendarRangeIcon,
-		workers: UsersIcon,
+		executionSurfaces: UsersIcon,
 		roles: BriefcaseBusinessIcon,
 		providers: CpuIcon
 	};

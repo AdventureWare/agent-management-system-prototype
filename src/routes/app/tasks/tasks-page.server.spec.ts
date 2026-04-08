@@ -57,6 +57,7 @@ const createTaskMock = vi.hoisted(() =>
 			dependencyTaskIds?: string[];
 			artifactPath: string;
 			targetDate?: string | null;
+			requiredPromptSkillNames?: string[];
 			requiredCapabilityNames?: string[];
 			requiredToolNames?: string[];
 			status?: string;
@@ -78,6 +79,7 @@ const createTaskMock = vi.hoisted(() =>
 			desiredRoleId: input.desiredRoleId,
 			assigneeWorkerId: null,
 			agentThreadId: null,
+			requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 			blockedReason: input.blockedReason ?? '',
 			dependencyTaskIds: input.dependencyTaskIds ?? [],
 			targetDate: input.targetDate ?? null,
@@ -410,6 +412,26 @@ describe('tasks page server actions', () => {
 		);
 	});
 
+	it('keeps desired role empty when the user does not choose one', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Optional role task');
+		form.set('instructions', 'Do not force a role onto this task.');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				desiredRoleId: ''
+			})
+		);
+	});
+
 	it('rewrites task instructions in place without creating a task', async () => {
 		const form = new FormData();
 		form.set('projectId', 'project_ams');
@@ -443,6 +465,7 @@ describe('tasks page server actions', () => {
 			delegationDoneCondition: '',
 			delegationIntegrationNotes: '',
 			blockedReason: '',
+			requiredPromptSkillNames: [],
 			requiredCapabilityNames: [],
 			requiredToolNames: ['codex', 'playwright'],
 			availableSkillNames: ['skill-installer', 'web-design-guidelines']

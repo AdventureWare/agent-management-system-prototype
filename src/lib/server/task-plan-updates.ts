@@ -37,6 +37,7 @@ type TaskPlanDecisionSummaryInput = {
 	nextDesiredRoleId: string;
 	nextDesiredRoleName: string | null;
 	currentDesiredRoleName: string | null;
+	nextRequiredPromptSkillNames: string[];
 	nextRequiredCapabilityNames: string[];
 	nextRequiredToolNames: string[];
 	nextBlockedReason: string;
@@ -62,6 +63,7 @@ export type ResolvedTaskPlanUpdate = {
 	nextRequiredThreadSandbox: AgentSandbox | null;
 	nextRequiresReview: boolean;
 	nextDesiredRoleId: string;
+	nextRequiredPromptSkillNames: string[];
 	nextRequiredCapabilityNames: string[];
 	nextRequiredToolNames: string[];
 	nextBlockedReason: string;
@@ -98,6 +100,8 @@ function buildTaskPlanDecisionSummary(input: TaskPlanDecisionSummaryInput) {
 	const nextCapabilityNames = [...input.nextRequiredCapabilityNames].sort();
 	const currentToolNames = [...(input.task.requiredToolNames ?? [])].sort();
 	const nextToolNames = [...input.nextRequiredToolNames].sort();
+	const currentPromptSkillNames = [...(input.task.requiredPromptSkillNames ?? [])].sort();
+	const nextPromptSkillNames = [...input.nextRequiredPromptSkillNames].sort();
 	const currentDependencyIds = normalizeIdList(input.task.dependencyTaskIds ?? []);
 	const nextDependencyIds = normalizeIdList(input.nextDependencyTaskIds);
 
@@ -200,6 +204,14 @@ function buildTaskPlanDecisionSummary(input: TaskPlanDecisionSummaryInput) {
 		);
 	}
 
+	if (currentPromptSkillNames.join('|') !== nextPromptSkillNames.join('|')) {
+		changes.push(
+			nextPromptSkillNames.length > 0
+				? `set requested prompt skills to ${nextPromptSkillNames.join(', ')}`
+				: 'cleared requested prompt skills'
+		);
+	}
+
 	if (currentCapabilityNames.join('|') !== nextCapabilityNames.join('|')) {
 		changes.push(
 			nextCapabilityNames.length > 0
@@ -285,6 +297,9 @@ export function resolveTaskPlanUpdate(input: {
 		: (task.requiredThreadSandbox ?? null);
 	const nextRequiresReview = form.hasRequiresReview ? form.requiresReview : task.requiresReview;
 	const nextDesiredRoleId = form.hasDesiredRoleId ? form.desiredRoleId : task.desiredRoleId;
+	const nextRequiredPromptSkillNames = form.hasRequiredPromptSkillNames
+		? form.requiredPromptSkillNames
+		: (task.requiredPromptSkillNames ?? []);
 	const nextRequiredCapabilityNames = form.hasRequiredCapabilityNames
 		? form.requiredCapabilityNames
 		: (task.requiredCapabilityNames ?? []);
@@ -329,6 +344,7 @@ export function resolveTaskPlanUpdate(input: {
 			? (current.roles.find((candidate) => candidate.id === task.desiredRoleId)?.name ??
 				task.desiredRoleId)
 			: null,
+		nextRequiredPromptSkillNames,
 		nextRequiredCapabilityNames,
 		nextRequiredToolNames,
 		nextBlockedReason,
@@ -358,6 +374,7 @@ export function resolveTaskPlanUpdate(input: {
 		nextRequiredThreadSandbox,
 		nextRequiresReview,
 		nextDesiredRoleId,
+		nextRequiredPromptSkillNames,
 		nextRequiredCapabilityNames,
 		nextRequiredToolNames,
 		nextBlockedReason,

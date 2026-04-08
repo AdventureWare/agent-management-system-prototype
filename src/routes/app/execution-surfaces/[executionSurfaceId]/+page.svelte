@@ -24,7 +24,10 @@
 	const workerRecordState = fromStore(workerRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
-		worker: mergeStoredWorkerRecord(sourceData.worker, workerRecordState.current.byId)
+		executionSurface: mergeStoredWorkerRecord(
+			sourceData.executionSurface,
+			workerRecordState.current.byId
+		)
 	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
@@ -44,11 +47,11 @@
 	});
 
 	$effect(() => {
-		workerRecordStore.seedWorker(sourceData.worker);
+		workerRecordStore.seedWorker(sourceData.executionSurface);
 	});
 
 	function shouldAutoRefreshWorkerDetail() {
-		return data.worker.status === 'busy' || hasActiveRecentRun;
+		return data.executionSurface.status === 'busy' || hasActiveRecentRun;
 	}
 
 	async function refreshWorkerDetail(options: { force?: boolean } = {}) {
@@ -60,12 +63,13 @@
 
 		try {
 			refreshedData = await fetchJson<PageData>(
-				`/api/workers/${data.worker.id}`,
-				'Could not refresh the worker detail.'
+				`/api/execution-surfaces/${data.executionSurface.id}`,
+				'Could not refresh the execution surface detail.'
 			);
 			refreshError = null;
 		} catch (err) {
-			refreshError = err instanceof Error ? err.message : 'Could not refresh the worker detail.';
+			refreshError =
+				err instanceof Error ? err.message : 'Could not refresh the execution surface detail.';
 		} finally {
 			isRefreshing = false;
 		}
@@ -103,18 +107,18 @@
 
 <AppPage width="full">
 	<DetailHeader
-		backHref={resolve('/app/workers')}
-		backLabel="Back to workers"
-		eyebrow="Worker detail"
-		title={data.worker.name}
-		description={data.worker.note || 'No note saved for this worker yet.'}
+		backHref={resolve('/app/execution-surfaces')}
+		backLabel="Back to execution surfaces"
+		eyebrow="Execution surface detail"
+		title={data.executionSurface.name}
+		description={data.executionSurface.note || 'No note saved for this execution surface yet.'}
 	>
 		{#snippet meta()}
 			<div class="flex flex-wrap gap-2">
 				<span
-					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.worker.status)}`}
+					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.executionSurface.status)}`}
 				>
-					{formatWorkerStatusLabel(data.worker.status)}
+					{formatWorkerStatusLabel(data.executionSurface.status)}
 				</span>
 			</div>
 		{/snippet}
@@ -135,7 +139,7 @@
 			<span
 				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
 			>
-				Live updates every {autoRefreshIntervalLabel} while this worker is active
+				Live updates every {autoRefreshIntervalLabel} while this execution surface is active
 			</span>
 		{/if}
 		{#if refreshError}
@@ -149,29 +153,35 @@
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Provider</p>
 			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
-				{data.worker.providerName}
+				{data.executionSurface.providerName}
 			</p>
 			<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-				{data.worker.location} execution surface
+				{data.executionSurface.location} execution surface
 			</p>
 			<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-				Provider default sandbox: {data.worker.providerDefaultThreadSandbox}
+				Provider default sandbox: {data.executionSurface.providerDefaultThreadSandbox}
 			</p>
 		</article>
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Role</p>
-			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">{data.worker.roleName}</p>
-			<p class="mt-2 text-sm text-slate-400">Capacity {data.worker.capacity}</p>
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+				Supported roles
+			</p>
+			<p class="ui-wrap-anywhere mt-3 text-lg font-semibold text-white">
+				{data.executionSurface.supportedRoleNames.length > 0
+					? data.executionSurface.supportedRoleNames.join(', ')
+					: 'No supported roles'}
+			</p>
+			<p class="mt-2 text-sm text-slate-400">Capacity {data.executionSurface.capacity}</p>
 		</article>
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Assigned tasks</p>
 			<p class="mt-3 text-3xl font-semibold text-white">{data.assignedTasks.length}</p>
-			<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to this worker.</p>
+			<p class="mt-2 text-sm text-slate-400">Tasks currently assigned to this execution surface.</p>
 		</article>
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Recent runs</p>
 			<p class="mt-3 text-3xl font-semibold text-white">{data.recentRuns.length}</p>
-			<p class="mt-2 text-sm text-slate-400">Latest recorded runs on this worker.</p>
+			<p class="mt-2 text-sm text-slate-400">Latest recorded runs on this execution surface.</p>
 		</article>
 	</div>
 
@@ -185,7 +195,7 @@
 		<p
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
-			Worker updates saved.
+			Execution surface updates saved.
 		</p>
 	{/if}
 
@@ -197,14 +207,16 @@
 		>
 			<div class="space-y-2">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
-					Worker details
+					Execution surface details
 				</p>
-				<h2 class="text-xl font-semibold text-white">Edit worker status and routing context</h2>
+				<h2 class="text-xl font-semibold text-white">
+					Edit execution surface status and routing context
+				</h2>
 			</div>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-				<input class="input text-white" name="name" required value={data.worker.name} />
+				<input class="input text-white" name="name" required value={data.executionSurface.name} />
 			</label>
 
 			<div class="grid gap-4 sm:grid-cols-2">
@@ -212,7 +224,10 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Provider</span>
 					<select class="select text-white" name="providerId">
 						{#each data.providers as provider (provider.id)}
-							<option value={provider.id} selected={data.worker.providerId === provider.id}>
+							<option
+								value={provider.id}
+								selected={data.executionSurface.providerId === provider.id}
+							>
 								{provider.name}
 							</option>
 						{/each}
@@ -220,12 +235,21 @@
 				</label>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Role</span>
-					<select class="select text-white" name="roleId">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Supported roles</span>
+					<select class="select min-h-36 text-white" name="supportedRoleIds" multiple>
 						{#each data.roles as role (role.id)}
-							<option value={role.id} selected={data.worker.roleId === role.id}>{role.name}</option>
+							<option
+								value={role.id}
+								selected={data.executionSurface.supportedRoleIds.includes(role.id)}
+							>
+								{role.name}
+							</option>
 						{/each}
 					</select>
+					<p class="mt-2 text-xs text-slate-500">
+						Hold Command or Control to select multiple supported roles. The first selected role is
+						kept as the compatibility fallback for older code paths.
+					</p>
 				</label>
 			</div>
 
@@ -234,7 +258,7 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Location</span>
 					<select class="select text-white" name="location">
 						{#each data.locationOptions as location (location)}
-							<option value={location} selected={data.worker.location === location}>
+							<option value={location} selected={data.executionSurface.location === location}>
 								{location}
 							</option>
 						{/each}
@@ -245,7 +269,7 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 					<select class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
-							<option value={status} selected={data.worker.status === status}>
+							<option value={status} selected={data.executionSurface.status === status}>
 								{formatWorkerStatusLabel(status)}
 							</option>
 						{/each}
@@ -259,7 +283,7 @@
 						name="capacity"
 						type="number"
 						min="1"
-						value={data.worker.capacity}
+						value={data.executionSurface.capacity}
 					/>
 				</label>
 			</div>
@@ -270,10 +294,10 @@
 					<input
 						class="input text-white"
 						name="skills"
-						value={(data.worker.skills ?? []).join(', ')}
+						value={(data.executionSurface.skills ?? []).join(', ')}
 					/>
 					<p class="mt-2 text-xs text-slate-500">
-						Worker-specific skills used for routing and coverage checks.
+						Execution-surface-specific skills used for routing and coverage checks.
 					</p>
 				</label>
 
@@ -284,10 +308,10 @@
 						name="maxConcurrentRuns"
 						type="number"
 						min="1"
-						value={data.worker.maxConcurrentRuns ?? ''}
+						value={data.executionSurface.maxConcurrentRuns ?? ''}
 					/>
 					<p class="mt-2 text-xs text-slate-500">
-						Leave blank to use the worker capacity as the concurrency limit.
+						Leave blank to use the surface capacity as the concurrency limit.
 					</p>
 				</label>
 			</div>
@@ -295,44 +319,49 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Thread sandbox override</span>
 				<select class="select text-white" name="threadSandboxOverride">
-					<option value="" selected={data.worker.threadSandboxOverride === null}>
-						Use provider default ({data.worker.providerDefaultThreadSandbox})
+					<option value="" selected={data.executionSurface.threadSandboxOverride === null}>
+						Use provider default ({data.executionSurface.providerDefaultThreadSandbox})
 					</option>
 					{#each data.sandboxOptions as sandbox (sandbox)}
-						<option value={sandbox} selected={data.worker.threadSandboxOverride === sandbox}>
+						<option
+							value={sandbox}
+							selected={data.executionSurface.threadSandboxOverride === sandbox}
+						>
 							{sandbox}
 						</option>
 					{/each}
 				</select>
 				<p class="mt-2 text-xs text-slate-500">
-					Applies when this worker starts a new managed thread. Existing threads keep their own
-					saved sandbox until you change them directly.
+					Applies when this execution surface starts a new managed thread. Existing threads keep
+					their own saved sandbox until you change them directly.
 				</p>
 			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Note</span>
-				<textarea class="textarea min-h-24 text-white" name="note">{data.worker.note}</textarea>
+				<textarea class="textarea min-h-24 text-white" name="note"
+					>{data.executionSurface.note}</textarea
+				>
 			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Tags</span>
-				<input class="input text-white" name="tags" value={data.worker.tags.join(', ')} />
+				<input class="input text-white" name="tags" value={data.executionSurface.tags.join(', ')} />
 			</label>
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Registered</p>
-					<p class="mt-2">{new Date(data.worker.registeredAt).toLocaleString()}</p>
+					<p class="mt-2">{new Date(data.executionSurface.registeredAt).toLocaleString()}</p>
 				</div>
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Last seen</p>
-					<p class="mt-2">{new Date(data.worker.lastSeenAt).toLocaleString()}</p>
+					<p class="mt-2">{new Date(data.executionSurface.lastSeenAt).toLocaleString()}</p>
 				</div>
 			</div>
 
 			<button class="btn preset-filled-primary-500 font-semibold" type="submit">
-				Save worker
+				Save surface
 			</button>
 		</form>
 
@@ -350,10 +379,12 @@
 				<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-							Worker skills
+							Surface skills
 						</p>
 						<p class="mt-2 text-sm text-white">
-							{data.worker.skills.length > 0 ? data.worker.skills.join(', ') : 'None listed'}
+							{data.executionSurface.skills.length > 0
+								? data.executionSurface.skills.join(', ')
+								: 'None listed'}
 						</p>
 					</div>
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
@@ -361,8 +392,8 @@
 							Provider capabilities
 						</p>
 						<p class="mt-2 text-sm text-white">
-							{data.worker.providerCapabilities.length > 0
-								? data.worker.providerCapabilities.join(', ')
+							{data.executionSurface.providerCapabilities.length > 0
+								? data.executionSurface.providerCapabilities.join(', ')
 								: 'None listed'}
 						</p>
 					</div>
@@ -371,7 +402,8 @@
 							Effective concurrency
 						</p>
 						<p class="mt-2 text-sm text-white">
-							{data.worker.activeRunCount} active / {data.worker.effectiveConcurrencyLimit} allowed
+							{data.executionSurface.activeRunCount} active / {data.executionSurface
+								.effectiveConcurrencyLimit} allowed
 						</p>
 					</div>
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
@@ -379,15 +411,15 @@
 							Thread sandbox
 						</p>
 						<p class="mt-2 text-sm text-white">
-							{data.worker.threadSandboxOverride ??
-								`Provider default (${data.worker.providerDefaultThreadSandbox})`}
+							{data.executionSurface.threadSandboxOverride ??
+								`Provider default (${data.executionSurface.providerDefaultThreadSandbox})`}
 						</p>
 					</div>
 				</div>
 
-				{#if data.worker.effectiveCapabilities.length > 0}
+				{#if data.executionSurface.effectiveCapabilities.length > 0}
 					<div class="mt-4 flex flex-wrap gap-2">
-						{#each data.worker.effectiveCapabilities as capability (capability)}
+						{#each data.executionSurface.effectiveCapabilities as capability (capability)}
 							<span
 								class="ui-wrap-anywhere rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
 							>
@@ -419,7 +451,7 @@
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
-							No tasks are assigned to this worker right now.
+							No tasks are assigned to this execution surface right now.
 						</p>
 					{:else}
 						{#each data.assignedTasks as task (task.id)}
@@ -453,7 +485,7 @@
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
-							No runs recorded for this worker yet.
+							No runs recorded for this execution surface yet.
 						</p>
 					{:else}
 						{#each data.recentRuns as run (run.id)}

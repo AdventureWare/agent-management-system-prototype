@@ -173,9 +173,12 @@
 			return;
 		}
 
-		const intervalId = window.setInterval(() => {
-			void refreshTaskDetail();
-		}, ACTIVE_REFRESH_INTERVAL_MS);
+		const intervalId = window.setInterval(
+			() => {
+				void refreshTaskDetail();
+			},
+			Math.max(ACTIVE_REFRESH_INTERVAL_MS, 5_000)
+		);
 
 		return () => {
 			window.clearInterval(intervalId);
@@ -241,7 +244,22 @@
 
 	let taskHasActiveRun = $derived(Boolean(data.task.hasActiveRun));
 	let taskIsReadyToRun = $derived(data.task.status === 'ready');
-	let runTaskDisabled = $derived(!taskIsReadyToRun || taskHasActiveRun);
+	let launchCoverageBlocked = $derived.by(() => {
+		if (!data.executionPreflight.hasDeclaredRequirements) {
+			return false;
+		}
+
+		if (data.executionPreflight.currentAssignee) {
+			return (
+				!data.executionPreflight.currentAssignee.withinConcurrencyLimit ||
+				data.executionPreflight.currentAssignee.missingCapabilityNames.length > 0 ||
+				data.executionPreflight.currentAssignee.missingToolNames.length > 0
+			);
+		}
+
+		return data.executionPreflight.eligibleWorkerCount === 0;
+	});
+	let runTaskDisabled = $derived(!taskIsReadyToRun || taskHasActiveRun || launchCoverageBlocked);
 	let runTaskButtonLabel = $derived(
 		taskHasActiveRun ? formatActiveRunStateLabel(data.task.activeRun?.status) : 'Run task'
 	);
@@ -252,6 +270,10 @@
 
 		if (!taskIsReadyToRun) {
 			return 'This task is not ready to run yet.';
+		}
+
+		if (launchCoverageBlocked) {
+			return 'Current execution-surface coverage does not satisfy this task’s declared launch requirements.';
 		}
 
 		return '';
@@ -272,6 +294,27 @@
 
 		if (!taskIsReadyToRun) {
 			return `Set the task status to Ready before running it. Current status: ${formatTaskStatusLabel(data.task.status)}.`;
+		}
+
+		if (launchCoverageBlocked) {
+			if (data.executionPreflight.currentAssignee) {
+				if (!data.executionPreflight.currentAssignee.withinConcurrencyLimit) {
+					return `${data.executionPreflight.currentAssignee.workerName} is already at its concurrency limit.`;
+				}
+
+				const missingParts = [
+					data.executionPreflight.currentAssignee.missingCapabilityNames.length > 0
+						? `capabilities: ${data.executionPreflight.currentAssignee.missingCapabilityNames.join(', ')}`
+						: '',
+					data.executionPreflight.currentAssignee.missingToolNames.length > 0
+						? `tools: ${data.executionPreflight.currentAssignee.missingToolNames.join(', ')}`
+						: ''
+				].filter(Boolean);
+
+				return `${data.executionPreflight.currentAssignee.workerName} does not cover the declared ${missingParts.join(' · ')}.`;
+			}
+
+			return 'No current execution surface can launch this task with its declared capability and tool requirements.';
 		}
 
 		return '';
@@ -334,6 +377,7 @@
 			dependencyTasksCount={data.dependencyTasks.length}
 			availableDependencyTasks={data.availableDependencyTasks ?? []}
 			executionRequirementInventory={data.executionRequirementInventory}
+			projectInstalledSkills={data.projectInstalledSkills}
 		/>
 
 		<div class="space-y-6">

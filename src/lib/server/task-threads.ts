@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
 import type { DelegationPacket } from '$lib/types/control-plane';
+import type { TaskRolePromptContext } from './task-role-context';
 
 const TASK_THREAD_NAME_PREFIX = 'Task thread';
 const LEGACY_TASK_THREAD_NAME_PREFIX = 'Work thread:';
@@ -20,6 +21,8 @@ export function buildTaskThreadPrompt(input: {
 	defaultArtifactRoot: string;
 	additionalWritableRoots?: string[];
 	availableSkillNames?: string[];
+	requiredPromptSkillNames?: string[];
+	preferredRole?: TaskRolePromptContext;
 	relevantKnowledgeItems?: Array<
 		Pick<
 			RetrievedSelfImprovementKnowledgeItem,
@@ -68,6 +71,32 @@ export function buildTaskThreadPrompt(input: {
 		contextLines.push(`Installed skills available: ${input.availableSkillNames.join(', ')}`);
 	}
 
+	if (input.requiredPromptSkillNames?.length) {
+		contextLines.push(`Prefer installed skills for this task: ${input.requiredPromptSkillNames.join(', ')}`);
+	}
+
+	const roleLines = input.preferredRole
+		? [
+				'Preferred role:',
+				`Role: ${input.preferredRole.name}`,
+				...(input.preferredRole.description.trim()
+					? [`Role description: ${input.preferredRole.description.trim()}`]
+					: []),
+				...(input.preferredRole.systemPrompt.trim()
+					? [`Role instructions: ${input.preferredRole.systemPrompt.trim()}`]
+					: []),
+				...(input.preferredRole.skillIds.length > 0
+					? [`Role skills: ${input.preferredRole.skillIds.join(', ')}`]
+					: []),
+				...(input.preferredRole.toolIds.length > 0
+					? [`Role tools: ${input.preferredRole.toolIds.join(', ')}`]
+					: []),
+				...(input.preferredRole.mcpIds.length > 0
+					? [`Role MCPs: ${input.preferredRole.mcpIds.join(', ')}`]
+					: [])
+			]
+		: [];
+
 	const knowledgeLines = input.relevantKnowledgeItems?.flatMap((knowledgeItem, index) => [
 		`Knowledge ${index + 1}: ${knowledgeItem.title}`,
 		`Summary: ${knowledgeItem.summary}`,
@@ -111,6 +140,7 @@ export function buildTaskThreadPrompt(input: {
 						: [])
 				]
 			: []),
+		...(roleLines.length > 0 ? ['', ...roleLines] : []),
 		'',
 		'Instructions:',
 		input.taskInstructions,

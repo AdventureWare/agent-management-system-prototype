@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
-import { loadControlPlane } from '$lib/server/control-plane';
+import { getExecutionSurfaces, loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -33,8 +33,11 @@ export const load: PageServerLoad = async ({ params }) => {
 			)
 		),
 		task: data.tasks.find((task) => task.id === run.taskId) ?? null,
+		executionSurface: run.workerId
+			? (getExecutionSurfaces(data).find((worker) => worker.id === run.workerId) ?? null)
+			: null,
 		worker: run.workerId
-			? (data.workers.find((worker) => worker.id === run.workerId) ?? null)
+			? (getExecutionSurfaces(data).find((worker) => worker.id === run.workerId) ?? null)
 			: null,
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)

@@ -21,11 +21,25 @@ export async function fetchJson<T>(path: string, errorMessage: string): Promise<
 	return (await response.json()) as T;
 }
 
-export async function fetchAgentThreads(options: { includeArchived?: boolean } = {}) {
-	const includeArchived = options.includeArchived ? '?includeArchived=1' : '';
+export async function fetchAgentThreads(
+	options: { includeArchived?: boolean; includeCategorization?: boolean } = {}
+) {
+	const params = new URLSearchParams();
+
+	if (options.includeArchived) {
+		params.set('includeArchived', '1');
+	}
+
+	if (options.includeCategorization === false) {
+		params.set('includeCategorization', '0');
+	}
+
 	const payload = await fetchJson<{
 		threads?: AgentThreadDetail[];
-	}>(`/api/agents/threads${includeArchived}`, 'Could not refresh threads.');
+	}>(
+		`/api/agents/threads${params.size > 0 ? `?${params.toString()}` : ''}`,
+		'Could not refresh threads.'
+	);
 
 	return payload.threads ?? [];
 }

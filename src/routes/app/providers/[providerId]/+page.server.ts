@@ -60,10 +60,21 @@ export const load: PageServerLoad = async ({ params }) => {
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const attachedWorkers = data.workers
 		.filter((worker) => worker.providerId === provider.id)
-		.map((worker) => ({
-			...worker,
-			roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role'
-		}))
+		.map((worker) => {
+			const supportedRoleIds = Array.from(
+				new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+			);
+			const supportedRoleNames = supportedRoleIds.map(
+				(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
+			);
+
+			return {
+				...worker,
+				roleName: supportedRoleNames[0] ?? 'Unknown role',
+				supportedRoleIds,
+				supportedRoleNames
+			};
+		})
 		.sort((a, b) => a.name.localeCompare(b.name));
 	const recentRuns = data.runs
 		.filter((run) => run.providerId === provider.id)

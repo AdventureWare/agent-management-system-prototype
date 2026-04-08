@@ -1,9 +1,16 @@
 import {
+	canonicalizeExecutionRequirementNames
+} from '$lib/execution-requirements';
+import {
+	listInstalledCodexSkills
+} from '$lib/server/codex-skills';
+import {
 	createDecision,
 	loadControlPlane,
 	parseTaskStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { isValidTaskDate, readTaskDetailForm } from '$lib/server/task-form';
 import { resolveTaskPlanUpdate } from '$lib/server/task-plan-updates';
 
@@ -107,6 +114,24 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		);
 	}
 
+	const executionRequirementInventory = buildExecutionRequirementInventory(current);
+	const installedPromptSkills = listInstalledCodexSkills(project.projectRootFolder);
+	const normalizedTaskInput = {
+		...taskInput,
+		requiredPromptSkillNames: canonicalizeExecutionRequirementNames(
+			taskInput.requiredPromptSkillNames,
+			installedPromptSkills.map((skill) => skill.id)
+		),
+		requiredCapabilityNames: canonicalizeExecutionRequirementNames(
+			taskInput.requiredCapabilityNames,
+			executionRequirementInventory.capabilityNames
+		),
+		requiredToolNames: canonicalizeExecutionRequirementNames(
+			taskInput.requiredToolNames,
+			executionRequirementInventory.toolNames
+		)
+	};
+
 	const {
 		nextTitle,
 		nextInstructions,
@@ -123,6 +148,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		nextRequiredThreadSandbox,
 		nextRequiresReview,
 		nextDesiredRoleId,
+		nextRequiredPromptSkillNames,
 		nextRequiredCapabilityNames,
 		nextRequiredToolNames,
 		nextBlockedReason,
@@ -133,7 +159,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		current,
 		task: existingTask,
 		status,
-		form: taskInput,
+		form: normalizedTaskInput,
 		project,
 		goal,
 		assigneeWorker
@@ -168,6 +194,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 				requiredThreadSandbox: nextRequiredThreadSandbox,
 				requiresReview: nextRequiresReview,
 				desiredRoleId: nextDesiredRoleId,
+				requiredPromptSkillNames: nextRequiredPromptSkillNames,
 				requiredCapabilityNames: nextRequiredCapabilityNames,
 				requiredToolNames: nextRequiredToolNames,
 				blockedReason: nextBlockedReason,

@@ -19,6 +19,7 @@ export type TaskWritingAssistInput = {
 	delegationDoneCondition?: string;
 	delegationIntegrationNotes?: string;
 	blockedReason?: string;
+	requiredPromptSkillNames?: string[];
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
 	availableSkillNames?: string[];
@@ -79,6 +80,7 @@ function buildTaskWritingAssistPrompt(input: TaskWritingAssistInput) {
 		`Delegation done condition: ${input.delegationDoneCondition?.trim() || 'None provided'}`,
 		`Delegation integration notes: ${input.delegationIntegrationNotes?.trim() || 'None provided'}`,
 		`Blocked reason: ${input.blockedReason?.trim() || 'None provided'}`,
+		`Requested prompt skills: ${compactList(input.requiredPromptSkillNames, 'None listed')}`,
 		`Required capabilities: ${compactList(input.requiredCapabilityNames, 'None listed')}`,
 		`Required tools: ${compactList(input.requiredToolNames, 'None listed')}`,
 		`Installed skills in workspace: ${compactList(input.availableSkillNames, 'None listed')}`,

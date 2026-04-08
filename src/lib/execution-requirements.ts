@@ -42,3 +42,22 @@ export function findUnknownExecutionRequirementNames(
 		(name) => !knownNameKeys.has(normalizeExecutionRequirementName(name))
 	);
 }
+
+export function canonicalizeExecutionRequirementNames(names: string[], knownNames: string[]) {
+	const knownNameMap = new Map(
+		knownNames.map((name) => [normalizeExecutionRequirementName(name), name] as const)
+	);
+
+	return [
+		...new Map(
+			names
+				.map((name) => name.trim())
+				.filter(Boolean)
+				.map((name) => {
+					const canonicalName =
+						knownNameMap.get(normalizeExecutionRequirementName(name)) ?? name;
+					return [normalizeExecutionRequirementName(canonicalName), canonicalName] as const;
+				})
+		).values()
+	];
+}

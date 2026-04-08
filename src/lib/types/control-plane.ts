@@ -440,6 +440,7 @@ export type Task = {
 	desiredRoleId: string;
 	assigneeWorkerId: string | null;
 	agentThreadId: string | null;
+	requiredPromptSkillNames?: string[];
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
 	blockedReason: string;
@@ -536,6 +537,7 @@ export type ControlPlaneData = {
 	projects: Project[];
 	goals: Goal[];
 	workers: Worker[];
+	executionSurfaces?: ExecutionSurface[];
 	tasks: Task[];
 	runs: Run[];
 	reviews: Review[];

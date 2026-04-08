@@ -88,6 +88,14 @@
 	};
 
 	type LaunchContextView = {
+		role: {
+			name: string;
+			description: string;
+			skillIds: string[];
+			toolIds: string[];
+			mcpIds: string[];
+			hasSystemPrompt: boolean;
+		} | null;
 		assignedWorker: {
 			name: string;
 			status: string;
@@ -118,6 +126,8 @@
 			includesExpectedOutcome: boolean;
 			includesDelegationPacket: boolean;
 			publishedKnowledgeCount: number;
+			requiredPromptSkillNames: string[];
+			missingPromptSkillNames: string[];
 		};
 		requirements: {
 			capabilityNames: string[];
@@ -221,8 +231,8 @@
 			</p>
 			<h3 class="mt-2 text-xl font-semibold text-white">Current capability coverage</h3>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
-				This is a read-only check against the current worker and provider metadata before you launch
-				new work.
+				This is a read-only check against the current execution-surface and provider metadata before
+				you launch new work.
 			</p>
 
 			<div
@@ -232,16 +242,16 @@
 					{#if !executionPreflight.hasDeclaredRequirements}
 						No required capabilities or tools are declared for this task yet.
 					{:else if executionPreflight.fullCoverageWorkerCount > 0}
-						{executionPreflight.fullCoverageWorkerCount} worker{executionPreflight.fullCoverageWorkerCount ===
+						{executionPreflight.fullCoverageWorkerCount} execution surface{executionPreflight.fullCoverageWorkerCount ===
 						1
 							? ''
 							: 's'} currently cover all declared capability and tool requirements.
 					{:else}
-						No worker currently covers all declared capability and tool requirements.
+						No execution surface currently covers all declared capability and tool requirements.
 					{/if}
 				</p>
 				<p class="mt-2 text-sm text-slate-300">
-					Eligible now: {executionPreflight.eligibleWorkerCount} worker{executionPreflight.eligibleWorkerCount ===
+					Eligible now: {executionPreflight.eligibleWorkerCount} execution surface{executionPreflight.eligibleWorkerCount ===
 					1
 						? ''
 						: 's'}
@@ -261,22 +271,22 @@
 
 				{#if executionPreflight.currentAssignee}
 					<p class="mt-3 text-sm text-slate-300">
-						Assigned worker: {executionPreflight.currentAssignee.workerName}
+						Assigned execution surface: {executionPreflight.currentAssignee.workerName}
 					</p>
 					{#if !executionPreflight.currentAssignee.withinConcurrencyLimit}
 						<p class="mt-2 text-sm text-amber-100">
-							The assigned worker is already at its concurrency limit.
+							The assigned execution surface is already at its concurrency limit.
 						</p>
 					{/if}
 					{#if executionPreflight.currentAssignee.missingCapabilityNames.length > 0}
 						<p class="mt-2 text-sm text-amber-100">
-							Assigned worker is missing capabilities:
+							Assigned execution surface is missing capabilities:
 							{executionPreflight.currentAssignee.missingCapabilityNames.join(', ')}
 						</p>
 					{/if}
 					{#if executionPreflight.currentAssignee.missingToolNames.length > 0}
 						<p class="mt-2 text-sm text-amber-100">
-							Assigned worker is missing tools:
+							Assigned execution surface is missing tools:
 							{executionPreflight.currentAssignee.missingToolNames.join(', ')}
 						</p>
 					{/if}
@@ -288,8 +298,8 @@
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Launch context</p>
 			<h3 class="mt-2 text-xl font-semibold text-white">What a new thread will inherit</h3>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
-				This mirrors the current launch plan so users can inspect the worker, provider, sandbox,
-				installed skills, and prompt inputs before starting work.
+				This mirrors the current launch plan so users can inspect the execution surface, provider,
+				sandbox, installed skills, and prompt inputs before starting work.
 			</p>
 
 			<div class="mt-5 grid gap-4 xl:grid-cols-2">
@@ -298,7 +308,7 @@
 						Execution surface
 					</p>
 					<p class="mt-3 text-sm text-slate-300">
-						Worker:
+						Surface:
 						{launchContext.assignedWorker
 							? `${launchContext.assignedWorker.name} · ${launchContext.assignedWorker.status}`
 							: 'Unassigned'}
@@ -316,7 +326,7 @@
 						Task requirement: {launchContext.sandbox.taskRequirement
 							? formatAgentSandboxLabel(launchContext.sandbox.taskRequirement)
 							: 'None'}
-						· Worker override: {launchContext.sandbox.workerOverride
+						· Surface override: {launchContext.sandbox.workerOverride
 							? formatAgentSandboxLabel(launchContext.sandbox.workerOverride)
 							: 'None'}
 					</p>
@@ -363,8 +373,54 @@
 						)}
 					</p>
 					<p class="mt-2 text-sm text-slate-300">
+						Requested prompt skills:
+						{launchContext.promptInputs.requiredPromptSkillNames.length > 0
+							? launchContext.promptInputs.requiredPromptSkillNames.join(', ')
+							: 'None'}
+					</p>
+					{#if launchContext.promptInputs.missingPromptSkillNames.length > 0}
+						<p class="mt-2 text-sm text-amber-100">
+							Not currently installed:
+							{launchContext.promptInputs.missingPromptSkillNames.join(', ')}
+						</p>
+					{/if}
+					<p class="mt-2 text-sm text-slate-300">
 						Published knowledge items: {launchContext.promptInputs.publishedKnowledgeCount}
 					</p>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Role context
+					</p>
+					{#if launchContext.role}
+						<p class="mt-3 text-sm text-slate-300">{launchContext.role.name}</p>
+						<p class="mt-2 text-sm text-slate-400">
+							{launchContext.role.description || 'No role description recorded.'}
+						</p>
+						<p class="mt-2 text-sm text-slate-300">
+							Role system prompt: {boolLabel(launchContext.role.hasSystemPrompt, 'Included', 'None')}
+						</p>
+						<p class="mt-2 text-sm text-slate-300">
+							Role skills: {launchContext.role.skillIds.length > 0
+								? launchContext.role.skillIds.join(', ')
+								: 'None'}
+						</p>
+						<p class="mt-2 text-sm text-slate-300">
+							Role tools: {launchContext.role.toolIds.length > 0
+								? launchContext.role.toolIds.join(', ')
+								: 'None'}
+						</p>
+						<p class="mt-2 text-sm text-slate-300">
+							Role MCPs: {launchContext.role.mcpIds.length > 0
+								? launchContext.role.mcpIds.join(', ')
+								: 'None'}
+						</p>
+					{:else}
+						<p class="mt-3 text-sm text-slate-400">
+							No preferred role is set for this task. Execution routing can still proceed without one.
+						</p>
+					{/if}
 				</div>
 
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -420,13 +476,13 @@
 
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-						Worker and provider capabilities
+						Execution surface and provider capabilities
 					</p>
 					<div class="mt-3 space-y-3">
 						<div>
-							<p class="text-xs text-slate-500 uppercase">Worker skills</p>
+							<p class="text-xs text-slate-500 uppercase">Surface skills</p>
 							{#if (launchContext.assignedWorker?.skillNames.length ?? 0) === 0}
-								<p class="mt-2 text-sm text-slate-500">No worker skills recorded.</p>
+								<p class="mt-2 text-sm text-slate-500">No execution-surface skills recorded.</p>
 							{:else}
 								<div class="mt-2 flex flex-wrap gap-2">
 									{#each launchContext.assignedWorker?.skillNames ?? [] as skillName (skillName)}
@@ -806,7 +862,9 @@
 
 							<div class="mt-4 grid gap-3 sm:grid-cols-3">
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Worker</p>
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Execution surface
+									</p>
 									<p class="mt-2 text-sm text-white">{run.workerName}</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">

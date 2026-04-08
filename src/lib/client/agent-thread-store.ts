@@ -15,9 +15,22 @@ function mergeThreadRecord(
 	current: Record<string, AgentThreadDetail>,
 	thread: AgentThreadDetail
 ): Record<string, AgentThreadDetail> {
+	const existing = current[thread.id];
+	const nextThread =
+		existing && thread.categorization === undefined
+			? {
+					...thread,
+					categorization: existing.categorization,
+					topicLabels:
+						(thread.topicLabels?.length ?? 0) > 0
+							? thread.topicLabels
+							: (existing.topicLabels ?? [])
+				}
+			: thread;
+
 	return {
 		...current,
-		[thread.id]: thread
+		[thread.id]: nextThread
 	};
 }
 
@@ -54,7 +67,7 @@ function createAgentThreadStore() {
 		},
 		seedThreads(threads: AgentThreadDetail[], options: { replace?: boolean } = {}) {
 			update((state) => {
-				let nextById = state.byId;
+				let nextById = options.replace ? {} : state.byId;
 
 				for (const thread of threads) {
 					nextById = mergeThreadRecord(nextById, thread);

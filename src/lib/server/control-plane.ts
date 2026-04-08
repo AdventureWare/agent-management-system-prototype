@@ -132,12 +132,40 @@ function defaultData(): ControlPlaneData {
 		projects: [],
 		goals: [],
 		workers: [],
+		executionSurfaces: [],
 		tasks: [],
 		runs: [],
 		reviews: [],
 		planningSessions: [],
 		approvals: [],
 		decisions: []
+	};
+}
+
+export function getExecutionSurfaces(
+	data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>
+) {
+	return data.executionSurfaces ?? data.workers;
+}
+
+function withExecutionSurfaceAliases(data: ControlPlaneData): ControlPlaneData {
+	const executionSurfaces = getExecutionSurfaces(data);
+
+	return {
+		...data,
+		workers: executionSurfaces,
+		executionSurfaces
+	};
+}
+
+function withoutExecutionSurfaceAlias(data: ControlPlaneData): ControlPlaneData {
+	const executionSurfaces = getExecutionSurfaces(data);
+	const { executionSurfaces: _ignored, ...rest } = data;
+	void _ignored;
+
+	return {
+		...rest,
+		workers: executionSurfaces
 	};
 }
 
@@ -829,6 +857,7 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 				: typeof task.agentThreadId === 'string' && task.agentThreadId.trim()
 					? task.agentThreadId
 					: null,
+		requiredPromptSkillNames: normalizeStringList(task.requiredPromptSkillNames),
 		requiredCapabilityNames: normalizeStringList(task.requiredCapabilityNames),
 		requiredToolNames: normalizeStringList(task.requiredToolNames),
 		blockedReason: typeof task.blockedReason === 'string' ? task.blockedReason : '',
@@ -1001,6 +1030,11 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 	const providers = Array.isArray(parsed.providers)
 		? parsed.providers.map((provider) => normalizeProvider(provider as LegacyProvider))
 		: [];
+	const rawExecutionSurfaces = Array.isArray(parsed.executionSurfaces)
+		? parsed.executionSurfaces
+		: Array.isArray(parsed.workers)
+			? parsed.workers
+			: [];
 	const projects = Array.isArray(parsed.projects)
 		? parsed.projects.map((project) => normalizeProject(project as Project))
 		: [];
@@ -1022,28 +1056,28 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
 		: [];
 
-	return syncGovernanceQueues(
-		syncTaskExecutionState({
-			providers,
-			roles: Array.isArray(parsed.roles)
-				? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
-				: [],
-			projects,
-			goals: Array.isArray(parsed.goals)
-				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
-				: [],
-			workers: Array.isArray(parsed.workers)
-				? parsed.workers.map((worker) => normalizeWorker(worker as LegacyWorker))
-				: [],
-			tasks: Array.isArray(parsed.tasks)
-				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
-				: [],
-			runs,
-			reviews,
-			planningSessions,
-			approvals,
-			decisions
-		})
+	return withExecutionSurfaceAliases(
+		syncGovernanceQueues(
+			syncTaskExecutionState({
+				providers,
+				roles: Array.isArray(parsed.roles)
+					? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
+					: [],
+				projects,
+				goals: Array.isArray(parsed.goals)
+					? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+					: [],
+				workers: rawExecutionSurfaces.map((worker) => normalizeWorker(worker as LegacyWorker)),
+				tasks: Array.isArray(parsed.tasks)
+					? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
+					: [],
+				runs,
+				reviews,
+				planningSessions,
+				approvals,
+				decisions
+			})
+		)
 	);
 }
 
@@ -1084,27 +1118,31 @@ async function ensureControlPlaneSqliteSeeded() {
 export async function loadControlPlane(): Promise<ControlPlaneData> {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
 		await ensureControlPlaneSqliteSeeded();
-		return normalizeControlPlaneData(loadControlPlaneFromSqlite());
+		return withExecutionSurfaceAliases(normalizeControlPlaneData(loadControlPlaneFromSqlite()));
 	}
 
-	return loadControlPlaneFromJson();
+	return withExecutionSurfaceAliases(await loadControlPlaneFromJson());
 }
 
 async function saveControlPlane(data: ControlPlaneData) {
+	const persistenceData = withoutExecutionSurfaceAlias(withExecutionSurfaceAliases(data));
+
 	if (getControlPlaneStorageBackend() === 'sqlite') {
-		saveControlPlaneToSqlite(data);
+		saveControlPlaneToSqlite(persistenceData);
 		return;
 	}
 
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
-	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+	await writeFile(DATA_FILE, JSON.stringify(persistenceData, null, 2));
 }
 
 export async function updateControlPlane(
 	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
 ) {
 	const current = await loadControlPlane();
-	const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
+	const next = withExecutionSurfaceAliases(
+		syncGovernanceQueues(syncTaskExecutionState(await updater(current)))
+	);
 	await saveControlPlane(next);
 	return next;
 }
@@ -1170,6 +1208,10 @@ export function createGoalId() {
 
 export function createProviderId() {
 	return `provider_${randomUUID()}`;
+}
+
+export function createRoleId() {
+	return `role_${randomUUID()}`;
 }
 
 export function createProjectId() {
@@ -1303,6 +1345,41 @@ export function createProvider(input: {
 		capabilities: input.capabilities ?? [],
 		defaultThreadSandbox: input.defaultThreadSandbox ?? 'workspace-write',
 		notes: input.notes ?? ''
+	};
+}
+
+export function createRole(input: {
+	name: string;
+	area?: Role['area'];
+	description: string;
+	skillIds?: string[];
+	toolIds?: string[];
+	mcpIds?: string[];
+	systemPrompt?: string;
+	qualityChecklist?: string[];
+	approvalPolicy?: string;
+	escalationPolicy?: string;
+}): Role {
+	return {
+		id: createRoleId(),
+		name: input.name,
+		area: input.area ?? 'shared',
+		description: input.description,
+		skillIds: normalizeStringList(input.skillIds).length
+			? normalizeStringList(input.skillIds)
+			: undefined,
+		toolIds: normalizeStringList(input.toolIds).length
+			? normalizeStringList(input.toolIds)
+			: undefined,
+		mcpIds: normalizeStringList(input.mcpIds).length
+			? normalizeStringList(input.mcpIds)
+			: undefined,
+		systemPrompt: input.systemPrompt?.trim() ? input.systemPrompt.trim() : undefined,
+		qualityChecklist: normalizeStringList(input.qualityChecklist).length
+			? normalizeStringList(input.qualityChecklist)
+			: undefined,
+		approvalPolicy: input.approvalPolicy?.trim() ? input.approvalPolicy.trim() : undefined,
+		escalationPolicy: input.escalationPolicy?.trim() ? input.escalationPolicy.trim() : undefined
 	};
 }
 
@@ -1465,6 +1542,7 @@ export function createTask(input: {
 	requiresReview: boolean;
 	desiredRoleId: string;
 	artifactPath: string;
+	requiredPromptSkillNames?: string[];
 	requiredCapabilityNames?: string[];
 	requiredToolNames?: string[];
 	blockedReason?: string;
@@ -1501,6 +1579,7 @@ export function createTask(input: {
 		desiredRoleId: input.desiredRoleId,
 		assigneeWorkerId: input.assigneeWorkerId ?? null,
 		agentThreadId: input.agentThreadId ?? null,
+		requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
 		requiredToolNames: input.requiredToolNames ?? [],
 		blockedReason: input.blockedReason ?? '',
@@ -1738,7 +1817,8 @@ export function deleteTask(data: ControlPlaneData, taskId: string): ControlPlane
 export function createWorker(input: {
 	name: string;
 	providerId: string;
-	roleId: string;
+	roleId?: string;
+	supportedRoleIds?: string[];
 	location: WorkerLocation;
 	status: WorkerStatus;
 	capacity: number;
@@ -1750,12 +1830,23 @@ export function createWorker(input: {
 	maxConcurrentRuns?: number | null;
 	threadSandboxOverride?: AgentSandbox | null;
 }): Worker {
+	const supportedRoleIds = Array.from(
+		new Set(
+			[
+				...normalizeStringList(input.supportedRoleIds),
+				typeof input.roleId === 'string' ? input.roleId.trim() : ''
+			].filter(Boolean)
+		)
+	);
+	const roleId =
+		(typeof input.roleId === 'string' && input.roleId.trim()) || supportedRoleIds[0] || '';
+
 	return {
 		id: createWorkerId(),
 		name: input.name,
 		providerId: input.providerId,
-		roleId: input.roleId,
-		supportedRoleIds: input.roleId ? [input.roleId] : [],
+		roleId,
+		supportedRoleIds,
 		location: input.location,
 		status: input.status,
 		capacity: input.capacity,

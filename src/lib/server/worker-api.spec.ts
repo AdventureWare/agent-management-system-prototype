@@ -246,6 +246,18 @@ describe('worker-api helpers', () => {
 		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
 	});
 
+	it('treats desired role as optional when a task does not request one', () => {
+		const { data, worker } = buildFixture();
+		data.tasks[2] = {
+			...data.tasks[2]!,
+			desiredRoleId: '',
+			requiredCapabilityNames: ['research', 'citations'],
+			requiredToolNames: ['codex']
+		};
+
+		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(true);
+	});
+
 	it('requires capability and tool matches when task requirements are set', () => {
 		const { data, worker } = buildFixture();
 		data.tasks[0] = {

@@ -1154,12 +1154,18 @@ function buildRunTimeline(detail: { run: AgentRunDetail | null; threadId: string
 	return steps;
 }
 
-async function buildRunDetail(run: AgentRun): Promise<AgentRunDetail> {
+async function buildRunDetail(
+	run: AgentRun,
+	options: {
+		includePrompt?: boolean;
+		logTailLineCount?: number;
+	} = {}
+): Promise<AgentRunDetail> {
 	const [state, lastMessage, logTail, stateUpdatedAt, messageUpdatedAt, logUpdatedAt] =
 		await Promise.all([
 			readRunState(run.statePath),
 			readOptionalText(run.messagePath),
-			readLogTail(run.logPath),
+			readLogTail(run.logPath, options.logTailLineCount ?? 80),
 			readOptionalTimestamp(run.statePath),
 			readOptionalTimestamp(run.messagePath),
 			readOptionalTimestamp(run.logPath)
@@ -1167,6 +1173,7 @@ async function buildRunDetail(run: AgentRun): Promise<AgentRunDetail> {
 
 	const detail = {
 		...run,
+		prompt: options.includePrompt === false ? '' : run.prompt,
 		state,
 		lastMessage: lastMessage?.trim() || null,
 		logTail,
@@ -1903,6 +1910,7 @@ function finalizeThreadDetail(input: {
 	runDetails: AgentRunDetail[];
 	runCount?: number;
 	includeCategorization?: boolean;
+	includeRunHistory?: boolean;
 	taskContext: TaskContext;
 	origin: AgentThreadOrigin;
 	threadSummaryOverride?: string | null;
@@ -2009,7 +2017,7 @@ function finalizeThreadDetail(input: {
 		}),
 		relatedTasks,
 		latestRun,
-		runs: input.runDetails
+		runs: input.includeRunHistory === false ? [] : input.runDetails
 	} satisfies AgentThreadDetail;
 }
 
@@ -2040,10 +2048,16 @@ export function isAbandonedThreadDetail(detail: AgentThreadDetail) {
 	return !latestRun.state?.codexThreadId;
 }
 
-async function buildLatestRunDetails(runs: AgentRun[]) {
+async function buildLatestRunDetails(
+	runs: AgentRun[],
+	options: {
+		includePrompt?: boolean;
+		logTailLineCount?: number;
+	} = {}
+) {
 	const latestRuns = [...runs].sort(compareByCreatedAtDesc).slice(0, 1);
 
-	return Promise.all(latestRuns.map((run) => buildRunDetail(run)));
+	return Promise.all(latestRuns.map((run) => buildRunDetail(run, options)));
 }
 
 async function buildManagedThreadListDetail(
@@ -2052,13 +2066,17 @@ async function buildManagedThreadListDetail(
 	taskContext: TaskContext,
 	includeCategorization: boolean
 ) {
-	const runDetails = await buildLatestRunDetails(runs);
+	const runDetails = await buildLatestRunDetails(runs, {
+		includePrompt: false,
+		logTailLineCount: 12
+	});
 
 	return finalizeThreadDetail({
 		session,
 		runDetails,
 		runCount: runs.length,
 		includeCategorization,
+		includeRunHistory: false,
 		taskContext,
 		origin: 'managed'
 	});
@@ -2088,13 +2106,17 @@ async function buildExternalThreadListDetail(
 	includeCategorization: boolean
 ) {
 	if (runs.length > 0) {
-		const runDetails = await buildLatestRunDetails(runs);
+		const runDetails = await buildLatestRunDetails(runs, {
+			includePrompt: false,
+			logTailLineCount: 12
+		});
 
 		return finalizeThreadDetail({
 			session: materializeNativeThread(thread),
 			runDetails,
 			runCount: runs.length,
 			includeCategorization,
+			includeRunHistory: false,
 			taskContext,
 			origin: 'external'
 		});

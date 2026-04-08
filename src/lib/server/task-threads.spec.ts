@@ -51,6 +51,44 @@ describe('task thread naming', () => {
 		).toContain('Installed skills available: skill-installer, web-design-guidelines');
 	});
 
+	it('includes requested prompt skills separately from the installed inventory', () => {
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Prefer the right skills',
+				taskInstructions: 'Call out the preferred workspace skills for this task.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				availableSkillNames: ['docs-writer', 'frontend-sveltekit'],
+				requiredPromptSkillNames: ['frontend-sveltekit']
+			})
+		).toContain('Prefer installed skills for this task: frontend-sveltekit');
+	});
+
+	it('includes preferred role context in the task prompt when present', () => {
+		const prompt = buildTaskThreadPrompt({
+			taskName: 'Use the writer role',
+			taskInstructions: 'Launch with the preferred role context.',
+			projectName: 'Agent Management System Prototype',
+			projectRootFolder: '/tmp/project',
+			defaultArtifactRoot: '/tmp/project/agent_output',
+			preferredRole: {
+				id: 'role_writer',
+				name: 'Writer',
+				description: 'Optimize for clarity.',
+				skillIds: ['docs-writer'],
+				toolIds: ['codex'],
+				mcpIds: ['github'],
+				systemPrompt: 'Write clearly.'
+			}
+		});
+
+		expect(prompt).toContain('Preferred role:');
+		expect(prompt).toContain('Role: Writer');
+		expect(prompt).toContain('Role skills: docs-writer');
+		expect(prompt).toContain('Role MCPs: github');
+	});
+
 	it('includes retrieved published knowledge in the task prompt when available', () => {
 		expect(
 			buildTaskThreadPrompt({

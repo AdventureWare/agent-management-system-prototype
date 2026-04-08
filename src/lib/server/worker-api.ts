@@ -4,6 +4,7 @@ import { error } from '@sveltejs/kit';
 import { normalizeExecutionRequirementName } from '$lib/execution-requirements';
 import {
 	createRun,
+	getExecutionSurfaces,
 	getPendingApprovalForTask,
 	syncTaskExecutionState,
 	syncGovernanceQueues,
@@ -74,7 +75,7 @@ export function assertBootstrapToken(token: string | null | undefined) {
 }
 
 export function authenticateWorker(data: ControlPlaneData, workerId: string, workerToken: string) {
-	const worker = data.workers.find((candidate) => candidate.id === workerId);
+	const worker = getExecutionSurfaces(data).find((candidate) => candidate.id === workerId);
 
 	if (!worker) {
 		throw error(404, 'Worker not found.');
@@ -154,8 +155,11 @@ export function describeWorkerTaskFit(
 	task: Task
 ): WorkerTaskFit {
 	const supportedRoleIds = getWorkerSupportedRoleIds(worker);
+	const hasDesiredRole = Boolean(task.desiredRoleId?.trim());
 	const roleEligible =
-		supportedRoleIds.includes('role_coordinator') || supportedRoleIds.includes(task.desiredRoleId);
+		!hasDesiredRole ||
+		supportedRoleIds.includes('role_coordinator') ||
+		supportedRoleIds.includes(task.desiredRoleId);
 	const capabilityKeys = getWorkerCapabilityKeys(data, worker);
 	const toolKeys = getWorkerToolKeys(data, worker);
 	const activeRunCount = getWorkerActiveRunCount(data, worker);
@@ -179,7 +183,7 @@ export function describeWorkerTaskFit(
 			withinConcurrencyLimit &&
 			missingCapabilityNames.length === 0 &&
 			missingToolNames.length === 0,
-		exactRoleMatch: supportedRoleIds.includes(task.desiredRoleId),
+		exactRoleMatch: hasDesiredRole && supportedRoleIds.includes(task.desiredRoleId),
 		assignedOpenTaskCount: getWorkerAssignedOpenTaskCount(data, worker),
 		activeRunCount,
 		availableRunCapacity: Math.max(0, concurrencyLimit - activeRunCount),
@@ -194,7 +198,7 @@ export function isWorkerEligibleForTask(data: ControlPlaneData, worker: Worker, 
 }
 
 export function getWorkerAssignmentSuggestions(data: ControlPlaneData, task: Task) {
-	return data.workers
+	return getExecutionSurfaces(data)
 		.map((worker) => describeWorkerTaskFit(data, worker, task))
 		.sort((left, right) => {
 			if (left.eligible !== right.eligible) {
@@ -266,7 +270,7 @@ export function updateWorkerHeartbeat(
 ) {
 	return {
 		...data,
-		workers: data.workers.map((worker) =>
+		workers: getExecutionSurfaces(data).map((worker) =>
 			worker.id === workerId
 				? {
 						...worker,

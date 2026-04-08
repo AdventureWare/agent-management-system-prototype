@@ -4,6 +4,7 @@ import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import { WORKER_LOCATION_OPTIONS, WORKER_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	formatRelativeTime,
+	getExecutionSurfaces,
 	loadControlPlane,
 	parseWorkerLocation,
 	parseWorkerStatus,
@@ -28,16 +29,38 @@ function parseListField(value: FormDataEntryValue | null) {
 	);
 }
 
+function parseSelectedIds(form: FormData, key: string) {
+	return [
+		...new Set(
+			form
+				.getAll(key)
+				.map((value) => value.toString().trim())
+				.filter(Boolean)
+		)
+	];
+}
+
 function parsePositiveInteger(value: FormDataEntryValue | null) {
 	const parsed = Number.parseInt(value?.toString() ?? '', 10);
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function getSupportedRoleIds(worker: { roleId: string; supportedRoleIds?: string[] }) {
+	return Array.from(
+		new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+	);
+}
+
 function readWorkerForm(form: FormData) {
+	const supportedRoleIds = parseSelectedIds(form, 'supportedRoleIds');
+	const legacyRoleId = form.get('roleId')?.toString().trim() ?? '';
+
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		providerId: form.get('providerId')?.toString().trim() ?? '',
-		roleId: form.get('roleId')?.toString().trim() ?? '',
+		roleId: supportedRoleIds[0] ?? legacyRoleId,
+		supportedRoleIds:
+			supportedRoleIds.length > 0 ? supportedRoleIds : legacyRoleId ? [legacyRoleId] : [],
 		note: form.get('note')?.toString().trim() ?? '',
 		tags: parseListField(form.get('tags')),
 		skills: parseListField(form.get('skills')),
@@ -51,15 +74,20 @@ function readWorkerForm(form: FormData) {
 
 export const load: PageServerLoad = async ({ params }) => {
 	const data = await loadControlPlane();
-	const worker = data.workers.find((candidate) => candidate.id === params.workerId);
+	const executionSurfaces = getExecutionSurfaces(data);
+	const worker = executionSurfaces.find((candidate) => candidate.id === params.executionSurfaceId);
 
 	if (!worker) {
-		throw error(404, 'Worker not found.');
+		throw error(404, 'Execution surface not found.');
 	}
 
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const provider = providerMap.get(worker.providerId) ?? null;
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+	const supportedRoleIds = getSupportedRoleIds(worker);
+	const supportedRoleNames = supportedRoleIds.map(
+		(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
+	);
 	const activeRunCount = data.runs.filter(
 		(run) => run.workerId === worker.id && ACTIVE_RUN_STATUSES.has(run.status)
 	).length;
@@ -82,22 +110,27 @@ export const load: PageServerLoad = async ({ params }) => {
 		}))
 		.sort((a, b) => a.title.localeCompare(b.title));
 
+	const executionSurfaceDetail = {
+		...worker,
+		providerName: provider?.name ?? 'Unknown provider',
+		providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
+		roleName: supportedRoleNames[0] ?? 'Unknown role',
+		supportedRoleIds,
+		supportedRoleNames,
+		providerCapabilities: provider?.capabilities ?? [],
+		effectiveCapabilities: [
+			...new Set([...(worker.skills ?? []), ...(provider?.capabilities ?? [])])
+		],
+		activeRunCount,
+		effectiveConcurrencyLimit:
+			typeof worker.maxConcurrentRuns === 'number' && Number.isFinite(worker.maxConcurrentRuns)
+				? Math.max(1, worker.maxConcurrentRuns)
+				: worker.capacity
+	};
+
 	return {
-		worker: {
-			...worker,
-			providerName: provider?.name ?? 'Unknown provider',
-			providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
-			roleName: roleMap.get(worker.roleId)?.name ?? 'Unknown role',
-			providerCapabilities: provider?.capabilities ?? [],
-			effectiveCapabilities: [
-				...new Set([...(worker.skills ?? []), ...(provider?.capabilities ?? [])])
-			],
-			activeRunCount,
-			effectiveConcurrencyLimit:
-				typeof worker.maxConcurrentRuns === 'number' && Number.isFinite(worker.maxConcurrentRuns)
-					? Math.max(1, worker.maxConcurrentRuns)
-					: worker.capacity
-		},
+		executionSurface: executionSurfaceDetail,
+		worker: executionSurfaceDetail,
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		statusOptions: WORKER_STATUS_OPTIONS,
@@ -112,8 +145,14 @@ export const actions: Actions = {
 	updateWorker: async ({ params, request }) => {
 		const workerUpdates = readWorkerForm(await request.formData());
 
-		if (!workerUpdates.name || !workerUpdates.providerId || !workerUpdates.roleId) {
-			return fail(400, { message: 'Name, provider, and role are required.' });
+		if (
+			!workerUpdates.name ||
+			!workerUpdates.providerId ||
+			workerUpdates.supportedRoleIds.length === 0
+		) {
+			return fail(400, {
+				message: 'Name, provider, and at least one supported role are required.'
+			});
 		}
 
 		let workerUpdated = false;
@@ -121,7 +160,7 @@ export const actions: Actions = {
 		await updateControlPlane((data) => ({
 			...data,
 			workers: data.workers.map((worker) => {
-				if (worker.id !== params.workerId) {
+				if (worker.id !== params.executionSurfaceId) {
 					return worker;
 				}
 
@@ -140,13 +179,13 @@ export const actions: Actions = {
 		}));
 
 		if (!workerUpdated) {
-			return fail(404, { message: 'Worker not found.' });
+			return fail(404, { message: 'Execution surface not found.' });
 		}
 
 		return {
 			ok: true,
 			successAction: 'updateWorker',
-			workerId: params.workerId
+			workerId: params.executionSurfaceId
 		};
 	}
 };

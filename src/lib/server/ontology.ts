@@ -88,12 +88,15 @@ export function buildOntologyV1Snapshot(input: {
 
 	const actors: OntologyActor[] = data.workers.map((worker) => {
 		const provider = providerMap.get(worker.providerId) ?? null;
+		const roleIds = Array.from(
+			new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+		);
 
 		return {
 			id: toActorIdFromWorkerId(worker.id),
 			name: worker.name,
 			kind: 'ai',
-			roleIds: worker.roleId ? [worker.roleId] : [],
+			roleIds,
 			capabilityNames: capabilityNamesForWorker(worker, provider),
 			executionSurfaceIds: [worker.id]
 		};
@@ -101,13 +104,16 @@ export function buildOntologyV1Snapshot(input: {
 
 	const executionSurfaces: OntologyExecutionSurface[] = data.workers.map((worker) => {
 		const provider = providerMap.get(worker.providerId) ?? null;
+		const roleIds = Array.from(
+			new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+		);
 
 		return {
 			id: worker.id,
 			name: worker.name,
 			status: worker.status,
 			providerId: worker.providerId || null,
-			roleIds: worker.roleId ? [worker.roleId] : [],
+			roleIds,
 			capabilityNames: capabilityNamesForWorker(worker, provider),
 			toolNames: provider ? toolNamesForProvider(provider) : [],
 			sandbox: worker.threadSandboxOverride ?? provider?.defaultThreadSandbox ?? null

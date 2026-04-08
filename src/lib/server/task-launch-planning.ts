@@ -5,13 +5,19 @@ import {
 	selectExecutionProvider,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
 import {
 	getAgentThread,
 	sendAgentThreadMessage,
 	startAgentThread
 } from '$lib/server/agent-threads';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
+import {
+	resolveTaskRolePromptContext,
+	type TaskRolePromptContext
+} from '$lib/server/task-role-context';
 import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import {
 	buildTaskThreadName,
@@ -19,6 +25,10 @@ import {
 	buildPromptDigest
 } from '$lib/server/task-threads';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
+import {
+	describeWorkerTaskFit,
+	getWorkerAssignmentSuggestions
+} from '$lib/server/worker-api';
 import { isValidTaskDate, type TaskDetailFormInput } from '$lib/server/task-form';
 import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';
 import type { AgentSandbox } from '$lib/types/agent-thread';
@@ -48,8 +58,10 @@ export type TaskLaunchPlan = {
 	effectiveRequiredThreadSandbox: AgentSandbox | null;
 	effectiveRequiresReview: boolean;
 	effectiveDesiredRoleId: string;
+	effectiveRole: TaskRolePromptContext;
 	assigneeWorker: Worker | null;
 	effectiveWorker: Worker | null;
+	effectiveRequiredPromptSkillNames: string[];
 	effectiveRequiredCapabilityNames: string[];
 	effectiveRequiredToolNames: string[];
 	effectiveDependencyTaskIds: string[];
@@ -141,7 +153,7 @@ export async function buildTaskLaunchPlan(
 	const assigneeWorker = input.assigneeWorkerId
 		? (current.workers.find((candidate) => candidate.id === input.assigneeWorkerId) ?? null)
 		: null;
-	const effectiveWorker =
+	const directlyAssignedWorker =
 		(input.hasAssigneeWorkerId ? assigneeWorker : null) ??
 		(task.assigneeWorkerId
 			? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
@@ -152,6 +164,44 @@ export async function buildTaskLaunchPlan(
 	const effectiveRequiredToolNames = input.hasRequiredToolNames
 		? input.requiredToolNames
 		: (task.requiredToolNames ?? []);
+	const effectiveRequiredPromptSkillNames = input.hasRequiredPromptSkillNames
+		? input.requiredPromptSkillNames
+		: (task.requiredPromptSkillNames ?? []);
+	const executionRequirementInventory = buildExecutionRequirementInventory(current);
+	const projectForSkillInventory =
+		current.projects.find((candidate) => candidate.id === effectiveProjectId) ?? null;
+	const { role: effectiveRole, effectivePromptSkillNames: normalizedRequiredPromptSkillNames } =
+		resolveTaskRolePromptContext({
+			roles: current.roles,
+			desiredRoleId: effectiveDesiredRoleId,
+			projectRootFolder: projectForSkillInventory?.projectRootFolder ?? '',
+			taskPromptSkillNames: effectiveRequiredPromptSkillNames
+		});
+	const normalizedRequiredCapabilityNames = canonicalizeExecutionRequirementNames(
+		effectiveRequiredCapabilityNames,
+		executionRequirementInventory.capabilityNames
+	);
+	const normalizedRequiredToolNames = canonicalizeExecutionRequirementNames(
+		effectiveRequiredToolNames,
+		executionRequirementInventory.toolNames
+	);
+	const taskForRouting = {
+		...task,
+		requiredPromptSkillNames: normalizedRequiredPromptSkillNames,
+		desiredRoleId: effectiveDesiredRoleId,
+		requiredCapabilityNames: normalizedRequiredCapabilityNames,
+		requiredToolNames: normalizedRequiredToolNames,
+		assigneeWorkerId: directlyAssignedWorker?.id ?? task.assigneeWorkerId ?? null
+	};
+	const assignmentSuggestions = getWorkerAssignmentSuggestions(current, taskForRouting);
+	const bestEligibleSuggestion = assignmentSuggestions.find((suggestion) => suggestion.eligible);
+	const autoSelectedWorker =
+		directlyAssignedWorker ||
+		(normalizedRequiredCapabilityNames.length === 0 && normalizedRequiredToolNames.length === 0)
+			? null
+			: (current.workers.find((candidate) => candidate.id === bestEligibleSuggestion?.workerId) ??
+				null);
+	const effectiveWorker = directlyAssignedWorker ?? autoSelectedWorker;
 	const effectiveDependencyTaskIds = input.hasDependencyTaskSelection
 		? input.dependencyTaskIds
 		: task.dependencyTaskIds;
@@ -193,6 +243,53 @@ export async function buildTaskLaunchPlan(
 		throw new TaskLaunchPlanError(400, 'Target date must use YYYY-MM-DD format.');
 	}
 
+	if (
+		(normalizedRequiredCapabilityNames.length > 0 || normalizedRequiredToolNames.length > 0) &&
+		!effectiveWorker
+	) {
+		throw new TaskLaunchPlanError(
+			409,
+			'No current worker covers this task’s declared capability and tool requirements.'
+		);
+	}
+
+	const effectiveWorkerFit = effectiveWorker
+		? describeWorkerTaskFit(
+				current,
+				effectiveWorker,
+				effectiveWorker.id === taskForRouting.assigneeWorkerId
+					? taskForRouting
+					: { ...taskForRouting, assigneeWorkerId: effectiveWorker.id }
+			)
+		: null;
+
+	if (effectiveWorkerFit && !effectiveWorkerFit.withinConcurrencyLimit) {
+		throw new TaskLaunchPlanError(
+			409,
+			`${effectiveWorkerFit.workerName} is already at its concurrency limit.`
+		);
+	}
+
+	if (
+		effectiveWorkerFit &&
+		(effectiveWorkerFit.missingCapabilityNames.length > 0 ||
+			effectiveWorkerFit.missingToolNames.length > 0)
+	) {
+		const gaps = [
+			effectiveWorkerFit.missingCapabilityNames.length > 0
+				? `capabilities: ${effectiveWorkerFit.missingCapabilityNames.join(', ')}`
+				: '',
+			effectiveWorkerFit.missingToolNames.length > 0
+				? `tools: ${effectiveWorkerFit.missingToolNames.join(', ')}`
+				: ''
+		].filter(Boolean);
+
+		throw new TaskLaunchPlanError(
+			409,
+			`${effectiveWorkerFit.workerName} does not cover this task’s declared ${gaps.join(' · ')}.`
+		);
+	}
+
 	if (!project.projectRootFolder) {
 		throw new TaskLaunchPlanError(
 			400,
@@ -231,6 +328,8 @@ export async function buildTaskLaunchPlan(
 		availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 			.slice(0, 12)
 			.map((skill) => skill.id),
+		requiredPromptSkillNames: normalizedRequiredPromptSkillNames,
+		preferredRole: effectiveRole,
 		relevantKnowledgeItems: taskKnowledge
 	});
 	const provider = selectExecutionProvider(current, effectiveWorker);
@@ -288,10 +387,12 @@ export async function buildTaskLaunchPlan(
 		effectiveRequiredThreadSandbox,
 		effectiveRequiresReview,
 		effectiveDesiredRoleId,
+		effectiveRole,
 		assigneeWorker,
 		effectiveWorker,
-		effectiveRequiredCapabilityNames,
-		effectiveRequiredToolNames,
+		effectiveRequiredPromptSkillNames: normalizedRequiredPromptSkillNames,
+		effectiveRequiredCapabilityNames: normalizedRequiredCapabilityNames,
+		effectiveRequiredToolNames: normalizedRequiredToolNames,
 		effectiveDependencyTaskIds,
 		effectiveTargetDate,
 		provider,
@@ -349,7 +450,7 @@ export async function launchTaskFromPlan(
 	const run = createRun({
 		taskId,
 		workerId: plan.effectiveWorker?.id ?? null,
-		assumedRoleId: plan.task.desiredRoleId,
+		assumedRoleId: plan.effectiveDesiredRoleId || null,
 		providerId,
 		status: 'running',
 		startedAt: now,
@@ -383,7 +484,7 @@ export async function launchTaskFromPlan(
 						expectedOutcome: plan.effectiveExpectedOutcome,
 						projectId: plan.project.id,
 						goalId: plan.effectiveGoalId,
-						assigneeWorkerId: plan.assigneeWorker?.id ?? candidate.assigneeWorkerId,
+						assigneeWorkerId: plan.effectiveWorker?.id ?? candidate.assigneeWorkerId,
 						priority: plan.effectivePriority,
 						riskLevel: plan.effectiveRiskLevel,
 						approvalMode: plan.effectiveApprovalMode,

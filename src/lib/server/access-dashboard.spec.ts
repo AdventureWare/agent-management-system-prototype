@@ -172,7 +172,35 @@ describe('buildAccessDashboardData', () => {
 					authTokenHash: ''
 				}
 			],
-			tasks: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Need prompt skill',
+					summary: 'Task summary',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: '',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: '',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					requiredPromptSkillNames: ['frontend-sveltekit'],
+					requiredCapabilityNames: [],
+					requiredToolNames: [],
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/restricted/project/agent_output',
+					attachments: [],
+					createdAt: '2026-04-06T12:00:00.000Z',
+					updatedAt: '2026-04-06T12:00:00.000Z'
+				}
+			],
 			runs: [],
 			reviews: [],
 			approvals: []
@@ -182,6 +210,7 @@ describe('buildAccessDashboardData', () => {
 			projectBlockerCount: 1,
 			attentionPathCount: 2,
 			macosPromptCount: 1,
+			projectsMissingRequestedPromptSkillsCount: 1,
 			providerNeedsSetupCount: 1,
 			workerAccessIssueCount: 1
 		});

@@ -9,6 +9,14 @@ export type ProjectSkillCatalogEntry = {
 	totalCount: number;
 	projectCount: number;
 	globalCount: number;
+	requestedSkillCount: number;
+	requestingTaskCount: number;
+	missingRequestedSkillCount: number;
+	tasksMissingRequestedSkillCount: number;
+	missingRequestedSkills: Array<{
+		id: string;
+		requestingTaskCount: number;
+	}>;
 	previewSkills: Array<{
 		id: string;
 		sourceLabel: string;
@@ -136,7 +144,7 @@ function finalizeToolEntries(entries: Map<string, ToolAccumulator>) {
 }
 
 export function buildExecutionCapabilityCatalog(
-	data: Pick<ControlPlaneData, 'projects' | 'providers' | 'workers'>
+	data: Pick<ControlPlaneData, 'projects' | 'providers' | 'workers' | 'tasks'>
 ): ExecutionCapabilityCatalog {
 	const capabilityEntries = new Map<string, CapabilityAccumulator>();
 	const toolEntries = new Map<string, ToolAccumulator>();
@@ -212,6 +220,55 @@ export function buildExecutionCapabilityCatalog(
 		projectSkills: [...data.projects]
 			.map((project) => {
 				const installedSkills = listInstalledCodexSkills(project.projectRootFolder);
+				const installedSkillNames = new Set(
+					installedSkills
+						.map((skill) => normalizeExecutionRequirementName(skill.id))
+						.filter((skillName): skillName is string => Boolean(skillName))
+				);
+				const requestedSkillEntries = new Map<
+					string,
+					{
+						id: string;
+						requestingTaskIds: Set<string>;
+					}
+				>();
+
+				for (const task of data.tasks.filter((candidate) => candidate.projectId === project.id)) {
+					for (const promptSkillName of task.requiredPromptSkillNames ?? []) {
+						const normalizedSkillName = normalizeExecutionRequirementName(promptSkillName);
+
+						if (!normalizedSkillName) {
+							continue;
+						}
+
+						const existingEntry = requestedSkillEntries.get(normalizedSkillName) ?? {
+							id: promptSkillName.trim(),
+							requestingTaskIds: new Set<string>()
+						};
+						existingEntry.requestingTaskIds.add(task.id);
+						requestedSkillEntries.set(normalizedSkillName, existingEntry);
+					}
+				}
+
+				const missingRequestedSkillEntries = [...requestedSkillEntries.entries()]
+					.filter(([normalizedSkillName]) => !installedSkillNames.has(normalizedSkillName))
+					.map(([, entry]) => entry);
+				const missingRequestedSkills = missingRequestedSkillEntries
+					.map((entry) => ({
+						id: entry.id,
+						requestingTaskCount: entry.requestingTaskIds.size
+					}))
+					.sort(
+						(left, right) =>
+							right.requestingTaskCount - left.requestingTaskCount ||
+							left.id.localeCompare(right.id)
+					);
+				const requestingTaskCount = new Set(
+					[...requestedSkillEntries.values()].flatMap((entry) => [...entry.requestingTaskIds])
+				).size;
+				const tasksMissingRequestedSkillCount = new Set(
+					missingRequestedSkillEntries.flatMap((entry) => [...entry.requestingTaskIds])
+				).size;
 
 				return {
 					projectId: project.id,
@@ -220,6 +277,11 @@ export function buildExecutionCapabilityCatalog(
 					totalCount: installedSkills.length,
 					projectCount: installedSkills.filter((skill) => skill.project).length,
 					globalCount: installedSkills.filter((skill) => skill.global).length,
+					requestedSkillCount: requestedSkillEntries.size,
+					requestingTaskCount,
+					missingRequestedSkillCount: missingRequestedSkills.length,
+					tasksMissingRequestedSkillCount,
+					missingRequestedSkills: missingRequestedSkills.slice(0, 8),
 					previewSkills: installedSkills.slice(0, 8).map((skill) => ({
 						id: skill.id,
 						sourceLabel: skill.sourceLabel

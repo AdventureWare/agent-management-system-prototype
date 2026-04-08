@@ -5,6 +5,18 @@ describe('buildTaskLaunchContextSummary', () => {
 	it('summarizes the launch surface, prompt context, and requirements', () => {
 		const summary = buildTaskLaunchContextSummary(
 			{
+				roles: [
+					{
+						id: 'role_writer',
+						name: 'Writer',
+						area: 'shared',
+						description: 'Optimize for clear operator-facing writing.',
+						skillIds: ['docs-writer'],
+						toolIds: ['codex'],
+						mcpIds: ['github'],
+						systemPrompt: 'Write clearly and keep unsupported claims explicit.'
+					}
+				],
 				providers: [
 					{
 						id: 'provider_local_codex',
@@ -49,9 +61,10 @@ describe('buildTaskLaunchContextSummary', () => {
 					approvalMode: 'none',
 					requiredThreadSandbox: 'danger-full-access',
 					requiresReview: true,
-					desiredRoleId: '',
+					desiredRoleId: 'role_writer',
 					assigneeWorkerId: 'worker_local',
 					agentThreadId: null,
+					requiredPromptSkillNames: ['skill_1', 'missing-skill'],
 					requiredCapabilityNames: ['planning'],
 					requiredToolNames: ['codex'],
 					blockedReason: '',
@@ -96,6 +109,13 @@ describe('buildTaskLaunchContextSummary', () => {
 		);
 
 		expect(summary).toMatchObject({
+			role: {
+				name: 'Writer',
+				skillIds: ['docs-writer'],
+				toolIds: ['codex'],
+				mcpIds: ['github'],
+				hasSystemPrompt: true
+			},
 			assignedWorker: {
 				name: 'Local worker',
 				status: 'idle',
@@ -122,7 +142,9 @@ describe('buildTaskLaunchContextSummary', () => {
 				includesReadyCondition: false,
 				includesExpectedOutcome: true,
 				includesDelegationPacket: true,
-				publishedKnowledgeCount: 2
+				publishedKnowledgeCount: 2,
+				requiredPromptSkillNames: ['skill_1', 'missing-skill', 'docs-writer'],
+				missingPromptSkillNames: ['skill_1', 'missing-skill', 'docs-writer']
 			},
 			requirements: {
 				capabilityNames: ['planning'],

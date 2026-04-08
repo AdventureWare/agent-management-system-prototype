@@ -118,7 +118,7 @@
 		<MetricCard
 			label="Capacity hours"
 			value={data.metrics.totalCapacityHours}
-			detail={`${data.metrics.overAllocatedWorkerCount} worker(s) over capacity in this window.`}
+			detail={`${data.metrics.overAllocatedWorkerCount} execution surface(s) over capacity in this window.`}
 		/>
 		<MetricCard
 			label="Slack"
@@ -183,9 +183,13 @@
 					</label>
 
 					<label class="block">
-						<span class="mb-2 block text-sm font-medium text-slate-200">Worker scope</span>
+						<span class="mb-2 block text-sm font-medium text-slate-200">
+							Execution surface scope
+						</span>
 						<select class="select text-white" name="workerId">
-							<option selected={data.filters.workerId === ''} value="">All workers</option>
+							<option selected={data.filters.workerId === ''} value="">
+								All execution surfaces
+							</option>
 							{#each data.workerOptions as worker (worker.id)}
 								<option selected={data.filters.workerId === worker.id} value={worker.id}>
 									{worker.name}
@@ -442,14 +446,15 @@
 													{/if}
 													{#if task.eligibleWorkerCount > 0}
 														<p class="text-xs text-slate-400">
-															{task.eligibleWorkerCount} matching worker(s)
+															{task.eligibleWorkerCount} matching execution surface(s)
 															{#if task.suggestedWorkerNames.length > 0}
 																: {task.suggestedWorkerNames.join(', ')}
 															{/if}
 														</p>
 													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
 														<p class="text-xs text-rose-300">
-															No workers currently match this task’s recorded requirements.
+															No execution surfaces currently match this task’s recorded
+															requirements.
 														</p>
 													{/if}
 													{#if task.assignedWorkerEligible === false}
@@ -478,8 +483,8 @@
 								<h3 class="text-xl font-semibold text-white">Undated work pulled into scope</h3>
 								<p class="mt-1 text-sm text-slate-400">
 									These tasks do not yet have a target date, but they are still relevant to the
-									current planning session because of the selected goals, projects, workers, or due
-									outcomes in this window.
+									current planning session because of the selected goals, projects, execution
+									surfaces, or due outcomes in this window.
 								</p>
 							</div>
 
@@ -533,14 +538,15 @@
 													{/if}
 													{#if task.eligibleWorkerCount > 0}
 														<p class="text-xs text-slate-400">
-															{task.eligibleWorkerCount} matching worker(s)
+															{task.eligibleWorkerCount} matching execution surface(s)
 															{#if task.suggestedWorkerNames.length > 0}
 																: {task.suggestedWorkerNames.join(', ')}
 															{/if}
 														</p>
 													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
 														<p class="text-xs text-rose-300">
-															No workers currently match this task’s recorded requirements.
+															No execution surfaces currently match this task’s recorded
+															requirements.
 														</p>
 													{/if}
 													{#if task.assignedWorkerEligible === false}

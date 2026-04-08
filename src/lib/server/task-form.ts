@@ -34,6 +34,7 @@ export type CreateTaskFormInput = {
 	desiredRoleId: string;
 	blockedReason: string;
 	dependencyTaskIds: string[];
+	requiredPromptSkillNames: string[];
 	requiredCapabilityNames: string[];
 	requiredToolNames: string[];
 };
@@ -48,6 +49,7 @@ export type TaskDetailFormInput = CreateTaskFormInput & {
 	hasRequiredThreadSandbox: boolean;
 	hasRequiresReview: boolean;
 	hasDesiredRoleId: boolean;
+	hasRequiredPromptSkillNames: boolean;
 	hasRequiredCapabilityNames: boolean;
 	hasRequiredToolNames: boolean;
 	hasBlockedReason: boolean;
@@ -81,6 +83,7 @@ export type CreateTaskPrefill = {
 	desiredRoleId: string;
 	blockedReason: string;
 	dependencyTaskIds: string[];
+	requiredPromptSkillNames: string;
 	requiredCapabilityNames: string;
 	requiredToolNames: string;
 };
@@ -164,6 +167,9 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		desiredRoleId: readTrimmedValue(form.get('desiredRoleId')),
 		blockedReason: readTrimmedValue(form.get('blockedReason')),
 		dependencyTaskIds: parseIdList(form.getAll('dependencyTaskIds')),
+		requiredPromptSkillNames: parseExecutionRequirementNames(
+			readTrimmedValue(form.get('requiredPromptSkillNames'))
+		),
 		requiredCapabilityNames: parseExecutionRequirementNames(
 			readTrimmedValue(form.get('requiredCapabilityNames'))
 		),
@@ -190,6 +196,7 @@ export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 		hasRequiredThreadSandbox: form.has('requiredThreadSandbox'),
 		hasRequiresReview: form.has('requiresReview'),
 		hasDesiredRoleId: form.has('desiredRoleId'),
+		hasRequiredPromptSkillNames: form.has('requiredPromptSkillNames'),
 		hasRequiredCapabilityNames: form.has('requiredCapabilityNames'),
 		hasRequiredToolNames: form.has('requiredToolNames'),
 		hasBlockedReason: form.has('blockedReason'),
@@ -235,6 +242,7 @@ export function readCreateTaskPrefill(url: URL): CreateTaskPrefill {
 		desiredRoleId: readTrimmedValue(url.searchParams.get('desiredRoleId')),
 		blockedReason: readTrimmedValue(url.searchParams.get('blockedReason')),
 		dependencyTaskIds: parseNameList(url.searchParams.get('dependencyTaskIds')),
+		requiredPromptSkillNames: readTrimmedValue(url.searchParams.get('requiredPromptSkillNames')),
 		requiredCapabilityNames: readTrimmedValue(url.searchParams.get('requiredCapabilityNames')),
 		requiredToolNames: readTrimmedValue(url.searchParams.get('requiredToolNames'))
 	};

@@ -9,6 +9,7 @@ describe('access probe store', () => {
 					projectBlockerCount: 1,
 					attentionPathCount: 1,
 					macosPromptCount: 0,
+					projectsMissingRequestedPromptSkillsCount: 0,
 					providerNeedsSetupCount: 1,
 					workerAccessIssueCount: 1
 				},
@@ -99,7 +100,9 @@ describe('access probe store', () => {
 						authTokenHash: '',
 						providerName: 'Codex',
 						roleName: 'Engineer',
-						workerHref: '/app/workers/worker_1',
+						supportedRoleIds: ['role_1'],
+						supportedRoleNames: ['Engineer'],
+						workerHref: '/app/execution-surfaces/worker_1',
 						accessState: 'provider_needs_setup'
 					}
 				]

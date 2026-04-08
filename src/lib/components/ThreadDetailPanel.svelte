@@ -199,6 +199,7 @@
 		timeStyle: 'short'
 	});
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
+	const THREAD_DETAIL_REFRESH_INTERVAL_MS = Math.max(ACTIVE_REFRESH_INTERVAL_MS, 5_000);
 	const THREAD_HEADER_SHRINK_DISTANCE = 120;
 	const threadStoreState = fromStore(agentThreadStore);
 	type ThreadStateDescriptor = {
@@ -687,7 +688,7 @@
 
 		const intervalId = window.setInterval(() => {
 			void refreshThread();
-		}, ACTIVE_REFRESH_INTERVAL_MS);
+		}, THREAD_DETAIL_REFRESH_INTERVAL_MS);
 
 		return () => {
 			window.clearInterval(intervalId);

@@ -21,8 +21,8 @@
 	const workerRecordState = fromStore(workerRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
-		worker: sourceData.worker
-			? mergeStoredWorkerRecord(sourceData.worker, workerRecordState.current.byId)
+		executionSurface: sourceData.executionSurface
+			? mergeStoredWorkerRecord(sourceData.executionSurface, workerRecordState.current.byId)
 			: null
 	}));
 	let isRefreshing = $state(false);
@@ -42,8 +42,8 @@
 	});
 
 	$effect(() => {
-		if (sourceData.worker) {
-			workerRecordStore.seedWorker(sourceData.worker);
+		if (sourceData.executionSurface) {
+			workerRecordStore.seedWorker(sourceData.executionSurface);
 		}
 	});
 
@@ -170,20 +170,22 @@
 		</article>
 
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">
-			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Worker</p>
-			{#if data.worker}
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+				Execution surface
+			</p>
+			{#if data.executionSurface}
 				<a
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
-					href={resolve(`/app/workers/${data.worker.id}`)}
+					href={resolve(`/app/execution-surfaces/${data.executionSurface.id}`)}
 				>
 					{data.run.workerName}
 				</a>
 				<p class="mt-2 text-sm text-slate-400">
-					{formatWorkerStatusLabel(data.worker.status)} worker
+					{formatWorkerStatusLabel(data.executionSurface.status)} surface
 				</p>
 			{:else}
 				<p class="mt-3 text-lg font-semibold text-white">Unassigned</p>
-				<p class="mt-2 text-sm text-slate-400">No worker was captured on this run.</p>
+				<p class="mt-2 text-sm text-slate-400">No execution surface was captured on this run.</p>
 			{/if}
 		</article>
 

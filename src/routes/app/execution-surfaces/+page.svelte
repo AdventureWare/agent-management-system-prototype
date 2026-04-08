@@ -19,7 +19,7 @@
 	let createWorkerDraftReady = $state(false);
 	let workerName = $state('');
 	let workerProviderId = $state('');
-	let workerRoleId = $state('');
+	let workerSupportedRoleIds = $state.raw<string[]>([]);
 	let workerLocation = $state('cloud');
 	let workerStatus = $state('idle');
 	let workerCapacity = $state('1');
@@ -34,13 +34,21 @@
 	}
 
 	let isCreateModalOpen = $state(modalShouldStartOpen());
-	let workers = $derived.by(() =>
-		data.workers.map((worker) => mergeStoredWorkerRecord(worker, workerRecordState.current.byId))
+	let executionSurfaces = $derived.by(() =>
+		data.executionSurfaces.map((surface) =>
+			mergeStoredWorkerRecord(surface, workerRecordState.current.byId)
+		)
 	);
 
-	let localWorkerCount = $derived(workers.filter((worker) => worker.location === 'local').length);
-	let busyWorkerCount = $derived(workers.filter((worker) => worker.status === 'busy').length);
-	let totalCapacity = $derived(workers.reduce((count, worker) => count + worker.capacity, 0));
+	let localExecutionSurfaceCount = $derived(
+		executionSurfaces.filter((surface) => surface.location === 'local').length
+	);
+	let busyExecutionSurfaceCount = $derived(
+		executionSurfaces.filter((surface) => surface.status === 'busy').length
+	);
+	let totalCapacity = $derived(
+		executionSurfaces.reduce((count, surface) => count + surface.capacity, 0)
+	);
 
 	function locationClass(location: string) {
 		return location === 'local'
@@ -48,7 +56,10 @@
 			: 'border-slate-700 bg-slate-950/70 text-slate-300';
 	}
 
-	function matchesWorker(worker: (typeof data.workers)[number], term: string) {
+	function matchesExecutionSurface(
+		executionSurface: (typeof data.executionSurfaces)[number],
+		term: string
+	) {
 		const normalizedTerm = term.trim().toLowerCase();
 
 		if (!normalizedTerm) {
@@ -56,36 +67,38 @@
 		}
 
 		return [
-			worker.name,
-			worker.note,
-			worker.providerName,
-			worker.roleName,
-			worker.location,
-			worker.status,
-			worker.tags.join(' '),
-			(worker.skills ?? []).join(' '),
-			(worker.providerCapabilities ?? []).join(' '),
-			(worker.effectiveCapabilities ?? []).join(' ')
+			executionSurface.name,
+			executionSurface.note,
+			executionSurface.providerName,
+			executionSurface.supportedRoleNames.join(' '),
+			executionSurface.location,
+			executionSurface.status,
+			executionSurface.tags.join(' '),
+			(executionSurface.skills ?? []).join(' '),
+			(executionSurface.providerCapabilities ?? []).join(' '),
+			(executionSurface.effectiveCapabilities ?? []).join(' ')
 		]
 			.join(' ')
 			.toLowerCase()
 			.includes(normalizedTerm);
 	}
 
-	let filteredWorkers = $derived(workers.filter((worker) => matchesWorker(worker, query)));
+	let filteredExecutionSurfaces = $derived(
+		executionSurfaces.filter((surface) => matchesExecutionSurface(surface, query))
+	);
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createWorker');
 
 	$effect(() => {
-		workerRecordStore.seedWorkers(data.workers);
+		workerRecordStore.seedWorkers(data.executionSurfaces);
 	});
 
 	function defaultWorkerProviderId() {
 		return data.providers[0]?.id ?? '';
 	}
 
-	function defaultWorkerRoleId() {
-		return data.roles[0]?.id ?? '';
+	function defaultWorkerSupportedRoleIds() {
+		return data.roles[0]?.id ? [data.roles[0].id] : [];
 	}
 
 	function defaultWorkerLocation() {
@@ -114,7 +127,7 @@
 		const savedDraft = readFormDraft<{
 			name: string;
 			providerId: string;
-			roleId: string;
+			supportedRoleIds: string[];
 			location: string;
 			status: string;
 			capacity: string;
@@ -125,9 +138,12 @@
 		}>(CREATE_WORKER_DRAFT_KEY);
 
 		if (savedDraft) {
+			const savedSupportedRoleIds = savedDraft.supportedRoleIds ?? [];
+
 			workerName = savedDraft.name ?? '';
 			workerProviderId = savedDraft.providerId ?? defaultWorkerProviderId();
-			workerRoleId = savedDraft.roleId ?? defaultWorkerRoleId();
+			workerSupportedRoleIds =
+				savedSupportedRoleIds.length > 0 ? savedSupportedRoleIds : defaultWorkerSupportedRoleIds();
 			workerLocation = normalizeWorkerLocation(savedDraft.location);
 			workerStatus = normalizeWorkerStatus(savedDraft.status);
 			workerCapacity = savedDraft.capacity ?? '1';
@@ -139,7 +155,8 @@
 		}
 
 		workerProviderId = workerProviderId || defaultWorkerProviderId();
-		workerRoleId = workerRoleId || defaultWorkerRoleId();
+		workerSupportedRoleIds =
+			workerSupportedRoleIds.length > 0 ? workerSupportedRoleIds : defaultWorkerSupportedRoleIds();
 		workerLocation = normalizeWorkerLocation(workerLocation);
 		workerStatus = normalizeWorkerStatus(workerStatus);
 
@@ -154,7 +171,10 @@
 		writeFormDraft(CREATE_WORKER_DRAFT_KEY, {
 			name: workerName,
 			providerId: workerProviderId === defaultWorkerProviderId() ? '' : workerProviderId,
-			roleId: workerRoleId === defaultWorkerRoleId() ? '' : workerRoleId,
+			supportedRoleIds:
+				workerSupportedRoleIds.join(',') === defaultWorkerSupportedRoleIds().join(',')
+					? []
+					: workerSupportedRoleIds,
 			location: workerLocation === defaultWorkerLocation() ? '' : workerLocation,
 			status: workerStatus === defaultWorkerStatus() ? '' : workerStatus,
 			capacity: workerCapacity === '1' ? '' : workerCapacity,
@@ -188,18 +208,18 @@
 	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 		<MetricCard
 			label="Surfaces"
-			value={workers.length}
+			value={executionSurfaces.length}
 			detail="Reachable execution surfaces saved in the control plane."
 		/>
 		<MetricCard
 			label="Local surfaces"
-			value={localWorkerCount}
+			value={localExecutionSurfaceCount}
 			detail="Execution surfaces that can directly touch your machine and repos."
 		/>
 		<MetricCard
 			label="Total capacity"
 			value={totalCapacity}
-			detail={`${busyWorkerCount} surfaces are marked busy right now.`}
+			detail={`${busyExecutionSurfaceCount} surfaces are marked busy right now.`}
 		/>
 	</div>
 
@@ -217,28 +237,28 @@
 
 	<CollectionToolbar
 		title="Surface directory"
-		description="Search by surface name, role, provider, note, or tags, then open one surface for full routing and execution detail."
+		description="Search by surface name, supported roles, provider, note, or tags, then open one surface for full routing and execution detail."
 	>
 		{#snippet controls()}
 			<div class="w-full xl:w-80">
-				<label class="sr-only" for="worker-search">Search workers</label>
+				<label class="sr-only" for="worker-search">Search execution surfaces</label>
 				<input
 					id="worker-search"
 					bind:value={query}
 					class="input text-white placeholder:text-slate-500"
-					placeholder="Search workers"
+					placeholder="Search execution surfaces"
 				/>
 			</div>
 		{/snippet}
 
-		{#if filteredWorkers.length === 0}
-			<p class="ui-empty-state mt-6">No workers match the current search.</p>
+		{#if filteredExecutionSurfaces.length === 0}
+			<p class="ui-empty-state mt-6">No execution surfaces match the current search.</p>
 		{:else}
 			<div class="mt-6 space-y-4">
-				{#each filteredWorkers as worker (worker.id)}
+				{#each filteredExecutionSurfaces as executionSurface (executionSurface.id)}
 					<a
 						class="group block rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-sky-400/40 hover:bg-slate-900"
-						href={resolve(`/app/workers/${worker.id}`)}
+						href={resolve(`/app/execution-surfaces/${executionSurface.id}`)}
 					>
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
@@ -246,55 +266,63 @@
 									<h3
 										class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
 									>
-										{worker.name}
+										{executionSurface.name}
 									</h3>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(executionSurface.status)}`}
 									>
-										{formatWorkerStatusLabel(worker.status)}
+										{formatWorkerStatusLabel(executionSurface.status)}
 									</span>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${locationClass(worker.location)}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${locationClass(executionSurface.location)}`}
 									>
-										{worker.location}
+										{executionSurface.location}
 									</span>
 								</div>
 								<p class="ui-clamp-3 mt-2 text-sm text-slate-300">
-									{worker.note || 'No note saved.'}
+									{executionSurface.note || 'No note saved.'}
 								</p>
 							</div>
 							<div class="min-w-0 text-left text-xs text-slate-500 sm:max-w-56 sm:text-right">
-								<p class="ui-wrap-anywhere">{worker.providerName}</p>
-								<p class="ui-wrap-anywhere mt-1">{worker.roleName}</p>
+								<p class="ui-wrap-anywhere">{executionSurface.providerName}</p>
+								<p class="ui-wrap-anywhere mt-1">
+									{executionSurface.supportedRoleNames.length > 0
+										? executionSurface.supportedRoleNames.join(', ')
+										: 'No supported roles'}
+								</p>
 							</div>
 						</div>
 
 						<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Capacity</p>
-								<p class="mt-2 text-lg font-semibold text-white">{worker.capacity}</p>
+								<p class="mt-2 text-lg font-semibold text-white">{executionSurface.capacity}</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Concurrency</p>
 								<p class="mt-2 text-lg font-semibold text-white">
-									{worker.activeRunCount} / {worker.effectiveConcurrencyLimit}
+									{executionSurface.activeRunCount} / {executionSurface.effectiveConcurrencyLimit}
 								</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Assigned tasks</p>
-								<p class="mt-2 text-lg font-semibold text-white">{worker.assignedTaskCount}</p>
+								<p class="mt-2 text-lg font-semibold text-white">
+									{executionSurface.assignedTaskCount}
+								</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Last run</p>
 								<p class="ui-wrap-anywhere mt-2 text-sm text-white">
-									{worker.latestRunAt ? new Date(worker.latestRunAt).toLocaleString() : 'None'}
+									{executionSurface.latestRunAt
+										? new Date(executionSurface.latestRunAt).toLocaleString()
+										: 'None'}
 								</p>
 							</div>
 						</div>
 
-						{#if worker.tags.length > 0}
+						{#if executionSurface.tags.length > 0}
 							<div class="mt-4 flex flex-wrap gap-2">
-								{#each worker.tags as tag (tag)}
+								{#each executionSurface.tags as tag (tag)}
 									<span
 										class="ui-wrap-anywhere rounded-full border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-300"
 									>
@@ -304,17 +332,17 @@
 							</div>
 						{/if}
 
-						{#if (worker.skills?.length ?? 0) > 0 || (worker.providerCapabilities?.length ?? 0) > 0}
+						{#if (executionSurface.skills?.length ?? 0) > 0 || (executionSurface.providerCapabilities?.length ?? 0) > 0}
 							<div class="mt-4 flex flex-wrap gap-2">
-								{#each worker.skills ?? [] as skill (skill)}
+								{#each executionSurface.skills ?? [] as skill (skill)}
 									<span
 										class="ui-wrap-anywhere rounded-full border border-sky-900/60 bg-sky-950/20 px-2 py-1 text-xs text-sky-100"
 									>
 										{skill}
-										<span class="text-sky-300/70"> · worker</span>
+										<span class="text-sky-300/70"> · surface</span>
 									</span>
 								{/each}
-								{#each worker.providerCapabilities ?? [] as capability (capability)}
+								{#each executionSurface.providerCapabilities ?? [] as capability (capability)}
 									<span
 										class="ui-wrap-anywhere rounded-full border border-emerald-900/60 bg-emerald-950/20 px-2 py-1 text-xs text-emerald-100"
 									>
@@ -334,9 +362,9 @@
 {#if isCreateModalOpen}
 	<AppDialog
 		bind:open={isCreateModalOpen}
-		title="Register worker"
+		title="Register execution surface"
 		description="Add a new execution surface after you confirm the current directory does not already cover the capacity you need."
-		closeLabel="Close register worker form"
+		closeLabel="Close register execution surface form"
 	>
 		<form class="space-y-6" method="POST" action="?/createWorker" data-persist-scope="manual">
 			<label class="block">
@@ -361,12 +389,21 @@
 				</label>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Role</span>
-					<select bind:value={workerRoleId} class="select text-white" name="roleId">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Supported roles</span>
+					<select
+						bind:value={workerSupportedRoleIds}
+						class="select min-h-36 text-white"
+						name="supportedRoleIds"
+						multiple
+					>
 						{#each data.roles as role (role.id)}
 							<option value={role.id}>{role.name}</option>
 						{/each}
 					</select>
+					<p class="mt-2 text-xs text-slate-500">
+						Hold Command or Control to select multiple supported roles. The first selected role is
+						kept as the compatibility fallback.
+					</p>
 				</label>
 			</div>
 
@@ -445,7 +482,7 @@
 				/>
 			</label>
 
-			<AppButton type="submit" variant="primary">Register worker</AppButton>
+			<AppButton type="submit" variant="primary">Register surface</AppButton>
 		</form>
 	</AppDialog>
 {/if}

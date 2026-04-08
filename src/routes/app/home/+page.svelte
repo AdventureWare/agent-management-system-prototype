@@ -355,7 +355,7 @@
 		</h1>
 		<p class="max-w-3xl text-sm text-slate-300">
 			This is the operator view. It keeps the current state, trouble spots, and resumable work on
-			one page so you can check your laptop workers quickly while you are away.
+			one page so you can check your local execution surfaces quickly while you are away.
 		</p>
 		<div class="space-y-2 text-sm text-slate-400">
 			<label

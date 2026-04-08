@@ -9,7 +9,7 @@ export type AppNavigationLinkId =
 	| 'projects'
 	| 'goals'
 	| 'planning'
-	| 'workers'
+	| 'executionSurfaces'
 	| 'roles'
 	| 'providers';
 
@@ -24,7 +24,7 @@ export type AppNavigationRoute =
 	| '/app/projects'
 	| '/app/goals'
 	| '/app/planning'
-	| '/app/workers'
+	| '/app/execution-surfaces'
 	| '/app/roles'
 	| '/app/providers';
 
@@ -78,7 +78,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		title: 'Capacity',
 		description: 'Routing, staffing, and providers',
 		links: [
-			{ id: 'workers', label: 'Surfaces', href: '/app/workers' },
+			{ id: 'executionSurfaces', label: 'Surfaces', href: '/app/execution-surfaces' },
 			{ id: 'roles', label: 'Roles', href: '/app/roles' },
 			{ id: 'providers', label: 'Providers', href: '/app/providers' }
 		]
