@@ -100,9 +100,7 @@ function getWorkerCapabilityKeys(data: ControlPlaneData, worker: Worker) {
 function getWorkerToolKeys(data: ControlPlaneData, worker: Worker) {
 	const provider = data.providers.find((candidate) => candidate.id === worker.providerId) ?? null;
 
-	return new Set(
-		[provider?.launcher ?? ''].map(normalizeExecutionRequirementName).filter(Boolean)
-	);
+	return new Set([provider?.launcher ?? ''].map(normalizeExecutionRequirementName).filter(Boolean));
 }
 
 function getWorkerAssignedOpenTaskCount(data: ControlPlaneData, worker: Worker) {

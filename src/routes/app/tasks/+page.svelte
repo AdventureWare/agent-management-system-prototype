@@ -2404,8 +2404,7 @@
 										{/each}
 									</div>
 									<span class="mt-2 block text-xs text-slate-500">
-										Select a known launcher label to append it from the current provider
-										inventory.
+										Select a known launcher label to append it from the current provider inventory.
 									</span>
 								{/if}
 								{#if data.executionRequirementInventory.tools.length > 0 && createTaskUnknownToolNames.length > 0}

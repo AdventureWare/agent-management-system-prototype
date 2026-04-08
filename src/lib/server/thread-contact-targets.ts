@@ -34,7 +34,9 @@ export function buildThreadContactTarget(thread: AgentThreadDetail): ThreadConta
 		projectLabel: thread.categorization?.projectLabels[0]?.trim() ?? '',
 		roleLabel: thread.categorization?.roleLabels[0]?.trim() ?? '',
 		primaryTaskTitle:
-			thread.relatedTasks.find((task) => task.isPrimary)?.title ?? thread.relatedTasks[0]?.title ?? '',
+			thread.relatedTasks.find((task) => task.isPrimary)?.title ??
+			thread.relatedTasks[0]?.title ??
+			'',
 		relatedTaskCount: thread.relatedTasks.length,
 		lastActivityLabel: thread.lastActivityLabel,
 		threadState: thread.threadState,

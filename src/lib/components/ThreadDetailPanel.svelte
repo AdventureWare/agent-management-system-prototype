@@ -2723,12 +2723,16 @@
 																	</p>
 																	<div class="mt-2 flex flex-wrap items-center gap-2">
 																		{#if target.projectLabel}
-																			<span class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase">
+																			<span
+																				class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+																			>
 																				{target.projectLabel}
 																			</span>
 																		{/if}
 																		{#if target.roleLabel}
-																			<span class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase">
+																			<span
+																				class="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300 uppercase"
+																			>
 																				{target.roleLabel}
 																			</span>
 																		{/if}
@@ -2752,11 +2756,14 @@
 																	</span>
 																</div>
 															</div>
-															<div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+															<div
+																class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500"
+															>
 																<span>Last active {target.lastActivityLabel}</span>
 																{#if target.relatedTaskCount > 0}
 																	<span>
-																		{target.relatedTaskCount} linked task{target.relatedTaskCount === 1
+																		{target.relatedTaskCount} linked task{target.relatedTaskCount ===
+																		1
 																			? ''
 																			: 's'}
 																	</span>
