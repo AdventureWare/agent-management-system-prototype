@@ -91,7 +91,7 @@
 				return false;
 			}
 
-			if (selectedWorkerId !== 'all' && run.workerId !== selectedWorkerId) {
+			if (selectedWorkerId !== 'all' && run.executionSurfaceId !== selectedWorkerId) {
 				return false;
 			}
 
@@ -189,10 +189,10 @@
 			</label>
 
 			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Worker</span>
+				<span class="mb-2 block text-sm font-medium text-slate-200">ExecutionSurface</span>
 				<select bind:value={selectedWorkerId} class="select text-white">
-					<option value="all">All workers</option>
-					{#each data.workers as worker (worker.id)}
+					<option value="all">All executionSurfaces</option>
+					{#each data.executionSurfaces as worker (worker.id)}
 						<option value={worker.id}>{worker.name}</option>
 					{/each}
 				</select>
@@ -245,7 +245,7 @@
 						<tr>
 							<th class="px-3 py-3 font-medium">Run</th>
 							<th class="px-3 py-3 font-medium">Task</th>
-							<th class="px-3 py-3 font-medium">Worker</th>
+							<th class="px-3 py-3 font-medium">ExecutionSurface</th>
 							<th class="px-3 py-3 font-medium">Provider</th>
 							<th class="px-3 py-3 font-medium">Prompt + thread</th>
 							<th class="px-3 py-3 font-medium">Heartbeat + errors</th>

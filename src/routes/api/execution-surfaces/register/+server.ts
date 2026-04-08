@@ -1,18 +1,18 @@
 import { json } from '@sveltejs/kit';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 import {
-	createWorker,
+	createExecutionSurface,
 	loadControlPlane,
-	parseWorkerLocation,
-	parseWorkerStatus,
+	parseExecutionSurfaceLocation,
+	parseExecutionSurfaceStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
 import {
 	assertBootstrapToken,
-	createWorkerAuthToken,
-	hashWorkerToken,
-	toPublicWorker
-} from '$lib/server/worker-api';
+	createExecutionSurfaceAuthToken,
+	hashExecutionSurfaceToken,
+	toPublicExecutionSurface
+} from '$lib/server/execution-surface-api';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 
 export const POST = async ({ request }) => {
@@ -20,7 +20,6 @@ export const POST = async ({ request }) => {
 		bootstrapToken?: string;
 		name?: string;
 		providerId?: string;
-		roleId?: string;
 		supportedRoleIds?: string[];
 		location?: string;
 		status?: string;
@@ -38,17 +37,13 @@ export const POST = async ({ request }) => {
 	const providerId = body.providerId?.trim() ?? '';
 	const supportedRoleIds = Array.from(
 		new Set(
-			[
-				...(Array.isArray(body.supportedRoleIds)
-					? body.supportedRoleIds.map((candidateRoleId) => candidateRoleId.trim()).filter(Boolean)
-					: []),
-				body.roleId?.trim() ?? ''
-			].filter(Boolean)
+			Array.isArray(body.supportedRoleIds)
+				? body.supportedRoleIds.map((candidateRoleId) => candidateRoleId.trim()).filter(Boolean)
+				: []
 		)
 	);
-	const roleId = supportedRoleIds[0] ?? '';
 
-	if (!name || !providerId || !roleId) {
+	if (!name || !providerId || supportedRoleIds.length === 0) {
 		return json(
 			{ error: 'name, providerId, and at least one supported role are required.' },
 			{ status: 400 }
@@ -66,20 +61,19 @@ export const POST = async ({ request }) => {
 	}
 
 	if (missingRoleId) {
-		return json({ error: `Unknown roleId: ${missingRoleId}.` }, { status: 400 });
+		return json({ error: `Unknown supportedRoleId: ${missingRoleId}.` }, { status: 400 });
 	}
 
-	const workerToken = createWorkerAuthToken();
-	let createdWorkerId = '';
+	const executionSurfaceToken = createExecutionSurfaceAuthToken();
+	let createdExecutionSurfaceId = '';
 
 	await updateControlPlane((current) => {
-		const worker = createWorker({
+		const executionSurface = createExecutionSurface({
 			name,
 			providerId,
-			roleId,
 			supportedRoleIds,
-			location: parseWorkerLocation(body.location ?? '', 'cloud'),
-			status: parseWorkerStatus(body.status ?? '', 'idle'),
+			location: parseExecutionSurfaceLocation(body.location ?? '', 'cloud'),
+			status: parseExecutionSurfaceStatus(body.status ?? '', 'idle'),
 			capacity:
 				typeof body.capacity === 'number' && Number.isFinite(body.capacity) && body.capacity > 0
 					? body.capacity
@@ -102,22 +96,26 @@ export const POST = async ({ request }) => {
 					: (null as AgentSandbox | null)
 		});
 
-		worker.authTokenHash = hashWorkerToken(workerToken);
-		createdWorkerId = worker.id;
+		executionSurface.authTokenHash = hashExecutionSurfaceToken(executionSurfaceToken);
+		createdExecutionSurfaceId = executionSurface.id;
 
 		return {
 			...current,
-			workers: [worker, ...current.workers]
+			executionSurfaces: [executionSurface, ...current.executionSurfaces]
 		};
 	});
 
 	const nextData = await loadControlPlane();
-	const createdWorker = nextData.workers.find((worker) => worker.id === createdWorkerId);
+	const createdExecutionSurface = nextData.executionSurfaces.find(
+		(candidate) => candidate.id === createdExecutionSurfaceId
+	);
 
 	return json(
 		{
-			worker: createdWorker ? toPublicWorker(createdWorker) : null,
-			workerToken
+			executionSurface: createdExecutionSurface
+				? toPublicExecutionSurface(createdExecutionSurface)
+				: null,
+			executionSurfaceToken
 		},
 		{ status: 201 }
 	);

@@ -97,7 +97,7 @@ describe('control-plane sqlite backend', () => {
 				],
 				projects: [],
 				goals: [],
-				workers: [],
+				executionSurfaces: [],
 				tasks: [],
 				runs: [],
 				reviews: [],

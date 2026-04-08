@@ -52,7 +52,7 @@ export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 	const workerCounts = new Map<string, number>();
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		workerCounts.set(worker.providerId, (workerCounts.get(worker.providerId) ?? 0) + 1);
 	}
 

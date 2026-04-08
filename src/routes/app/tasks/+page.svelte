@@ -540,7 +540,7 @@
 					successCriteria: form.successCriteria?.toString() ?? '',
 					readyCondition: form.readyCondition?.toString() ?? '',
 					expectedOutcome: form.expectedOutcome?.toString() ?? '',
-					assigneeWorkerId: form.assigneeWorkerId?.toString() ?? '',
+					assigneeExecutionSurfaceId: form.assigneeExecutionSurfaceId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
 					area: ('area' in form ? form.area?.toString() : undefined) ?? 'product',
@@ -586,7 +586,7 @@
 					successCriteria: '',
 					readyCondition: '',
 					expectedOutcome: '',
-					assigneeWorkerId: '',
+					assigneeExecutionSurfaceId: '',
 					targetDate: '',
 					goalId: '',
 					area: 'product',
@@ -793,7 +793,7 @@
 					successCriteria?: string;
 					readyCondition?: string;
 					expectedOutcome?: string;
-					assigneeWorkerId?: string;
+					assigneeExecutionSurfaceId?: string;
 					targetDate?: string;
 					goalId?: string;
 					area?: string;
@@ -829,7 +829,7 @@
 			Boolean(draft.successCriteria?.trim()) ||
 			Boolean(draft.readyCondition?.trim()) ||
 			Boolean(draft.expectedOutcome?.trim()) ||
-			Boolean(draft.assigneeWorkerId?.trim()) ||
+			Boolean(draft.assigneeExecutionSurfaceId?.trim()) ||
 			Boolean(draft.targetDate?.trim()) ||
 			Boolean(draft.goalId?.trim()) ||
 			Boolean(draft.requiredPromptSkillNames?.trim()) ||
@@ -863,7 +863,7 @@
 		createTaskSuccessCriteria = prefill?.successCriteria ?? '';
 		createTaskReadyCondition = prefill?.readyCondition ?? '';
 		createTaskExpectedOutcome = prefill?.expectedOutcome ?? '';
-		createTaskAssigneeWorkerId = prefill?.assigneeWorkerId ?? '';
+		createTaskAssigneeWorkerId = prefill?.assigneeExecutionSurfaceId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
 		createTaskArea = (prefill as { area?: string } | null | undefined)?.area ?? 'product';
@@ -931,7 +931,7 @@
 			createTaskSuccessCriteria = createTaskFormValues.successCriteria;
 			createTaskReadyCondition = createTaskFormValues.readyCondition;
 			createTaskExpectedOutcome = createTaskFormValues.expectedOutcome;
-			createTaskAssigneeWorkerId = createTaskFormValues.assigneeWorkerId;
+			createTaskAssigneeWorkerId = createTaskFormValues.assigneeExecutionSurfaceId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
 			createTaskArea = createTaskFormValues.area;
@@ -1000,7 +1000,7 @@
 			successCriteria: string;
 			readyCondition: string;
 			expectedOutcome: string;
-			assigneeWorkerId: string;
+			assigneeExecutionSurfaceId: string;
 			targetDate: string;
 			goalId: string;
 			area: string;
@@ -1030,7 +1030,7 @@
 			createTaskSuccessCriteria = savedDraft.successCriteria ?? '';
 			createTaskReadyCondition = savedDraft.readyCondition ?? '';
 			createTaskExpectedOutcome = savedDraft.expectedOutcome ?? '';
-			createTaskAssigneeWorkerId = savedDraft.assigneeWorkerId ?? '';
+			createTaskAssigneeWorkerId = savedDraft.assigneeExecutionSurfaceId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
 			createTaskArea = savedDraft.area ?? 'product';
@@ -1088,7 +1088,7 @@
 			successCriteria: createTaskSuccessCriteria,
 			readyCondition: createTaskReadyCondition,
 			expectedOutcome: createTaskExpectedOutcome,
-			assigneeWorkerId: createTaskAssigneeWorkerId,
+			assigneeExecutionSurfaceId: createTaskAssigneeWorkerId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
 			area: createTaskArea === 'product' ? '' : createTaskArea,
@@ -2164,10 +2164,10 @@
 								<select
 									bind:value={createTaskAssigneeWorkerId}
 									class="select text-white"
-									name="assigneeWorkerId"
+									name="assigneeExecutionSurfaceId"
 								>
 									<option value="">Leave unassigned</option>
-									{#each data.workers as worker (worker.id)}
+									{#each data.executionSurfaces as worker (worker.id)}
 										<option value={worker.id}>{worker.name}</option>
 									{/each}
 								</select>

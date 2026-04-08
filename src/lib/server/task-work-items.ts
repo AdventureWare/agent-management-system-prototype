@@ -128,7 +128,7 @@ export function buildTaskWorkItems(
 	options: { now?: number } = {}
 ): TaskWorkItem[] {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const runMap = new Map(data.runs.map((run) => [run.id, run]));
@@ -152,8 +152,8 @@ export function buildTaskWorkItems(
 			return {
 				...task,
 				projectName: project?.name ?? 'No project',
-				assigneeName: task.assigneeWorkerId
-					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+				assigneeName: task.assigneeExecutionSurfaceId
+					? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
 					: 'Unassigned',
 				desiredRoleName: task.desiredRoleId
 					? (roleMap.get(task.desiredRoleId)?.name ?? task.desiredRoleId)

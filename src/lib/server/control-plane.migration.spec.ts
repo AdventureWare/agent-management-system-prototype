@@ -29,7 +29,7 @@ describe('control-plane project migration', () => {
 				providers: [
 					{
 						id: 'provider_local_codex',
-						name: 'Local Codex Worker',
+						name: 'Local Codex ExecutionSurface',
 						kind: 'local',
 						description: 'Runs on the Mac and can access local repos.'
 					}
@@ -49,7 +49,7 @@ describe('control-plane project migration', () => {
 					}
 				],
 				goals: [],
-				workers: [],
+				executionSurfaces: [],
 				tasks: [],
 				runs: []
 			})
@@ -96,7 +96,7 @@ describe('control-plane project migration', () => {
 					}
 				],
 				goals: [],
-				workers: [],
+				executionSurfaces: [],
 				tasks: [],
 				runs: [],
 				reviews: [],
@@ -130,7 +130,7 @@ describe('control-plane project migration', () => {
 					}
 				],
 				goals: [],
-				workers: [],
+				executionSurfaces: [],
 				tasks: [
 					{
 						id: 'task_1',
@@ -145,7 +145,7 @@ describe('control-plane project migration', () => {
 						approvalMode: 'none',
 						requiresReview: true,
 						desiredRoleId: '',
-						assigneeWorkerId: null,
+						assigneeExecutionSurfaceId: null,
 						blockedReason: '',
 						dependencyTaskIds: [],
 						runCount: 0,
@@ -159,7 +159,7 @@ describe('control-plane project migration', () => {
 					{
 						id: 'run_1',
 						taskId: 'task_1',
-						workerId: null,
+						executionSurfaceId: null,
 						providerId: null,
 						status: 'completed',
 						createdAt: '2026-03-26T00:00:00.000Z',

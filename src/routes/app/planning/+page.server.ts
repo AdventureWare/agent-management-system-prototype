@@ -84,7 +84,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		endDate: normalizedEndDate,
 		projectId: readFilterValue(url.searchParams.get('projectId')),
 		goalId: readFilterValue(url.searchParams.get('goalId')),
-		workerId: readFilterValue(url.searchParams.get('workerId')),
+		executionSurfaceId: readFilterValue(url.searchParams.get('executionSurfaceId')),
 		includeUnscheduled:
 			includeUnscheduledValues.length === 0 || includeUnscheduledValues.includes('true')
 	});
@@ -192,7 +192,7 @@ export const actions: Actions = {
 		const rawEndDate = readFilterValue(form.get('endDate')?.toString() ?? '');
 		const projectId = readFilterValue(form.get('projectId')?.toString() ?? '');
 		const goalId = readFilterValue(form.get('goalId')?.toString() ?? '');
-		const workerId = readFilterValue(form.get('workerId')?.toString() ?? '');
+		const executionSurfaceId = readFilterValue(form.get('executionSurfaceId')?.toString() ?? '');
 		const includeUnscheduledValues = form
 			.getAll('includeUnscheduled')
 			.map((value) => value.toString());
@@ -210,7 +210,7 @@ export const actions: Actions = {
 			endDate,
 			projectId,
 			goalId,
-			workerId,
+			executionSurfaceId,
 			includeUnscheduled
 		});
 		const goalIds = planningData.goalsInScope.map((goal) => goal.id);
@@ -232,7 +232,7 @@ export const actions: Actions = {
 			windowEnd: endDate,
 			projectId: projectId || null,
 			goalId: goalId || null,
-			workerId: workerId || null,
+			executionSurfaceId: executionSurfaceId || null,
 			includeUnscheduled,
 			goalIds,
 			taskIds,

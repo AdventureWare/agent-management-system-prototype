@@ -13,7 +13,7 @@ const createRun = vi.hoisted(() =>
 	vi.fn(
 		(input: {
 			taskId: string;
-			workerId: string | null;
+			executionSurfaceId: string | null;
 			providerId: string | null;
 			status: string;
 			threadId: string | null;
@@ -26,7 +26,7 @@ const createRun = vi.hoisted(() =>
 		}) => ({
 			id: 'run_test',
 			taskId: input.taskId,
-			workerId: input.workerId,
+			executionSurfaceId: input.executionSurfaceId,
 			providerId: input.providerId,
 			status: input.status,
 			createdAt: input.startedAt,
@@ -101,7 +101,7 @@ const createTask = vi.hoisted(() =>
 			requiredThreadSandbox: input.requiredThreadSandbox ?? null,
 			requiresReview: input.requiresReview,
 			desiredRoleId: input.desiredRoleId,
-			assigneeWorkerId: null,
+			assigneeExecutionSurfaceId: null,
 			agentThreadId: null,
 			requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
@@ -205,7 +205,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			decisionType: input.decisionType,
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-03-30T12:00:00.000Z',
-			decidedByWorkerId: null
+			decidedByExecutionSurfaceId: null
 		})
 	),
 	createTask,
@@ -241,8 +241,8 @@ vi.mock('$lib/server/control-plane', () => ({
 			null
 	),
 	getExecutionSurfaces: vi.fn(
-		(data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>) =>
-			data.executionSurfaces ?? data.workers
+		(data: Pick<ControlPlaneData, 'executionSurfaces' | 'executionSurfaces'>) =>
+			data.executionSurfaces ?? data.executionSurfaces
 	),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = syncTaskExecutionStateLike(
@@ -347,7 +347,7 @@ describe('task detail page server actions', () => {
 			providers: [
 				{
 					id: 'provider_local_codex',
-					name: 'Local Codex Worker',
+					name: 'Local Codex ExecutionSurface',
 					service: 'OpenAI',
 					kind: 'local',
 					description: 'local',
@@ -403,7 +403,7 @@ describe('task detail page server actions', () => {
 					targetDate: null
 				}
 			],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -418,7 +418,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -559,7 +559,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -655,7 +655,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -730,7 +730,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -882,7 +882,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -908,7 +908,7 @@ describe('task detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_reviewer',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -1149,7 +1149,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'run_previous',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: 'provider_local_codex',
 					status: 'completed',
 					createdAt: '2026-03-30T12:10:00.000Z',
@@ -1226,7 +1226,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: 'provider_local_codex',
 					status: 'running',
 					createdAt: '2026-03-30T12:10:00.000Z',
@@ -1281,7 +1281,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: 'provider_local_codex',
 					status: 'running',
 					createdAt: '2026-03-30T12:00:00.000Z',
@@ -1453,12 +1453,12 @@ describe('task detail page server actions', () => {
 					description: 'Coordinates work'
 				}
 			],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_1',
 					name: 'Local operator',
 					providerId: 'provider_local_codex',
-					roleId: 'role_coordinator',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -1473,13 +1473,13 @@ describe('task detail page server actions', () => {
 			tasks: [
 				{
 					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
-					assigneeWorkerId: 'worker_1'
+					assigneeExecutionSurfaceId: 'worker_1'
 				}
 			]
 		};
 
 		const form = new FormData();
-		form.set('assigneeWorkerId', 'worker_1');
+		form.set('assigneeExecutionSurfaceId', 'worker_1');
 
 		await actions.launchTaskSession({
 			params: { taskId: 'task_1' },
@@ -1522,12 +1522,12 @@ describe('task detail page server actions', () => {
 			'danger-full-access';
 		controlPlaneState.current = {
 			...(controlPlaneState.current as ControlPlaneData),
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_1',
 					name: 'Local operator',
 					providerId: 'provider_local_codex',
-					roleId: 'role_coordinator',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -1542,13 +1542,13 @@ describe('task detail page server actions', () => {
 			tasks: [
 				{
 					...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
-					assigneeWorkerId: 'worker_1'
+					assigneeExecutionSurfaceId: 'worker_1'
 				}
 			]
 		};
 
 		const form = new FormData();
-		form.set('assigneeWorkerId', 'worker_1');
+		form.set('assigneeExecutionSurfaceId', 'worker_1');
 		form.set('requiredThreadSandbox', 'workspace-write');
 
 		await actions.launchTaskSession({
@@ -1588,7 +1588,7 @@ describe('task detail page server actions', () => {
 				{
 					id: 'run_previous',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: 'provider_local_codex',
 					status: 'completed',
 					createdAt: '2026-03-30T12:10:00.000Z',

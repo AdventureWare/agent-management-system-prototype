@@ -15,7 +15,7 @@ const createRunMock = vi.hoisted(() =>
 	vi.fn((input: { taskId: string; agentThreadId?: string | null; status?: string }) => ({
 		id: `run_${input.taskId}`,
 		taskId: input.taskId,
-		workerId: null,
+		executionSurfaceId: null,
 		providerId: null,
 		status: input.status ?? 'queued',
 		createdAt: '2026-03-31T10:00:00.000Z',
@@ -77,7 +77,7 @@ const createTaskMock = vi.hoisted(() =>
 			requiredThreadSandbox: input.requiredThreadSandbox ?? null,
 			requiresReview: input.requiresReview ?? true,
 			desiredRoleId: input.desiredRoleId,
-			assigneeWorkerId: null,
+			assigneeExecutionSurfaceId: null,
 			agentThreadId: null,
 			requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 			blockedReason: input.blockedReason ?? '',
@@ -335,7 +335,7 @@ describe('tasks page server actions', () => {
 					taskIds: ['task_existing']
 				}
 			],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_existing',
@@ -350,7 +350,7 @@ describe('tasks page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],

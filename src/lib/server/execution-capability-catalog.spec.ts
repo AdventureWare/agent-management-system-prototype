@@ -52,12 +52,12 @@ describe('buildExecutionCapabilityCatalog', () => {
 					notes: ''
 				}
 			],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_one',
-					name: 'Worker One',
+					name: 'ExecutionSurface One',
 					providerId: 'provider_local',
-					roleId: 'role_builder',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -71,9 +71,9 @@ describe('buildExecutionCapabilityCatalog', () => {
 				},
 				{
 					id: 'worker_two',
-					name: 'Worker Two',
+					name: 'ExecutionSurface Two',
 					providerId: 'provider_cloud',
-					roleId: 'role_researcher',
+					supportedRoleIds: [],
 					location: 'cloud',
 					status: 'offline',
 					capacity: 1,
@@ -100,7 +100,7 @@ describe('buildExecutionCapabilityCatalog', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: '',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					requiredPromptSkillNames: ['frontend-sveltekit', 'docs-writer'],
 					requiredCapabilityNames: [],

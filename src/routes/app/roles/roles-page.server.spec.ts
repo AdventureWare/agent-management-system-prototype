@@ -38,7 +38,9 @@ const createRoleMock = vi.hoisted(() =>
 
 vi.mock('$lib/server/control-plane', () => ({
 	createRole: createRoleMock,
-	getExecutionSurfaces: vi.fn((data: ControlPlaneData) => data.executionSurfaces ?? data.workers),
+	getExecutionSurfaces: vi.fn(
+		(data: ControlPlaneData) => data.executionSurfaces ?? data.executionSurfaces
+	),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
@@ -71,31 +73,11 @@ describe('roles page server', () => {
 			],
 			projects: [],
 			goals: [],
-			workers: [
-				{
-					id: 'worker_local',
-					name: 'Local surface',
-					providerId: 'provider_local',
-					roleId: '',
-					supportedRoleIds: ['role_writer'],
-					location: 'local',
-					status: 'idle',
-					capacity: 1,
-					registeredAt: '2026-04-08T10:00:00.000Z',
-					lastSeenAt: '2026-04-08T10:00:00.000Z',
-					note: '',
-					tags: [],
-					skills: ['documentation-writing'],
-					threadSandboxOverride: null,
-					authTokenHash: ''
-				}
-			],
 			executionSurfaces: [
 				{
 					id: 'worker_local',
 					name: 'Local surface',
 					providerId: 'provider_local',
-					roleId: '',
 					supportedRoleIds: ['role_writer'],
 					location: 'local',
 					status: 'idle',
@@ -124,7 +106,7 @@ describe('roles page server', () => {
 					requiredThreadSandbox: null,
 					requiresReview: true,
 					desiredRoleId: 'role_writer',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],

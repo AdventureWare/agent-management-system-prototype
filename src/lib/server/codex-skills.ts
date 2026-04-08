@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 
@@ -13,6 +13,12 @@ export type InstalledCodexSkill = {
 type SkillMetadata = {
 	id: string;
 	description: string;
+};
+
+export type CreatedProjectCodexSkill = {
+	skillId: string;
+	skillDirectory: string;
+	skillFilePath: string;
 };
 
 const SKILL_METADATA_CACHE_TTL_MS = 10_000;
@@ -99,6 +105,99 @@ function listSkillMetadata(root: string) {
 	});
 
 	return skills;
+}
+
+function invalidateSkillMetadataCache(roots: string[]) {
+	for (const root of roots) {
+		if (root) {
+			skillMetadataCache.delete(root);
+		}
+	}
+}
+
+export function normalizeCodexSkillId(value: string) {
+	return value
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9._/\s-]/g, '')
+		.replace(/[\/\s]+/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/^-|-$/g, '');
+}
+
+function buildProjectSkillTemplate(input: { skillId: string; description: string }) {
+	return [
+		'---',
+		`name: ${input.skillId}`,
+		`description: ${input.description}`,
+		'---',
+		'',
+		`# ${input.skillId}`,
+		'',
+		'## When to use this skill',
+		'',
+		'- Use this skill when the task repeatedly needs project-specific guidance in this area.',
+		'- Keep the trigger language specific enough that it only loads when it materially improves execution quality.',
+		'',
+		'## Workflow',
+		'',
+		'1. Inspect the relevant project files and current task context before making changes.',
+		'2. Apply the project-specific constraints, patterns, or review checklist captured here.',
+		'3. Validate the result with the narrowest reliable check for the change.',
+		'',
+		'## Project notes',
+		'',
+		'- Add the project-specific heuristics, guardrails, and references this skill should enforce.',
+		'- Keep this file concise and move large references into sibling files only when needed.'
+	].join('\n');
+}
+
+export function createProjectCodexSkill(input: {
+	projectRootFolder: string;
+	skillId: string;
+	description: string;
+}) {
+	const projectRootFolder = input.projectRootFolder.trim();
+	const skillId = normalizeCodexSkillId(input.skillId);
+	const description = input.description.trim();
+
+	if (!projectRootFolder) {
+		throw new Error('Project root folder is required to create a project skill.');
+	}
+
+	if (!skillId) {
+		throw new Error('Skill ID is required.');
+	}
+
+	if (!description) {
+		throw new Error('Skill description is required.');
+	}
+
+	const projectAgentsRoot = resolve(projectRootFolder, '.agents');
+	const projectSkillsRoot = resolve(projectAgentsRoot, 'skills');
+	const skillDirectory = resolve(projectSkillsRoot, skillId);
+	const skillFilePath = resolve(skillDirectory, 'SKILL.md');
+
+	if (existsSync(skillFilePath)) {
+		throw new Error(`Project skill "${skillId}" already exists.`);
+	}
+
+	mkdirSync(skillDirectory, { recursive: true });
+	writeFileSync(
+		skillFilePath,
+		buildProjectSkillTemplate({
+			skillId,
+			description
+		}),
+		'utf8'
+	);
+	invalidateSkillMetadataCache([projectAgentsRoot, projectSkillsRoot]);
+
+	return {
+		skillId,
+		skillDirectory,
+		skillFilePath
+	} satisfies CreatedProjectCodexSkill;
 }
 
 export function listInstalledCodexSkills(

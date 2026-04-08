@@ -210,8 +210,8 @@ const ENTITY_PROFILES = [
 		keywords: ['project', 'projects', 'repo', 'repos', 'repository', 'workspace']
 	},
 	{
-		label: 'Worker',
-		keywords: ['provider', 'providers', 'role', 'roles', 'worker', 'workers']
+		label: 'ExecutionSurface',
+		keywords: ['provider', 'providers', 'role', 'roles', 'worker', 'executionSurfaces']
 	},
 	{
 		label: 'Run',

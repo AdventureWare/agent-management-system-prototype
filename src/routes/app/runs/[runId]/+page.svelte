@@ -3,14 +3,17 @@
 	import { resolve } from '$app/paths';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
-	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
+	import {
+		mergeStoredExecutionSurfaceRecord,
+		executionSurfaceRecordStore
+	} from '$lib/client/execution-surface-record-store';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
 	import {
 		formatRunStatusLabel,
-		formatWorkerStatusLabel,
+		formatExecutionSurfaceStatusLabel,
 		runStatusToneClass
 	} from '$lib/types/control-plane';
 	import { fromStore } from 'svelte/store';
@@ -18,11 +21,14 @@
 	let props = $props<{ data: PageData }>();
 	let refreshedData = $state.raw<PageData | null>(null);
 	let sourceData = $derived(refreshedData ?? props.data);
-	const workerRecordState = fromStore(workerRecordStore);
+	const workerRecordState = fromStore(executionSurfaceRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
 		executionSurface: sourceData.executionSurface
-			? mergeStoredWorkerRecord(sourceData.executionSurface, workerRecordState.current.byId)
+			? mergeStoredExecutionSurfaceRecord(
+					sourceData.executionSurface,
+					workerRecordState.current.byId
+				)
 			: null
 	}));
 	let isRefreshing = $state(false);
@@ -43,7 +49,7 @@
 
 	$effect(() => {
 		if (sourceData.executionSurface) {
-			workerRecordStore.seedWorker(sourceData.executionSurface);
+			executionSurfaceRecordStore.seedExecutionSurface(sourceData.executionSurface);
 		}
 	});
 
@@ -181,7 +187,7 @@
 					{data.run.workerName}
 				</a>
 				<p class="mt-2 text-sm text-slate-400">
-					{formatWorkerStatusLabel(data.executionSurface.status)} surface
+					{formatExecutionSurfaceStatusLabel(data.executionSurface.status)} surface
 				</p>
 			{:else}
 				<p class="mt-3 text-lg font-semibold text-white">Unassigned</p>

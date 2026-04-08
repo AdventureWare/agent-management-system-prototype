@@ -214,7 +214,7 @@ function buildTaskResponseAction(input: {
 		taskApprovalMode: task.approvalMode,
 		taskRequiresReview: task.requiresReview,
 		taskDesiredRoleId: task.desiredRoleId,
-		taskAssigneeWorkerId: task.assigneeWorkerId ?? '',
+		taskAssigneeWorkerId: task.assigneeExecutionSurfaceId ?? '',
 		taskTargetDate: task.targetDate ?? '',
 		taskRequiredCapabilityNames: task.requiredCapabilityNames ?? [],
 		taskRequiredToolNames: task.requiredToolNames ?? [],
@@ -328,7 +328,7 @@ function reopenTasksForThreadRetry(input: {
 
 		return createRun({
 			taskId: task.id,
-			workerId: latestRun?.workerId ?? null,
+			executionSurfaceId: latestRun?.executionSurfaceId ?? null,
 			assumedRoleId: latestRun?.assumedRoleId ?? task.desiredRoleId,
 			providerId: latestRun?.providerId ?? null,
 			status: 'running',

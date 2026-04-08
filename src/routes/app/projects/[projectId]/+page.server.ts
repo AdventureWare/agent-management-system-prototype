@@ -45,15 +45,15 @@ export const load: PageServerLoad = async ({ params }) => {
 		throw error(404, 'Project not found.');
 	}
 
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const relatedTasks = data.tasks
 		.filter((task) => task.projectId === project.id)
 		.map((task) => ({
 			...task,
 			goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
-			assigneeName: task.assigneeWorkerId
-				? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+			assigneeName: task.assigneeExecutionSurfaceId
+				? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
 				: 'Unassigned',
 			openReview: getOpenReviewForTask(data, task.id),
 			pendingApproval: getPendingApprovalForTask(data, task.id),

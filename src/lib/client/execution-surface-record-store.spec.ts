@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
+import {
+	mergeStoredExecutionSurfaceRecord,
+	executionSurfaceRecordStore
+} from '$lib/client/execution-surface-record-store';
 
-describe('workerRecordStore', () => {
+describe('executionSurfaceRecordStore', () => {
 	beforeEach(() => {
-		workerRecordStore.reset();
+		executionSurfaceRecordStore.reset();
 	});
 
 	it('keeps the newest worker fields across list and detail snapshots', () => {
-		workerRecordStore.seedWorkers([
+		executionSurfaceRecordStore.seedExecutionSurfaces([
 			{
 				id: 'worker-1',
 				name: 'Original worker',
@@ -16,14 +19,14 @@ describe('workerRecordStore', () => {
 			}
 		]);
 
-		workerRecordStore.seedWorker({
+		executionSurfaceRecordStore.seedExecutionSurface({
 			id: 'worker-1',
 			name: 'Updated worker',
 			status: 'busy',
 			note: 'Handling a long-running task'
 		});
 
-		expect(get(workerRecordStore).byId['worker-1']).toMatchObject({
+		expect(get(executionSurfaceRecordStore).byId['worker-1']).toMatchObject({
 			id: 'worker-1',
 			name: 'Updated worker',
 			status: 'busy',
@@ -32,25 +35,25 @@ describe('workerRecordStore', () => {
 	});
 
 	it('overlays stored worker fields onto page-local worker shapes', () => {
-		workerRecordStore.seedWorker({
+		executionSurfaceRecordStore.seedExecutionSurface({
 			id: 'worker-7',
 			status: 'offline',
 			providerName: 'Local shell'
 		});
 
 		expect(
-			mergeStoredWorkerRecord(
+			mergeStoredExecutionSurfaceRecord(
 				{
 					id: 'worker-7',
 					status: 'idle',
-					name: 'Worker Seven'
+					name: 'ExecutionSurface Seven'
 				},
-				get(workerRecordStore).byId
+				get(executionSurfaceRecordStore).byId
 			)
 		).toMatchObject({
 			id: 'worker-7',
 			status: 'offline',
-			name: 'Worker Seven',
+			name: 'ExecutionSurface Seven',
 			providerName: 'Local shell'
 		});
 	});

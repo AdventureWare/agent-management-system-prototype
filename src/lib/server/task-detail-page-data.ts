@@ -11,7 +11,7 @@ import { buildExecutionRequirementInventory } from '$lib/server/execution-requir
 import { buildTaskLaunchContextSummary } from '$lib/server/task-launch-context-summary';
 import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
 import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
-import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
+import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-surface-api';
 import { buildTaskExecutionPreflight } from '$lib/server/task-execution-preflight';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
@@ -42,7 +42,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 	}
 
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
@@ -77,20 +77,20 @@ export async function loadTaskDetailPageData(taskId: string) {
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
 	const availableSkillSummary = summarizeInstalledSkills(availableSkills);
-	const assignedWorker = task.assigneeWorkerId
-		? (workerMap.get(task.assigneeWorkerId) ?? null)
+	const assignedWorker = task.assigneeExecutionSurfaceId
+		? (workerMap.get(task.assigneeExecutionSurfaceId) ?? null)
 		: null;
 	const recentDecisions = buildRecentTaskDecisionViews(
 		data.decisions ?? [],
 		task.id,
 		formatRelativeTime
 	);
-	const rawAssignmentSuggestions = getWorkerAssignmentSuggestions(data, task);
+	const rawAssignmentSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
 	const assignmentSuggestions = buildAssignmentSuggestionViews(
 		rawAssignmentSuggestions,
 		data.roles,
 		data.providers,
-		task.assigneeWorkerId
+		task.assigneeExecutionSurfaceId
 	);
 	const executionPreflight = buildTaskExecutionPreflight(task, rawAssignmentSuggestions);
 	const executionRequirementInventory = buildExecutionRequirementInventory(data);
@@ -148,7 +148,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		goals: buildTaskGoalOptions(data.goals),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
-		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
+		executionSurfaces: [...data.executionSurfaces].sort((a, b) => a.name.localeCompare(b.name)),
 		assignmentSuggestions,
 		executionPreflight,
 		executionRequirementInventory,

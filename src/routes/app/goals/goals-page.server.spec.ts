@@ -6,23 +6,18 @@ const controlPlaneState = vi.hoisted(() => ({
 	saved: null as ControlPlaneData | null
 }));
 
-const deleteGoalMock = vi.hoisted(() =>
-	vi.fn((data: ControlPlaneData, goalId: string) => ({
-		...data,
-		goals: data.goals.filter((goal) => goal.id !== goalId)
-	}))
-);
 const assistGoalWritingMock = vi.hoisted(() =>
 	vi.fn(async () => ({
-		name: 'Clarify goal creation before operators structure work',
+		name: 'Help operators define goals clearly before linking work',
 		summary:
-			'This goal makes the drafting step clearer so operators can define the intended outcome before linking tasks and projects. It matters because unclear goals create planning churn.',
+			'This goal improves the goal-writing flow so operators can describe the outcome before managing structure. It matters because weak goal framing makes linked execution harder to trust.',
 		successSignal:
-			'New goals are saved with a concrete outcome and a visible review condition before linked execution begins.',
+			'Most new goals include a concrete outcome and a visible proof point before execution work is linked.',
 		changeSummary:
-			'Rewrote the goal draft into a more concrete outcome with a clearer summary and proof point.'
+			'Rewrote the goal draft into a clearer outcome, summary, and observable success signal.'
 	}))
 );
+
 const updateControlPlaneMock = vi.hoisted(() =>
 	vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
@@ -44,6 +39,10 @@ vi.mock('$lib/server/artifact-browser', () => ({
 	}))
 }));
 
+vi.mock('$lib/server/folder-options', () => ({
+	loadFolderPickerOptions: vi.fn(async () => [])
+}));
+
 vi.mock('$lib/server/goal-relationships', () => ({
 	applyGoalRelationships: vi.fn((input: { data: ControlPlaneData }) => input.data),
 	getGoalChildGoals: vi.fn(() => []),
@@ -52,12 +51,11 @@ vi.mock('$lib/server/goal-relationships', () => ({
 	sortGoalsByName: vi.fn((goals: unknown[]) => goals),
 	sortProjectsByName: vi.fn((projects: unknown[]) => projects),
 	sortTasksByTitle: vi.fn((tasks: unknown[]) => tasks),
-	suggestGoalArtifactPath: vi.fn(() => ''),
-	wouldCreateGoalCycle: vi.fn(() => false)
+	suggestGoalArtifactPath: vi.fn(() => '/tmp/project/agent_output/goals/intake-quality')
 }));
 
 vi.mock('$lib/server/control-plane', () => ({
-	deleteGoal: deleteGoalMock,
+	createGoal: vi.fn(),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseArea: vi.fn((_value: string, fallback: string) => fallback),
 	parseGoalStatus: vi.fn((_value: string, fallback: string) => fallback),
@@ -70,17 +68,16 @@ vi.mock('$lib/server/goal-writing-assist', () => ({
 
 import { actions } from './+page.server';
 
-describe('goal detail page server actions', () => {
+describe('goals page server actions', () => {
 	beforeEach(() => {
 		assistGoalWritingMock.mockClear();
-		deleteGoalMock.mockClear();
 		updateControlPlaneMock.mockClear();
 		controlPlaneState.current = {
 			providers: [],
 			roles: [],
 			projects: [
 				{
-					id: 'project_1',
+					id: 'project_ams',
 					name: 'Agent Management System Prototype',
 					summary: 'Primary app project',
 					projectRootFolder: '/tmp/project',
@@ -92,29 +89,27 @@ describe('goal detail page server actions', () => {
 			],
 			goals: [
 				{
-					id: 'goal_1',
-					name: 'Allow deletion',
+					id: 'goal_parent',
+					name: 'Strengthen planning quality',
 					area: 'product',
 					status: 'running',
-					summary: 'Goal summary',
-					artifactPath: '/tmp/project/agent_output/goals/goal_1',
+					summary: 'Make planning records easier to trust.',
+					artifactPath: '/tmp/project/agent_output/goals/planning-quality',
+					successSignal: 'Operators can structure work without cleanup.',
 					parentGoalId: null,
-					projectIds: ['project_1'],
-					taskIds: ['task_1'],
-					targetDate: null,
-					planningPriority: 0,
-					confidence: 'medium'
+					projectIds: ['project_ams'],
+					taskIds: ['task_1']
 				}
 			],
 			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
-					title: 'Audit goal quality checks',
-					summary: 'Review the quality checks in the goal editor.',
-					projectId: 'project_1',
+					title: 'Map goal creation friction',
+					summary: 'Inspect where goal setup breaks down.',
+					projectId: 'project_ams',
 					area: 'product',
-					goalId: 'goal_1',
+					goalId: 'goal_parent',
 					priority: 'medium',
 					status: 'ready',
 					riskLevel: 'medium',
@@ -140,51 +135,17 @@ describe('goal detail page server actions', () => {
 		controlPlaneState.saved = null;
 	});
 
-	it('redirects after deleting a goal', async () => {
-		await expect(
-			actions.deleteGoal({
-				params: { goalId: 'goal_1' }
-			} as never)
-		).rejects.toMatchObject({
-			status: 303,
-			location: '/app/goals?deleted=1'
-		});
-
-		expect(deleteGoalMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				goals: expect.arrayContaining([expect.objectContaining({ id: 'goal_1' })])
-			}),
-			'goal_1'
-		);
-		expect(controlPlaneState.saved?.goals).toEqual([]);
-	});
-
-	it('returns not found when deleting an unknown goal', async () => {
-		const result = await actions.deleteGoal({
-			params: { goalId: 'goal_missing' }
-		} as never);
-
-		expect(result).toMatchObject({
-			status: 404,
-			data: {
-				message: 'Goal not found.'
-			}
-		});
-		expect(deleteGoalMock).not.toHaveBeenCalled();
-	});
-
-	it('rewrites an existing goal draft without saving the goal', async () => {
+	it('rewrites goal fields in place without creating a goal', async () => {
 		const form = new FormData();
-		form.set('goalId', 'goal_1');
 		form.set('name', 'make this goal clearer');
 		form.set('summary', 'help operators define the goal better');
-		form.set('successSignal', 'goals are easier to review');
-		form.set('projectIds', 'project_1');
+		form.set('successSignal', 'clearer goal drafts');
+		form.set('parentGoalId', 'goal_parent');
+		form.set('projectIds', 'project_ams');
 		form.set('taskIds', 'task_1');
 
 		const result = await actions.assistGoalWriting({
-			params: { goalId: 'goal_1' },
-			request: new Request('http://localhost/app/goals/goal_1', {
+			request: new Request('http://localhost/app/goals', {
 				method: 'POST',
 				body: form
 			})
@@ -194,36 +155,67 @@ describe('goal detail page server actions', () => {
 			cwd: '/tmp/project',
 			name: 'make this goal clearer',
 			summary: 'help operators define the goal better',
-			successSignal: 'goals are easier to review',
+			successSignal: 'clearer goal drafts',
 			area: 'product',
 			status: 'ready',
 			targetDate: '',
-			parentGoalName: null,
+			parentGoalName: 'Strengthen planning quality',
 			artifactPath: '',
 			linkedProjectNames: ['Agent Management System Prototype'],
-			linkedTaskTitles: ['Audit goal quality checks']
+			linkedTaskTitles: ['Map goal creation friction']
 		});
 		expect(result).toEqual({
 			ok: true,
 			successAction: 'assistGoalWriting',
+			reopenCreateModal: true,
 			assistChangeSummary:
-				'Rewrote the goal draft into a more concrete outcome with a clearer summary and proof point.',
+				'Rewrote the goal draft into a clearer outcome, summary, and observable success signal.',
 			values: {
-				goalId: 'goal_1',
-				name: 'Clarify goal creation before operators structure work',
+				name: 'Help operators define goals clearly before linking work',
 				summary:
-					'This goal makes the drafting step clearer so operators can define the intended outcome before linking tasks and projects. It matters because unclear goals create planning churn.',
+					'This goal improves the goal-writing flow so operators can describe the outcome before managing structure. It matters because weak goal framing makes linked execution harder to trust.',
 				successSignal:
-					'New goals are saved with a concrete outcome and a visible review condition before linked execution begins.',
+					'Most new goals include a concrete outcome and a visible proof point before execution work is linked.',
 				targetDate: '',
 				artifactPath: '',
-				parentGoalId: '',
-				projectIds: ['project_1'],
+				parentGoalId: 'goal_parent',
+				projectIds: ['project_ams'],
 				taskIds: ['task_1'],
 				area: 'product',
 				status: 'ready'
 			}
 		});
 		expect(updateControlPlaneMock).not.toHaveBeenCalled();
+		expect(controlPlaneState.saved).toBeNull();
+	});
+
+	it('rejects goal-writing assist requests without draft content', async () => {
+		const result = await actions.assistGoalWriting({
+			request: new Request('http://localhost/app/goals', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				message:
+					'Add a draft goal name, summary, or success signal before requesting writing assist.',
+				values: {
+					name: '',
+					summary: '',
+					successSignal: '',
+					targetDate: '',
+					artifactPath: '',
+					parentGoalId: '',
+					projectIds: [],
+					taskIds: [],
+					area: 'product',
+					status: 'ready'
+				}
+			}
+		});
+		expect(assistGoalWritingMock).not.toHaveBeenCalled();
 	});
 });

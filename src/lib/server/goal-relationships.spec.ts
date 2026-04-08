@@ -75,7 +75,7 @@ function buildFixture(): ControlPlaneData {
 				taskIds: ['task_3']
 			}
 		],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [
 			{
 				id: 'task_1',
@@ -90,7 +90,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -114,7 +114,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -138,7 +138,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],

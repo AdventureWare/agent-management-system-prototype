@@ -1,11 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
-import { authenticateWorker, claimTaskForWorker } from '$lib/server/worker-api';
+import {
+	authenticateExecutionSurface,
+	claimTaskForExecutionSurface
+} from '$lib/server/execution-surface-api';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
-		workerId?: string;
-		workerToken?: string;
+		executionSurfaceId?: string;
+		executionSurfaceToken?: string;
 		taskId?: string;
 	};
 
@@ -14,13 +17,13 @@ export const POST = async ({ request }) => {
 	}
 
 	const data = await loadControlPlane();
-	const worker = authenticateWorker(
+	const executionSurface = authenticateExecutionSurface(
 		data,
-		body.workerId?.trim() ?? '',
-		body.workerToken?.trim() ?? ''
+		body.executionSurfaceId?.trim() ?? '',
+		body.executionSurfaceToken?.trim() ?? ''
 	);
 	const nextData = await updateControlPlane((current) =>
-		claimTaskForWorker(current, worker, body.taskId?.trim() ?? '')
+		claimTaskForExecutionSurface(current, executionSurface, body.taskId?.trim() ?? '')
 	);
 	const task = nextData.tasks.find((candidate) => candidate.id === body.taskId?.trim());
 

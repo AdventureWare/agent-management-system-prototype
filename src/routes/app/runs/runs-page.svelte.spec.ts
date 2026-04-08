@@ -9,7 +9,7 @@ describe('/app/runs/+page.svelte', () => {
 			data: {
 				statusOptions: RUN_STATUS_OPTIONS,
 				tasks: [{ id: 'task_1', title: 'Make runs first class' }],
-				workers: [{ id: 'worker_1', name: 'Coordinator' }],
+				executionSurfaces: [{ id: 'worker_1', name: 'Coordinator' }],
 				providers: [{ id: 'provider_1', name: 'Local Codex' }],
 				runs: [
 					{
@@ -18,7 +18,7 @@ describe('/app/runs/+page.svelte', () => {
 						taskTitle: 'Make runs first class',
 						taskProjectId: 'project_1',
 						taskProjectName: 'Agent Management System Prototype',
-						workerId: 'worker_1',
+						executionSurfaceId: 'worker_1',
 						workerName: 'Coordinator',
 						providerId: 'provider_1',
 						providerName: 'Local Codex',

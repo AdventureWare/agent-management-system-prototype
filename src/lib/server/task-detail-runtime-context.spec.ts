@@ -21,7 +21,7 @@ function createTask(overrides: Partial<Task> = {}): Task {
 		requiredThreadSandbox: null,
 		requiresReview: false,
 		desiredRoleId: '',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: 'thread_1',
 		requiredCapabilityNames: [],
 		requiredToolNames: [],
@@ -42,7 +42,7 @@ function createRun(overrides: Partial<Run> = {}): Run {
 	return {
 		id: 'run_1',
 		taskId: 'task_1',
-		workerId: null,
+		executionSurfaceId: null,
 		providerId: null,
 		status: 'running',
 		createdAt: '2026-04-07T12:00:00.000Z',
@@ -63,7 +63,7 @@ function createRun(overrides: Partial<Run> = {}): Run {
 function createThread(overrides: Partial<AgentThreadDetail> = {}): AgentThreadDetail {
 	return {
 		id: 'thread_1',
-		name: 'Worker thread',
+		name: 'ExecutionSurface thread',
 		cwd: '/tmp/project',
 		additionalWritableRoots: [],
 		sandbox: 'workspace-write',

@@ -31,7 +31,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		hasDelegationPacketFields,
 		projectId,
 		goalId,
-		assigneeWorkerId,
+		assigneeExecutionSurfaceId,
 		desiredRoleId,
 		hasDesiredRoleId,
 		dependencyTaskIds,
@@ -49,8 +49,9 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 	const current = await loadControlPlane();
 	const project = current.projects.find((candidate) => candidate.id === projectId);
 	const goal = goalId ? (current.goals.find((candidate) => candidate.id === goalId) ?? null) : null;
-	const assigneeWorker = assigneeWorkerId
-		? (current.workers.find((candidate) => candidate.id === assigneeWorkerId) ?? null)
+	const assigneeWorker = assigneeExecutionSurfaceId
+		? (current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId) ??
+			null)
 		: null;
 	const desiredRole = desiredRoleId
 		? (current.roles.find((candidate) => candidate.id === desiredRoleId) ?? null)
@@ -64,8 +65,8 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		throw new TaskUpdateActionError(400, 'Goal not found.');
 	}
 
-	if (assigneeWorkerId && !assigneeWorker) {
-		throw new TaskUpdateActionError(400, 'Worker not found.');
+	if (assigneeExecutionSurfaceId && !assigneeWorker) {
+		throw new TaskUpdateActionError(400, 'ExecutionSurface not found.');
 	}
 
 	const existingTask = current.tasks.find((candidate) => candidate.id === taskId);
@@ -183,7 +184,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 				projectId: project.id,
 				goalId: nextGoalId,
 				status: nextStatus,
-				assigneeWorkerId: nextAssigneeWorker?.id ?? null,
+				assigneeExecutionSurfaceId: nextAssigneeWorker?.id ?? null,
 				priority: nextPriority,
 				riskLevel: nextRiskLevel,
 				approvalMode: nextApprovalMode,

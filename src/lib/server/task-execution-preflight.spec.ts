@@ -7,12 +7,12 @@ describe('buildTaskExecutionPreflight', () => {
 			{
 				requiredCapabilityNames: ['planning', 'citations'],
 				requiredToolNames: ['codex', 'playwright'],
-				assigneeWorkerId: 'worker_local'
+				assigneeExecutionSurfaceId: 'worker_local'
 			},
 			[
 				{
-					workerId: 'worker_local',
-					workerName: 'Local worker',
+					executionSurfaceId: 'worker_local',
+					executionSurfaceName: 'Local worker',
 					roleId: 'role_coordinator',
 					providerId: 'provider_local',
 					status: 'idle',
@@ -26,8 +26,8 @@ describe('buildTaskExecutionPreflight', () => {
 					missingToolNames: ['playwright']
 				},
 				{
-					workerId: 'worker_cloud',
-					workerName: 'Cloud worker',
+					executionSurfaceId: 'worker_cloud',
+					executionSurfaceName: 'Cloud worker',
 					roleId: 'role_coordinator',
 					providerId: 'provider_cloud',
 					status: 'idle',
@@ -50,7 +50,7 @@ describe('buildTaskExecutionPreflight', () => {
 			uncoveredCapabilityNames: [],
 			uncoveredToolNames: ['playwright'],
 			currentAssignee: {
-				workerId: 'worker_local',
+				executionSurfaceId: 'worker_local',
 				withinConcurrencyLimit: false,
 				missingCapabilityNames: ['citations'],
 				missingToolNames: ['playwright'],
@@ -64,7 +64,7 @@ describe('buildTaskExecutionPreflight', () => {
 			{
 				requiredCapabilityNames: [],
 				requiredToolNames: [],
-				assigneeWorkerId: null
+				assigneeExecutionSurfaceId: null
 			},
 			[]
 		);

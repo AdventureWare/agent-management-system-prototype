@@ -93,7 +93,7 @@ function buildTaskCreateFormContext(
 		delegationExpectedDeliverable: input.delegationExpectedDeliverable,
 		delegationDoneCondition: input.delegationDoneCondition,
 		delegationIntegrationNotes: input.delegationIntegrationNotes,
-		assigneeWorkerId: input.assigneeWorkerId,
+		assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId,
 		targetDate: input.targetDate,
 		goalId: input.goalId,
 		area: input.area,
@@ -129,7 +129,7 @@ function failTaskCreate(
 		delegationExpectedDeliverable: string;
 		delegationDoneCondition: string;
 		delegationIntegrationNotes: string;
-		assigneeWorkerId: string;
+		assigneeExecutionSurfaceId: string;
 		targetDate: string;
 		goalId: string;
 		area: string;
@@ -230,7 +230,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		availableDependencyTasks,
 		projectSkillSummaries,
 		executionRequirementInventory,
-		workers: [...data.workers].sort((a, b) => a.name.localeCompare(b.name)),
+		executionSurfaces: [...data.executionSurfaces].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
 		tasks: taskWorkItems
 	};
@@ -253,7 +253,7 @@ export const actions: Actions = {
 			delegationExpectedDeliverable,
 			delegationDoneCondition,
 			delegationIntegrationNotes,
-			assigneeWorkerId,
+			assigneeExecutionSurfaceId,
 			targetDate,
 			goalId,
 			area,
@@ -313,8 +313,8 @@ export const actions: Actions = {
 		const parentTask = parentTaskId
 			? current.tasks.find((candidate) => candidate.id === parentTaskId)
 			: null;
-		const assigneeWorker = assigneeWorkerId
-			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+		const assigneeWorker = assigneeExecutionSurfaceId
+			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
 
 		if (!project) {
@@ -352,9 +352,9 @@ export const actions: Actions = {
 			});
 		}
 
-		if (assigneeWorkerId && !assigneeWorker) {
+		if (assigneeExecutionSurfaceId && !assigneeWorker) {
 			return failTaskCreate(400, {
-				message: 'Worker not found.',
+				message: 'ExecutionSurface not found.',
 				...failureContext
 			});
 		}
@@ -422,7 +422,7 @@ export const actions: Actions = {
 			requiredThreadSandbox,
 			requiresReview,
 			desiredRoleId: nextDesiredRoleId,
-			assigneeWorkerId: assigneeWorker?.id ?? null,
+			assigneeExecutionSurfaceId: assigneeWorker?.id ?? null,
 			blockedReason,
 			dependencyTaskIds,
 			targetDate: targetDate || null,
@@ -518,7 +518,7 @@ export const actions: Actions = {
 		const now = new Date().toISOString();
 		const run = createRun({
 			taskId: createdTask.id,
-			workerId: assigneeWorker?.id ?? null,
+			executionSurfaceId: assigneeWorker?.id ?? null,
 			assumedRoleId: createdTask.desiredRoleId || null,
 			providerId,
 			status: 'running',
@@ -629,8 +629,14 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
 		const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
-		const { name, instructions, projectId, assigneeWorkerId, targetDate, requiredThreadSandbox } =
-			readCreateTaskForm(form);
+		const {
+			name,
+			instructions,
+			projectId,
+			assigneeExecutionSurfaceId,
+			targetDate,
+			requiredThreadSandbox
+		} = readCreateTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
@@ -650,16 +656,16 @@ export const actions: Actions = {
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === projectId);
-		const assigneeWorker = assigneeWorkerId
-			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+		const assigneeWorker = assigneeExecutionSurfaceId
+			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
 
 		if (!project) {
 			return fail(400, { message: 'Project not found.' });
 		}
 
-		if (assigneeWorkerId && !assigneeWorker) {
-			return fail(400, { message: 'Worker not found.' });
+		if (assigneeExecutionSurfaceId && !assigneeWorker) {
+			return fail(400, { message: 'ExecutionSurface not found.' });
 		}
 
 		await updateControlPlane((data) => {
@@ -679,7 +685,7 @@ export const actions: Actions = {
 						projectId: project.id,
 						status,
 						requiredThreadSandbox,
-						assigneeWorkerId: assigneeWorker?.id ?? null,
+						assigneeExecutionSurfaceId: assigneeWorker?.id ?? null,
 						targetDate: targetDate || null,
 						delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
 						artifactPath:
@@ -704,7 +710,7 @@ export const actions: Actions = {
 	launchTaskSession: async ({ request }) => {
 		const form = await request.formData();
 		const taskId = form.get('taskId')?.toString().trim() ?? '';
-		const { name, instructions, projectId, assigneeWorkerId } = readCreateTaskForm(form);
+		const { name, instructions, projectId, assigneeExecutionSurfaceId } = readCreateTaskForm(form);
 
 		if (!taskId) {
 			return fail(400, { message: 'Task ID is required.' });
@@ -723,13 +729,15 @@ export const actions: Actions = {
 		const effectiveReadyCondition = task.readyCondition ?? '';
 		const effectiveExpectedOutcome = task.expectedOutcome ?? '';
 		const effectiveProjectId = projectId || task.projectId;
-		const assigneeWorker = assigneeWorkerId
-			? current.workers.find((candidate) => candidate.id === assigneeWorkerId)
+		const assigneeWorker = assigneeExecutionSurfaceId
+			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
 		const effectiveWorker =
 			assigneeWorker ??
-			(task.assigneeWorkerId
-				? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+			(task.assigneeExecutionSurfaceId
+				? (current.executionSurfaces.find(
+						(candidate) => candidate.id === task.assigneeExecutionSurfaceId
+					) ?? null)
 				: null);
 		const project = current.projects.find((candidate) => candidate.id === effectiveProjectId);
 
@@ -737,8 +745,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'Task project not found.' });
 		}
 
-		if (assigneeWorkerId && !assigneeWorker) {
-			return fail(400, { message: 'Worker not found.' });
+		if (assigneeExecutionSurfaceId && !assigneeWorker) {
+			return fail(400, { message: 'ExecutionSurface not found.' });
 		}
 
 		if (!project.projectRootFolder) {
@@ -872,7 +880,7 @@ export const actions: Actions = {
 		const providerId = provider?.id ?? null;
 		const run = createRun({
 			taskId,
-			workerId: effectiveWorker?.id ?? null,
+			executionSurfaceId: effectiveWorker?.id ?? null,
 			assumedRoleId: task.desiredRoleId || null,
 			providerId,
 			status: 'running',
@@ -903,7 +911,8 @@ export const actions: Actions = {
 							title: effectiveName,
 							summary: effectiveInstructions,
 							projectId: project.id,
-							assigneeWorkerId: assigneeWorker?.id ?? candidate.assigneeWorkerId,
+							assigneeExecutionSurfaceId:
+								assigneeWorker?.id ?? candidate.assigneeExecutionSurfaceId,
 							agentThreadId,
 							delegationAcceptance: null,
 							artifactPath:

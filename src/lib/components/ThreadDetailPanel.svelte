@@ -2454,7 +2454,7 @@
 											{#if taskResponseAction.taskAssigneeWorkerId}
 												<input
 													type="hidden"
-													name="assigneeWorkerId"
+													name="assigneeExecutionSurfaceId"
 													value={taskResponseAction.taskAssigneeWorkerId}
 												/>
 											{/if}

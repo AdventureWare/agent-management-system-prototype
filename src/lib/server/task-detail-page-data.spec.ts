@@ -36,7 +36,7 @@ const buildArtifactBrowser = vi.hoisted(() => vi.fn());
 const listInstalledCodexSkills = vi.hoisted(() => vi.fn());
 const loadRelevantSelfImprovementKnowledgeItems = vi.hoisted(() => vi.fn());
 const getTaskAttachmentRoot = vi.hoisted(() => vi.fn());
-const getWorkerAssignmentSuggestions = vi.hoisted(() => vi.fn());
+const getExecutionSurfaceAssignmentSuggestions = vi.hoisted(() => vi.fn());
 const buildAssignmentSuggestionViews = vi.hoisted(() => vi.fn());
 const buildParentTaskView = vi.hoisted(() => vi.fn());
 const buildRecentTaskDecisionViews = vi.hoisted(() => vi.fn());
@@ -74,8 +74,8 @@ vi.mock('$lib/server/task-attachments', () => ({
 	getTaskAttachmentRoot
 }));
 
-vi.mock('$lib/server/worker-api', () => ({
-	getWorkerAssignmentSuggestions
+vi.mock('$lib/server/execution-surface-api', () => ({
+	getExecutionSurfaceAssignmentSuggestions
 }));
 
 vi.mock('./task-detail-display-data', () => ({
@@ -179,12 +179,12 @@ function createData(): ControlPlaneData {
 				targetDate: null
 			}
 		],
-		workers: [
+		executionSurfaces: [
 			{
 				id: 'worker_b',
-				name: 'Zulu Worker',
+				name: 'Zulu ExecutionSurface',
 				providerId: 'provider_local',
-				roleId: 'role_b',
+				supportedRoleIds: [],
 				location: 'local',
 				status: 'idle',
 				capacity: 1,
@@ -197,9 +197,9 @@ function createData(): ControlPlaneData {
 			},
 			{
 				id: 'worker_a',
-				name: 'Alpha Worker',
+				name: 'Alpha ExecutionSurface',
 				providerId: 'provider_local',
-				roleId: 'role_a',
+				supportedRoleIds: [],
 				location: 'local',
 				status: 'idle',
 				capacity: 1,
@@ -228,7 +228,7 @@ function createData(): ControlPlaneData {
 				requiredThreadSandbox: null,
 				requiresReview: false,
 				desiredRoleId: '',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -258,7 +258,7 @@ function createData(): ControlPlaneData {
 				requiredThreadSandbox: null,
 				requiresReview: false,
 				desiredRoleId: '',
-				assigneeWorkerId: 'worker_a',
+				assigneeExecutionSurfaceId: 'worker_a',
 				agentThreadId: 'thread_1',
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -306,11 +306,11 @@ describe('task-detail-page-data', () => {
 		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([{ id: 'knowledge_1' }]);
 		getTaskAttachmentRoot.mockReset();
 		getTaskAttachmentRoot.mockReturnValue('/tmp/project/agent_output/task_1');
-		getWorkerAssignmentSuggestions.mockReset();
-		getWorkerAssignmentSuggestions.mockReturnValue([
+		getExecutionSurfaceAssignmentSuggestions.mockReset();
+		getExecutionSurfaceAssignmentSuggestions.mockReturnValue([
 			{
-				workerId: 'worker_a',
-				workerName: 'Worker A',
+				executionSurfaceId: 'worker_a',
+				workerName: 'ExecutionSurface A',
 				eligible: true,
 				withinConcurrencyLimit: true,
 				missingCapabilityNames: [],
@@ -318,7 +318,9 @@ describe('task-detail-page-data', () => {
 			}
 		]);
 		buildAssignmentSuggestionViews.mockReset();
-		buildAssignmentSuggestionViews.mockReturnValue([{ workerId: 'worker_a', eligible: true }]);
+		buildAssignmentSuggestionViews.mockReturnValue([
+			{ executionSurfaceId: 'worker_a', eligible: true }
+		]);
 		buildParentTaskView.mockReset();
 		buildParentTaskView.mockReturnValue({ id: 'task_parent' });
 		buildRecentTaskDecisionViews.mockReset();
@@ -369,7 +371,7 @@ describe('task-detail-page-data', () => {
 			relatedRuns: [{ id: 'run_1' }],
 			candidateThreads: [{ id: 'thread_1' }],
 			suggestedThread: { id: 'thread_1' },
-			assignmentSuggestions: [{ workerId: 'worker_a', eligible: true }],
+			assignmentSuggestions: [{ executionSurfaceId: 'worker_a', eligible: true }],
 			recentDecisions: [{ id: 'decision_1' }]
 		});
 		expect(result?.projects.map((project) => project.name)).toEqual([
@@ -377,7 +379,10 @@ describe('task-detail-page-data', () => {
 			'Zulu Project'
 		]);
 		expect(result?.roles.map((role) => role.name)).toEqual(['Architect', 'Builder']);
-		expect(result?.workers.map((worker) => worker.name)).toEqual(['Alpha Worker', 'Zulu Worker']);
+		expect(result?.executionSurfaces.map((worker) => worker.name)).toEqual([
+			'Alpha ExecutionSurface',
+			'Zulu ExecutionSurface'
+		]);
 		expect(result?.goals.map((goal) => goal.label)).toEqual(['Parent goal', '  - Child goal']);
 
 		expect(loadRelevantSelfImprovementKnowledgeItems).toHaveBeenCalledWith({

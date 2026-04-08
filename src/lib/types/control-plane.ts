@@ -49,8 +49,8 @@ export const DECISION_TYPE_OPTIONS = [
 	'task_completed'
 ] as const;
 export const GOAL_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
-export const WORKER_STATUS_OPTIONS = ['idle', 'busy', 'offline'] as const;
-export const WORKER_LOCATION_OPTIONS = ['local', 'cloud'] as const;
+export const EXECUTION_SURFACE_STATUS_OPTIONS = ['idle', 'busy', 'offline'] as const;
+export const EXECUTION_SURFACE_LOCATION_OPTIONS = ['local', 'cloud'] as const;
 export const PROVIDER_KIND_OPTIONS = ['local', 'cloud', 'api'] as const;
 export const PROVIDER_SETUP_STATUS_OPTIONS = ['connected', 'needs_setup', 'planned'] as const;
 export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'custom'] as const;
@@ -66,8 +66,8 @@ export type ReviewStatus = (typeof REVIEW_STATUS_OPTIONS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUS_OPTIONS)[number];
 export type DecisionType = (typeof DECISION_TYPE_OPTIONS)[number];
 export type GoalStatus = (typeof GOAL_STATUS_OPTIONS)[number];
-export type WorkerStatus = (typeof WORKER_STATUS_OPTIONS)[number];
-export type WorkerLocation = (typeof WORKER_LOCATION_OPTIONS)[number];
+export type ExecutionSurfaceStatus = (typeof EXECUTION_SURFACE_STATUS_OPTIONS)[number];
+export type ExecutionSurfaceLocation = (typeof EXECUTION_SURFACE_LOCATION_OPTIONS)[number];
 export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
@@ -287,7 +287,7 @@ export function goalStatusToneClass(status: string): string {
 	}
 }
 
-export function formatWorkerStatusLabel(status: string): string {
+export function formatExecutionSurfaceStatusLabel(status: string): string {
 	return formatEnumLabel(status);
 }
 
@@ -385,11 +385,9 @@ export type ExecutionSurface = {
 	id: string;
 	name: string;
 	providerId: string;
-	// Legacy single-role assignment kept during the execution-surface migration.
-	roleId: string;
 	supportedRoleIds?: string[];
-	location: WorkerLocation;
-	status: WorkerStatus;
+	location: ExecutionSurfaceLocation;
+	status: ExecutionSurfaceStatus;
 	capacity: number;
 	registeredAt: string;
 	lastSeenAt: string;
@@ -402,8 +400,6 @@ export type ExecutionSurface = {
 	threadSandboxOverride: AgentSandbox | null;
 	authTokenHash: string;
 };
-
-export type Worker = ExecutionSurface;
 
 export type DelegationPacket = {
 	objective: string;
@@ -438,7 +434,7 @@ export type Task = {
 	requiredThreadSandbox?: AgentSandbox | null;
 	requiresReview: boolean;
 	desiredRoleId: string;
-	assigneeWorkerId: string | null;
+	assigneeExecutionSurfaceId: string | null;
 	agentThreadId: string | null;
 	requiredPromptSkillNames?: string[];
 	requiredCapabilityNames?: string[];
@@ -458,7 +454,7 @@ export type Task = {
 export type Run = {
 	id: string;
 	taskId: string;
-	workerId: string | null;
+	executionSurfaceId: string | null;
 	assumedRoleId?: string | null;
 	providerId: string | null;
 	status: RunStatus;
@@ -483,8 +479,8 @@ export type Review = {
 	createdAt: string;
 	updatedAt: string;
 	resolvedAt: string | null;
-	requestedByWorkerId: string | null;
-	reviewerWorkerId: string | null;
+	requestedByExecutionSurfaceId: string | null;
+	reviewerExecutionSurfaceId: string | null;
 	summary: string;
 };
 
@@ -497,8 +493,8 @@ export type Approval = {
 	createdAt: string;
 	updatedAt: string;
 	resolvedAt: string | null;
-	requestedByWorkerId: string | null;
-	approverWorkerId: string | null;
+	requestedByExecutionSurfaceId: string | null;
+	approverExecutionSurfaceId: string | null;
 	summary: string;
 };
 
@@ -513,7 +509,7 @@ export type Decision = {
 	decisionType: DecisionType;
 	summary: string;
 	createdAt: string;
-	decidedByWorkerId: string | null;
+	decidedByExecutionSurfaceId: string | null;
 };
 
 export type PlanningSession = {
@@ -522,7 +518,7 @@ export type PlanningSession = {
 	windowEnd: string;
 	projectId: string | null;
 	goalId: string | null;
-	workerId: string | null;
+	executionSurfaceId: string | null;
 	includeUnscheduled: boolean;
 	goalIds: string[];
 	taskIds: string[];
@@ -536,8 +532,7 @@ export type ControlPlaneData = {
 	roles: Role[];
 	projects: Project[];
 	goals: Goal[];
-	workers: Worker[];
-	executionSurfaces?: ExecutionSurface[];
+	executionSurfaces: ExecutionSurface[];
 	tasks: Task[];
 	runs: Run[];
 	reviews: Review[];

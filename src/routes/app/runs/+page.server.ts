@@ -15,8 +15,10 @@ export const load: PageServerLoad = async () => {
 		})
 	]);
 	const taskIdsWithRuns = new Set(data.runs.map((run) => run.taskId));
-	const workerIdsWithRuns = new Set(
-		data.runs.map((run) => run.workerId).filter((workerId): workerId is string => Boolean(workerId))
+	const executionSurfaceIdsWithRuns = new Set(
+		data.runs
+			.map((run) => run.executionSurfaceId)
+			.filter((executionSurfaceId): executionSurfaceId is string => Boolean(executionSurfaceId))
 	);
 	const providerIdsWithRuns = new Set(
 		data.runs
@@ -31,8 +33,8 @@ export const load: PageServerLoad = async () => {
 			.filter((task) => taskIdsWithRuns.has(task.id))
 			.map((task) => ({ id: task.id, title: task.title }))
 			.sort((left, right) => left.title.localeCompare(right.title)),
-		workers: [...data.workers]
-			.filter((worker) => workerIdsWithRuns.has(worker.id))
+		executionSurfaces: [...data.executionSurfaces]
+			.filter((worker) => executionSurfaceIdsWithRuns.has(worker.id))
 			.map((worker) => ({ id: worker.id, name: worker.name }))
 			.sort((left, right) => left.name.localeCompare(right.name)),
 		providers: [...data.providers]

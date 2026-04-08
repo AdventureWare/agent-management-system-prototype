@@ -25,9 +25,12 @@ import {
 	buildPromptDigest
 } from '$lib/server/task-threads';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
-import { describeWorkerTaskFit, getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
+import {
+	describeExecutionSurfaceTaskFit,
+	getExecutionSurfaceAssignmentSuggestions
+} from '$lib/server/execution-surface-api';
 import { isValidTaskDate, type TaskDetailFormInput } from '$lib/server/task-form';
-import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';
+import type { ControlPlaneData, Project, Task, ExecutionSurface } from '$lib/types/control-plane';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 
 export class TaskLaunchPlanError extends Error {
@@ -56,8 +59,8 @@ export type TaskLaunchPlan = {
 	effectiveRequiresReview: boolean;
 	effectiveDesiredRoleId: string;
 	effectiveRole: TaskRolePromptContext;
-	assigneeWorker: Worker | null;
-	effectiveWorker: Worker | null;
+	assigneeWorker: ExecutionSurface | null;
+	effectiveWorker: ExecutionSurface | null;
 	effectiveRequiredPromptSkillNames: string[];
 	effectiveRequiredCapabilityNames: string[];
 	effectiveRequiredToolNames: string[];
@@ -147,13 +150,17 @@ export async function buildTaskLaunchPlan(
 		input.hasDesiredRoleId && (input.desiredRoleId === '' || selectedDesiredRole)
 			? input.desiredRoleId
 			: task.desiredRoleId;
-	const assigneeWorker = input.assigneeWorkerId
-		? (current.workers.find((candidate) => candidate.id === input.assigneeWorkerId) ?? null)
+	const assigneeWorker = input.assigneeExecutionSurfaceId
+		? (current.executionSurfaces.find(
+				(candidate) => candidate.id === input.assigneeExecutionSurfaceId
+			) ?? null)
 		: null;
 	const directlyAssignedWorker =
 		(input.hasAssigneeWorkerId ? assigneeWorker : null) ??
-		(task.assigneeWorkerId
-			? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+		(task.assigneeExecutionSurfaceId
+			? (current.executionSurfaces.find(
+					(candidate) => candidate.id === task.assigneeExecutionSurfaceId
+				) ?? null)
 			: null);
 	const effectiveRequiredCapabilityNames = input.hasRequiredCapabilityNames
 		? input.requiredCapabilityNames
@@ -188,16 +195,18 @@ export async function buildTaskLaunchPlan(
 		desiredRoleId: effectiveDesiredRoleId,
 		requiredCapabilityNames: normalizedRequiredCapabilityNames,
 		requiredToolNames: normalizedRequiredToolNames,
-		assigneeWorkerId: directlyAssignedWorker?.id ?? task.assigneeWorkerId ?? null
+		assigneeExecutionSurfaceId:
+			directlyAssignedWorker?.id ?? task.assigneeExecutionSurfaceId ?? null
 	};
-	const assignmentSuggestions = getWorkerAssignmentSuggestions(current, taskForRouting);
+	const assignmentSuggestions = getExecutionSurfaceAssignmentSuggestions(current, taskForRouting);
 	const bestEligibleSuggestion = assignmentSuggestions.find((suggestion) => suggestion.eligible);
 	const autoSelectedWorker =
 		directlyAssignedWorker ||
 		(normalizedRequiredCapabilityNames.length === 0 && normalizedRequiredToolNames.length === 0)
 			? null
-			: (current.workers.find((candidate) => candidate.id === bestEligibleSuggestion?.workerId) ??
-				null);
+			: (current.executionSurfaces.find(
+					(candidate) => candidate.id === bestEligibleSuggestion?.executionSurfaceId
+				) ?? null);
 	const effectiveWorker = directlyAssignedWorker ?? autoSelectedWorker;
 	const effectiveDependencyTaskIds = input.hasDependencyTaskSelection
 		? input.dependencyTaskIds
@@ -215,8 +224,8 @@ export async function buildTaskLaunchPlan(
 		throw new TaskLaunchPlanError(400, 'Goal not found.');
 	}
 
-	if (input.assigneeWorkerId && !assigneeWorker) {
-		throw new TaskLaunchPlanError(400, 'Worker not found.');
+	if (input.assigneeExecutionSurfaceId && !assigneeWorker) {
+		throw new TaskLaunchPlanError(400, 'ExecutionSurface not found.');
 	}
 
 	if (input.hasDesiredRoleId && input.desiredRoleId && !selectedDesiredRole) {
@@ -251,19 +260,19 @@ export async function buildTaskLaunchPlan(
 	}
 
 	const effectiveWorkerFit = effectiveWorker
-		? describeWorkerTaskFit(
+		? describeExecutionSurfaceTaskFit(
 				current,
 				effectiveWorker,
-				effectiveWorker.id === taskForRouting.assigneeWorkerId
+				effectiveWorker.id === taskForRouting.assigneeExecutionSurfaceId
 					? taskForRouting
-					: { ...taskForRouting, assigneeWorkerId: effectiveWorker.id }
+					: { ...taskForRouting, assigneeExecutionSurfaceId: effectiveWorker.id }
 			)
 		: null;
 
 	if (effectiveWorkerFit && !effectiveWorkerFit.withinConcurrencyLimit) {
 		throw new TaskLaunchPlanError(
 			409,
-			`${effectiveWorkerFit.workerName} is already at its concurrency limit.`
+			`${effectiveWorkerFit.executionSurfaceName} is already at its concurrency limit.`
 		);
 	}
 
@@ -283,7 +292,7 @@ export async function buildTaskLaunchPlan(
 
 		throw new TaskLaunchPlanError(
 			409,
-			`${effectiveWorkerFit.workerName} does not cover this task’s declared ${gaps.join(' · ')}.`
+			`${effectiveWorkerFit.executionSurfaceName} does not cover this task’s declared ${gaps.join(' · ')}.`
 		);
 	}
 
@@ -446,7 +455,7 @@ export async function launchTaskFromPlan(
 	const providerId = plan.provider?.id ?? null;
 	const run = createRun({
 		taskId,
-		workerId: plan.effectiveWorker?.id ?? null,
+		executionSurfaceId: plan.effectiveWorker?.id ?? null,
 		assumedRoleId: plan.effectiveDesiredRoleId || null,
 		providerId,
 		status: 'running',
@@ -481,7 +490,8 @@ export async function launchTaskFromPlan(
 						expectedOutcome: plan.effectiveExpectedOutcome,
 						projectId: plan.project.id,
 						goalId: plan.effectiveGoalId,
-						assigneeWorkerId: plan.effectiveWorker?.id ?? candidate.assigneeWorkerId,
+						assigneeExecutionSurfaceId:
+							plan.effectiveWorker?.id ?? candidate.assigneeExecutionSurfaceId,
 						priority: plan.effectivePriority,
 						riskLevel: plan.effectiveRiskLevel,
 						approvalMode: plan.effectiveApprovalMode,

@@ -30,6 +30,10 @@
 	};
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateGoal');
+	let goalWritingAssistSuccess = $derived(form?.ok && form?.successAction === 'assistGoalWriting');
+	let goalWritingAssistChangeSummary = $derived(
+		goalWritingAssistSuccess ? (form?.assistChangeSummary?.toString() ?? '') : ''
+	);
 	let formValues = $derived(
 		(form && 'values' in form ? form.values : undefined) as GoalFormValues | undefined
 	);
@@ -132,6 +136,8 @@
 			<div class="card border border-slate-800 bg-slate-950/70 p-6">
 				<GoalEditor
 					action="?/updateGoal"
+					assistAction="?/assistGoalWriting"
+					assistChangeSummary={goalWritingAssistChangeSummary}
 					description="This is the canonical goal management surface. Refine the wording with the coach, then update parent/subgoal structure, project context, and task links here."
 					folderOptions={data.folderOptions}
 					heading="Edit goal"

@@ -140,12 +140,12 @@ describe('buildAccessDashboardData', () => {
 				}
 			],
 			goals: [],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_1',
 					name: 'Local runner',
 					providerId: 'provider_1',
-					roleId: 'role_1',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -160,7 +160,7 @@ describe('buildAccessDashboardData', () => {
 					id: 'worker_2',
 					name: 'Disabled provider worker',
 					providerId: 'provider_2',
-					roleId: 'role_1',
+					supportedRoleIds: [],
 					location: 'cloud',
 					status: 'offline',
 					capacity: 1,
@@ -186,7 +186,7 @@ describe('buildAccessDashboardData', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: '',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					requiredPromptSkillNames: ['frontend-sveltekit'],
 					requiredCapabilityNames: [],
@@ -227,7 +227,7 @@ describe('buildAccessDashboardData', () => {
 				})
 			])
 		);
-		expect(result.workers).toEqual(
+		expect(result.executionSurfaces).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
 					name: 'Disabled provider worker',

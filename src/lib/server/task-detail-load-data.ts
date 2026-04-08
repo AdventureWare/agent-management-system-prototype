@@ -4,7 +4,7 @@ import type {
 	Provider,
 	Run,
 	Task,
-	Worker
+	ExecutionSurface
 } from '$lib/types/control-plane';
 
 type RelativeTimeFormatter = (value: string) => string;
@@ -58,7 +58,7 @@ export function buildTaskDetailCollections(input: {
 	data: ControlPlaneData;
 	task: Task;
 	projectMap: Map<string, Project>;
-	workerMap: Map<string, Worker>;
+	workerMap: Map<string, ExecutionSurface>;
 	providerMap: Map<string, Provider>;
 	formatRelativeTime: RelativeTimeFormatter;
 }) {
@@ -68,8 +68,8 @@ export function buildTaskDetailCollections(input: {
 		.filter((run) => run.taskId === task.id)
 		.map((run) => ({
 			...run,
-			workerName: run.workerId
-				? (workerMap.get(run.workerId)?.name ?? 'Unknown worker')
+			workerName: run.executionSurfaceId
+				? (workerMap.get(run.executionSurfaceId)?.name ?? 'Unknown worker')
 				: 'Unassigned',
 			providerName: run.providerId
 				? (providerMap.get(run.providerId)?.name ?? 'Unknown provider')

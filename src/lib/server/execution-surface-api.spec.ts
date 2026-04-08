@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-	claimTaskForWorker,
-	describeWorkerTaskFit,
-	getWorkerAssignmentSuggestions,
-	getWorkerTaskView,
-	hashWorkerToken,
-	isWorkerEligibleForTask,
-	toPublicWorker,
-	updateTaskFromWorker,
-	updateWorkerHeartbeat
-} from './worker-api';
-import type { ControlPlaneData, Worker } from '$lib/types/control-plane';
+	claimTaskForExecutionSurface,
+	describeExecutionSurfaceTaskFit,
+	getExecutionSurfaceAssignmentSuggestions,
+	getExecutionSurfaceTaskView,
+	hashExecutionSurfaceToken,
+	isExecutionSurfaceEligibleForTask,
+	toPublicExecutionSurface,
+	updateTaskFromExecutionSurface,
+	updateExecutionSurfaceHeartbeat
+} from './execution-surface-api';
+import type { ControlPlaneData, ExecutionSurface } from '$lib/types/control-plane';
 
-function buildFixture(): { data: ControlPlaneData; worker: Worker } {
-	const workerTokenHash = hashWorkerToken('secret-token');
-	const worker: Worker = {
+function buildFixture(): { data: ControlPlaneData; worker: ExecutionSurface } {
+	const executionSurfaceTokenHash = hashExecutionSurfaceToken('secret-token');
+	const worker: ExecutionSurface = {
 		id: 'worker_one',
-		name: 'Worker One',
+		name: 'ExecutionSurface One',
 		providerId: 'provider_cloud_codex',
-		roleId: 'role_researcher',
+		supportedRoleIds: ['role_researcher'],
 		location: 'cloud',
 		status: 'idle',
 		capacity: 2,
@@ -28,7 +28,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 		tags: ['research'],
 		skills: ['research'],
 		threadSandboxOverride: null,
-		authTokenHash: workerTokenHash
+		authTokenHash: executionSurfaceTokenHash
 	};
 
 	return {
@@ -56,12 +56,12 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [worker],
+			executionSurfaces: [worker],
 			runs: [
 				{
 					id: 'run_running_assigned',
 					taskId: 'task_running_assigned',
-					workerId: 'worker_one',
+					executionSurfaceId: 'worker_one',
 					providerId: 'provider_cloud_codex',
 					status: 'running',
 					createdAt: '2026-03-26T00:00:00.000Z',
@@ -93,7 +93,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_researcher',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -117,7 +117,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_researcher',
-					assigneeWorkerId: 'worker_one',
+					assigneeExecutionSurfaceId: 'worker_one',
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -141,7 +141,7 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 					approvalMode: 'before_complete',
 					requiresReview: false,
 					desiredRoleId: 'role_app_worker',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -157,10 +157,10 @@ function buildFixture(): { data: ControlPlaneData; worker: Worker } {
 	};
 }
 
-describe('worker-api helpers', () => {
+describe('execution-surface-api helpers', () => {
 	it('omits authTokenHash from public worker output', () => {
 		const { worker } = buildFixture();
-		const publicWorker = toPublicWorker(worker);
+		const publicWorker = toPublicExecutionSurface(worker);
 
 		expect('authTokenHash' in publicWorker).toBe(false);
 		expect(publicWorker.id).toBe(worker.id);
@@ -168,7 +168,7 @@ describe('worker-api helpers', () => {
 
 	it('selects assigned and available tasks for a worker', () => {
 		const { data, worker } = buildFixture();
-		const view = getWorkerTaskView(data, worker);
+		const view = getExecutionSurfaceTaskView(data, worker);
 
 		expect(view.assigned).toHaveLength(1);
 		expect(view.available).toHaveLength(1);
@@ -177,34 +177,34 @@ describe('worker-api helpers', () => {
 
 	it('claims a ready task for an eligible worker', () => {
 		const { data, worker } = buildFixture();
-		const next = claimTaskForWorker(data, worker, 'task_ready_match');
+		const next = claimTaskForExecutionSurface(data, worker, 'task_ready_match');
 		const claimed = next.tasks.find((task) => task.id === 'task_ready_match');
 		const run = next.runs.find((candidate) => candidate.taskId === 'task_ready_match');
 
-		expect(claimed?.assigneeWorkerId).toBe(worker.id);
+		expect(claimed?.assigneeExecutionSurfaceId).toBe(worker.id);
 		expect(claimed?.status).toBe('in_progress');
 		expect(claimed?.runCount).toBe(1);
 		expect(claimed?.latestRunId).toBe(run?.id);
-		expect(run?.workerId).toBe(worker.id);
+		expect(run?.executionSurfaceId).toBe(worker.id);
 		expect(run?.status).toBe('running');
 	});
 
 	it('does not create a duplicate run when the same worker reclaims an active task', () => {
 		const { data, worker } = buildFixture();
-		const next = claimTaskForWorker(data, worker, 'task_running_assigned');
+		const next = claimTaskForExecutionSurface(data, worker, 'task_running_assigned');
 
 		expect(next).toEqual(data);
 	});
 
 	it('updates worker heartbeat fields', () => {
 		const { data, worker } = buildFixture();
-		const next = updateWorkerHeartbeat(data, worker.id, {
+		const next = updateExecutionSurfaceHeartbeat(data, worker.id, {
 			status: 'busy',
 			capacity: 4,
 			note: 'updated',
 			tags: ['growth', 'citations']
 		});
-		const updatedWorker = next.workers[0];
+		const updatedWorker = next.executionSurfaces[0];
 
 		expect(updatedWorker?.status).toBe('busy');
 		expect(updatedWorker?.capacity).toBe(4);
@@ -221,7 +221,7 @@ describe('worker-api helpers', () => {
 		}
 
 		runningTask.approvalMode = 'before_complete';
-		const next = updateTaskFromWorker(data, worker, {
+		const next = updateTaskFromExecutionSurface(data, worker, {
 			taskId: 'task_running_assigned',
 			status: 'review'
 		});
@@ -242,8 +242,8 @@ describe('worker-api helpers', () => {
 	it('checks worker role eligibility correctly', () => {
 		const { data, worker } = buildFixture();
 
-		expect(isWorkerEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
-		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
+		expect(isExecutionSurfaceEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
+		expect(isExecutionSurfaceEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
 	});
 
 	it('treats desired role as optional when a task does not request one', () => {
@@ -255,7 +255,7 @@ describe('worker-api helpers', () => {
 			requiredToolNames: ['codex']
 		};
 
-		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(true);
+		expect(isExecutionSurfaceEligibleForTask(data, worker, data.tasks[2]!)).toBe(true);
 	});
 
 	it('requires capability and tool matches when task requirements are set', () => {
@@ -271,8 +271,8 @@ describe('worker-api helpers', () => {
 			requiredToolNames: ['xcodebuild']
 		};
 
-		expect(isWorkerEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
-		expect(isWorkerEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
+		expect(isExecutionSurfaceEligibleForTask(data, worker, data.tasks[0]!)).toBe(true);
+		expect(isExecutionSurfaceEligibleForTask(data, worker, data.tasks[2]!)).toBe(false);
 	});
 
 	it('describes worker fit and sorts assignment suggestions by eligibility and load', () => {
@@ -282,18 +282,18 @@ describe('worker-api helpers', () => {
 			requiredCapabilityNames: ['research', 'citations'],
 			requiredToolNames: ['codex']
 		};
-		data.workers.push({
+		data.executionSurfaces.push({
 			...worker,
 			id: 'worker_two',
-			name: 'Worker Two',
+			name: 'ExecutionSurface Two',
 			status: 'busy',
-			roleId: 'role_coordinator',
+			supportedRoleIds: ['role_researcher'],
 			skills: ['research']
 		});
-		data.workers.push({
+		data.executionSurfaces.push({
 			...worker,
 			id: 'worker_three',
-			name: 'Worker Three',
+			name: 'ExecutionSurface Three',
 			status: 'idle',
 			skills: ['research'],
 			providerId: 'provider_other'
@@ -306,19 +306,19 @@ describe('worker-api helpers', () => {
 			capabilities: []
 		});
 
-		const fit = describeWorkerTaskFit(data, data.workers[2]!, data.tasks[0]!);
-		const suggestions = getWorkerAssignmentSuggestions(data, data.tasks[0]!);
+		const fit = describeExecutionSurfaceTaskFit(data, data.executionSurfaces[2]!, data.tasks[0]!);
+		const suggestions = getExecutionSurfaceAssignmentSuggestions(data, data.tasks[0]!);
 
 		expect(fit.eligible).toBe(false);
 		expect(fit.missingCapabilityNames).toEqual(['citations']);
 		expect(fit.missingToolNames).toEqual(['codex']);
-		expect(suggestions.slice(0, 2).map((candidate) => candidate.workerId)).toEqual([
+		expect(suggestions.slice(0, 2).map((candidate) => candidate.executionSurfaceId)).toEqual([
 			'worker_one',
 			'worker_two'
 		]);
 		expect(suggestions[2]).toEqual(
 			expect.objectContaining({
-				workerId: 'worker_three',
+				executionSurfaceId: 'worker_three',
 				eligible: false,
 				missingCapabilityNames: ['citations'],
 				missingToolNames: ['codex']
@@ -341,7 +341,7 @@ describe('worker-api helpers', () => {
 			approvalMode: 'none',
 			requiresReview: true,
 			desiredRoleId: 'role_researcher',
-			assigneeWorkerId: null,
+			assigneeExecutionSurfaceId: null,
 			agentThreadId: null,
 			blockedReason: '',
 			dependencyTaskIds: ['task_running_assigned'],
@@ -353,7 +353,7 @@ describe('worker-api helpers', () => {
 			updatedAt: '2026-03-26T00:00:00.000Z'
 		});
 
-		const view = getWorkerTaskView(data, worker);
+		const view = getExecutionSurfaceTaskView(data, worker);
 
 		expect(view.available.map((task) => task.id)).not.toContain('task_waiting_on_dependency');
 	});
@@ -376,34 +376,34 @@ describe('worker-api helpers', () => {
 			createdAt: '2026-03-26T00:00:00.000Z',
 			updatedAt: '2026-03-26T00:00:00.000Z',
 			resolvedAt: null,
-			requestedByWorkerId: null,
-			approverWorkerId: null,
+			requestedByExecutionSurfaceId: null,
+			approverExecutionSurfaceId: null,
 			summary: 'Waiting on before-run approval.'
 		});
 
-		const view = getWorkerTaskView(data, worker);
+		const view = getExecutionSurfaceTaskView(data, worker);
 
 		expect(view.available.map((task) => task.id)).not.toContain('task_ready_match');
 	});
 
 	it('does not expose or claim new work when the worker is at its concurrency limit', () => {
 		const { data, worker } = buildFixture();
-		data.workers[0] = {
+		data.executionSurfaces[0] = {
 			...worker,
 			maxConcurrentRuns: 1
 		};
 
-		const view = getWorkerTaskView(data, data.workers[0]!);
+		const view = getExecutionSurfaceTaskView(data, data.executionSurfaces[0]!);
 
 		expect(view.available).toHaveLength(0);
 
 		try {
-			claimTaskForWorker(data, data.workers[0]!, 'task_ready_match');
-			throw new Error('Expected claimTaskForWorker to reject the claim.');
+			claimTaskForExecutionSurface(data, data.executionSurfaces[0]!, 'task_ready_match');
+			throw new Error('Expected claimTaskForExecutionSurface to reject the claim.');
 		} catch (thrown) {
 			expect(thrown).toMatchObject({
 				status: 409,
-				body: { message: 'Worker is already at its concurrency limit.' }
+				body: { message: 'ExecutionSurface is already at its concurrency limit.' }
 			});
 		}
 	});

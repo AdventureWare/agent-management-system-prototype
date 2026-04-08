@@ -8,7 +8,7 @@
 	import {
 		formatRunStatusLabel,
 		formatProviderSetupStatusLabel,
-		formatWorkerStatusLabel,
+		formatExecutionSurfaceStatusLabel,
 		providerSetupStatusToneClass,
 		runStatusToneClass,
 		workerStatusToneClass
@@ -287,7 +287,7 @@
 									<span
 										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
 									>
-										{formatWorkerStatusLabel(worker.status)}
+										{formatExecutionSurfaceStatusLabel(worker.status)}
 									</span>
 								</div>
 								<p class="ui-clamp-3 mt-3 text-sm text-slate-300">

@@ -40,12 +40,12 @@ describe('buildExecutionRequirementInventory', () => {
 					notes: ''
 				}
 			],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_one',
-					name: 'Worker One',
+					name: 'ExecutionSurface One',
 					providerId: 'provider_cloud',
-					roleId: 'role_researcher',
+					supportedRoleIds: [],
 					location: 'cloud',
 					status: 'idle',
 					capacity: 1,
@@ -59,9 +59,9 @@ describe('buildExecutionRequirementInventory', () => {
 				},
 				{
 					id: 'worker_two',
-					name: 'Worker Two',
+					name: 'ExecutionSurface Two',
 					providerId: 'provider_local',
-					roleId: 'role_researcher',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,

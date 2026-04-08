@@ -43,7 +43,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					taskTitle: 'Make runs first class',
 					taskProjectId: 'project_1',
 					taskProjectName: 'Agent Management System Prototype',
-					workerId: 'worker_1',
+					executionSurfaceId: 'worker_1',
 					workerName: 'Coordinator',
 					providerId: 'provider_1',
 					providerName: 'Local Codex',

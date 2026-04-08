@@ -21,7 +21,7 @@ describe('task-form', () => {
 		form.set('delegationExpectedDeliverable', '  Shared task-form module  ');
 		form.set('delegationDoneCondition', '  Routes import the new helpers  ');
 		form.set('delegationIntegrationNotes', '  Keep route behavior unchanged  ');
-		form.set('assigneeWorkerId', '  worker_1  ');
+		form.set('assigneeExecutionSurfaceId', '  worker_1  ');
 		form.set('targetDate', ' 2026-04-10 ');
 		form.set('goalId', '  goal_cleanup ');
 		form.set('area', 'invalid');
@@ -52,7 +52,7 @@ describe('task-form', () => {
 			delegationExpectedDeliverable: 'Shared task-form module',
 			delegationDoneCondition: 'Routes import the new helpers',
 			delegationIntegrationNotes: 'Keep route behavior unchanged',
-			assigneeWorkerId: 'worker_1',
+			assigneeExecutionSurfaceId: 'worker_1',
 			targetDate: '2026-04-10',
 			goalId: 'goal_cleanup',
 			area: 'product',
@@ -76,7 +76,7 @@ describe('task-form', () => {
 		form.set('instructions', 'Task instructions');
 		form.set('projectId', 'project_1');
 		form.set('goalId', '');
-		form.set('assigneeWorkerId', '');
+		form.set('assigneeExecutionSurfaceId', '');
 		form.set('priority', 'medium');
 		form.set('requiredThreadSandbox', '');
 		form.set('requiresReview', 'true');

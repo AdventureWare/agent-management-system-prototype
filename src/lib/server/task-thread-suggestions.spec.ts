@@ -49,7 +49,7 @@ function createTask(overrides: Partial<Task> = {}): Task {
 		desiredRoleId: 'role_coordinator',
 		requiredCapabilityNames: [],
 		requiredToolNames: [],
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: null,
 		blockedReason: '',
 		dependencyTaskIds: [],
@@ -212,11 +212,11 @@ describe('buildTaskThreadSuggestions', () => {
 						areaLabels: ['Product'],
 						focusLabels: ['UI/UX'],
 						entityLabels: ['Task'],
-						roleLabels: ['App Worker'],
+						roleLabels: ['App ExecutionSurface'],
 						capabilityLabels: ['iOS', 'SwiftUI'],
 						toolLabels: ['Xcodebuild'],
 						keywordLabels: [],
-						labels: ['Product', 'UI/UX', 'Task', 'App Worker']
+						labels: ['Product', 'UI/UX', 'Task', 'App ExecutionSurface']
 					}
 				}),
 				createSession('generic', {
@@ -227,12 +227,12 @@ describe('buildTaskThreadSuggestions', () => {
 		});
 
 		expect(result.suggestedThread?.id).toBe('metadata');
-		expect(result.suggestedThread?.matchedContext.roleLabels).toEqual(['App Worker']);
+		expect(result.suggestedThread?.matchedContext.roleLabels).toEqual(['App ExecutionSurface']);
 		expect(result.suggestedThread?.matchedContext.capabilityLabels).toEqual(
 			expect.arrayContaining(['iOS', 'SwiftUI'])
 		);
 		expect(result.suggestedThread?.matchedContext.toolLabels).toEqual(['Xcodebuild']);
-		expect(result.suggestedThread?.suggestionReason).toContain('role App Worker');
+		expect(result.suggestedThread?.suggestionReason).toContain('role App ExecutionSurface');
 		expect(result.suggestedThread?.suggestionReason).toContain('capabilities iOS, SwiftUI');
 		expect(result.suggestedThread?.suggestionReason).toContain('tools Xcodebuild');
 	});

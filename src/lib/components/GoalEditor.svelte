@@ -75,6 +75,8 @@
 
 	let {
 		action,
+		assistAction = null,
+		assistChangeSummary = '',
 		submitLabel,
 		heading,
 		description,
@@ -90,6 +92,8 @@
 		clearDraftOnSuccess = false
 	}: {
 		action: string;
+		assistAction?: string | null;
+		assistChangeSummary?: string;
 		submitLabel: string;
 		heading: string;
 		description: string;
@@ -313,6 +317,9 @@
 	let normalizedName = $derived(name.trim());
 	let normalizedSummary = $derived(summary.trim());
 	let normalizedSuccessSignal = $derived(successSignal.trim());
+	let hasGoalWritingSeed = $derived(
+		Boolean(normalizedName || normalizedSummary || normalizedSuccessSignal)
+	);
 	let hasOutcomeTitle = $derived(
 		normalizedName.length >= 12 && normalizedName.split(/\s+/).filter(Boolean).length >= 3
 	);
@@ -611,12 +618,25 @@
 	</div>
 
 	<div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-		<div>
-			<h3 class="text-sm font-semibold tracking-[0.2em] text-slate-300 uppercase">Outcome</h3>
-			<p class="mt-1 text-sm text-slate-500">
-				State the outcome first. The coach helps you describe a useful goal before you worry about
-				relationships.
-			</p>
+		<div class="flex flex-wrap items-start justify-between gap-3">
+			<div>
+				<h3 class="text-sm font-semibold tracking-[0.2em] text-slate-300 uppercase">Outcome</h3>
+				<p class="mt-1 text-sm text-slate-500">
+					State the outcome first. The coach helps you describe a useful goal before you worry about
+					relationships.
+				</p>
+			</div>
+			{#if assistAction}
+				<button
+					class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
+					type="submit"
+					formaction={assistAction}
+					formmethod="POST"
+					disabled={!hasGoalWritingSeed}
+				>
+					Improve with AI
+				</button>
+			{/if}
 		</div>
 
 		<div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
@@ -664,6 +684,14 @@
 						This can be a metric, a visible behavior change, or a review condition.
 					</span>
 				</label>
+
+				{#if assistChangeSummary}
+					<p
+						class="rounded-2xl border border-emerald-900/70 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
+					>
+						{assistChangeSummary}
+					</p>
+				{/if}
 
 				<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
 					<label class="block">

@@ -48,7 +48,7 @@ export type ExecutionCapabilityCatalog = {
 
 type CapabilityAccumulator = {
 	name: string;
-	workerIds: Set<string>;
+	executionSurfaceIds: Set<string>;
 	supportedWorkerIds: Set<string>;
 	onlineSupportedWorkerIds: Set<string>;
 	providerIds: Set<string>;
@@ -59,7 +59,7 @@ type ToolAccumulator = {
 	name: string;
 	providerIds: Set<string>;
 	connectedProviderIds: Set<string>;
-	workerIds: Set<string>;
+	executionSurfaceIds: Set<string>;
 	onlineWorkerIds: Set<string>;
 };
 
@@ -81,7 +81,7 @@ function getOrCreateCapabilityEntry(
 
 	const nextEntry = {
 		name: name.trim(),
-		workerIds: new Set<string>(),
+		executionSurfaceIds: new Set<string>(),
 		supportedWorkerIds: new Set<string>(),
 		onlineSupportedWorkerIds: new Set<string>(),
 		providerIds: new Set<string>(),
@@ -111,7 +111,7 @@ function getOrCreateToolEntry(
 		name: name.trim(),
 		providerIds: new Set<string>(),
 		connectedProviderIds: new Set<string>(),
-		workerIds: new Set<string>(),
+		executionSurfaceIds: new Set<string>(),
 		onlineWorkerIds: new Set<string>()
 	};
 	entries.set(normalizedName, nextEntry);
@@ -122,7 +122,7 @@ function finalizeCapabilityEntries(entries: Map<string, CapabilityAccumulator>) 
 	return [...entries.values()]
 		.map((entry) => ({
 			name: entry.name,
-			workerSkillCount: entry.workerIds.size,
+			workerSkillCount: entry.executionSurfaceIds.size,
 			supportedWorkerCount: entry.supportedWorkerIds.size,
 			onlineSupportedWorkerCount: entry.onlineSupportedWorkerIds.size,
 			providerCapabilityCount: entry.providerIds.size,
@@ -137,21 +137,21 @@ function finalizeToolEntries(entries: Map<string, ToolAccumulator>) {
 			name: entry.name,
 			providerCount: entry.providerIds.size,
 			connectedProviderCount: entry.connectedProviderIds.size,
-			workerCount: entry.workerIds.size,
+			workerCount: entry.executionSurfaceIds.size,
 			onlineWorkerCount: entry.onlineWorkerIds.size
 		}))
 		.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function buildExecutionCapabilityCatalog(
-	data: Pick<ControlPlaneData, 'projects' | 'providers' | 'workers' | 'tasks'>
+	data: Pick<ControlPlaneData, 'projects' | 'providers' | 'executionSurfaces' | 'tasks'>
 ): ExecutionCapabilityCatalog {
 	const capabilityEntries = new Map<string, CapabilityAccumulator>();
 	const toolEntries = new Map<string, ToolAccumulator>();
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
-	const workersByProviderId = new Map<string, ControlPlaneData['workers']>();
+	const workersByProviderId = new Map<string, ControlPlaneData['executionSurfaces']>();
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		const providerWorkers = workersByProviderId.get(worker.providerId) ?? [];
 		providerWorkers.push(worker);
 		workersByProviderId.set(worker.providerId, providerWorkers);
@@ -189,14 +189,14 @@ export function buildExecutionCapabilityCatalog(
 		}
 	}
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		const provider = providerMap.get(worker.providerId) ?? null;
 
 		for (const skillName of worker.skills ?? []) {
 			const entry = getOrCreateCapabilityEntry(capabilityEntries, skillName);
 
 			if (entry) {
-				entry.workerIds.add(worker.id);
+				entry.executionSurfaceIds.add(worker.id);
 				entry.supportedWorkerIds.add(worker.id);
 
 				if (worker.status !== 'offline') {
@@ -208,7 +208,7 @@ export function buildExecutionCapabilityCatalog(
 		const toolEntry = getOrCreateToolEntry(toolEntries, provider?.launcher ?? '');
 
 		if (toolEntry) {
-			toolEntry.workerIds.add(worker.id);
+			toolEntry.executionSurfaceIds.add(worker.id);
 
 			if (worker.status !== 'offline') {
 				toolEntry.onlineWorkerIds.add(worker.id);

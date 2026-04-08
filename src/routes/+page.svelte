@@ -20,8 +20,8 @@
 		</h1>
 		<p class="max-w-3xl text-base text-slate-300 sm:text-lg">
 			The real workflow today is tasks, runs, and resumable threads. Projects, goals, planning,
-			workers, roles, and providers are already modeled, but they currently support that core loop
-			more than they replace it.
+			executionSurfaces, roles, and providers are already modeled, but they currently support that
+			core loop more than they replace it.
 		</p>
 		<div class="flex flex-wrap gap-3">
 			<a

@@ -186,12 +186,12 @@
 						<span class="mb-2 block text-sm font-medium text-slate-200">
 							Execution surface scope
 						</span>
-						<select class="select text-white" name="workerId">
-							<option selected={data.filters.workerId === ''} value="">
+						<select class="select text-white" name="executionSurfaceId">
+							<option selected={data.filters.executionSurfaceId === ''} value="">
 								All execution surfaces
 							</option>
 							{#each data.workerOptions as worker (worker.id)}
-								<option selected={data.filters.workerId === worker.id} value={worker.id}>
+								<option selected={data.filters.executionSurfaceId === worker.id} value={worker.id}>
 									{worker.name}
 								</option>
 							{/each}
@@ -229,7 +229,7 @@
 					<input name="endDate" type="hidden" value={data.filters.endDate} />
 					<input name="projectId" type="hidden" value={data.filters.projectId} />
 					<input name="goalId" type="hidden" value={data.filters.goalId} />
-					<input name="workerId" type="hidden" value={data.filters.workerId} />
+					<input name="executionSurfaceId" type="hidden" value={data.filters.executionSurfaceId} />
 					<input
 						name="includeUnscheduled"
 						type="hidden"

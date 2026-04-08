@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Decision, Project, Task, Worker } from '$lib/types/control-plane';
+import type { Decision, Project, Task, ExecutionSurface } from '$lib/types/control-plane';
 import type { InstalledCodexSkill } from '$lib/server/codex-skills';
 import {
 	buildRecentTaskDecisionViews,
@@ -18,11 +18,11 @@ const project: Project = {
 	defaultBranch: ''
 };
 
-const worker: Worker = {
+const worker: ExecutionSurface = {
 	id: 'worker_1',
 	name: 'Planner',
 	providerId: 'provider_local',
-	roleId: 'role_reviewer',
+	supportedRoleIds: [],
 	location: 'local',
 	status: 'idle',
 	capacity: 1,
@@ -54,7 +54,7 @@ const task: Task = {
 	requiredThreadSandbox: null,
 	requiresReview: true,
 	desiredRoleId: 'role_reviewer',
-	assigneeWorkerId: 'worker_1',
+	assigneeExecutionSurfaceId: 'worker_1',
 	agentThreadId: null,
 	blockedReason: '',
 	dependencyTaskIds: [],
@@ -83,7 +83,7 @@ describe('task-detail-display-data', () => {
 				decisionType: 'task_plan_updated',
 				summary: 'Older',
 				createdAt: '2026-04-01T10:00:00.000Z',
-				decidedByWorkerId: null
+				decidedByExecutionSurfaceId: null
 			},
 			{
 				id: 'decision_newer',
@@ -96,7 +96,7 @@ describe('task-detail-display-data', () => {
 				decisionType: 'task_plan_updated',
 				summary: 'Newer',
 				createdAt: '2026-04-02T10:00:00.000Z',
-				decidedByWorkerId: null
+				decidedByExecutionSurfaceId: null
 			}
 		];
 

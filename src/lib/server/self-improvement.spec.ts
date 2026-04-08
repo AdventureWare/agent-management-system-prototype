@@ -126,12 +126,12 @@ function createFixture(): ControlPlaneData {
 				taskIds: []
 			}
 		],
-		workers: [
+		executionSurfaces: [
 			{
 				id: 'worker_1',
-				name: 'Worker',
+				name: 'ExecutionSurface',
 				providerId: 'provider_local',
-				roleId: 'role_builder',
+				supportedRoleIds: [],
 				location: 'local',
 				status: 'busy',
 				capacity: 1,
@@ -157,7 +157,7 @@ function createFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_builder',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: 'session_busy',
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -181,7 +181,7 @@ function createFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_builder',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: 'Need the schema migration task to finish first.',
 				dependencyTaskIds: ['task_dependency'],
@@ -205,7 +205,7 @@ function createFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_builder',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -229,7 +229,7 @@ function createFixture(): ControlPlaneData {
 				approvalMode: 'before_complete',
 				requiresReview: true,
 				desiredRoleId: 'role_builder',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: 'session_review',
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -253,7 +253,7 @@ function createFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: false,
 				desiredRoleId: 'role_builder',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -269,7 +269,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'run_failure_old',
 				taskId: 'task_failure',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'failed',
 				createdAt: '2026-03-31T09:10:00.000Z',
@@ -287,7 +287,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'run_failure_latest',
 				taskId: 'task_failure',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'failed',
 				createdAt: '2026-03-31T11:20:00.000Z',
@@ -305,7 +305,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'run_dependency',
 				taskId: 'task_dependency',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'running',
 				createdAt: '2026-03-31T02:00:00.000Z',
@@ -323,7 +323,7 @@ function createFixture(): ControlPlaneData {
 			{
 				id: 'run_review',
 				taskId: 'task_review',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'completed',
 				createdAt: '2026-03-31T10:00:00.000Z',
@@ -348,8 +348,8 @@ function createFixture(): ControlPlaneData {
 				createdAt: '2026-03-31T10:40:00.000Z',
 				updatedAt: '2026-03-31T10:45:00.000Z',
 				resolvedAt: null,
-				requestedByWorkerId: null,
-				reviewerWorkerId: null,
+				requestedByExecutionSurfaceId: null,
+				reviewerExecutionSurfaceId: null,
 				summary: 'Needs stronger edge-case handling.'
 			}
 		],

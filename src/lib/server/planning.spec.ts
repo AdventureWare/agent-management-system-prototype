@@ -81,12 +81,12 @@ function buildFixture(): ControlPlaneData {
 				confidence: 'high'
 			}
 		],
-		workers: [
+		executionSurfaces: [
 			{
 				id: 'worker_1',
 				name: 'Local builder',
 				providerId: 'provider_local',
-				roleId: 'role_product',
+				supportedRoleIds: [],
 				location: 'local',
 				status: 'busy',
 				capacity: 2,
@@ -105,7 +105,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'worker_2',
 				name: 'Cloud coordinator',
 				providerId: 'provider_cloud',
-				roleId: 'role_coordinator',
+				supportedRoleIds: [],
 				location: 'cloud',
 				status: 'idle',
 				capacity: 1,
@@ -135,7 +135,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_product',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -163,7 +163,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: false,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -242,7 +242,7 @@ describe('planning helpers', () => {
 		const snapshot = buildPlanningPageData(buildFixture(), {
 			startDate: '2026-04-01',
 			endDate: '2026-04-15',
-			workerId: 'worker_1',
+			executionSurfaceId: 'worker_1',
 			includeUnscheduled: true
 		});
 

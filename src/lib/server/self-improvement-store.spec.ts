@@ -145,7 +145,7 @@ function createControlPlaneData(): ControlPlaneData {
 				taskIds: ['task_2']
 			}
 		],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [
 			{
 				id: 'task_1',
@@ -160,7 +160,7 @@ function createControlPlaneData(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -184,7 +184,7 @@ function createControlPlaneData(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_coordinator',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],

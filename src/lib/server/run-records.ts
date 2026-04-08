@@ -24,7 +24,7 @@ export type RunRecord = Run & {
 export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDetail[]): RunRecord[] {
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 	const staleHeartbeatCutoffMs = 5 * 60 * 1000;
@@ -33,7 +33,9 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 		.map((run) => {
 			const task = taskMap.get(run.taskId) ?? null;
 			const project = task ? (projectMap.get(task.projectId) ?? null) : null;
-			const worker = run.workerId ? (workerMap.get(run.workerId) ?? null) : null;
+			const worker = run.executionSurfaceId
+				? (workerMap.get(run.executionSurfaceId) ?? null)
+				: null;
 			const provider = run.providerId ? (providerMap.get(run.providerId) ?? null) : null;
 			const thread = run.agentThreadId ? (threadMap.get(run.agentThreadId) ?? null) : null;
 			const heartbeatAgeMs = run.lastHeartbeatAt

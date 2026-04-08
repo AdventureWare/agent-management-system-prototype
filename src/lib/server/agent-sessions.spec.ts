@@ -1181,7 +1181,7 @@ describe('agent session helpers', () => {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -1196,7 +1196,7 @@ describe('agent session helpers', () => {
 					approvalMode: 'before_complete',
 					requiresReview: true,
 					desiredRoleId: 'role_app_worker',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: 'session_1',
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -1212,7 +1212,7 @@ describe('agent session helpers', () => {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-03-30T20:00:00.000Z',
@@ -1253,7 +1253,7 @@ describe('agent session helpers', () => {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -1268,7 +1268,7 @@ describe('agent session helpers', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: 'session_1',
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -1284,7 +1284,7 @@ describe('agent session helpers', () => {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-03-30T20:00:00.000Z',
@@ -1354,7 +1354,7 @@ describe('agent session helpers', () => {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -1369,7 +1369,7 @@ describe('agent session helpers', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: 'session_1',
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -1385,7 +1385,7 @@ describe('agent session helpers', () => {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T16:14:14.000Z',
@@ -1458,7 +1458,7 @@ describe('agent session helpers', () => {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -1473,7 +1473,7 @@ describe('agent session helpers', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: 'session_1',
 					blockedReason: 'False transport error.',
 					dependencyTaskIds: [],
@@ -1489,7 +1489,7 @@ describe('agent session helpers', () => {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'failed',
 					createdAt: '2026-04-01T16:36:41.929Z',
@@ -1571,7 +1571,7 @@ describe('agent session helpers', () => {
 			roles: [],
 			projects: [],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
@@ -1586,7 +1586,7 @@ describe('agent session helpers', () => {
 					approvalMode: 'before_complete',
 					requiresReview: true,
 					desiredRoleId: 'role_app_worker',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: 'session_1',
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -1602,7 +1602,7 @@ describe('agent session helpers', () => {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'completed',
 					createdAt: '2026-03-30T20:00:00.000Z',
@@ -1627,8 +1627,8 @@ describe('agent session helpers', () => {
 					createdAt: '2026-03-30T20:15:00.000Z',
 					updatedAt: '2026-03-30T20:15:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					reviewerWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					reviewerExecutionSurfaceId: null,
 					summary: 'Waiting on review.'
 				}
 			],
@@ -1642,8 +1642,8 @@ describe('agent session helpers', () => {
 					createdAt: '2026-03-30T20:15:00.000Z',
 					updatedAt: '2026-03-30T20:15:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					approverWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					approverExecutionSurfaceId: null,
 					summary: 'Task requires approval before it can be closed out.'
 				}
 			]

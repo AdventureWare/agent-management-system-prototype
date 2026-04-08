@@ -56,7 +56,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			decisionType: input.decisionType,
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-04-07T12:00:00.000Z',
-			decidedByWorkerId: null
+			decidedByExecutionSurfaceId: null
 		})
 	),
 	getOpenReviewForTask: vi.fn((data: ControlPlaneData, taskId: string) => {
@@ -111,7 +111,7 @@ function createTaskWorkItem(
 		requiresReview: input.requiresReview ?? true,
 		desiredRoleId: input.desiredRoleId ?? 'role_coordinator',
 		desiredRoleName: input.desiredRoleName ?? 'Coordinator',
-		assigneeWorkerId: input.assigneeWorkerId ?? null,
+		assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId ?? null,
 		assigneeName: input.assigneeName ?? 'Unassigned',
 		agentThreadId: input.agentThreadId ?? null,
 		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
@@ -185,7 +185,7 @@ describe('task-governance helpers', () => {
 					targetDate: null
 				}
 			],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_review',
@@ -200,7 +200,7 @@ describe('task-governance helpers', () => {
 					approvalMode: 'none',
 					requiresReview: true,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -225,7 +225,7 @@ describe('task-governance helpers', () => {
 					approvalMode: 'before_complete',
 					requiresReview: false,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],
@@ -250,7 +250,7 @@ describe('task-governance helpers', () => {
 					approvalMode: 'none',
 					requiresReview: false,
 					desiredRoleId: 'role_coordinator',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: 'Waiting on operator input.',
 					dependencyTaskIds: ['task_review'],
@@ -267,7 +267,7 @@ describe('task-governance helpers', () => {
 				{
 					id: 'run_review',
 					taskId: 'task_review',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'completed',
 					createdAt: '2026-04-07T10:00:00.000Z',
@@ -285,7 +285,7 @@ describe('task-governance helpers', () => {
 				{
 					id: 'run_approval',
 					taskId: 'task_approval',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'completed',
 					createdAt: '2026-04-07T10:05:00.000Z',
@@ -303,7 +303,7 @@ describe('task-governance helpers', () => {
 				{
 					id: 'run_stale',
 					taskId: 'task_stale',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-07T09:00:00.000Z',
@@ -328,8 +328,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:00:00.000Z',
 					updatedAt: '2026-04-07T11:00:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					reviewerWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					reviewerExecutionSurfaceId: null,
 					summary: 'Please review.'
 				}
 			],
@@ -343,8 +343,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:05:00.000Z',
 					updatedAt: '2026-04-07T11:05:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					approverWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					approverExecutionSurfaceId: null,
 					summary: 'Needs final approval.'
 				}
 			]
@@ -367,8 +367,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:00:00.000Z',
 					updatedAt: '2026-04-07T11:00:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					reviewerWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					reviewerExecutionSurfaceId: null,
 					summary: 'Please review.'
 				}
 			}),
@@ -387,8 +387,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:05:00.000Z',
 					updatedAt: '2026-04-07T11:05:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					approverWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					approverExecutionSurfaceId: null,
 					summary: 'Needs final approval.'
 				}
 			}),
@@ -548,8 +548,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:06:00.000Z',
 					updatedAt: '2026-04-07T11:06:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					approverWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					approverExecutionSurfaceId: null,
 					summary: 'Still needs approval.'
 				}
 			]
@@ -590,8 +590,8 @@ describe('task-governance helpers', () => {
 					createdAt: '2026-04-07T11:07:00.000Z',
 					updatedAt: '2026-04-07T11:07:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: null,
-					reviewerWorkerId: null,
+					requestedByExecutionSurfaceId: null,
+					reviewerExecutionSurfaceId: null,
 					summary: 'Review still open.'
 				}
 			]

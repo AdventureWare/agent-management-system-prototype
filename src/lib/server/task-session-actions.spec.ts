@@ -20,7 +20,7 @@ const createDecision = vi.hoisted(() =>
 			decisionType: input.decisionType,
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-04-01T10:00:00.000Z',
-			decidedByWorkerId: null
+			decidedByExecutionSurfaceId: null
 		})
 	)
 );
@@ -84,7 +84,7 @@ function createTask(overrides: Partial<Task>): Task {
 		requiredThreadSandbox: null,
 		requiresReview: false,
 		desiredRoleId: '',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: 'thread_assigned',
 		requiredCapabilityNames: [],
 		requiredToolNames: [],
@@ -118,7 +118,7 @@ function createData(): ControlPlaneData {
 			}
 		],
 		goals: [],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [createTask({})],
 		runs: [],
 		decisions: [],
@@ -182,7 +182,7 @@ describe('task-session-actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T10:00:00.000Z',
@@ -215,7 +215,7 @@ describe('task-session-actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T10:00:00.000Z',
@@ -259,7 +259,7 @@ describe('task-session-actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T10:00:00.000Z',
@@ -304,7 +304,7 @@ describe('task-session-actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T10:00:00.000Z',
@@ -336,7 +336,7 @@ describe('task-session-actions', () => {
 				{
 					id: 'run_active',
 					taskId: 'task_1',
-					workerId: null,
+					executionSurfaceId: null,
 					providerId: null,
 					status: 'running',
 					createdAt: '2026-04-01T10:00:00.000Z',

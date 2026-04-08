@@ -1,5 +1,5 @@
 import type { AgentThreadDetail } from '$lib/types/agent-thread';
-import type { ControlPlaneData, Provider, Worker } from '$lib/types/control-plane';
+import type { ControlPlaneData, Provider, ExecutionSurface } from '$lib/types/control-plane';
 import type {
 	OntologyActor,
 	OntologyApproval,
@@ -21,8 +21,8 @@ import type {
 	OntologyWorkAttempt
 } from '$lib/types/ontology';
 
-function toActorIdFromWorkerId(workerId: string) {
-	return `actor_${workerId}`;
+function toActorIdFromWorkerId(executionSurfaceId: string) {
+	return `actor_${executionSurfaceId}`;
 }
 
 function slugify(value: string) {
@@ -41,7 +41,7 @@ function toolNamesForProvider(provider: Provider) {
 	return uniqueStrings([provider.launcher]);
 }
 
-function capabilityNamesForWorker(worker: Worker, provider: Provider | null) {
+function capabilityNamesForWorker(worker: ExecutionSurface, provider: Provider | null) {
 	return uniqueStrings([...(worker.skills ?? []), ...(provider?.capabilities ?? [])]);
 }
 
@@ -86,43 +86,41 @@ export function buildOntologyV1Snapshot(input: {
 		area: role.area
 	}));
 
-	const actors: OntologyActor[] = data.workers.map((worker) => {
-		const provider = providerMap.get(worker.providerId) ?? null;
-		const roleIds = Array.from(
-			new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
-		);
+	const actors: OntologyActor[] = data.executionSurfaces.map((executionSurface) => {
+		const provider = providerMap.get(executionSurface.providerId) ?? null;
+		const roleIds = Array.from(new Set([...(executionSurface.supportedRoleIds ?? [])]));
 
 		return {
-			id: toActorIdFromWorkerId(worker.id),
-			name: worker.name,
+			id: toActorIdFromWorkerId(executionSurface.id),
+			name: executionSurface.name,
 			kind: 'ai',
 			roleIds,
-			capabilityNames: capabilityNamesForWorker(worker, provider),
-			executionSurfaceIds: [worker.id]
+			capabilityNames: capabilityNamesForWorker(executionSurface, provider),
+			executionSurfaceIds: [executionSurface.id]
 		};
 	});
 
-	const executionSurfaces: OntologyExecutionSurface[] = data.workers.map((worker) => {
-		const provider = providerMap.get(worker.providerId) ?? null;
-		const roleIds = Array.from(
-			new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
-		);
+	const executionSurfaces: OntologyExecutionSurface[] = data.executionSurfaces.map(
+		(executionSurface) => {
+			const provider = providerMap.get(executionSurface.providerId) ?? null;
+			const roleIds = Array.from(new Set([...(executionSurface.supportedRoleIds ?? [])]));
 
-		return {
-			id: worker.id,
-			name: worker.name,
-			status: worker.status,
-			providerId: worker.providerId || null,
-			roleIds,
-			capabilityNames: capabilityNamesForWorker(worker, provider),
-			toolNames: provider ? toolNamesForProvider(provider) : [],
-			sandbox: worker.threadSandboxOverride ?? provider?.defaultThreadSandbox ?? null
-		};
-	});
+			return {
+				id: executionSurface.id,
+				name: executionSurface.name,
+				status: executionSurface.status,
+				providerId: executionSurface.providerId || null,
+				roleIds,
+				capabilityNames: capabilityNamesForWorker(executionSurface, provider),
+				toolNames: provider ? toolNamesForProvider(provider) : [],
+				sandbox: executionSurface.threadSandboxOverride ?? provider?.defaultThreadSandbox ?? null
+			};
+		}
+	);
 
 	const capabilityMap = new Map<string, OntologyCapability>();
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		for (const skill of worker.skills ?? []) {
 			const name = skill.trim();
 			if (!name) {
@@ -255,8 +253,10 @@ export function buildOntologyV1Snapshot(input: {
 			id: run.id,
 			kind: 'run',
 			taskId: run.taskId || null,
-			performedByActorId: run.workerId ? toActorIdFromWorkerId(run.workerId) : null,
-			executionSurfaceId: run.workerId,
+			performedByActorId: run.executionSurfaceId
+				? toActorIdFromWorkerId(run.executionSurfaceId)
+				: null,
+			executionSurfaceId: run.executionSurfaceId,
 			providerId: run.providerId,
 			threadId: run.agentThreadId,
 			status: run.status,
@@ -355,7 +355,9 @@ export function buildOntologyV1Snapshot(input: {
 		goalId: task.goalId || null,
 		dependencyTaskIds: task.dependencyTaskIds,
 		desiredRoleId: task.desiredRoleId || null,
-		assignedActorId: task.assigneeWorkerId ? toActorIdFromWorkerId(task.assigneeWorkerId) : null,
+		assignedActorId: task.assigneeExecutionSurfaceId
+			? toActorIdFromWorkerId(task.assigneeExecutionSurfaceId)
+			: null,
 		primaryThreadId: task.agentThreadId,
 		workAttemptIds: workAttemptIdsByTask.get(task.id) ?? [],
 		contextResourceIds: contextIdsByTask.get(task.id) ?? [],
@@ -372,8 +374,8 @@ export function buildOntologyV1Snapshot(input: {
 		taskId: review.taskId,
 		workAttemptId: review.runId,
 		status: review.status,
-		reviewerActorId: review.reviewerWorkerId
-			? toActorIdFromWorkerId(review.reviewerWorkerId)
+		reviewerActorId: review.reviewerExecutionSurfaceId
+			? toActorIdFromWorkerId(review.reviewerExecutionSurfaceId)
 			: null,
 		summary: review.summary
 	}));
@@ -384,8 +386,8 @@ export function buildOntologyV1Snapshot(input: {
 		workAttemptId: approval.runId,
 		status: approval.status,
 		mode: approval.mode,
-		approverActorId: approval.approverWorkerId
-			? toActorIdFromWorkerId(approval.approverWorkerId)
+		approverActorId: approval.approverExecutionSurfaceId
+			? toActorIdFromWorkerId(approval.approverExecutionSurfaceId)
 			: null,
 		summary: approval.summary
 	}));
@@ -410,7 +412,7 @@ export function buildOntologyV1Snapshot(input: {
 	);
 
 	const limitations = [
-		'Current workers act mostly as execution surfaces; the broader Actor concept is still only approximated.',
+		'Current executionSurfaces act mostly as execution surfaces; the broader Actor concept is still only approximated.',
 		'Runs are mapped as WorkAttempt instances, but human work attempts are not yet represented.'
 	];
 

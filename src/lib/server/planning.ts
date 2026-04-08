@@ -1,5 +1,5 @@
-import type { ControlPlaneData, Goal, Task, Worker } from '$lib/types/control-plane';
-import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
+import type { ControlPlaneData, Goal, Task, ExecutionSurface } from '$lib/types/control-plane';
+import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-surface-api';
 
 const FALLBACK_CAPACITY_HOURS_PER_SLOT = 20;
 
@@ -8,7 +8,7 @@ type PlanningPageFilters = {
 	endDate: string;
 	projectId?: string | null;
 	goalId?: string | null;
-	workerId?: string | null;
+	executionSurfaceId?: string | null;
 	includeUnscheduled?: boolean;
 };
 
@@ -47,7 +47,7 @@ type PlanningTaskSummary = {
 	assignedWorkerEligible: boolean | null;
 };
 
-function getWorkerCapacityHours(worker: Worker) {
+function getWorkerCapacityHours(worker: ExecutionSurface) {
 	return (
 		(worker.weeklyCapacityHours ?? worker.capacity * FALLBACK_CAPACITY_HOURS_PER_SLOT) *
 		(worker.focusFactor ?? 1)
@@ -92,9 +92,10 @@ function goalMatchesFilters(goal: Goal, data: ControlPlaneData, filters: Plannin
 		return false;
 	}
 
-	if (filters.workerId) {
+	if (filters.executionSurfaceId) {
 		return data.tasks.some(
-			(task) => task.goalId === goal.id && task.assigneeWorkerId === filters.workerId
+			(task) =>
+				task.goalId === goal.id && task.assigneeExecutionSurfaceId === filters.executionSurfaceId
 		);
 	}
 
@@ -110,7 +111,10 @@ function taskMatchesFilters(task: Task, filters: PlanningPageFilters) {
 		return false;
 	}
 
-	if (filters.workerId && task.assigneeWorkerId !== filters.workerId) {
+	if (
+		filters.executionSurfaceId &&
+		task.assigneeExecutionSurfaceId !== filters.executionSurfaceId
+	) {
 		return false;
 	}
 
@@ -133,7 +137,7 @@ function uniqueTasks(tasks: Task[]) {
 export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningPageFilters) {
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.workers.map((worker) => [worker.id, worker]));
+	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
 	const includeUnscheduled = filters.includeUnscheduled ?? true;
 	const matchingGoals = data.goals.filter((goal) => goalMatchesFilters(goal, data, filters));
 	const matchingGoalIds = new Set(matchingGoals.map((goal) => goal.id));
@@ -154,10 +158,10 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 						}
 
 						if (!task.goalId || !matchingGoalIds.has(task.goalId)) {
-							return Boolean(filters.projectId || filters.workerId);
+							return Boolean(filters.projectId || filters.executionSurfaceId);
 						}
 
-						if (filters.goalId || filters.projectId || filters.workerId) {
+						if (filters.goalId || filters.projectId || filters.executionSurfaceId) {
 							return true;
 						}
 
@@ -200,10 +204,10 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 	const goalTaskMap = new Map(
 		goalsInScope.map((goal) => [goal.id, inScopeTasks.filter((task) => task.goalId === goal.id)])
 	);
-	const workerLoads = data.workers
+	const workerLoads = data.executionSurfaces
 		.map((worker) => {
 			const plannedHours = scheduledOpenTasks.reduce((total, task) => {
-				if (task.assigneeWorkerId !== worker.id) {
+				if (task.assigneeExecutionSurfaceId !== worker.id) {
 					return total;
 				}
 
@@ -234,7 +238,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 			endDate: filters.endDate,
 			projectId: filters.projectId ?? '',
 			goalId: filters.goalId ?? '',
-			workerId: filters.workerId ?? '',
+			executionSurfaceId: filters.executionSurfaceId ?? '',
 			includeUnscheduled
 		},
 		metrics: {
@@ -279,11 +283,12 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 			};
 		}),
 		scheduledTasks: scheduledTasks.map((task): PlanningTaskSummary => {
-			const workerSuggestions = getWorkerAssignmentSuggestions(data, task);
+			const workerSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
 			const eligibleSuggestions = workerSuggestions.filter((suggestion) => suggestion.eligible);
-			const assignedWorkerSuggestion = task.assigneeWorkerId
-				? (workerSuggestions.find((suggestion) => suggestion.workerId === task.assigneeWorkerId) ??
-					null)
+			const assignedWorkerSuggestion = task.assigneeExecutionSurfaceId
+				? (workerSuggestions.find(
+						(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
+					) ?? null)
 				: null;
 
 			return {
@@ -293,8 +298,8 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
 				goalId: task.goalId,
 				goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
-				assigneeName: task.assigneeWorkerId
-					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+				assigneeName: task.assigneeExecutionSurfaceId
+					? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
 					: 'Unassigned',
 				estimateHours: task.estimateHours ?? null,
 				targetDate: task.targetDate ?? null,
@@ -304,16 +309,17 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				eligibleWorkerCount: eligibleSuggestions.length,
 				suggestedWorkerNames: eligibleSuggestions
 					.slice(0, 3)
-					.map((suggestion) => suggestion.workerName),
+					.map((suggestion) => suggestion.executionSurfaceName),
 				assignedWorkerEligible: assignedWorkerSuggestion ? assignedWorkerSuggestion.eligible : null
 			};
 		}),
 		unscheduledTasks: unscheduledTasks.map((task): PlanningTaskSummary => {
-			const workerSuggestions = getWorkerAssignmentSuggestions(data, task);
+			const workerSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
 			const eligibleSuggestions = workerSuggestions.filter((suggestion) => suggestion.eligible);
-			const assignedWorkerSuggestion = task.assigneeWorkerId
-				? (workerSuggestions.find((suggestion) => suggestion.workerId === task.assigneeWorkerId) ??
-					null)
+			const assignedWorkerSuggestion = task.assigneeExecutionSurfaceId
+				? (workerSuggestions.find(
+						(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
+					) ?? null)
 				: null;
 
 			return {
@@ -323,8 +329,8 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
 				goalId: task.goalId,
 				goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
-				assigneeName: task.assigneeWorkerId
-					? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+				assigneeName: task.assigneeExecutionSurfaceId
+					? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
 					: 'Unassigned',
 				estimateHours: task.estimateHours ?? null,
 				targetDate: null,
@@ -334,7 +340,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				eligibleWorkerCount: eligibleSuggestions.length,
 				suggestedWorkerNames: eligibleSuggestions
 					.slice(0, 3)
-					.map((suggestion) => suggestion.workerName),
+					.map((suggestion) => suggestion.executionSurfaceName),
 				assignedWorkerEligible: assignedWorkerSuggestion ? assignedWorkerSuggestion.eligible : null
 			};
 		}),
@@ -351,7 +357,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				id: goal.id,
 				name: goal.name
 			})),
-		workerOptions: [...data.workers]
+		workerOptions: [...data.executionSurfaces]
 			.sort((left, right) => left.name.localeCompare(right.name))
 			.map((worker) => ({
 				id: worker.id,

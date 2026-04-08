@@ -7,7 +7,7 @@ import type {
 	Review,
 	Role,
 	Task,
-	Worker
+	ExecutionSurface
 } from '$lib/types/control-plane';
 import type {
 	ChildTaskRollup,
@@ -52,7 +52,7 @@ export function summarizeInstalledSkills(skills: InstalledCodexSkill[]) {
 }
 
 export function buildAssignmentSuggestionViews<
-	T extends { roleId: string; providerId: string; workerId: string | null }
+	T extends { roleId: string; providerId: string; executionSurfaceId: string | null }
 >(
 	suggestions: T[],
 	roles: Role[],
@@ -65,7 +65,7 @@ export function buildAssignmentSuggestionViews<
 		providerName:
 			providers.find((provider) => provider.id === suggestion.providerId)?.name ??
 			suggestion.providerId,
-		isCurrentAssignee: suggestion.workerId === currentAssigneeId
+		isCurrentAssignee: suggestion.executionSurfaceId === currentAssigneeId
 	}));
 }
 
@@ -74,7 +74,7 @@ export function buildTaskDetailTaskView(input: {
 	projectMap: Map<string, Project>;
 	goalMap: Map<string, { name: string }>;
 	roleMap: Map<string, { name: string }>;
-	workerMap: Map<string, Worker>;
+	workerMap: Map<string, ExecutionSurface>;
 	latestRun: RelatedRunView | null;
 	activeRun: RelatedRunView | null;
 	threadContext: ThreadContextView;
@@ -109,8 +109,8 @@ export function buildTaskDetailTaskView(input: {
 		desiredRoleName: task.desiredRoleId
 			? (roleMap.get(task.desiredRoleId)?.name ?? task.desiredRoleId)
 			: '',
-		assigneeName: task.assigneeWorkerId
-			? (workerMap.get(task.assigneeWorkerId)?.name ?? 'Unknown worker')
+		assigneeName: task.assigneeExecutionSurfaceId
+			? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
 			: 'Unassigned',
 		latestRun,
 		activeRun,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAccessProbeSnapshot, buildAccessProbeRecords } from '$lib/server/access-probe-store';
 
 describe('access probe store', () => {
-	it('builds records across local paths, providers, and workers', () => {
+	it('builds records across local paths, providers, and executionSurfaces', () => {
 		const records = buildAccessProbeRecords(
 			{
 				summary: {
@@ -83,12 +83,11 @@ describe('access probe store', () => {
 						providerHref: '/app/providers/provider_1'
 					}
 				],
-				workers: [
+				executionSurfaces: [
 					{
 						id: 'worker_1',
 						name: 'Local worker',
 						providerId: 'provider_1',
-						roleId: 'role_1',
 						location: 'local',
 						status: 'idle',
 						capacity: 1,

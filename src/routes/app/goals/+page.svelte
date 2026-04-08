@@ -29,12 +29,16 @@
 	let collapsedGoalIds = $state.raw<string[]>([]);
 
 	function modalShouldStartOpen() {
-		return Boolean(form?.message);
+		return Boolean(form?.message) || form?.reopenCreateModal === true;
 	}
 
 	let isCreateModalOpen = $state(modalShouldStartOpen());
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createGoal');
+	let goalWritingAssistSuccess = $derived(form?.ok && form?.successAction === 'assistGoalWriting');
+	let goalWritingAssistChangeSummary = $derived(
+		goalWritingAssistSuccess ? (form?.assistChangeSummary?.toString() ?? '') : ''
+	);
 	let deleteSuccess = $derived(data.deleted);
 
 	function matchesStatus(goal: GoalDirectoryGoal) {
@@ -416,6 +420,8 @@
 		<div class="p-6">
 			<GoalEditor
 				action="?/createGoal"
+				assistAction="?/assistGoalWriting"
+				assistChangeSummary={goalWritingAssistChangeSummary}
 				description="Outcome first, relationships second. Use the built-in coach if you need help wording the goal, then keep the workspace blank if linked context already tells the system where it should live."
 				folderOptions={data.folderOptions}
 				heading="Create goal"

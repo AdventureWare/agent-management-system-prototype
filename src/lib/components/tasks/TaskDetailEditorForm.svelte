@@ -50,7 +50,7 @@
 		goalId?: string | null;
 		status: TaskStatus;
 		targetDate?: string | null;
-		assigneeWorkerId?: string | null;
+		assigneeExecutionSurfaceId?: string | null;
 		requiredPromptSkillNames?: string[];
 		requiredCapabilityNames?: string[];
 		requiredToolNames?: string[];
@@ -98,7 +98,7 @@
 	};
 
 	type AssignmentSuggestionView = {
-		workerId: string;
+		executionSurfaceId: string;
 		workerName: string;
 		eligible: boolean;
 		isCurrentAssignee: boolean;
@@ -139,7 +139,7 @@
 		projects,
 		goals,
 		statusOptions,
-		workers,
+		executionSurfaces,
 		assignmentSuggestions,
 		roles,
 		dependencyTasksCount,
@@ -151,7 +151,7 @@
 		projects: ProjectOption[];
 		goals: GoalOption[];
 		statusOptions: TaskStatus[];
-		workers: WorkerOption[];
+		executionSurfaces: WorkerOption[];
 		assignmentSuggestions: AssignmentSuggestionView[];
 		roles: RoleOption[];
 		dependencyTasksCount: number;
@@ -431,10 +431,10 @@
 			<label class="mt-4 block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Assigned execution surface</span
 				>
-				<select class="select text-white" name="assigneeWorkerId">
-					<option value="" selected={!task.assigneeWorkerId}>Unassigned</option>
-					{#each workers as worker (worker.id)}
-						<option value={worker.id} selected={task.assigneeWorkerId === worker.id}>
+				<select class="select text-white" name="assigneeExecutionSurfaceId">
+					<option value="" selected={!task.assigneeExecutionSurfaceId}>Unassigned</option>
+					{#each executionSurfaces as worker (worker.id)}
+						<option value={worker.id} selected={task.assigneeExecutionSurfaceId === worker.id}>
 							{worker.name}
 						</option>
 					{/each}
@@ -458,7 +458,7 @@
 				</div>
 
 				<div class="mt-4 space-y-3">
-					{#each visibleAssignmentSuggestions as suggestion (suggestion.workerId)}
+					{#each visibleAssignmentSuggestions as suggestion (suggestion.executionSurfaceId)}
 						<div class={`rounded-2xl border p-3 ${assignmentSuggestionClass(suggestion.eligible)}`}>
 							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div class="min-w-0">

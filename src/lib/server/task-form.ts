@@ -22,7 +22,7 @@ export type CreateTaskFormInput = {
 	delegationExpectedDeliverable: string;
 	delegationDoneCondition: string;
 	delegationIntegrationNotes: string;
-	assigneeWorkerId: string;
+	assigneeExecutionSurfaceId: string;
 	targetDate: string;
 	goalId: string;
 	area: (typeof AREA_OPTIONS)[number];
@@ -72,7 +72,7 @@ export type CreateTaskPrefill = {
 	readyCondition: string;
 	expectedOutcome: string;
 	requiredThreadSandbox: string;
-	assigneeWorkerId: string;
+	assigneeExecutionSurfaceId: string;
 	targetDate: string;
 	goalId: string;
 	area: (typeof AREA_OPTIONS)[number];
@@ -155,7 +155,7 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		delegationExpectedDeliverable: readTrimmedValue(form.get('delegationExpectedDeliverable')),
 		delegationDoneCondition: readTrimmedValue(form.get('delegationDoneCondition')),
 		delegationIntegrationNotes: readTrimmedValue(form.get('delegationIntegrationNotes')),
-		assigneeWorkerId: readTrimmedValue(form.get('assigneeWorkerId')),
+		assigneeExecutionSurfaceId: readTrimmedValue(form.get('assigneeExecutionSurfaceId')),
 		targetDate: readTrimmedValue(form.get('targetDate')),
 		goalId: readTrimmedValue(form.get('goalId')),
 		area: parseOption(AREA_OPTIONS, form.get('area'), 'product'),
@@ -189,7 +189,7 @@ export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 			form.has('delegationDoneCondition') ||
 			form.has('delegationIntegrationNotes'),
 		hasGoalId: form.has('goalId'),
-		hasAssigneeWorkerId: form.has('assigneeWorkerId'),
+		hasAssigneeWorkerId: form.has('assigneeExecutionSurfaceId'),
 		hasPriority: form.has('priority'),
 		hasRiskLevel: form.has('riskLevel'),
 		hasApprovalMode: form.has('approvalMode'),
@@ -227,7 +227,9 @@ export function readCreateTaskPrefill(url: URL): CreateTaskPrefill {
 		readyCondition: readTrimmedValue(url.searchParams.get('readyCondition')),
 		expectedOutcome: readTrimmedValue(url.searchParams.get('expectedOutcome')),
 		requiredThreadSandbox: readTrimmedValue(url.searchParams.get('requiredThreadSandbox')),
-		assigneeWorkerId: readTrimmedValue(url.searchParams.get('assigneeWorkerId')),
+		assigneeExecutionSurfaceId: readTrimmedValue(
+			url.searchParams.get('assigneeExecutionSurfaceId')
+		),
 		targetDate: targetDate && isValidTaskDate(targetDate) ? targetDate : '',
 		goalId: readTrimmedValue(url.searchParams.get('goalId')),
 		area: parseOption(AREA_OPTIONS, url.searchParams.get('area'), 'product'),

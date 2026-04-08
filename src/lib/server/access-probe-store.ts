@@ -89,7 +89,9 @@ function getProviderRecordStatus(
 	return 'healthy';
 }
 
-function getWorkerRecordStatus(worker: AccessDashboardData['workers'][number]): AccessProbeStatus {
+function getWorkerRecordStatus(
+	worker: AccessDashboardData['executionSurfaces'][number]
+): AccessProbeStatus {
 	switch (worker.accessState) {
 		case 'provider_disabled':
 			return 'disabled';
@@ -134,7 +136,7 @@ export function buildAccessProbeRecords(dashboard: AccessDashboardData, checkedA
 				checkedAt
 			}) satisfies AccessProbeRecord
 	);
-	const workerRecords = dashboard.workers.map(
+	const workerRecords = dashboard.executionSurfaces.map(
 		(worker) =>
 			({
 				targetKey: `worker:${worker.id}`,
@@ -145,8 +147,8 @@ export function buildAccessProbeRecords(dashboard: AccessDashboardData, checkedA
 				status: getWorkerRecordStatus(worker),
 				summary:
 					worker.accessState === 'healthy'
-						? 'Worker and provider look ready.'
-						: `Worker access state: ${worker.accessState.replace(/_/g, ' ')}.`,
+						? 'ExecutionSurface and provider look ready.'
+						: `ExecutionSurface access state: ${worker.accessState.replace(/_/g, ' ')}.`,
 				checkedAt
 			}) satisfies AccessProbeRecord
 	);

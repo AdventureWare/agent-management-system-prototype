@@ -349,9 +349,9 @@
 
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-400">
 					<p>
-						Provider and account authorization still live on the providers and workers surfaces.
-						This section is focused on local folder access because that is what controls iCloud,
-						Dropbox, and similar synced paths today.
+						Provider and account authorization still live on the providers and executionSurfaces
+						surfaces. This section is focused on local folder access because that is what controls
+						iCloud, Dropbox, and similar synced paths today.
 					</p>
 				</div>
 			</DetailSection>

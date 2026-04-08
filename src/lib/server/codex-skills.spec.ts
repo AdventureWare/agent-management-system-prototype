@@ -2,7 +2,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listInstalledCodexSkills } from './codex-skills';
+import {
+	createProjectCodexSkill,
+	listInstalledCodexSkills,
+	normalizeCodexSkillId
+} from './codex-skills';
 
 const tempRoots: string[] = [];
 
@@ -84,5 +88,54 @@ describe('listInstalledCodexSkills', () => {
 				sourceLabel: 'Global'
 			}
 		]);
+	});
+});
+
+describe('normalizeCodexSkillId', () => {
+	it('normalizes free-form labels into repo-safe skill ids', () => {
+		expect(normalizeCodexSkillId(' Docs Writer / Internal ')).toBe('docs-writer-internal');
+	});
+});
+
+describe('createProjectCodexSkill', () => {
+	it('creates a project-local skill scaffold and invalidates cached discovery', () => {
+		const codexHome = createTempRoot();
+		const projectRoot = createTempRoot();
+
+		expect(listInstalledCodexSkills(projectRoot, codexHome)).toEqual([]);
+
+		const createdSkill = createProjectCodexSkill({
+			projectRootFolder: projectRoot,
+			skillId: 'Docs Writer',
+			description: 'Project-specific documentation workflow guidance.'
+		});
+
+		expect(createdSkill.skillId).toBe('docs-writer');
+		expect(listInstalledCodexSkills(projectRoot, codexHome)).toEqual([
+			expect.objectContaining({
+				id: 'docs-writer',
+				description: 'Project-specific documentation workflow guidance.',
+				project: true,
+				global: false
+			})
+		]);
+	});
+
+	it('rejects duplicate project-local skills', () => {
+		const projectRoot = createTempRoot();
+
+		createProjectCodexSkill({
+			projectRootFolder: projectRoot,
+			skillId: 'docs-writer',
+			description: 'Project-specific documentation workflow guidance.'
+		});
+
+		expect(() =>
+			createProjectCodexSkill({
+				projectRootFolder: projectRoot,
+				skillId: 'docs-writer',
+				description: 'Another description.'
+			})
+		).toThrow('Project skill "docs-writer" already exists.');
 	});
 });

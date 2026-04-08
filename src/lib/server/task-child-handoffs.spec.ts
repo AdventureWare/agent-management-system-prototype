@@ -19,7 +19,7 @@ const createDecision = vi.hoisted(() =>
 			decisionType: input.decisionType,
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-04-01T10:00:00.000Z',
-			decidedByWorkerId: null
+			decidedByExecutionSurfaceId: null
 		})
 	)
 );
@@ -56,7 +56,7 @@ function createTask(overrides: Partial<Task>): Task {
 		requiredThreadSandbox: null,
 		requiresReview: false,
 		desiredRoleId: '',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: null,
 		requiredCapabilityNames: [],
 		requiredToolNames: [],
@@ -79,7 +79,7 @@ function createData(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [
 			createTask({
 				id: 'task_parent',

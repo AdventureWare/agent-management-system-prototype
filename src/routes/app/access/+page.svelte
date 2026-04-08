@@ -6,7 +6,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
 		formatProviderSetupStatusLabel,
-		formatWorkerStatusLabel,
+		formatExecutionSurfaceStatusLabel,
 		providerSetupStatusToneClass,
 		workerStatusToneClass
 	} from '$lib/types/control-plane';
@@ -124,6 +124,36 @@
 	let workerAvailabilitySuccess = $derived(
 		form?.ok && form?.successAction === 'updateWorkerAvailability'
 	);
+	let createProjectSkillSuccess = $derived(
+		form?.ok && form?.successAction === 'createProjectSkill'
+	);
+	let createProjectSkillFormValues = $derived.by(() => ({
+		projectId:
+			form && 'projectId' in form && typeof form.projectId === 'string' ? form.projectId : '',
+		skillId: form && 'skillId' in form && typeof form.skillId === 'string' ? form.skillId : '',
+		description:
+			form && 'description' in form && typeof form.description === 'string' ? form.description : ''
+	}));
+	let suggestedProjectSkills = $derived.by(() =>
+		data.executionCatalog.projectSkills
+			.flatMap((projectSkills) =>
+				projectSkills.missingRequestedSkills.map((skill) => ({
+					projectId: projectSkills.projectId,
+					projectName: projectSkills.projectName,
+					projectHref: projectSkills.projectHref,
+					skillId: skill.id,
+					requestingTaskCount: skill.requestingTaskCount,
+					description: `Project-specific guidance for ${skill.id} tasks in ${projectSkills.projectName}.`
+				}))
+			)
+			.sort(
+				(left, right) =>
+					right.requestingTaskCount - left.requestingTaskCount ||
+					left.projectName.localeCompare(right.projectName) ||
+					left.skillId.localeCompare(right.skillId)
+			)
+			.slice(0, 8)
+	);
 </script>
 
 <AppPage width="full">
@@ -147,6 +177,12 @@
 		</p>
 	{/if}
 
+	{#if form?.message}
+		<p class="card border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+			{form.message}
+		</p>
+	{/if}
+
 	{#if providerAvailabilitySuccess}
 		<p
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
@@ -159,7 +195,15 @@
 		<p
 			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 		>
-			Worker availability updated.
+			ExecutionSurface availability updated.
+		</p>
+	{/if}
+
+	{#if createProjectSkillSuccess}
+		<p
+			class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+		>
+			Project skill stub created for {form?.createdSkillId}.
 		</p>
 	{/if}
 
@@ -198,6 +242,195 @@
 
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
 		<section class="space-y-6">
+			<DetailSection
+				eyebrow="Workbench"
+				title="Add skills and execution context"
+				description="Create project-local skills from real task demand, and use the right control surface when you actually mean role MCPs or provider tools."
+				bodyClass="space-y-4"
+			>
+				<div class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+					<form
+						class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+						method="POST"
+						action="?/createProjectSkill"
+					>
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Create project skill
+								</p>
+								<p class="mt-2 text-sm text-slate-400">
+									Scaffold a reusable project-local skill under `.agents/skills` when a workflow
+									keeps recurring.
+								</p>
+							</div>
+							<span
+								class="badge border border-slate-700 bg-slate-950/70 text-[0.72rem] tracking-[0.18em] text-slate-200 uppercase"
+							>
+								Project-local
+							</span>
+						</div>
+
+						<div class="mt-4 grid gap-3 md:grid-cols-2">
+							<label class="block">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Project
+								</span>
+								<select class="select text-white" name="projectId" required>
+									<option value="">Choose project</option>
+									{#each data.projects as project (project.id)}
+										<option
+											value={project.id}
+											selected={createProjectSkillFormValues.projectId === project.id}
+										>
+											{project.name}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Skill ID
+								</span>
+								<input
+									class="input text-white"
+									name="skillId"
+									placeholder="docs-writer"
+									required
+									value={createProjectSkillFormValues.skillId}
+								/>
+							</label>
+						</div>
+
+						<label class="mt-3 block">
+							<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+								Description
+							</span>
+							<input
+								class="input text-white"
+								name="description"
+								placeholder="Project-specific guidance for writing operator-facing docs."
+								required
+								value={createProjectSkillFormValues.description}
+							/>
+						</label>
+
+						<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+							<p class="text-xs text-slate-500">
+								The app creates a starter `SKILL.md`. You can refine the trigger language and
+								workflow after scaffolding it.
+							</p>
+							<button
+								class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-sky-700 hover:text-white"
+								type="submit"
+							>
+								Create skill stub
+							</button>
+						</div>
+					</form>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+							Where to add other capability types
+						</p>
+						<div class="mt-4 space-y-3">
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-3 transition hover:border-sky-400/40 hover:bg-slate-900"
+								href="/app/roles"
+							>
+								<p class="text-sm font-medium text-white">Roles</p>
+								<p class="mt-1 text-sm text-slate-400">
+									Define role-level default skills, MCPs, tools, prompt instructions, and review
+									policy.
+								</p>
+							</a>
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-3 transition hover:border-sky-400/40 hover:bg-slate-900"
+								href="/app/providers"
+							>
+								<p class="text-sm font-medium text-white">Providers</p>
+								<p class="mt-1 text-sm text-slate-400">
+									Configure launchers, auth, provider capabilities, and readiness for tool/runtime
+									access.
+								</p>
+							</a>
+							<a
+								class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-3 transition hover:border-sky-400/40 hover:bg-slate-900"
+								href="/app/execution-surfaces"
+							>
+								<p class="text-sm font-medium text-white">Execution surfaces</p>
+								<p class="mt-1 text-sm text-slate-400">
+									Assign worker-side skills, supported roles, and live availability.
+								</p>
+							</a>
+						</div>
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+								Next likely skills to add
+							</p>
+							<p class="mt-2 text-sm text-slate-400">
+								These come from tasks already requesting prompt skills that are missing from the
+								current project workspace.
+							</p>
+						</div>
+						<span
+							class="badge border border-slate-700 bg-slate-950/70 text-[0.72rem] tracking-[0.18em] text-slate-200 uppercase"
+						>
+							{suggestedProjectSkills.length} suggestions
+						</span>
+					</div>
+
+					{#if suggestedProjectSkills.length === 0}
+						<p
+							class="mt-4 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+						>
+							No missing prompt-skill demand is recorded right now. Use the form above when you want
+							to create a new project-local skill proactively.
+						</p>
+					{:else}
+						<div class="mt-4 grid gap-3 lg:grid-cols-2">
+							{#each suggestedProjectSkills as suggestion (`${suggestion.projectId}:${suggestion.skillId}`)}
+								<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div class="min-w-0 flex-1">
+											<p class="font-medium text-white">{suggestion.skillId}</p>
+											<p class="mt-1 text-sm text-slate-400">
+												<a class="text-sky-300 hover:text-sky-200" href={suggestion.projectHref}>
+													{suggestion.projectName}
+												</a>
+											</p>
+											<p class="mt-2 text-sm text-slate-400">
+												Requested by {suggestion.requestingTaskCount} task{suggestion.requestingTaskCount ===
+												1
+													? ''
+													: 's'}.
+											</p>
+										</div>
+										<form method="POST" action="?/createProjectSkill">
+											<input name="projectId" type="hidden" value={suggestion.projectId} />
+											<input name="skillId" type="hidden" value={suggestion.skillId} />
+											<input name="description" type="hidden" value={suggestion.description} />
+											<button
+												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-sky-700 hover:text-white"
+												type="submit"
+											>
+												Create stub
+											</button>
+										</form>
+									</div>
+								</article>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</DetailSection>
+
 			<DetailSection
 				eyebrow="Recorded state"
 				title="Last probe and recent changes"
@@ -788,7 +1021,7 @@
 				description="Execution surfaces inherit access risk from both their own state and their backing provider."
 				bodyClass="space-y-4"
 			>
-				{#each data.workers as worker (worker.id)}
+				{#each data.executionSurfaces as worker (worker.id)}
 					<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
@@ -797,7 +1030,7 @@
 									<span
 										class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${workerStatusToneClass(worker.status)}`}
 									>
-										{formatWorkerStatusLabel(worker.status)}
+										{formatExecutionSurfaceStatusLabel(worker.status)}
 									</span>
 								</div>
 								<p class="mt-2 text-sm text-slate-300">{worker.providerName}</p>
@@ -819,7 +1052,7 @@
 							method="POST"
 							action="?/updateWorkerAvailability"
 						>
-							<input name="workerId" type="hidden" value={worker.id} />
+							<input name="executionSurfaceId" type="hidden" value={worker.id} />
 
 							<label class="block min-w-0 flex-1">
 								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
@@ -828,7 +1061,7 @@
 								<select class="select text-white" name="status">
 									{#each data.workerStatusOptions as status (status)}
 										<option value={status} selected={worker.status === status}>
-											{formatWorkerStatusLabel(status)}
+											{formatExecutionSurfaceStatusLabel(status)}
 										</option>
 									{/each}
 								</select>

@@ -22,7 +22,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		delegationExpectedDeliverable: '',
 		delegationDoneCondition: '',
 		delegationIntegrationNotes: '',
-		assigneeWorkerId: '',
+		assigneeExecutionSurfaceId: '',
 		targetDate: '',
 		goalId: '',
 		area: 'product',
@@ -75,7 +75,7 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 		approvalMode: 'none',
 		requiresReview: true,
 		desiredRoleId: 'role_builder',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: null,
 		requiredCapabilityNames: ['planning'],
 		requiredToolNames: [],
@@ -135,12 +135,12 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 				}
 			],
 			goals: [],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_builder',
 					name: 'Builder worker',
 					providerId: 'provider_local',
-					roleId: 'role_builder',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -156,7 +156,7 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 					id: 'worker_other',
 					name: 'Other worker',
 					providerId: 'provider_local',
-					roleId: 'role_builder',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'offline',
 					capacity: 1,
@@ -190,7 +190,7 @@ describe('buildTaskLaunchPlan', () => {
 
 	it('blocks launch when the assigned worker does not cover declared tools', async () => {
 		const { current, task } = buildFixture({
-			assigneeWorkerId: 'worker_builder',
+			assigneeExecutionSurfaceId: 'worker_builder',
 			requiredToolNames: ['playwright']
 		});
 

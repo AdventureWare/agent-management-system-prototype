@@ -2,7 +2,7 @@ import { resolveThreadSandbox, selectExecutionProvider } from '$lib/server/contr
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import type { AgentSandbox } from '$lib/types/agent-thread';
-import type { ControlPlaneData, Project, Task, Worker } from '$lib/types/control-plane';
+import type { ControlPlaneData, Project, Task, ExecutionSurface } from '$lib/types/control-plane';
 
 export type TaskLaunchContextSummary = {
 	role: {
@@ -17,7 +17,7 @@ export type TaskLaunchContextSummary = {
 	assignedWorker: {
 		id: string;
 		name: string;
-		status: Worker['status'];
+		status: ExecutionSurface['status'];
 		skillNames: string[];
 	} | null;
 	provider: {
@@ -60,7 +60,7 @@ export function buildTaskLaunchContextSummary(
 	input: {
 		task: Task;
 		project: Project | null;
-		worker: Worker | null;
+		worker: ExecutionSurface | null;
 		publishedKnowledgeCount: number;
 	}
 ): TaskLaunchContextSummary {

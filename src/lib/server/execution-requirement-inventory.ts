@@ -16,7 +16,7 @@ export type ExecutionRequirementInventory = {
 
 type RequirementAccumulator = {
 	name: string;
-	workerIds: Set<string>;
+	executionSurfaceIds: Set<string>;
 	providerIds: Set<string>;
 };
 
@@ -38,7 +38,7 @@ function getOrCreateEntry(
 
 	const nextEntry = {
 		name: name.trim(),
-		workerIds: new Set<string>(),
+		executionSurfaceIds: new Set<string>(),
 		providerIds: new Set<string>()
 	};
 	entries.set(normalizedName, nextEntry);
@@ -49,14 +49,14 @@ function finalizeEntries(entries: Map<string, RequirementAccumulator>) {
 	return [...entries.values()]
 		.map((entry) => ({
 			name: entry.name,
-			workerCount: entry.workerIds.size,
+			workerCount: entry.executionSurfaceIds.size,
 			providerCount: entry.providerIds.size
 		}))
 		.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function buildExecutionRequirementInventory(
-	data: Pick<ControlPlaneData, 'providers' | 'workers'>
+	data: Pick<ControlPlaneData, 'providers' | 'executionSurfaces'>
 ): ExecutionRequirementInventory {
 	const capabilityEntries = new Map<string, RequirementAccumulator>();
 	const toolEntries = new Map<string, RequirementAccumulator>();
@@ -77,12 +77,12 @@ export function buildExecutionRequirementInventory(
 		}
 	}
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		for (const skillName of worker.skills ?? []) {
 			const entry = getOrCreateEntry(capabilityEntries, skillName);
 
 			if (entry) {
-				entry.workerIds.add(worker.id);
+				entry.executionSurfaceIds.add(worker.id);
 			}
 		}
 	}

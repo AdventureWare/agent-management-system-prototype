@@ -4,6 +4,7 @@ import type {
 	Approval,
 	ControlPlaneData,
 	Decision,
+	ExecutionSurface,
 	Goal,
 	PlanningSession,
 	Project,
@@ -11,8 +12,7 @@ import type {
 	Review,
 	Role,
 	Run,
-	Task,
-	Worker
+	Task
 } from '$lib/types/control-plane';
 
 const CONTROL_PLANE_COLLECTIONS = [
@@ -20,7 +20,7 @@ const CONTROL_PLANE_COLLECTIONS = [
 	'roles',
 	'projects',
 	'goals',
-	'workers',
+	'executionSurfaces',
 	'tasks',
 	'runs',
 	'reviews',
@@ -36,7 +36,7 @@ type ControlPlaneRecordPayload =
 	| Role
 	| Project
 	| Goal
-	| Worker
+	| ExecutionSurface
 	| Task
 	| Run
 	| Review
@@ -61,7 +61,7 @@ function emptyControlPlaneData(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [],
 		runs: [],
 		reviews: [],

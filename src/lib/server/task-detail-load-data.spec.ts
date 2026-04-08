@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlPlaneData, Project, Provider, Task, Worker } from '$lib/types/control-plane';
+import type {
+	ControlPlaneData,
+	Project,
+	Provider,
+	Task,
+	ExecutionSurface
+} from '$lib/types/control-plane';
 import { buildTaskDetailCollections } from './task-detail-load-data';
 
 const project: Project = {
@@ -15,7 +21,7 @@ const project: Project = {
 
 const provider: Provider = {
 	id: 'provider_local',
-	name: 'Local Codex Worker',
+	name: 'Local Codex ExecutionSurface',
 	service: 'OpenAI',
 	kind: 'local',
 	description: 'local',
@@ -31,11 +37,11 @@ const provider: Provider = {
 	notes: ''
 };
 
-const worker: Worker = {
+const worker: ExecutionSurface = {
 	id: 'worker_1',
 	name: 'Planner',
 	providerId: 'provider_local',
-	roleId: 'role_reviewer',
+	supportedRoleIds: [],
 	location: 'local',
 	status: 'idle',
 	capacity: 1,
@@ -63,7 +69,7 @@ const parentTask: Task = {
 	requiredThreadSandbox: null,
 	requiresReview: true,
 	desiredRoleId: '',
-	assigneeWorkerId: null,
+	assigneeExecutionSurfaceId: null,
 	agentThreadId: null,
 	blockedReason: '',
 	dependencyTaskIds: ['task_dependency'],
@@ -84,7 +90,7 @@ function createData(): ControlPlaneData {
 		roles: [],
 		projects: [project],
 		goals: [],
-		workers: [worker],
+		executionSurfaces: [worker],
 		tasks: [
 			parentTask,
 			{
@@ -129,7 +135,7 @@ function createData(): ControlPlaneData {
 			{
 				id: 'run_1',
 				taskId: 'task_parent',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'running',
 				createdAt: '2026-04-02T09:00:00.000Z',
@@ -165,7 +171,7 @@ describe('task-detail-load-data', () => {
 		expect(result.relatedRuns[0]).toMatchObject({
 			id: 'run_1',
 			workerName: 'Planner',
-			providerName: 'Local Codex Worker'
+			providerName: 'Local Codex ExecutionSurface'
 		});
 		expect(result.dependencyTasks).toEqual([
 			{

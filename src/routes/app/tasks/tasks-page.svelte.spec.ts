@@ -18,7 +18,7 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		approvalMode: 'none',
 		requiresReview: true,
 		desiredRoleId: 'role_1',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		agentThreadId: null,
 		blockedReason: '',
 		dependencyTaskIds: [],
@@ -87,7 +87,7 @@ function renderPage(
 				projectId: '',
 				name: '',
 				instructions: '',
-				assigneeWorkerId: '',
+				assigneeExecutionSurfaceId: '',
 				targetDate: '',
 				goalId: '',
 				requiredCapabilityNames: '',
@@ -156,7 +156,7 @@ function renderPage(
 					projectName: 'Agent Management System Prototype'
 				}
 			],
-			workers: [],
+			executionSurfaces: [],
 			tasks
 		} as never
 	});
@@ -383,7 +383,7 @@ describe('/app/tasks/+page.svelte', () => {
 				projectId: 'project_1',
 				name: 'Keep my draft',
 				instructions: 'Persist this between reloads.',
-				assigneeWorkerId: '',
+				assigneeExecutionSurfaceId: '',
 				targetDate: '2026-04-10',
 				goalId: 'goal_1',
 				area: 'product',

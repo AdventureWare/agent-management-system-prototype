@@ -86,7 +86,7 @@ describe('project detail page server actions', () => {
 				}
 			],
 			goals: [],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [],
 			runs: [],
 			reviews: [],
@@ -112,7 +112,7 @@ describe('project detail page server actions', () => {
 					approvalMode: 'none',
 					requiresReview: false,
 					desiredRoleId: 'role_1',
-					assigneeWorkerId: null,
+					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
 					dependencyTaskIds: [],

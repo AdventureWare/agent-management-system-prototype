@@ -3,14 +3,17 @@
 	import { resolve } from '$app/paths';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
-	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
+	import {
+		mergeStoredExecutionSurfaceRecord,
+		executionSurfaceRecordStore
+	} from '$lib/client/execution-surface-record-store';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
 	import {
 		formatRunStatusLabel,
 		formatTaskStatusLabel,
-		formatWorkerStatusLabel,
+		formatExecutionSurfaceStatusLabel,
 		runStatusToneClass,
 		taskStatusToneClass,
 		workerStatusToneClass
@@ -21,10 +24,10 @@
 	let form = $derived(props.form);
 	let refreshedData = $state.raw<PageData | null>(null);
 	let sourceData = $derived(refreshedData ?? props.data);
-	const workerRecordState = fromStore(workerRecordStore);
+	const workerRecordState = fromStore(executionSurfaceRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
-		executionSurface: mergeStoredWorkerRecord(
+		executionSurface: mergeStoredExecutionSurfaceRecord(
 			sourceData.executionSurface,
 			workerRecordState.current.byId
 		)
@@ -47,7 +50,7 @@
 	});
 
 	$effect(() => {
-		workerRecordStore.seedWorker(sourceData.executionSurface);
+		executionSurfaceRecordStore.seedExecutionSurface(sourceData.executionSurface);
 	});
 
 	function shouldAutoRefreshWorkerDetail() {
@@ -118,7 +121,7 @@
 				<span
 					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.executionSurface.status)}`}
 				>
-					{formatWorkerStatusLabel(data.executionSurface.status)}
+					{formatExecutionSurfaceStatusLabel(data.executionSurface.status)}
 				</span>
 			</div>
 		{/snippet}
@@ -270,7 +273,7 @@
 					<select class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
 							<option value={status} selected={data.executionSurface.status === status}>
-								{formatWorkerStatusLabel(status)}
+								{formatExecutionSurfaceStatusLabel(status)}
 							</option>
 						{/each}
 					</select>

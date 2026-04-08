@@ -11,7 +11,7 @@ import {
 	type Task,
 	type TaskApprovalMode,
 	type TaskRiskLevel,
-	type Worker
+	type ExecutionSurface
 } from '$lib/types/control-plane';
 import type { TaskDetailFormInput } from './task-form';
 
@@ -28,7 +28,7 @@ type TaskPlanDecisionSummaryInput = {
 	nextGoalName: string | null;
 	currentGoalName: string | null;
 	nextStatus: Task['status'];
-	nextAssigneeWorker: Worker | null;
+	nextAssigneeWorker: ExecutionSurface | null;
 	nextPriority: Priority;
 	nextRiskLevel: TaskRiskLevel;
 	nextApprovalMode: TaskApprovalMode;
@@ -56,7 +56,7 @@ export type ResolvedTaskPlanUpdate = {
 	nextDelegationPacket: Task['delegationPacket'] | null;
 	nextGoalId: string;
 	nextStatus: Task['status'];
-	nextAssigneeWorker: Worker | null;
+	nextAssigneeWorker: ExecutionSurface | null;
 	nextPriority: Priority;
 	nextRiskLevel: TaskRiskLevel;
 	nextApprovalMode: TaskApprovalMode;
@@ -160,7 +160,7 @@ function buildTaskPlanDecisionSummary(input: TaskPlanDecisionSummaryInput) {
 		changes.push(`set status to ${formatTaskStatusLabel(input.nextStatus)}`);
 	}
 
-	if ((input.nextAssigneeWorker?.id ?? null) !== (input.task.assigneeWorkerId ?? null)) {
+	if ((input.nextAssigneeWorker?.id ?? null) !== (input.task.assigneeExecutionSurfaceId ?? null)) {
 		changes.push(
 			input.nextAssigneeWorker
 				? `assigned the task to ${input.nextAssigneeWorker.name}`
@@ -264,7 +264,7 @@ export function resolveTaskPlanUpdate(input: {
 	form: TaskDetailFormInput;
 	project: Project;
 	goal: Goal | null;
-	assigneeWorker: Worker | null;
+	assigneeWorker: ExecutionSurface | null;
 }): ResolvedTaskPlanUpdate {
 	const { current, task, status, form, project, goal, assigneeWorker } = input;
 	const nextTitle = form.name;
@@ -286,8 +286,10 @@ export function resolveTaskPlanUpdate(input: {
 	const nextStatus = status;
 	const nextAssigneeWorker = form.hasAssigneeWorkerId
 		? assigneeWorker
-		: task.assigneeWorkerId
-			? (current.workers.find((candidate) => candidate.id === task.assigneeWorkerId) ?? null)
+		: task.assigneeExecutionSurfaceId
+			? (current.executionSurfaces.find(
+					(candidate) => candidate.id === task.assigneeExecutionSurfaceId
+				) ?? null)
 			: null;
 	const nextPriority = form.hasPriority ? form.priority : task.priority;
 	const nextRiskLevel = form.hasRiskLevel ? form.riskLevel : task.riskLevel;

@@ -1,16 +1,20 @@
 import { json } from '@sveltejs/kit';
-import { loadControlPlane, parseWorkerStatus, updateControlPlane } from '$lib/server/control-plane';
 import {
-	authenticateWorker,
-	getWorkerQueueSummary,
-	toPublicWorker,
-	updateWorkerHeartbeat
-} from '$lib/server/worker-api';
+	loadControlPlane,
+	parseExecutionSurfaceStatus,
+	updateControlPlane
+} from '$lib/server/control-plane';
+import {
+	authenticateExecutionSurface,
+	getExecutionSurfaceQueueSummary,
+	toPublicExecutionSurface,
+	updateExecutionSurfaceHeartbeat
+} from '$lib/server/execution-surface-api';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
-		workerId?: string;
-		workerToken?: string;
+		executionSurfaceId?: string;
+		executionSurfaceToken?: string;
 		status?: string;
 		capacity?: number;
 		note?: string;
@@ -18,15 +22,17 @@ export const POST = async ({ request }) => {
 	};
 
 	const data = await loadControlPlane();
-	const worker = authenticateWorker(
+	const executionSurface = authenticateExecutionSurface(
 		data,
-		body.workerId?.trim() ?? '',
-		body.workerToken?.trim() ?? ''
+		body.executionSurfaceId?.trim() ?? '',
+		body.executionSurfaceToken?.trim() ?? ''
 	);
 
 	const nextData = await updateControlPlane((current) =>
-		updateWorkerHeartbeat(current, worker.id, {
-			status: body.status ? parseWorkerStatus(body.status, worker.status) : worker.status,
+		updateExecutionSurfaceHeartbeat(current, executionSurface.id, {
+			status: body.status
+				? parseExecutionSurfaceStatus(body.status, executionSurface.status)
+				: executionSurface.status,
 			capacity: body.capacity,
 			note: typeof body.note === 'string' ? body.note.trim() : undefined,
 			tags: Array.isArray(body.tags)
@@ -35,10 +41,16 @@ export const POST = async ({ request }) => {
 		})
 	);
 
-	const updatedWorker = nextData.workers.find((candidate) => candidate.id === worker.id);
+	const updatedExecutionSurface = nextData.executionSurfaces.find(
+		(candidate) => candidate.id === executionSurface.id
+	);
 
 	return json({
-		worker: updatedWorker ? toPublicWorker(updatedWorker) : null,
-		queueSummary: updatedWorker ? getWorkerQueueSummary(nextData, updatedWorker) : null
+		executionSurface: updatedExecutionSurface
+			? toPublicExecutionSurface(updatedExecutionSurface)
+			: null,
+		queueSummary: updatedExecutionSurface
+			? getExecutionSurfaceQueueSummary(nextData, updatedExecutionSurface)
+			: null
 	});
 };

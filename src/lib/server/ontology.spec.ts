@@ -12,7 +12,7 @@ function buildFixture(): {
 			providers: [
 				{
 					id: 'provider_local_codex',
-					name: 'Local Codex Worker',
+					name: 'Local Codex ExecutionSurface',
 					service: 'OpenAI',
 					kind: 'local',
 					description: 'Local execution surface',
@@ -31,7 +31,7 @@ function buildFixture(): {
 			roles: [
 				{
 					id: 'role_app_worker',
-					name: 'App Worker',
+					name: 'App ExecutionSurface',
 					area: 'product',
 					description: 'Implements product changes'
 				}
@@ -66,12 +66,12 @@ function buildFixture(): {
 					confidence: 'medium'
 				}
 			],
-			workers: [
+			executionSurfaces: [
 				{
 					id: 'worker_local',
 					name: 'Colin Mac Local',
 					providerId: 'provider_local_codex',
-					roleId: 'role_app_worker',
+					supportedRoleIds: [],
 					location: 'local',
 					status: 'idle',
 					capacity: 2,
@@ -101,7 +101,7 @@ function buildFixture(): {
 					approvalMode: 'before_apply',
 					requiresReview: true,
 					desiredRoleId: 'role_app_worker',
-					assigneeWorkerId: 'worker_local',
+					assigneeExecutionSurfaceId: 'worker_local',
 					agentThreadId: 'session_1',
 					requiredCapabilityNames: ['planning', 'svelte'],
 					requiredToolNames: ['codex'],
@@ -130,7 +130,7 @@ function buildFixture(): {
 				{
 					id: 'run_1',
 					taskId: 'task_1',
-					workerId: 'worker_local',
+					executionSurfaceId: 'worker_local',
 					providerId: 'provider_local_codex',
 					status: 'running',
 					createdAt: '2026-04-01T00:00:00.000Z',
@@ -155,8 +155,8 @@ function buildFixture(): {
 					createdAt: '2026-04-01T00:00:00.000Z',
 					updatedAt: '2026-04-01T00:00:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: 'worker_local',
-					reviewerWorkerId: 'worker_local',
+					requestedByExecutionSurfaceId: 'worker_local',
+					reviewerExecutionSurfaceId: 'worker_local',
 					summary: 'Check ontology framing'
 				}
 			],
@@ -170,8 +170,8 @@ function buildFixture(): {
 					createdAt: '2026-04-01T00:00:00.000Z',
 					updatedAt: '2026-04-01T00:00:00.000Z',
 					resolvedAt: null,
-					requestedByWorkerId: 'worker_local',
-					approverWorkerId: null,
+					requestedByExecutionSurfaceId: 'worker_local',
+					approverExecutionSurfaceId: null,
 					summary: 'Approve schema update'
 				}
 			]
@@ -261,7 +261,7 @@ describe('ontology v1 snapshot', () => {
 		expect(snapshot.gaps.humanActorCount).toBe(0);
 		expect(snapshot.gaps.tasksWithoutCapabilityRequirementsCount).toBe(0);
 		expect(snapshot.limitations).toContain(
-			'Current workers act mostly as execution surfaces; the broader Actor concept is still only approximated.'
+			'Current executionSurfaces act mostly as execution surfaces; the broader Actor concept is still only approximated.'
 		);
 	});
 });

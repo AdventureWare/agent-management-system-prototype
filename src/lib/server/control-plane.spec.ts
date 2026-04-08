@@ -23,7 +23,7 @@ function buildFixture(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
-		workers: [],
+		executionSurfaces: [],
 		tasks: [
 			{
 				id: 'task_done',
@@ -38,7 +38,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: false,
 				desiredRoleId: 'role_app_worker',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: 'session_1',
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -62,7 +62,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'before_complete',
 				requiresReview: true,
 				desiredRoleId: 'role_app_worker',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_done'],
@@ -86,7 +86,7 @@ function buildFixture(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_researcher',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: ['task_review'],
@@ -102,7 +102,7 @@ function buildFixture(): ControlPlaneData {
 			{
 				id: 'run_done',
 				taskId: 'task_done',
-				workerId: 'worker_one',
+				executionSurfaceId: 'worker_one',
 				providerId: 'provider_local_codex',
 				status: 'completed',
 				createdAt: '2026-03-26T00:00:00.000Z',
@@ -127,8 +127,8 @@ function buildFixture(): ControlPlaneData {
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z',
 				resolvedAt: null,
-				requestedByWorkerId: null,
-				reviewerWorkerId: null,
+				requestedByExecutionSurfaceId: null,
+				reviewerExecutionSurfaceId: null,
 				summary: 'Waiting for review.'
 			}
 		],
@@ -142,8 +142,8 @@ function buildFixture(): ControlPlaneData {
 				createdAt: '2026-03-26T00:00:00.000Z',
 				updatedAt: '2026-03-26T00:00:00.000Z',
 				resolvedAt: null,
-				requestedByWorkerId: null,
-				approverWorkerId: null,
+				requestedByExecutionSurfaceId: null,
+				approverExecutionSurfaceId: null,
 				summary: 'Waiting for final approval.'
 			}
 		]
@@ -199,7 +199,7 @@ describe('control-plane helpers', () => {
 	it('creates runs as first-class execution records', () => {
 		const run = createRun({
 			taskId: 'task_1',
-			workerId: 'worker_1',
+			executionSurfaceId: 'worker_1',
 			providerId: 'provider_1',
 			status: 'running',
 			agentThreadId: 'session_1',
@@ -208,7 +208,7 @@ describe('control-plane helpers', () => {
 
 		expect(run.id).toMatch(/^run_/);
 		expect(run.taskId).toBe('task_1');
-		expect(run.workerId).toBe('worker_1');
+		expect(run.executionSurfaceId).toBe('worker_1');
 		expect(run.status).toBe('running');
 		expect(run.agentThreadId).toBe('session_1');
 	});
@@ -262,7 +262,7 @@ describe('control-plane helpers', () => {
 		data.runs.push({
 			id: 'run_review',
 			taskId: 'task_review',
-			workerId: 'worker_two',
+			executionSurfaceId: 'worker_two',
 			providerId: 'provider_local_codex',
 			status: 'running',
 			createdAt: '2026-03-26T00:20:00.000Z',
@@ -355,7 +355,7 @@ describe('control-plane helpers', () => {
 				windowEnd: '2026-03-07',
 				projectId: 'project_1',
 				goalId: 'goal_1',
-				workerId: null,
+				executionSurfaceId: null,
 				includeUnscheduled: true,
 				goalIds: ['goal_parent', 'goal_1', 'goal_child'],
 				taskIds: ['task_review'],
@@ -376,7 +376,7 @@ describe('control-plane helpers', () => {
 				decisionType: 'goal_plan_updated',
 				summary: 'Goal updated',
 				createdAt: '2026-03-01T00:00:00.000Z',
-				decidedByWorkerId: null
+				decidedByExecutionSurfaceId: null
 			}
 		];
 
@@ -440,7 +440,7 @@ describe('control-plane helpers', () => {
 				windowEnd: '2026-03-07',
 				projectId: 'project_1',
 				goalId: null,
-				workerId: null,
+				executionSurfaceId: null,
 				includeUnscheduled: true,
 				goalIds: [],
 				taskIds: [],

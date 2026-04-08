@@ -32,7 +32,7 @@ function createDashboardTask() {
 		requiresReview: false,
 		desiredRoleId: 'role_reviewer',
 		desiredRoleName: 'Reviewer',
-		assigneeWorkerId: null,
+		assigneeExecutionSurfaceId: null,
 		assigneeName: 'Unassigned',
 		agentThreadId: null,
 		requiredCapabilityNames: [],

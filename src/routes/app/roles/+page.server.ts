@@ -49,30 +49,26 @@ function readRoleForm(form: FormData) {
 
 function countRoleDemand(data: Awaited<ReturnType<typeof loadControlPlane>>) {
 	const taskCounts = new Map<string, number>();
-	const workerCounts = new Map<string, number>();
+	const executionSurfaceCounts = new Map<string, number>();
 
 	for (const task of data.tasks) {
 		taskCounts.set(task.desiredRoleId, (taskCounts.get(task.desiredRoleId) ?? 0) + 1);
 	}
 
 	for (const worker of getExecutionSurfaces(data)) {
-		const supportedRoleIds = worker.supportedRoleIds?.length
-			? worker.supportedRoleIds
-			: worker.roleId
-				? [worker.roleId]
-				: [];
+		const supportedRoleIds = worker.supportedRoleIds ?? [];
 
 		for (const roleId of supportedRoleIds) {
-			workerCounts.set(roleId, (workerCounts.get(roleId) ?? 0) + 1);
+			executionSurfaceCounts.set(roleId, (executionSurfaceCounts.get(roleId) ?? 0) + 1);
 		}
 	}
 
-	return { taskCounts, workerCounts };
+	return { taskCounts, executionSurfaceCounts };
 }
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
-	const { taskCounts, workerCounts } = countRoleDemand(data);
+	const { taskCounts, executionSurfaceCounts } = countRoleDemand(data);
 
 	return {
 		roleAreaOptions: ['shared', ...AREA_OPTIONS],
@@ -80,7 +76,7 @@ export const load: PageServerLoad = async () => {
 			.map((role) => ({
 				...role,
 				taskCount: taskCounts.get(role.id) ?? 0,
-				workerCount: workerCounts.get(role.id) ?? 0
+				workerCount: executionSurfaceCounts.get(role.id) ?? 0
 			}))
 			.sort((a, b) => a.name.localeCompare(b.name))
 	};

@@ -77,7 +77,7 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const workerCounts = new Map<string, number>();
 
-	for (const worker of data.workers) {
+	for (const worker of data.executionSurfaces) {
 		workerCounts.set(worker.providerId, (workerCounts.get(worker.providerId) ?? 0) + 1);
 	}
 
@@ -121,11 +121,11 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 				a.name.localeCompare(b.name)
 		);
 
-	const workers = [...data.workers]
-		.map((worker) => {
-			const provider = providerMap.get(worker.providerId) ?? null;
+	const executionSurfaces = [...data.executionSurfaces]
+		.map((executionSurface) => {
+			const provider = providerMap.get(executionSurface.providerId) ?? null;
 			const supportedRoleIds = Array.from(
-				new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
+				new Set([...(executionSurface.supportedRoleIds ?? [])].filter(Boolean))
 			);
 			const supportedRoleNames = supportedRoleIds.map(
 				(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
@@ -143,17 +143,17 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 				accessState = 'provider_disabled';
 			} else if (provider.setupStatus !== 'connected') {
 				accessState = 'provider_needs_setup';
-			} else if (worker.status === 'offline') {
+			} else if (executionSurface.status === 'offline') {
 				accessState = 'offline';
 			}
 
 			return {
-				...worker,
+				...executionSurface,
 				providerName: provider?.name ?? 'Unknown provider',
 				roleName: supportedRoleNames[0] ?? 'Unknown role',
 				supportedRoleIds,
 				supportedRoleNames,
-				workerHref: `/app/execution-surfaces/${worker.id}`,
+				workerHref: `/app/execution-surfaces/${executionSurface.id}`,
 				accessState
 			};
 		})
@@ -173,13 +173,14 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 			).length,
 			providerNeedsSetupCount: providers.filter((provider) => provider.setupStatus !== 'connected')
 				.length,
-			workerAccessIssueCount: workers.filter((worker) => worker.accessState !== 'healthy').length
+			workerAccessIssueCount: executionSurfaces.filter((worker) => worker.accessState !== 'healthy')
+				.length
 		},
 		executionCatalog,
 		projects,
 		attentionPaths,
 		providers,
-		workers
+		executionSurfaces
 	};
 }
 

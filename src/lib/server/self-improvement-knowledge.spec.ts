@@ -27,7 +27,7 @@ const task: Task = {
 	approvalMode: 'none',
 	requiresReview: true,
 	desiredRoleId: 'role_coordinator',
-	assigneeWorkerId: null,
+	assigneeExecutionSurfaceId: null,
 	agentThreadId: null,
 	blockedReason: '',
 	dependencyTaskIds: [],

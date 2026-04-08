@@ -1,5 +1,5 @@
 import type { Task } from '$lib/types/control-plane';
-import type { WorkerTaskFit } from '$lib/server/worker-api';
+import type { ExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
 
 export type TaskExecutionPreflight = {
 	requiredCapabilityNames: string[];
@@ -10,8 +10,8 @@ export type TaskExecutionPreflight = {
 	uncoveredCapabilityNames: string[];
 	uncoveredToolNames: string[];
 	currentAssignee: {
-		workerId: string;
-		workerName: string;
+		executionSurfaceId: string;
+		executionSurfaceName: string;
 		withinConcurrencyLimit: boolean;
 		missingCapabilityNames: string[];
 		missingToolNames: string[];
@@ -20,7 +20,7 @@ export type TaskExecutionPreflight = {
 };
 
 function isRequirementCovered(
-	suggestions: WorkerTaskFit[],
+	suggestions: ExecutionSurfaceTaskFit[],
 	requirement: string,
 	key: 'missingCapabilityNames' | 'missingToolNames'
 ) {
@@ -28,13 +28,15 @@ function isRequirementCovered(
 }
 
 export function buildTaskExecutionPreflight(
-	task: Pick<Task, 'requiredCapabilityNames' | 'requiredToolNames' | 'assigneeWorkerId'>,
-	suggestions: WorkerTaskFit[]
+	task: Pick<Task, 'requiredCapabilityNames' | 'requiredToolNames' | 'assigneeExecutionSurfaceId'>,
+	suggestions: ExecutionSurfaceTaskFit[]
 ): TaskExecutionPreflight {
 	const requiredCapabilityNames = [...(task.requiredCapabilityNames ?? [])];
 	const requiredToolNames = [...(task.requiredToolNames ?? [])];
-	const currentAssignee = task.assigneeWorkerId
-		? (suggestions.find((suggestion) => suggestion.workerId === task.assigneeWorkerId) ?? null)
+	const currentAssignee = task.assigneeExecutionSurfaceId
+		? (suggestions.find(
+				(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
+			) ?? null)
 		: null;
 
 	return {
@@ -54,8 +56,8 @@ export function buildTaskExecutionPreflight(
 		),
 		currentAssignee: currentAssignee
 			? {
-					workerId: currentAssignee.workerId,
-					workerName: currentAssignee.workerName,
+					executionSurfaceId: currentAssignee.executionSurfaceId,
+					executionSurfaceName: currentAssignee.executionSurfaceName,
 					withinConcurrencyLimit: currentAssignee.withinConcurrencyLimit,
 					missingCapabilityNames: currentAssignee.missingCapabilityNames,
 					missingToolNames: currentAssignee.missingToolNames,

@@ -30,7 +30,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			decisionType: input.decisionType,
 			summary: input.summary,
 			createdAt: input.createdAt ?? '2026-04-01T12:00:00.000Z',
-			decidedByWorkerId: null
+			decidedByExecutionSurfaceId: null
 		})
 	),
 	createPlanningSession: vi.fn(
@@ -39,7 +39,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			windowEnd: string;
 			projectId?: string | null;
 			goalId?: string | null;
-			workerId?: string | null;
+			executionSurfaceId?: string | null;
 			includeUnscheduled: boolean;
 			goalIds?: string[];
 			taskIds?: string[];
@@ -52,7 +52,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			windowEnd: input.windowEnd,
 			projectId: input.projectId ?? null,
 			goalId: input.goalId ?? null,
-			workerId: input.workerId ?? null,
+			executionSurfaceId: input.executionSurfaceId ?? null,
 			includeUnscheduled: input.includeUnscheduled,
 			goalIds: input.goalIds ?? [],
 			taskIds: input.taskIds ?? [],
@@ -104,7 +104,7 @@ describe('planning page server actions', () => {
 					confidence: 'medium'
 				}
 			],
-			workers: [],
+			executionSurfaces: [],
 			tasks: [],
 			runs: [],
 			reviews: [],
@@ -122,7 +122,7 @@ describe('planning page server actions', () => {
 					decisionType: 'goal_plan_updated',
 					summary: 'Existing goal decision.',
 					createdAt: '2026-04-01T11:00:00.000Z',
-					decidedByWorkerId: null
+					decidedByExecutionSurfaceId: null
 				}
 			]
 		};
@@ -176,7 +176,7 @@ describe('planning page server actions', () => {
 		form.set('endDate', '2026-04-14');
 		form.set('projectId', 'project_1');
 		form.set('goalId', '');
-		form.set('workerId', '');
+		form.set('executionSurfaceId', '');
 		form.set('includeUnscheduled', 'true');
 
 		const result = await actions.capturePlanningSession({

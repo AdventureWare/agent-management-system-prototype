@@ -371,7 +371,7 @@
 			projects={data.projects}
 			goals={data.goals}
 			statusOptions={data.statusOptions}
-			workers={data.workers}
+			executionSurfaces={data.executionSurfaces}
 			assignmentSuggestions={data.assignmentSuggestions}
 			roles={data.roles ?? []}
 			dependencyTasksCount={data.dependencyTasks.length}

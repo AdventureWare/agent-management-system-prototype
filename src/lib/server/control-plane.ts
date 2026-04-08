@@ -23,8 +23,8 @@ import {
 	RUN_STATUS_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
-	WORKER_LOCATION_OPTIONS,
-	WORKER_STATUS_OPTIONS,
+	EXECUTION_SURFACE_LOCATION_OPTIONS,
+	EXECUTION_SURFACE_STATUS_OPTIONS,
 	normalizeTaskStatus,
 	type Approval,
 	type ApprovalStatus,
@@ -54,9 +54,9 @@ import {
 	type Task,
 	type TaskAttachment,
 	type TaskStatus,
-	type Worker,
-	type WorkerLocation,
-	type WorkerStatus
+	type ExecutionSurface,
+	type ExecutionSurfaceLocation,
+	type ExecutionSurfaceStatus
 } from '$lib/types/control-plane';
 
 const DATA_FILE = resolve(process.cwd(), 'data', 'control-plane.json');
@@ -97,12 +97,12 @@ function isGoalStatus(value: string): value is GoalStatus {
 	return GOAL_STATUS_OPTIONS.includes(value as GoalStatus);
 }
 
-function isWorkerStatus(value: string): value is WorkerStatus {
-	return WORKER_STATUS_OPTIONS.includes(value as WorkerStatus);
+function isExecutionSurfaceStatus(value: string): value is ExecutionSurfaceStatus {
+	return EXECUTION_SURFACE_STATUS_OPTIONS.includes(value as ExecutionSurfaceStatus);
 }
 
-function isWorkerLocation(value: string): value is WorkerLocation {
-	return WORKER_LOCATION_OPTIONS.includes(value as WorkerLocation);
+function isExecutionSurfaceLocation(value: string): value is ExecutionSurfaceLocation {
+	return EXECUTION_SURFACE_LOCATION_OPTIONS.includes(value as ExecutionSurfaceLocation);
 }
 
 function isProviderKind(value: string): value is ProviderKind {
@@ -131,7 +131,6 @@ function defaultData(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
-		workers: [],
 		executionSurfaces: [],
 		tasks: [],
 		runs: [],
@@ -142,31 +141,8 @@ function defaultData(): ControlPlaneData {
 	};
 }
 
-export function getExecutionSurfaces(
-	data: Pick<ControlPlaneData, 'workers' | 'executionSurfaces'>
-) {
-	return data.executionSurfaces ?? data.workers;
-}
-
-function withExecutionSurfaceAliases(data: ControlPlaneData): ControlPlaneData {
-	const executionSurfaces = getExecutionSurfaces(data);
-
-	return {
-		...data,
-		workers: executionSurfaces,
-		executionSurfaces
-	};
-}
-
-function withoutExecutionSurfaceAlias(data: ControlPlaneData): ControlPlaneData {
-	const executionSurfaces = getExecutionSurfaces(data);
-	const { executionSurfaces: _ignored, ...rest } = data;
-	void _ignored;
-
-	return {
-		...rest,
-		workers: executionSurfaces
-	};
+export function getExecutionSurfaces(data: Pick<ControlPlaneData, 'executionSurfaces'>) {
+	return data.executionSurfaces;
 }
 
 type LegacyProject = Partial<Project> & {
@@ -191,7 +167,7 @@ type LegacyProvider = Partial<Provider> & {
 	notes?: unknown;
 };
 
-type LegacyWorker = Partial<Worker> & {
+type LegacyExecutionSurface = Partial<ExecutionSurface> & {
 	providerId?: unknown;
 	roleId?: unknown;
 	supportedRoleIds?: unknown;
@@ -470,56 +446,57 @@ function normalizeProvider(provider: LegacyProvider): Provider {
 	};
 }
 
-function normalizeWorker(worker: LegacyWorker): Worker {
-	const locationValue = typeof worker.location === 'string' ? worker.location : '';
-	const statusValue = typeof worker.status === 'string' ? worker.status : '';
-	const tags = Array.isArray(worker.tags)
-		? worker.tags
+function normalizeExecutionSurface(surface: LegacyExecutionSurface): ExecutionSurface {
+	const locationValue = typeof surface.location === 'string' ? surface.location : '';
+	const statusValue = typeof surface.status === 'string' ? surface.status : '';
+	const tags = Array.isArray(surface.tags)
+		? surface.tags
 				.filter((tag): tag is string => typeof tag === 'string')
 				.map((tag) => tag.trim())
 				.filter(Boolean)
 		: [];
-	const skills = normalizeStringList(worker.skills);
+	const skills = normalizeStringList(surface.skills);
 	const supportedRoleIds = Array.from(
 		new Set(
 			[
-				...normalizeStringList(worker.supportedRoleIds),
-				typeof worker.roleId === 'string' && worker.roleId.trim() ? worker.roleId.trim() : ''
+				...normalizeStringList(surface.supportedRoleIds),
+				typeof surface.roleId === 'string' && surface.roleId.trim() ? surface.roleId.trim() : ''
 			].filter(Boolean)
 		)
 	);
 	const focusFactor =
-		typeof worker.focusFactor === 'number' &&
-		Number.isFinite(worker.focusFactor) &&
-		worker.focusFactor > 0 &&
-		worker.focusFactor <= 1
-			? worker.focusFactor
+		typeof surface.focusFactor === 'number' &&
+		Number.isFinite(surface.focusFactor) &&
+		surface.focusFactor > 0 &&
+		surface.focusFactor <= 1
+			? surface.focusFactor
 			: 1;
 
 	return {
-		id: typeof worker.id === 'string' ? worker.id : createWorkerId(),
-		name: typeof worker.name === 'string' ? worker.name : '',
-		providerId: typeof worker.providerId === 'string' ? worker.providerId : '',
-		roleId: typeof worker.roleId === 'string' ? worker.roleId : '',
+		id: typeof surface.id === 'string' ? surface.id : createExecutionSurfaceId(),
+		name: typeof surface.name === 'string' ? surface.name : '',
+		providerId: typeof surface.providerId === 'string' ? surface.providerId : '',
 		supportedRoleIds,
-		location: isWorkerLocation(locationValue) ? locationValue : 'cloud',
-		status: isWorkerStatus(statusValue) ? statusValue : 'idle',
+		location: isExecutionSurfaceLocation(locationValue) ? locationValue : 'cloud',
+		status: isExecutionSurfaceStatus(statusValue) ? statusValue : 'idle',
 		capacity:
-			typeof worker.capacity === 'number' && Number.isFinite(worker.capacity) && worker.capacity > 0
-				? worker.capacity
+			typeof surface.capacity === 'number' &&
+			Number.isFinite(surface.capacity) &&
+			surface.capacity > 0
+				? surface.capacity
 				: 1,
 		registeredAt:
-			typeof worker.registeredAt === 'string' ? worker.registeredAt : new Date().toISOString(),
+			typeof surface.registeredAt === 'string' ? surface.registeredAt : new Date().toISOString(),
 		lastSeenAt:
-			typeof worker.lastSeenAt === 'string' ? worker.lastSeenAt : new Date().toISOString(),
-		note: typeof worker.note === 'string' ? worker.note : '',
+			typeof surface.lastSeenAt === 'string' ? surface.lastSeenAt : new Date().toISOString(),
+		note: typeof surface.note === 'string' ? surface.note : '',
 		tags,
 		skills,
-		weeklyCapacityHours: normalizePositiveNumber(worker.weeklyCapacityHours),
+		weeklyCapacityHours: normalizePositiveNumber(surface.weeklyCapacityHours),
 		focusFactor,
-		maxConcurrentRuns: normalizePositiveNumber(worker.maxConcurrentRuns),
-		threadSandboxOverride: normalizeOptionalAgentSandbox(worker.threadSandboxOverride),
-		authTokenHash: typeof worker.authTokenHash === 'string' ? worker.authTokenHash : ''
+		maxConcurrentRuns: normalizePositiveNumber(surface.maxConcurrentRuns),
+		threadSandboxOverride: normalizeOptionalAgentSandbox(surface.threadSandboxOverride),
+		authTokenHash: typeof surface.authTokenHash === 'string' ? surface.authTokenHash : ''
 	};
 }
 
@@ -626,7 +603,10 @@ function normalizeRun(run: LegacyRun): Run {
 	return {
 		id: typeof run.id === 'string' ? run.id : createRunId(),
 		taskId: typeof run.taskId === 'string' ? run.taskId : '',
-		workerId: typeof run.workerId === 'string' && run.workerId.trim() ? run.workerId : null,
+		executionSurfaceId:
+			typeof run.executionSurfaceId === 'string' && run.executionSurfaceId.trim()
+				? run.executionSurfaceId
+				: null,
 		...(typeof run.assumedRoleId === 'string'
 			? {
 					assumedRoleId: run.assumedRoleId.trim() ? run.assumedRoleId : null
@@ -663,13 +643,15 @@ function normalizeReview(review: LegacyReview): Review {
 		createdAt: typeof review.createdAt === 'string' ? review.createdAt : now,
 		updatedAt: typeof review.updatedAt === 'string' ? review.updatedAt : now,
 		resolvedAt: typeof review.resolvedAt === 'string' ? review.resolvedAt : null,
-		requestedByWorkerId:
-			typeof review.requestedByWorkerId === 'string' && review.requestedByWorkerId.trim()
-				? review.requestedByWorkerId
+		requestedByExecutionSurfaceId:
+			typeof review.requestedByExecutionSurfaceId === 'string' &&
+			review.requestedByExecutionSurfaceId.trim()
+				? review.requestedByExecutionSurfaceId
 				: null,
-		reviewerWorkerId:
-			typeof review.reviewerWorkerId === 'string' && review.reviewerWorkerId.trim()
-				? review.reviewerWorkerId
+		reviewerExecutionSurfaceId:
+			typeof review.reviewerExecutionSurfaceId === 'string' &&
+			review.reviewerExecutionSurfaceId.trim()
+				? review.reviewerExecutionSurfaceId
 				: null,
 		summary: typeof review.summary === 'string' ? review.summary : ''
 	};
@@ -689,13 +671,15 @@ function normalizeApproval(approval: LegacyApproval): Approval {
 		createdAt: typeof approval.createdAt === 'string' ? approval.createdAt : now,
 		updatedAt: typeof approval.updatedAt === 'string' ? approval.updatedAt : now,
 		resolvedAt: typeof approval.resolvedAt === 'string' ? approval.resolvedAt : null,
-		requestedByWorkerId:
-			typeof approval.requestedByWorkerId === 'string' && approval.requestedByWorkerId.trim()
-				? approval.requestedByWorkerId
+		requestedByExecutionSurfaceId:
+			typeof approval.requestedByExecutionSurfaceId === 'string' &&
+			approval.requestedByExecutionSurfaceId.trim()
+				? approval.requestedByExecutionSurfaceId
 				: null,
-		approverWorkerId:
-			typeof approval.approverWorkerId === 'string' && approval.approverWorkerId.trim()
-				? approval.approverWorkerId
+		approverExecutionSurfaceId:
+			typeof approval.approverExecutionSurfaceId === 'string' &&
+			approval.approverExecutionSurfaceId.trim()
+				? approval.approverExecutionSurfaceId
 				: null,
 		summary: typeof approval.summary === 'string' ? approval.summary : ''
 	};
@@ -723,9 +707,10 @@ function normalizeDecision(decision: LegacyDecision): Decision {
 		decisionType: isDecisionType(decisionTypeValue) ? decisionTypeValue : 'task_plan_updated',
 		summary: typeof decision.summary === 'string' ? decision.summary : '',
 		createdAt: typeof decision.createdAt === 'string' ? decision.createdAt : now,
-		decidedByWorkerId:
-			typeof decision.decidedByWorkerId === 'string' && decision.decidedByWorkerId.trim()
-				? decision.decidedByWorkerId
+		decidedByExecutionSurfaceId:
+			typeof decision.decidedByExecutionSurfaceId === 'string' &&
+			decision.decidedByExecutionSurfaceId.trim()
+				? decision.decidedByExecutionSurfaceId
 				: null
 	};
 }
@@ -746,8 +731,10 @@ function normalizePlanningSession(session: LegacyPlanningSession): PlanningSessi
 		projectId:
 			typeof session.projectId === 'string' && session.projectId.trim() ? session.projectId : null,
 		goalId: typeof session.goalId === 'string' && session.goalId.trim() ? session.goalId : null,
-		workerId:
-			typeof session.workerId === 'string' && session.workerId.trim() ? session.workerId : null,
+		executionSurfaceId:
+			typeof session.executionSurfaceId === 'string' && session.executionSurfaceId.trim()
+				? session.executionSurfaceId
+				: null,
 		includeUnscheduled:
 			typeof session.includeUnscheduled === 'boolean' ? session.includeUnscheduled : true,
 		goalIds: Array.isArray(session.goalIds)
@@ -847,9 +834,9 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		requiredThreadSandbox,
 		requiresReview: typeof task.requiresReview === 'boolean' ? task.requiresReview : true,
 		desiredRoleId: typeof task.desiredRoleId === 'string' ? task.desiredRoleId : '',
-		assigneeWorkerId:
-			typeof task.assigneeWorkerId === 'string' && task.assigneeWorkerId.trim()
-				? task.assigneeWorkerId
+		assigneeExecutionSurfaceId:
+			typeof task.assigneeExecutionSurfaceId === 'string' && task.assigneeExecutionSurfaceId.trim()
+				? task.assigneeExecutionSurfaceId
 				: null,
 		agentThreadId:
 			typeof task.agentThreadId === 'string' && task.agentThreadId.trim()
@@ -1032,9 +1019,7 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		: [];
 	const rawExecutionSurfaces = Array.isArray(parsed.executionSurfaces)
 		? parsed.executionSurfaces
-		: Array.isArray(parsed.workers)
-			? parsed.workers
-			: [];
+		: [];
 	const projects = Array.isArray(parsed.projects)
 		? parsed.projects.map((project) => normalizeProject(project as Project))
 		: [];
@@ -1056,28 +1041,28 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
 		: [];
 
-	return withExecutionSurfaceAliases(
-		syncGovernanceQueues(
-			syncTaskExecutionState({
-				providers,
-				roles: Array.isArray(parsed.roles)
-					? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
-					: [],
-				projects,
-				goals: Array.isArray(parsed.goals)
-					? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
-					: [],
-				workers: rawExecutionSurfaces.map((worker) => normalizeWorker(worker as LegacyWorker)),
-				tasks: Array.isArray(parsed.tasks)
-					? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
-					: [],
-				runs,
-				reviews,
-				planningSessions,
-				approvals,
-				decisions
-			})
-		)
+	return syncGovernanceQueues(
+		syncTaskExecutionState({
+			providers,
+			roles: Array.isArray(parsed.roles)
+				? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
+				: [],
+			projects,
+			goals: Array.isArray(parsed.goals)
+				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+				: [],
+			executionSurfaces: rawExecutionSurfaces.map((surface) =>
+				normalizeExecutionSurface(surface as LegacyExecutionSurface)
+			),
+			tasks: Array.isArray(parsed.tasks)
+				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
+				: [],
+			runs,
+			reviews,
+			planningSessions,
+			approvals,
+			decisions
+		})
 	);
 }
 
@@ -1118,31 +1103,27 @@ async function ensureControlPlaneSqliteSeeded() {
 export async function loadControlPlane(): Promise<ControlPlaneData> {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
 		await ensureControlPlaneSqliteSeeded();
-		return withExecutionSurfaceAliases(normalizeControlPlaneData(loadControlPlaneFromSqlite()));
+		return normalizeControlPlaneData(loadControlPlaneFromSqlite());
 	}
 
-	return withExecutionSurfaceAliases(await loadControlPlaneFromJson());
+	return await loadControlPlaneFromJson();
 }
 
 async function saveControlPlane(data: ControlPlaneData) {
-	const persistenceData = withoutExecutionSurfaceAlias(withExecutionSurfaceAliases(data));
-
 	if (getControlPlaneStorageBackend() === 'sqlite') {
-		saveControlPlaneToSqlite(persistenceData);
+		saveControlPlaneToSqlite(data);
 		return;
 	}
 
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
-	await writeFile(DATA_FILE, JSON.stringify(persistenceData, null, 2));
+	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
 export async function updateControlPlane(
 	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
 ) {
 	const current = await loadControlPlane();
-	const next = withExecutionSurfaceAliases(
-		syncGovernanceQueues(syncTaskExecutionState(await updater(current)))
-	);
+	const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
 	await saveControlPlane(next);
 	return next;
 }
@@ -1177,8 +1158,8 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 	const blockedRuns = data.runs.filter((run) => run.status === 'blocked');
 	const openReviews = data.reviews.filter((review) => review.status === 'open');
 	const pendingApprovals = data.approvals.filter((approval) => approval.status === 'pending');
-	const onlineWorkers = data.workers.filter((worker) => worker.status !== 'offline');
-	const busyWorkers = data.workers.filter((worker) => worker.status === 'busy');
+	const onlineWorkers = data.executionSurfaces.filter((worker) => worker.status !== 'offline');
+	const busyWorkers = data.executionSurfaces.filter((worker) => worker.status === 'busy');
 
 	return {
 		taskCount: data.tasks.length,
@@ -1196,7 +1177,7 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 		highRiskTaskCount: highRiskTasks.length,
 		projectCount: data.projects.length,
 		goalCount: data.goals.length,
-		workerCount: data.workers.length,
+		workerCount: data.executionSurfaces.length,
 		onlineWorkerCount: onlineWorkers.length,
 		busyWorkerCount: busyWorkers.length
 	};
@@ -1246,8 +1227,8 @@ export function createDecisionId() {
 	return `decision_${randomUUID()}`;
 }
 
-export function createWorkerId() {
-	return `worker_${randomUUID()}`;
+export function createExecutionSurfaceId() {
+	return `surface_${randomUUID()}`;
 }
 
 export function parseArea(value: string, fallback: Area): Area {
@@ -1290,12 +1271,18 @@ export function parseGoalStatus(value: string, fallback: GoalStatus): GoalStatus
 	return isGoalStatus(value) ? value : fallback;
 }
 
-export function parseWorkerStatus(value: string, fallback: WorkerStatus): WorkerStatus {
-	return isWorkerStatus(value) ? value : fallback;
+export function parseExecutionSurfaceStatus(
+	value: string,
+	fallback: ExecutionSurfaceStatus
+): ExecutionSurfaceStatus {
+	return isExecutionSurfaceStatus(value) ? value : fallback;
 }
 
-export function parseWorkerLocation(value: string, fallback: WorkerLocation): WorkerLocation {
-	return isWorkerLocation(value) ? value : fallback;
+export function parseExecutionSurfaceLocation(
+	value: string,
+	fallback: ExecutionSurfaceLocation
+): ExecutionSurfaceLocation {
+	return isExecutionSurfaceLocation(value) ? value : fallback;
 }
 
 export function parseProviderKind(value: string, fallback: ProviderKind): ProviderKind {
@@ -1549,7 +1536,7 @@ export function createTask(input: {
 	dependencyTaskIds?: string[];
 	estimateHours?: number | null;
 	targetDate?: string | null;
-	assigneeWorkerId?: string | null;
+	assigneeExecutionSurfaceId?: string | null;
 	agentThreadId?: string | null;
 	status?: TaskStatus;
 	attachments?: TaskAttachment[];
@@ -1577,7 +1564,7 @@ export function createTask(input: {
 		requiredThreadSandbox: input.requiredThreadSandbox ?? null,
 		requiresReview: input.requiresReview,
 		desiredRoleId: input.desiredRoleId,
-		assigneeWorkerId: input.assigneeWorkerId ?? null,
+		assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId ?? null,
 		agentThreadId: input.agentThreadId ?? null,
 		requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
@@ -1597,7 +1584,7 @@ export function createTask(input: {
 
 export function createRun(input: {
 	taskId: string;
-	workerId?: string | null;
+	executionSurfaceId?: string | null;
 	assumedRoleId?: string | null;
 	providerId?: string | null;
 	status?: RunStatus;
@@ -1616,7 +1603,7 @@ export function createRun(input: {
 	return {
 		id: createRunId(),
 		taskId: input.taskId,
-		workerId: input.workerId ?? null,
+		executionSurfaceId: input.executionSurfaceId ?? null,
 		...(input.assumedRoleId !== undefined ? { assumedRoleId: input.assumedRoleId ?? null } : {}),
 		providerId: input.providerId ?? null,
 		status: input.status ?? 'queued',
@@ -1638,8 +1625,8 @@ export function createReview(input: {
 	taskId: string;
 	runId?: string | null;
 	status?: ReviewStatus;
-	requestedByWorkerId?: string | null;
-	reviewerWorkerId?: string | null;
+	requestedByExecutionSurfaceId?: string | null;
+	reviewerExecutionSurfaceId?: string | null;
 	resolvedAt?: string | null;
 	summary?: string;
 }): Review {
@@ -1653,8 +1640,8 @@ export function createReview(input: {
 		createdAt: now,
 		updatedAt: now,
 		resolvedAt: input.resolvedAt ?? null,
-		requestedByWorkerId: input.requestedByWorkerId ?? null,
-		reviewerWorkerId: input.reviewerWorkerId ?? null,
+		requestedByExecutionSurfaceId: input.requestedByExecutionSurfaceId ?? null,
+		reviewerExecutionSurfaceId: input.reviewerExecutionSurfaceId ?? null,
 		summary: input.summary ?? ''
 	};
 }
@@ -1664,8 +1651,8 @@ export function createApproval(input: {
 	runId?: string | null;
 	mode: TaskApprovalMode;
 	status?: ApprovalStatus;
-	requestedByWorkerId?: string | null;
-	approverWorkerId?: string | null;
+	requestedByExecutionSurfaceId?: string | null;
+	approverExecutionSurfaceId?: string | null;
 	resolvedAt?: string | null;
 	summary?: string;
 }): Approval {
@@ -1680,8 +1667,8 @@ export function createApproval(input: {
 		createdAt: now,
 		updatedAt: now,
 		resolvedAt: input.resolvedAt ?? null,
-		requestedByWorkerId: input.requestedByWorkerId ?? null,
-		approverWorkerId: input.approverWorkerId ?? null,
+		requestedByExecutionSurfaceId: input.requestedByExecutionSurfaceId ?? null,
+		approverExecutionSurfaceId: input.approverExecutionSurfaceId ?? null,
 		summary: input.summary ?? ''
 	};
 }
@@ -1696,7 +1683,7 @@ export function createDecision(input: {
 	decisionType: DecisionType;
 	summary: string;
 	createdAt?: string;
-	decidedByWorkerId?: string | null;
+	decidedByExecutionSurfaceId?: string | null;
 }): Decision {
 	return {
 		id: createDecisionId(),
@@ -1709,7 +1696,7 @@ export function createDecision(input: {
 		decisionType: input.decisionType,
 		summary: input.summary,
 		createdAt: input.createdAt ?? new Date().toISOString(),
-		decidedByWorkerId: input.decidedByWorkerId ?? null
+		decidedByExecutionSurfaceId: input.decidedByExecutionSurfaceId ?? null
 	};
 }
 
@@ -1718,7 +1705,7 @@ export function createPlanningSession(input: {
 	windowEnd: string;
 	projectId?: string | null;
 	goalId?: string | null;
-	workerId?: string | null;
+	executionSurfaceId?: string | null;
 	includeUnscheduled: boolean;
 	goalIds?: string[];
 	taskIds?: string[];
@@ -1732,7 +1719,7 @@ export function createPlanningSession(input: {
 		windowEnd: input.windowEnd,
 		projectId: input.projectId ?? null,
 		goalId: input.goalId ?? null,
-		workerId: input.workerId ?? null,
+		executionSurfaceId: input.executionSurfaceId ?? null,
 		includeUnscheduled: input.includeUnscheduled,
 		goalIds: input.goalIds ?? [],
 		taskIds: input.taskIds ?? [],
@@ -1814,13 +1801,12 @@ export function deleteTask(data: ControlPlaneData, taskId: string): ControlPlane
 	};
 }
 
-export function createWorker(input: {
+export function createExecutionSurface(input: {
 	name: string;
 	providerId: string;
-	roleId?: string;
 	supportedRoleIds?: string[];
-	location: WorkerLocation;
-	status: WorkerStatus;
+	location: ExecutionSurfaceLocation;
+	status: ExecutionSurfaceStatus;
 	capacity: number;
 	note: string;
 	tags: string[];
@@ -1829,23 +1815,15 @@ export function createWorker(input: {
 	focusFactor?: number;
 	maxConcurrentRuns?: number | null;
 	threadSandboxOverride?: AgentSandbox | null;
-}): Worker {
+}): ExecutionSurface {
 	const supportedRoleIds = Array.from(
-		new Set(
-			[
-				...normalizeStringList(input.supportedRoleIds),
-				typeof input.roleId === 'string' ? input.roleId.trim() : ''
-			].filter(Boolean)
-		)
+		new Set(normalizeStringList(input.supportedRoleIds).filter(Boolean))
 	);
-	const roleId =
-		(typeof input.roleId === 'string' && input.roleId.trim()) || supportedRoleIds[0] || '';
 
 	return {
-		id: createWorkerId(),
+		id: createExecutionSurfaceId(),
 		name: input.name,
 		providerId: input.providerId,
-		roleId,
 		supportedRoleIds,
 		location: input.location,
 		status: input.status,
@@ -1865,7 +1843,7 @@ export function createWorker(input: {
 
 export function resolveThreadSandbox(input: {
 	task?: Pick<Task, 'requiredThreadSandbox'> | null;
-	worker?: Pick<Worker, 'threadSandboxOverride'> | null;
+	worker?: Pick<ExecutionSurface, 'threadSandboxOverride'> | null;
 	project?: Pick<Project, 'defaultThreadSandbox'> | null;
 	provider?: Pick<Provider, 'defaultThreadSandbox'> | null;
 	fallback?: AgentSandbox;
@@ -1882,7 +1860,7 @@ export function resolveThreadSandbox(input: {
 
 export function selectExecutionProvider(
 	data: Pick<ControlPlaneData, 'providers'>,
-	worker?: Pick<Worker, 'providerId'> | null
+	worker?: Pick<ExecutionSurface, 'providerId'> | null
 ) {
 	return (
 		(worker?.providerId

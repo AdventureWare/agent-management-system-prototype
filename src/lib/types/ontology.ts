@@ -7,7 +7,7 @@ import type {
 	TaskApprovalMode,
 	TaskRiskLevel,
 	TaskStatus,
-	WorkerStatus
+	ExecutionSurfaceStatus
 } from '$lib/types/control-plane';
 import type { AgentSandbox, AgentThreadState } from '$lib/types/agent-thread';
 
@@ -114,7 +114,7 @@ export type OntologyActor = {
 export type OntologyExecutionSurface = {
 	id: string;
 	name: string;
-	status: WorkerStatus | 'unknown';
+	status: ExecutionSurfaceStatus | 'unknown';
 	providerId: string | null;
 	roleIds: string[];
 	capabilityNames: string[];

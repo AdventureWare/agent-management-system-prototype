@@ -1,29 +1,29 @@
 import { json } from '@sveltejs/kit';
 import { loadControlPlane } from '$lib/server/control-plane';
 import {
-	authenticateWorker,
-	getWorkerQueueSummary,
-	getWorkerTaskView,
-	toPublicWorker
-} from '$lib/server/worker-api';
+	authenticateExecutionSurface,
+	getExecutionSurfaceQueueSummary,
+	getExecutionSurfaceTaskView,
+	toPublicExecutionSurface
+} from '$lib/server/execution-surface-api';
 
 export const POST = async ({ request }) => {
 	const body = (await request.json()) as {
-		workerId?: string;
-		workerToken?: string;
+		executionSurfaceId?: string;
+		executionSurfaceToken?: string;
 	};
 
 	const data = await loadControlPlane();
-	const worker = authenticateWorker(
+	const executionSurface = authenticateExecutionSurface(
 		data,
-		body.workerId?.trim() ?? '',
-		body.workerToken?.trim() ?? ''
+		body.executionSurfaceId?.trim() ?? '',
+		body.executionSurfaceToken?.trim() ?? ''
 	);
-	const tasks = getWorkerTaskView(data, worker);
+	const tasks = getExecutionSurfaceTaskView(data, executionSurface);
 
 	return json({
-		worker: toPublicWorker(worker),
-		queueSummary: getWorkerQueueSummary(data, worker),
+		executionSurface: toPublicExecutionSurface(executionSurface),
+		queueSummary: getExecutionSurfaceQueueSummary(data, executionSurface),
 		tasks
 	});
 };

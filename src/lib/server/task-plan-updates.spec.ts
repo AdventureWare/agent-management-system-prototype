@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlPlaneData, Goal, Project, Task, Worker } from '$lib/types/control-plane';
+import type {
+	ControlPlaneData,
+	Goal,
+	Project,
+	Task,
+	ExecutionSurface
+} from '$lib/types/control-plane';
 import type { TaskDetailFormInput } from './task-form';
 import { resolveTaskPlanUpdate } from './task-plan-updates';
 
@@ -26,11 +32,11 @@ const goal: Goal = {
 	taskIds: []
 };
 
-const worker: Worker = {
+const worker: ExecutionSurface = {
 	id: 'worker_1',
 	name: 'Planner',
 	providerId: 'provider_local',
-	roleId: 'role_reviewer',
+	supportedRoleIds: [],
 	location: 'local',
 	status: 'idle',
 	capacity: 1,
@@ -58,7 +64,7 @@ const task: Task = {
 	requiredThreadSandbox: null,
 	requiresReview: true,
 	desiredRoleId: '',
-	assigneeWorkerId: null,
+	assigneeExecutionSurfaceId: null,
 	agentThreadId: null,
 	requiredPromptSkillNames: [],
 	blockedReason: '',
@@ -87,7 +93,7 @@ function createCurrentState(): ControlPlaneData {
 		],
 		projects: [project],
 		goals: [goal],
-		workers: [worker],
+		executionSurfaces: [worker],
 		tasks: [
 			task,
 			{
@@ -121,7 +127,7 @@ function createFormInput(overrides: Partial<TaskDetailFormInput> = {}): TaskDeta
 		delegationExpectedDeliverable: '',
 		delegationDoneCondition: '',
 		delegationIntegrationNotes: '',
-		assigneeWorkerId: '',
+		assigneeExecutionSurfaceId: '',
 		targetDate: '',
 		goalId: '',
 		area: 'product',
@@ -182,7 +188,7 @@ describe('task-plan-updates', () => {
 				instructions: 'Rewrite the task surface',
 				goalId: 'goal_cleanup',
 				hasGoalId: true,
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				hasAssigneeWorkerId: true,
 				priority: 'high',
 				hasPriority: true,

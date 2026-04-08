@@ -1,13 +1,16 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
-import { WORKER_LOCATION_OPTIONS, WORKER_STATUS_OPTIONS } from '$lib/types/control-plane';
+import {
+	EXECUTION_SURFACE_LOCATION_OPTIONS,
+	EXECUTION_SURFACE_STATUS_OPTIONS
+} from '$lib/types/control-plane';
 import {
 	formatRelativeTime,
 	getExecutionSurfaces,
 	loadControlPlane,
-	parseWorkerLocation,
-	parseWorkerStatus,
+	parseExecutionSurfaceLocation,
+	parseExecutionSurfaceStatus,
 	updateControlPlane
 } from '$lib/server/control-plane';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
@@ -45,29 +48,24 @@ function parsePositiveInteger(value: FormDataEntryValue | null) {
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function getSupportedRoleIds(worker: { roleId: string; supportedRoleIds?: string[] }) {
-	return Array.from(
-		new Set([...(worker.supportedRoleIds ?? []), worker.roleId.trim()].filter(Boolean))
-	);
+function getSupportedRoleIds(executionSurface: { supportedRoleIds?: string[] }) {
+	return Array.from(new Set([...(executionSurface.supportedRoleIds ?? [])].filter(Boolean)));
 }
 
-function readWorkerForm(form: FormData) {
+function readExecutionSurfaceForm(form: FormData) {
 	const supportedRoleIds = parseSelectedIds(form, 'supportedRoleIds');
-	const legacyRoleId = form.get('roleId')?.toString().trim() ?? '';
 
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		providerId: form.get('providerId')?.toString().trim() ?? '',
-		roleId: supportedRoleIds[0] ?? legacyRoleId,
-		supportedRoleIds:
-			supportedRoleIds.length > 0 ? supportedRoleIds : legacyRoleId ? [legacyRoleId] : [],
+		supportedRoleIds,
 		note: form.get('note')?.toString().trim() ?? '',
 		tags: parseListField(form.get('tags')),
 		skills: parseListField(form.get('skills')),
 		capacity: Number.parseInt(form.get('capacity')?.toString() ?? '1', 10),
 		maxConcurrentRuns: parsePositiveInteger(form.get('maxConcurrentRuns')),
-		location: parseWorkerLocation(form.get('location')?.toString() ?? '', 'cloud'),
-		status: parseWorkerStatus(form.get('status')?.toString() ?? '', 'idle'),
+		location: parseExecutionSurfaceLocation(form.get('location')?.toString() ?? '', 'cloud'),
+		status: parseExecutionSurfaceStatus(form.get('status')?.toString() ?? '', 'idle'),
 		threadSandboxOverride: readThreadSandboxOverride(form.get('threadSandboxOverride'))
 	};
 }
@@ -75,24 +73,26 @@ function readWorkerForm(form: FormData) {
 export const load: PageServerLoad = async ({ params }) => {
 	const data = await loadControlPlane();
 	const executionSurfaces = getExecutionSurfaces(data);
-	const worker = executionSurfaces.find((candidate) => candidate.id === params.executionSurfaceId);
+	const executionSurface = executionSurfaces.find(
+		(candidate) => candidate.id === params.executionSurfaceId
+	);
 
-	if (!worker) {
+	if (!executionSurface) {
 		throw error(404, 'Execution surface not found.');
 	}
 
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
-	const provider = providerMap.get(worker.providerId) ?? null;
+	const provider = providerMap.get(executionSurface.providerId) ?? null;
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
-	const supportedRoleIds = getSupportedRoleIds(worker);
+	const supportedRoleIds = getSupportedRoleIds(executionSurface);
 	const supportedRoleNames = supportedRoleIds.map(
 		(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
 	);
 	const activeRunCount = data.runs.filter(
-		(run) => run.workerId === worker.id && ACTIVE_RUN_STATUSES.has(run.status)
+		(run) => run.executionSurfaceId === executionSurface.id && ACTIVE_RUN_STATUSES.has(run.status)
 	).length;
 	const recentRuns = data.runs
-		.filter((run) => run.workerId === worker.id)
+		.filter((run) => run.executionSurfaceId === executionSurface.id)
 		.map((run) => ({
 			...run,
 			taskTitle: data.tasks.find((task) => task.id === run.taskId)?.title ?? 'Unknown task',
@@ -101,7 +101,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 		.slice(0, 8);
 	const assignedTasks = data.tasks
-		.filter((task) => task.assigneeWorkerId === worker.id)
+		.filter((task) => task.assigneeExecutionSurfaceId === executionSurface.id)
 		.map((task) => ({
 			id: task.id,
 			title: task.title,
@@ -111,7 +111,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.sort((a, b) => a.title.localeCompare(b.title));
 
 	const executionSurfaceDetail = {
-		...worker,
+		...executionSurface,
 		providerName: provider?.name ?? 'Unknown provider',
 		providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
 		roleName: supportedRoleNames[0] ?? 'Unknown role',
@@ -119,22 +119,22 @@ export const load: PageServerLoad = async ({ params }) => {
 		supportedRoleNames,
 		providerCapabilities: provider?.capabilities ?? [],
 		effectiveCapabilities: [
-			...new Set([...(worker.skills ?? []), ...(provider?.capabilities ?? [])])
+			...new Set([...(executionSurface.skills ?? []), ...(provider?.capabilities ?? [])])
 		],
 		activeRunCount,
 		effectiveConcurrencyLimit:
-			typeof worker.maxConcurrentRuns === 'number' && Number.isFinite(worker.maxConcurrentRuns)
-				? Math.max(1, worker.maxConcurrentRuns)
-				: worker.capacity
+			typeof executionSurface.maxConcurrentRuns === 'number' &&
+			Number.isFinite(executionSurface.maxConcurrentRuns)
+				? Math.max(1, executionSurface.maxConcurrentRuns)
+				: executionSurface.capacity
 	};
 
 	return {
 		executionSurface: executionSurfaceDetail,
-		worker: executionSurfaceDetail,
 		providers: [...data.providers].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
-		statusOptions: WORKER_STATUS_OPTIONS,
-		locationOptions: WORKER_LOCATION_OPTIONS,
+		statusOptions: EXECUTION_SURFACE_STATUS_OPTIONS,
+		locationOptions: EXECUTION_SURFACE_LOCATION_OPTIONS,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		recentRuns,
 		assignedTasks
@@ -142,50 +142,51 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	updateWorker: async ({ params, request }) => {
-		const workerUpdates = readWorkerForm(await request.formData());
+	updateExecutionSurface: async ({ params, request }) => {
+		const executionSurfaceUpdates = readExecutionSurfaceForm(await request.formData());
 
 		if (
-			!workerUpdates.name ||
-			!workerUpdates.providerId ||
-			workerUpdates.supportedRoleIds.length === 0
+			!executionSurfaceUpdates.name ||
+			!executionSurfaceUpdates.providerId ||
+			executionSurfaceUpdates.supportedRoleIds.length === 0
 		) {
 			return fail(400, {
 				message: 'Name, provider, and at least one supported role are required.'
 			});
 		}
 
-		let workerUpdated = false;
+		let executionSurfaceUpdated = false;
 
 		await updateControlPlane((data) => ({
 			...data,
-			workers: data.workers.map((worker) => {
-				if (worker.id !== params.executionSurfaceId) {
-					return worker;
+			executionSurfaces: data.executionSurfaces.map((executionSurface) => {
+				if (executionSurface.id !== params.executionSurfaceId) {
+					return executionSurface;
 				}
 
-				workerUpdated = true;
+				executionSurfaceUpdated = true;
 
 				return {
-					...worker,
-					...workerUpdates,
+					...executionSurface,
+					...executionSurfaceUpdates,
 					capacity:
-						Number.isFinite(workerUpdates.capacity) && workerUpdates.capacity > 0
-							? workerUpdates.capacity
+						Number.isFinite(executionSurfaceUpdates.capacity) &&
+						executionSurfaceUpdates.capacity > 0
+							? executionSurfaceUpdates.capacity
 							: 1,
 					lastSeenAt: new Date().toISOString()
 				};
 			})
 		}));
 
-		if (!workerUpdated) {
+		if (!executionSurfaceUpdated) {
 			return fail(404, { message: 'Execution surface not found.' });
 		}
 
 		return {
 			ok: true,
-			successAction: 'updateWorker',
-			workerId: params.executionSurfaceId
+			successAction: 'updateExecutionSurface',
+			executionSurfaceId: params.executionSurfaceId
 		};
 	}
 };

@@ -14,6 +14,7 @@ import {
 	wouldCreateGoalCycle
 } from '$lib/server/goal-relationships';
 import { normalizePathInput } from '$lib/server/path-tools';
+import { assistGoalWriting } from '$lib/server/goal-writing-assist';
 import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	deleteGoal as removeGoalFromControlPlane,
@@ -51,6 +52,22 @@ function readGoalForm(form: FormData) {
 		taskIds: parseSelectedIds(form, 'taskIds'),
 		area: parseArea(form.get('area')?.toString() ?? '', 'product'),
 		status: parseGoalStatus(form.get('status')?.toString() ?? '', 'ready')
+	};
+}
+
+function buildGoalFormValues(values: ReturnType<typeof readGoalForm>) {
+	return {
+		goalId: values.goalId,
+		name: values.name,
+		summary: values.summary,
+		successSignal: values.successSignal,
+		targetDate: values.targetDate,
+		artifactPath: values.artifactPath,
+		parentGoalId: values.parentGoalId,
+		projectIds: values.projectIds,
+		taskIds: values.taskIds,
+		area: values.area,
+		status: values.status
 	};
 }
 
@@ -208,6 +225,74 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
+	assistGoalWriting: async ({ params, request }) => {
+		const form = await request.formData();
+		const values = readGoalForm(form);
+
+		if (!values.name && !values.summary && !values.successSignal) {
+			return fail(400, {
+				message:
+					'Add a draft goal name, summary, or success signal before requesting writing assist.',
+				values: buildGoalFormValues(values)
+			});
+		}
+
+		const current = await loadControlPlane();
+		const existingGoal = current.goals.find((goal) => goal.id === params.goalId);
+
+		if (!existingGoal) {
+			return fail(404, { message: 'Goal not found.' });
+		}
+
+		const parentGoal = current.goals.find((goal) => goal.id === values.parentGoalId) ?? null;
+		const linkedProjectNames = values.projectIds
+			.map((projectId) => current.projects.find((project) => project.id === projectId)?.name ?? '')
+			.filter(Boolean);
+		const linkedTaskTitles = values.taskIds
+			.map((taskId) => current.tasks.find((task) => task.id === taskId)?.title ?? '')
+			.filter(Boolean);
+		const assistCwd =
+			current.projects.find((project) => values.projectIds.includes(project.id))
+				?.projectRootFolder || process.cwd();
+
+		try {
+			const result = await assistGoalWriting({
+				cwd: assistCwd,
+				name: values.name,
+				summary: values.summary,
+				successSignal: values.successSignal,
+				area: values.area,
+				status: values.status,
+				targetDate: values.targetDate,
+				parentGoalName: parentGoal?.name ?? null,
+				artifactPath: values.artifactPath,
+				linkedProjectNames,
+				linkedTaskTitles
+			});
+
+			return {
+				ok: true,
+				successAction: 'assistGoalWriting',
+				assistChangeSummary: result.changeSummary,
+				values: buildGoalFormValues({
+					...values,
+					goalId: existingGoal.id,
+					name: result.name,
+					summary: result.summary,
+					successSignal: result.successSignal
+				})
+			};
+		} catch (error) {
+			return fail(400, {
+				message:
+					error instanceof Error && error.message.trim()
+						? error.message
+						: 'Could not rewrite the goal draft.',
+				values: buildGoalFormValues(values)
+			});
+		}
+	},
+
 	updateGoal: async ({ params, request }) => {
 		const form = await request.formData();
 		const values = readGoalForm(form);
@@ -215,14 +300,14 @@ export const actions: Actions = {
 		if (!values.name || !values.summary) {
 			return fail(400, {
 				message: 'Name and summary are required.',
-				values
+				values: buildGoalFormValues(values)
 			});
 		}
 
 		if (values.targetDate && !isValidDate(values.targetDate)) {
 			return fail(400, {
 				message: 'Target date must use YYYY-MM-DD.',
-				values
+				values: buildGoalFormValues(values)
 			});
 		}
 
@@ -238,7 +323,7 @@ export const actions: Actions = {
 		if (validationError) {
 			return fail(400, {
 				message: validationError,
-				values
+				values: buildGoalFormValues(values)
 			});
 		}
 
@@ -256,7 +341,7 @@ export const actions: Actions = {
 		if (!artifactPath) {
 			return fail(400, {
 				message: 'Add an artifact path or link a project or parent goal with a usable workspace.',
-				values
+				values: buildGoalFormValues(values)
 			});
 		}
 

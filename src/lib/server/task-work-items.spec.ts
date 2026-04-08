@@ -26,7 +26,7 @@ function createSession(overrides: Partial<AgentThreadDetail> = {}): AgentThreadD
 		runCount: 1,
 		lastActivityAt: '2026-03-31T11:40:00.000Z',
 		lastActivityLabel: '20m ago',
-		threadSummary: 'Worker is still running.',
+		threadSummary: 'ExecutionSurface is still running.',
 		lastExitCode: null,
 		runTimeline: [],
 		relatedTasks: [],
@@ -78,12 +78,12 @@ function createControlPlane(): ControlPlaneData {
 			}
 		],
 		goals: [],
-		workers: [
+		executionSurfaces: [
 			{
 				id: 'worker_1',
 				name: 'Operator worker',
 				providerId: 'provider_local',
-				roleId: 'role_1',
+				supportedRoleIds: [],
 				location: 'local',
 				status: 'busy',
 				capacity: 1,
@@ -109,7 +109,7 @@ function createControlPlane(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_1',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -133,7 +133,7 @@ function createControlPlane(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_1',
-				assigneeWorkerId: 'worker_1',
+				assigneeExecutionSurfaceId: 'worker_1',
 				agentThreadId: 'session_quiet',
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -157,7 +157,7 @@ function createControlPlane(): ControlPlaneData {
 				approvalMode: 'none',
 				requiresReview: true,
 				desiredRoleId: 'role_1',
-				assigneeWorkerId: null,
+				assigneeExecutionSurfaceId: null,
 				agentThreadId: null,
 				blockedReason: '',
 				dependencyTaskIds: [],
@@ -173,7 +173,7 @@ function createControlPlane(): ControlPlaneData {
 			{
 				id: 'run_stale_wip',
 				taskId: 'task_stale_wip',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'running',
 				createdAt: '2026-03-31T04:00:00.000Z',
@@ -191,7 +191,7 @@ function createControlPlane(): ControlPlaneData {
 			{
 				id: 'run_quiet_thread',
 				taskId: 'task_quiet_thread',
-				workerId: 'worker_1',
+				executionSurfaceId: 'worker_1',
 				providerId: 'provider_local',
 				status: 'running',
 				createdAt: '2026-03-31T11:00:00.000Z',

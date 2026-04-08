@@ -2,19 +2,25 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
-	import { mergeStoredWorkerRecord, workerRecordStore } from '$lib/client/worker-record-store';
+	import {
+		mergeStoredExecutionSurfaceRecord,
+		executionSurfaceRecordStore
+	} from '$lib/client/execution-surface-record-store';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import { formatWorkerStatusLabel, workerStatusToneClass } from '$lib/types/control-plane';
+	import {
+		formatExecutionSurfaceStatusLabel,
+		workerStatusToneClass
+	} from '$lib/types/control-plane';
 	import { fromStore } from 'svelte/store';
 
 	let { data, form } = $props();
 	const CREATE_WORKER_DRAFT_KEY = 'ams:create-worker';
-	const workerRecordState = fromStore(workerRecordStore);
+	const workerRecordState = fromStore(executionSurfaceRecordStore);
 
 	let createWorkerDraftReady = $state(false);
 	let workerName = $state('');
@@ -36,7 +42,7 @@
 	let isCreateModalOpen = $state(modalShouldStartOpen());
 	let executionSurfaces = $derived.by(() =>
 		data.executionSurfaces.map((surface) =>
-			mergeStoredWorkerRecord(surface, workerRecordState.current.byId)
+			mergeStoredExecutionSurfaceRecord(surface, workerRecordState.current.byId)
 		)
 	);
 
@@ -87,10 +93,10 @@
 		executionSurfaces.filter((surface) => matchesExecutionSurface(surface, query))
 	);
 
-	let createSuccess = $derived(form?.ok && form?.successAction === 'createWorker');
+	let createSuccess = $derived(form?.ok && form?.successAction === 'createExecutionSurface');
 
 	$effect(() => {
-		workerRecordStore.seedWorkers(data.executionSurfaces);
+		executionSurfaceRecordStore.seedExecutionSurfaces(data.executionSurfaces);
 	});
 
 	function defaultWorkerProviderId() {
@@ -101,20 +107,22 @@
 		return data.roles[0]?.id ? [data.roles[0].id] : [];
 	}
 
-	function defaultWorkerLocation() {
+	function defaultExecutionSurfaceLocation() {
 		return data.locationOptions[0] ?? 'cloud';
 	}
 
-	function defaultWorkerStatus() {
+	function defaultExecutionSurfaceStatus() {
 		return data.statusOptions[0] ?? 'idle';
 	}
 
-	function normalizeWorkerLocation(value: string | undefined) {
-		return data.locationOptions.find((option) => option === value) ?? defaultWorkerLocation();
+	function normalizeExecutionSurfaceLocation(value: string | undefined) {
+		return (
+			data.locationOptions.find((option) => option === value) ?? defaultExecutionSurfaceLocation()
+		);
 	}
 
-	function normalizeWorkerStatus(value: string | undefined) {
-		return data.statusOptions.find((option) => option === value) ?? defaultWorkerStatus();
+	function normalizeExecutionSurfaceStatus(value: string | undefined) {
+		return data.statusOptions.find((option) => option === value) ?? defaultExecutionSurfaceStatus();
 	}
 
 	onMount(() => {
@@ -144,8 +152,8 @@
 			workerProviderId = savedDraft.providerId ?? defaultWorkerProviderId();
 			workerSupportedRoleIds =
 				savedSupportedRoleIds.length > 0 ? savedSupportedRoleIds : defaultWorkerSupportedRoleIds();
-			workerLocation = normalizeWorkerLocation(savedDraft.location);
-			workerStatus = normalizeWorkerStatus(savedDraft.status);
+			workerLocation = normalizeExecutionSurfaceLocation(savedDraft.location);
+			workerStatus = normalizeExecutionSurfaceStatus(savedDraft.status);
 			workerCapacity = savedDraft.capacity ?? '1';
 			workerMaxConcurrentRuns = savedDraft.maxConcurrentRuns ?? '';
 			workerNote = savedDraft.note ?? '';
@@ -157,8 +165,8 @@
 		workerProviderId = workerProviderId || defaultWorkerProviderId();
 		workerSupportedRoleIds =
 			workerSupportedRoleIds.length > 0 ? workerSupportedRoleIds : defaultWorkerSupportedRoleIds();
-		workerLocation = normalizeWorkerLocation(workerLocation);
-		workerStatus = normalizeWorkerStatus(workerStatus);
+		workerLocation = normalizeExecutionSurfaceLocation(workerLocation);
+		workerStatus = normalizeExecutionSurfaceStatus(workerStatus);
 
 		createWorkerDraftReady = true;
 	});
@@ -175,8 +183,8 @@
 				workerSupportedRoleIds.join(',') === defaultWorkerSupportedRoleIds().join(',')
 					? []
 					: workerSupportedRoleIds,
-			location: workerLocation === defaultWorkerLocation() ? '' : workerLocation,
-			status: workerStatus === defaultWorkerStatus() ? '' : workerStatus,
+			location: workerLocation === defaultExecutionSurfaceLocation() ? '' : workerLocation,
+			status: workerStatus === defaultExecutionSurfaceStatus() ? '' : workerStatus,
 			capacity: workerCapacity === '1' ? '' : workerCapacity,
 			maxConcurrentRuns: workerMaxConcurrentRuns,
 			note: workerNote,
@@ -271,7 +279,7 @@
 									<span
 										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(executionSurface.status)}`}
 									>
-										{formatWorkerStatusLabel(executionSurface.status)}
+										{formatExecutionSurfaceStatusLabel(executionSurface.status)}
 									</span>
 									<span
 										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${locationClass(executionSurface.location)}`}
@@ -366,7 +374,12 @@
 		description="Add a new execution surface after you confirm the current directory does not already cover the capacity you need."
 		closeLabel="Close register execution surface form"
 	>
-		<form class="space-y-6" method="POST" action="?/createWorker" data-persist-scope="manual">
+		<form
+			class="space-y-6"
+			method="POST"
+			action="?/createExecutionSurface"
+			data-persist-scope="manual"
+		>
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 				<input
@@ -421,7 +434,7 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 					<select bind:value={workerStatus} class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
-							<option value={status}>{formatWorkerStatusLabel(status)}</option>
+							<option value={status}>{formatExecutionSurfaceStatusLabel(status)}</option>
 						{/each}
 					</select>
 				</label>
