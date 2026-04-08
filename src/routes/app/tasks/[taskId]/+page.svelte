@@ -68,6 +68,19 @@
 	);
 	let governanceSuccessMessage = $derived.by(() => {
 		switch (form?.successAction) {
+			case 'decomposeTask': {
+				const createdChildCount =
+					typeof form === 'object' &&
+					form &&
+					'createdChildCount' in form &&
+					typeof form.createdChildCount === 'number'
+						? form.createdChildCount
+						: null;
+
+				return createdChildCount && createdChildCount > 0
+					? `Created ${createdChildCount} delegated child task${createdChildCount === 1 ? '' : 's'}.`
+					: 'Delegated child tasks created.';
+			}
 			case 'approveReview':
 				return 'Review approved.';
 			case 'requestChanges':
@@ -95,6 +108,7 @@
 				case 'requestChanges':
 				case 'approveApproval':
 				case 'rejectApproval':
+				case 'decomposeTask':
 				case 'acceptChildHandoff':
 				case 'requestChildHandoffChanges':
 					return 'governance';
@@ -359,6 +373,7 @@
 				<TaskExecutionPanel
 					task={data.task}
 					executionPreflight={data.executionPreflight}
+					launchContext={data.launchContext}
 					retrievedKnowledgeItems={data.retrievedKnowledgeItems ?? []}
 					suggestedThread={data.suggestedThread}
 					candidateThreads={data.candidateThreads}
@@ -371,6 +386,7 @@
 					parentTask={data.parentTask}
 					childTaskRollup={data.childTaskRollup}
 					childTasks={data.childTasks}
+					roles={data.roles ?? []}
 					dependencyTasks={data.dependencyTasks}
 					recentDecisions={data.recentDecisions}
 				/>

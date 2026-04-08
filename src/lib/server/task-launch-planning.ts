@@ -69,6 +69,16 @@ async function loadTaskRetrievedKnowledge(task: Task, project: Project | null) {
 	});
 }
 
+function hasDelegationPacketContent(packet: Task['delegationPacket'] | null | undefined) {
+	return Boolean(
+		packet?.objective ||
+		packet?.inputContext ||
+		packet?.expectedDeliverable ||
+		packet?.doneCondition ||
+		packet?.integrationNotes
+	);
+}
+
 function selectTaskThreadForSandbox(
 	thread: Awaited<ReturnType<typeof getAgentThread>> | null,
 	requiredSandbox: AgentSandbox | null
@@ -94,7 +104,7 @@ export async function buildTaskLaunchPlan(
 	const effectiveSuccessCriteria = input.successCriteria;
 	const effectiveReadyCondition = input.readyCondition;
 	const effectiveExpectedOutcome = input.expectedOutcome;
-	const effectiveDelegationPacket =
+	const formDelegationPacket =
 		task.parentTaskId && input.hasDelegationPacketFields
 			? {
 					objective: input.delegationObjective,
@@ -103,7 +113,10 @@ export async function buildTaskLaunchPlan(
 					doneCondition: input.delegationDoneCondition,
 					integrationNotes: input.delegationIntegrationNotes
 				}
-			: (task.delegationPacket ?? null);
+			: null;
+	const effectiveDelegationPacket = hasDelegationPacketContent(formDelegationPacket)
+		? formDelegationPacket
+		: (task.delegationPacket ?? null);
 	const effectiveProjectId = input.projectId || task.projectId;
 	const effectivePriority = input.hasPriority ? input.priority : task.priority;
 	const effectiveRiskLevel = input.hasRiskLevel ? input.riskLevel : task.riskLevel;

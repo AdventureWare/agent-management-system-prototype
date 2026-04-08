@@ -43,6 +43,79 @@ const createRun = vi.hoisted(() =>
 		})
 	)
 );
+const createTaskState = vi.hoisted(() => ({ nextId: 1 }));
+const createTask = vi.hoisted(() =>
+	vi.fn(
+		(input: {
+			title: string;
+			summary: string;
+			successCriteria?: string;
+			readyCondition?: string;
+			expectedOutcome?: string;
+			projectId: string;
+			area?: string;
+			goalId: string;
+			parentTaskId?: string | null;
+			delegationPacket?: {
+				objective: string;
+				inputContext: string;
+				expectedDeliverable: string;
+				doneCondition: string;
+				integrationNotes: string;
+			} | null;
+			delegationAcceptance?: {
+				summary: string;
+				acceptedAt: string;
+			} | null;
+			priority: string;
+			status?: string;
+			riskLevel: string;
+			approvalMode: string;
+			requiredThreadSandbox?: string | null;
+			requiresReview: boolean;
+			desiredRoleId: string;
+			requiredCapabilityNames?: string[];
+			requiredToolNames?: string[];
+			blockedReason?: string;
+			dependencyTaskIds?: string[];
+			targetDate?: string | null;
+			artifactPath: string;
+		}) => ({
+			id: `task_created_${createTaskState.nextId++}`,
+			title: input.title,
+			summary: input.summary,
+			successCriteria: input.successCriteria ?? '',
+			readyCondition: input.readyCondition ?? '',
+			expectedOutcome: input.expectedOutcome ?? '',
+			projectId: input.projectId,
+			area: input.area ?? 'product',
+			goalId: input.goalId,
+			parentTaskId: input.parentTaskId ?? null,
+			delegationPacket: input.delegationPacket ?? null,
+			delegationAcceptance: input.delegationAcceptance ?? null,
+			priority: input.priority,
+			status: input.status ?? 'ready',
+			riskLevel: input.riskLevel,
+			approvalMode: input.approvalMode,
+			requiredThreadSandbox: input.requiredThreadSandbox ?? null,
+			requiresReview: input.requiresReview,
+			desiredRoleId: input.desiredRoleId,
+			assigneeWorkerId: null,
+			agentThreadId: null,
+			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
+			requiredToolNames: input.requiredToolNames ?? [],
+			blockedReason: input.blockedReason ?? '',
+			dependencyTaskIds: input.dependencyTaskIds ?? [],
+			targetDate: input.targetDate ?? null,
+			runCount: 0,
+			latestRunId: null,
+			artifactPath: input.artifactPath,
+			attachments: [],
+			createdAt: '2026-03-30T12:00:00.000Z',
+			updatedAt: '2026-03-30T12:00:00.000Z'
+		})
+	)
+);
 
 const projectMatchesPath = vi.hoisted(() => vi.fn(() => true));
 const getWorkspaceExecutionIssue = vi.hoisted(() =>
@@ -133,6 +206,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			decidedByWorkerId: null
 		})
 	),
+	createTask,
 	createTaskAttachmentId: vi.fn(() => 'attachment_test'),
 	createRun,
 	deleteTask: vi.fn(),
@@ -243,6 +317,8 @@ describe('task detail page server actions', () => {
 		existsSync.mockReturnValue(true);
 		mkdir.mockReset();
 		writeFile.mockReset();
+		createTaskState.nextId = 1;
+		createTask.mockClear();
 		createRun.mockClear();
 		projectMatchesPath.mockReset();
 		projectMatchesPath.mockReturnValue(true);
@@ -695,6 +771,180 @@ describe('task detail page server actions', () => {
 				decisionType: 'delegation_handoff_changes_requested'
 			})
 		);
+	});
+
+	it('decomposes a task into delegated child tasks within the fan-out limit', async () => {
+		const form = new FormData();
+		form.set('decompositionEnabled0', 'true');
+		form.set('decompositionTitle0', 'Research current worker constraints');
+		form.set(
+			'decompositionInstructions0',
+			'Audit the current worker capacity and concurrency constraints.'
+		);
+		form.set('decompositionDesiredRoleId0', 'role_reviewer');
+		form.set('decompositionObjective0', 'Produce a bounded analysis of worker constraints.');
+		form.set(
+			'decompositionExpectedDeliverable0',
+			'A short design note with the current limits and gaps.'
+		);
+		form.set(
+			'decompositionDoneCondition0',
+			'The parent can decide whether worker routing changes are needed.'
+		);
+		form.set('decompositionEnabled1', 'true');
+		form.set('decompositionTitle1', 'Draft orchestration UI copy');
+		form.set(
+			'decompositionInstructions1',
+			'Prepare the copy needed for the operator-facing decomposition flow.'
+		);
+		form.set('decompositionDesiredRoleId1', 'role_coordinator');
+		form.set('decompositionObjective1', 'Define the parent-facing orchestration prompts.');
+		form.set(
+			'decompositionExpectedDeliverable1',
+			'UI-ready copy for decomposition labels and guidance.'
+		);
+		form.set(
+			'decompositionDoneCondition1',
+			'The parent can incorporate the copy without additional clarification.'
+		);
+
+		const result = await actions.decomposeTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'decomposeTask',
+				taskId: 'task_1',
+				createdChildCount: 2
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.filter((task) => task.parentTaskId === 'task_1')).toEqual([
+			expect.objectContaining({
+				title: 'Research current worker constraints',
+				desiredRoleId: 'role_reviewer',
+				parentTaskId: 'task_1',
+				successCriteria: 'The parent can decide whether worker routing changes are needed.',
+				expectedOutcome: 'A short design note with the current limits and gaps.',
+				delegationPacket: expect.objectContaining({
+					objective: 'Produce a bounded analysis of worker constraints.',
+					doneCondition:
+						'The parent can decide whether worker routing changes are needed.',
+					inputContext: expect.stringContaining('Parent task: Attach a brief')
+				})
+			}),
+			expect.objectContaining({
+				title: 'Draft orchestration UI copy',
+				desiredRoleId: 'role_coordinator',
+				parentTaskId: 'task_1',
+				delegationPacket: expect.objectContaining({
+					objective: 'Define the parent-facing orchestration prompts.'
+				})
+			})
+		]);
+		expect(controlPlaneState.saved?.decisions?.[0]).toEqual(
+			expect.objectContaining({
+				taskId: 'task_1',
+				decisionType: 'task_decomposed',
+				summary: expect.stringContaining('Research current worker constraints')
+			})
+		);
+	});
+
+	it('rejects decomposition that would exceed the child fan-out limit', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			tasks: [
+				...(controlPlaneState.current as ControlPlaneData).tasks,
+				{
+					id: 'task_child_a',
+					title: 'Existing child A',
+					summary: 'First delegated child task.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: '',
+					parentTaskId: 'task_1',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					targetDate: null,
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				},
+				{
+					id: 'task_child_b',
+					title: 'Existing child B',
+					summary: 'Second delegated child task.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: '',
+					parentTaskId: 'task_1',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_reviewer',
+					assigneeWorkerId: null,
+					agentThreadId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					targetDate: null,
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output',
+					attachments: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('decompositionEnabled0', 'true');
+		form.set('decompositionTitle0', 'Third child');
+		form.set('decompositionInstructions0', 'Create the third child.');
+		form.set('decompositionDesiredRoleId0', 'role_coordinator');
+		form.set('decompositionObjective0', 'Own the third child outcome.');
+		form.set('decompositionDoneCondition0', 'Third child is ready.');
+		form.set('decompositionEnabled1', 'true');
+		form.set('decompositionTitle1', 'Fourth child');
+		form.set('decompositionInstructions1', 'Create the fourth child.');
+		form.set('decompositionDesiredRoleId1', 'role_reviewer');
+		form.set('decompositionObjective1', 'Own the fourth child outcome.');
+		form.set('decompositionDoneCondition1', 'Fourth child is ready.');
+
+		const result = await actions.decomposeTask({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 409,
+			data: {
+				message: expect.stringContaining('fan-out limit is 3')
+			}
+		});
+		expect(controlPlaneState.saved).toBeNull();
 	});
 
 	it('rejects an invalid task target date from the detail form', async () => {

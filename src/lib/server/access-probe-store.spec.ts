@@ -12,6 +12,11 @@ describe('access probe store', () => {
 					providerNeedsSetupCount: 1,
 					workerAccessIssueCount: 1
 				},
+				executionCatalog: {
+					projectSkills: [],
+					capabilities: [],
+					tools: []
+				},
 				projects: [
 					{
 						id: 'project_1',

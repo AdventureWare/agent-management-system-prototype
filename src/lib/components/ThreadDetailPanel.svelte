@@ -2227,173 +2227,171 @@
 								description="Reply in the same thread once you have enough context. Attached files are saved onto the thread and included for the next run."
 								bodyClass="space-y-3"
 							>
-								<div
-									id="reply"
-									bind:this={followUpComposerRoot}
-									class="space-y-3 rounded-xl border border-slate-800 bg-black/20 p-4"
-								>
-									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-										<div>
-											<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
-												Reply context
-											</p>
-											<p class="mt-2 text-sm text-slate-400">
-												Review the current task, latest instruction, and saved response without
-												leaving the composer.
-											</p>
-										</div>
-										{#if latestContextRun}
-											<span
-												class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(latestContextRun))}`}
-											>
-												{latestRunStatus(latestContextRun)}
-											</span>
-										{/if}
-									</div>
-
-									{#if focusTask}
-										{@render focusTaskCard(focusTask, {
-											label: 'Working on',
-											description:
-												'Keep this task visible while you review the last turn and draft the next instruction.',
-											compact: true
-										})}
-									{/if}
-
-									{#if latestContextRun}
-										<div class="space-y-3">
-											<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-												<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-													Latest instruction
+								<div id="reply" bind:this={followUpComposerRoot} class="space-y-3">
+									<div class="rounded-xl border border-slate-800 bg-black/20 p-4">
+										<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+											<div>
+												<p class="text-xs tracking-[0.16em] text-slate-500 uppercase">
+													Reply context
 												</p>
-												<p
-													class="ui-wrap-anywhere ui-clamp-3 mt-2 text-sm whitespace-pre-wrap text-slate-300"
+												<p class="mt-2 text-sm text-slate-400">
+													Review the current task, latest instruction, and saved response without
+													leaving the composer.
+												</p>
+											</div>
+											{#if latestContextRun}
+												<span
+													class={`inline-flex items-center justify-center rounded-full px-2 py-1 text-center text-[11px] leading-none uppercase ${runStatusClass(latestRunStatus(latestContextRun))}`}
 												>
-													{latestContextRun.prompt}
-												</p>
-											</div>
-
-											<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-												<div class="flex flex-wrap items-center justify-between gap-2">
-													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
-														Most recent response
-													</p>
-													<p class="text-xs text-slate-500">
-														{formatTimestamp(latestContextRun.createdAt)}
-													</p>
-												</div>
-												<div class="mt-2 max-h-52 overflow-auto pr-1">
-													{#if shouldShowActiveResponsePlaceholder(latestContextRun)}
-														<p class="ui-wrap-anywhere text-sm text-slate-400">
-															The current run is still working. The saved response appears here as
-															soon as it is written.
-														</p>
-													{:else}
-														<ThreadMessageContent
-															text={responseText(latestContextRun)}
-															tone="muted"
-														/>
-													{/if}
-												</div>
-											</div>
+													{latestRunStatus(latestContextRun)}
+												</span>
+											{/if}
 										</div>
-									{:else}
-										<p
-											class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400"
-										>
-											No saved response is available yet. The composer stays ready here once the
-											thread has something to review.
-										</p>
-									{/if}
-								</div>
 
-								<form
-									id="thread-follow-up-form"
-									class="space-y-3"
-									onsubmit={submitFollowUp}
-									onpaste={handleFollowUpAttachmentPaste}
-								>
-									<textarea
-										bind:this={followUpPromptField}
-										bind:value={followUpPrompt}
-										class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
-										name="prompt"
-										placeholder={session.canResume
-											? 'Send the next instruction.'
-											: session.hasActiveRun
-												? 'This thread is busy until the current run finishes.'
-												: 'This thread cannot resume until a Codex thread id is discovered.'}
-										disabled={!session.canResume || sendState?.status === 'sending'}
-									></textarea>
-									<div class="space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
-										<div class="flex flex-col gap-1">
-											<p class="text-sm font-medium text-white">Follow-up attachments</p>
-											<p class="ui-wrap-anywhere text-sm text-slate-400">
-												Choose files or paste screenshots and copied files anywhere in this form.
-											</p>
-										</div>
-										<label class="block">
-											<span class="sr-only">Attach follow-up files</span>
-											<input
-												bind:this={followUpAttachmentInput}
-												class="file-input w-full border border-slate-700 bg-slate-950 text-slate-100 disabled:opacity-50"
-												name="attachments"
-												type="file"
-												multiple
-												disabled={!session.canResume || sendState?.status === 'sending'}
-												onchange={syncPendingFollowUpAttachments}
-											/>
-										</label>
-										{#if pendingFollowUpAttachments.length > 0}
+										{#if focusTask}
+											{@render focusTaskCard(focusTask, {
+												label: 'Working on',
+												description:
+													'Keep this task visible while you review the last turn and draft the next instruction.',
+												compact: true
+											})}
+										{/if}
+
+										{#if latestContextRun}
 											<div class="space-y-3">
-												<div class="flex flex-wrap items-center justify-between gap-3">
-													<p class="ui-wrap-anywhere text-sm text-slate-200">
-														{pendingFollowUpAttachments.length === 1
-															? '1 attachment ready to send'
-															: `${pendingFollowUpAttachments.length} attachments ready to send`}
+												<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Latest instruction
 													</p>
-													<AppButton
-														size="sm"
-														type="button"
-														variant="ghost"
-														disabled={sendState?.status === 'sending'}
-														onclick={clearPendingFollowUpAttachments}
+													<p
+														class="ui-wrap-anywhere ui-clamp-3 mt-2 text-sm whitespace-pre-wrap text-slate-300"
 													>
-														Clear
-													</AppButton>
+														{latestContextRun.prompt}
+													</p>
 												</div>
-												<div class="space-y-2">
-													{#each pendingFollowUpAttachments as attachment (attachment.id)}
-														<div
-															class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3"
-														>
-															<p class="ui-wrap-anywhere text-sm font-medium text-white">
-																{attachment.name}
+
+												<div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+													<div class="flex flex-wrap items-center justify-between gap-2">
+														<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+															Most recent response
+														</p>
+														<p class="text-xs text-slate-500">
+															{formatTimestamp(latestContextRun.createdAt)}
+														</p>
+													</div>
+													<div class="mt-2 max-h-52 overflow-auto pr-1">
+														{#if shouldShowActiveResponsePlaceholder(latestContextRun)}
+															<p class="ui-wrap-anywhere text-sm text-slate-400">
+																The current run is still working. The saved response appears here as
+																soon as it is written.
 															</p>
-															<p class="mt-1 text-xs text-slate-400">
-																{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
-															</p>
-														</div>
-													{/each}
+														{:else}
+															<ThreadMessageContent
+																text={responseText(latestContextRun)}
+																tone="muted"
+															/>
+														{/if}
+													</div>
 												</div>
 											</div>
+										{:else}
+											<p
+												class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400"
+											>
+												No saved response is available yet. The composer stays ready here once the
+												thread has something to review.
+											</p>
 										{/if}
 									</div>
-									{#if sendState}
-										<p
-											class={[
-												'ui-wrap-anywhere text-sm',
-												sendState.status === 'error'
-													? 'text-rose-300'
-													: sendState.status === 'success'
-														? 'text-emerald-300'
-														: 'text-sky-300'
-											]}
-										>
-											{sendState.message}
-										</p>
-									{/if}
-								</form>
+
+									<form
+										id="thread-follow-up-form"
+										class="space-y-3"
+										onsubmit={submitFollowUp}
+										onpaste={handleFollowUpAttachmentPaste}
+									>
+										<textarea
+											bind:this={followUpPromptField}
+											bind:value={followUpPrompt}
+											class="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white disabled:opacity-50"
+											name="prompt"
+											placeholder={session.canResume
+												? 'Send the next instruction.'
+												: session.hasActiveRun
+													? 'This thread is busy until the current run finishes.'
+													: 'This thread cannot resume until a Codex thread id is discovered.'}
+											disabled={!session.canResume || sendState?.status === 'sending'}
+										></textarea>
+										<div class="space-y-3 rounded-lg border border-slate-800 bg-black/20 p-4">
+											<div class="flex flex-col gap-1">
+												<p class="text-sm font-medium text-white">Follow-up attachments</p>
+												<p class="ui-wrap-anywhere text-sm text-slate-400">
+													Choose files or paste screenshots and copied files anywhere in this form.
+												</p>
+											</div>
+											<label class="block">
+												<span class="sr-only">Attach follow-up files</span>
+												<input
+													bind:this={followUpAttachmentInput}
+													class="file-input w-full border border-slate-700 bg-slate-950 text-slate-100 disabled:opacity-50"
+													name="attachments"
+													type="file"
+													multiple
+													disabled={!session.canResume || sendState?.status === 'sending'}
+													onchange={syncPendingFollowUpAttachments}
+												/>
+											</label>
+											{#if pendingFollowUpAttachments.length > 0}
+												<div class="space-y-3">
+													<div class="flex flex-wrap items-center justify-between gap-3">
+														<p class="ui-wrap-anywhere text-sm text-slate-200">
+															{pendingFollowUpAttachments.length === 1
+																? '1 attachment ready to send'
+																: `${pendingFollowUpAttachments.length} attachments ready to send`}
+														</p>
+														<AppButton
+															size="sm"
+															type="button"
+															variant="ghost"
+															disabled={sendState?.status === 'sending'}
+															onclick={clearPendingFollowUpAttachments}
+														>
+															Clear
+														</AppButton>
+													</div>
+													<div class="space-y-2">
+														{#each pendingFollowUpAttachments as attachment (attachment.id)}
+															<div
+																class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3"
+															>
+																<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																	{attachment.name}
+																</p>
+																<p class="mt-1 text-xs text-slate-400">
+																	{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+																</p>
+															</div>
+														{/each}
+													</div>
+												</div>
+											{/if}
+										</div>
+										{#if sendState}
+											<p
+												class={[
+													'ui-wrap-anywhere text-sm',
+													sendState.status === 'error'
+														? 'text-rose-300'
+														: sendState.status === 'success'
+															? 'text-emerald-300'
+															: 'text-sky-300'
+												]}
+											>
+												{sendState.message}
+											</p>
+										{/if}
+									</form>
+								</div>
 
 								<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 									<AppButton

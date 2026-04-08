@@ -8,6 +8,7 @@ import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
+import { buildTaskLaunchContextSummary } from '$lib/server/task-launch-context-summary';
 import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
 import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
 import { getWorkerAssignmentSuggestions } from '$lib/server/worker-api';
@@ -72,6 +73,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
 	const availableSkillSummary = summarizeInstalledSkills(availableSkills);
+	const assignedWorker = task.assigneeWorkerId ? (workerMap.get(task.assigneeWorkerId) ?? null) : null;
 	const recentDecisions = buildRecentTaskDecisionViews(
 		data.decisions ?? [],
 		task.id,
@@ -102,6 +104,15 @@ export async function loadTaskDetailPageData(taskId: string) {
 			}))
 		})
 	]);
+	const launchContext = buildTaskLaunchContextSummary(
+		{ providers: data.providers },
+		{
+			task,
+			project,
+			worker: assignedWorker,
+			publishedKnowledgeCount: retrievedKnowledgeItems.length
+		}
+	);
 
 	return {
 		task: buildTaskDetailTaskView({
@@ -123,6 +134,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		stalledRecovery,
 		attachmentRoot: artifactRoot,
 		availableSkills: availableSkillSummary,
+		launchContext,
 		artifactBrowser,
 		project,
 		retrievedKnowledgeItems,

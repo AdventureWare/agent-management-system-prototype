@@ -85,14 +85,31 @@
 		summary: string;
 	};
 
-	let { task, parentTask, childTaskRollup, childTasks, dependencyTasks, recentDecisions } = $props<{
+	type RoleOption = {
+		id: string;
+		name: string;
+	};
+
+	type TaskGovernancePanelProps = {
 		task: TaskGovernanceView;
 		parentTask: ParentTaskView | null;
 		childTaskRollup: ChildTaskRollupView | null;
 		childTasks: ChildTaskView[];
+		roles: RoleOption[];
 		dependencyTasks: DependencyTaskView[];
 		recentDecisions: RecentDecisionView[];
-	}>();
+	};
+
+	let {
+		task,
+		parentTask,
+		childTaskRollup,
+		childTasks,
+		roles,
+		dependencyTasks,
+		recentDecisions
+	}: TaskGovernancePanelProps = $props();
+	let remainingChildSlots = $derived(Math.max(0, 3 - childTasks.length));
 </script>
 
 <div id="task-detail-panel-governance" role="tabpanel" aria-labelledby="task-detail-tab-governance">
@@ -292,7 +309,8 @@
 									Delegated subtasks
 								</p>
 								<span class="text-xs text-slate-500">
-									{childTasks.length === 1 ? '1 child task' : `${childTasks.length} child tasks`}
+									{childTasks.length === 1 ? '1 child task' : `${childTasks.length} child tasks`} ·
+									{remainingChildSlots} slot{remainingChildSlots === 1 ? '' : 's'} remaining
 								</span>
 							</div>
 							{#if childTasks.length === 0}
@@ -377,6 +395,156 @@
 										</div>
 									{/each}
 								</div>
+							{/if}
+						</div>
+
+						<div class="rounded-xl border border-slate-800/90 bg-slate-950/70 p-3">
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<p class="text-xs font-semibold tracking-[0.14em] text-slate-500 uppercase">
+										Decompose parent task
+									</p>
+									<p class="mt-2 text-sm text-white">
+										Create up to three bounded child tasks with explicit specialist roles and
+										handoff contracts.
+									</p>
+								</div>
+								<span
+									class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-300 uppercase"
+								>
+									Fan-out limit: 3
+								</span>
+							</div>
+
+							{#if remainingChildSlots === 0}
+								<p
+									class="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3 text-sm text-slate-300"
+								>
+									This task already owns the maximum number of delegated child tasks for the current
+									orchestration flow.
+								</p>
+							{:else}
+								<form class="mt-4 space-y-4" method="POST" action="?/decomposeTask">
+									{#each [0, 1, 2] as index (index)}
+										<fieldset class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+											<div class="flex flex-wrap items-center justify-between gap-3">
+												<label
+													class="inline-flex items-center gap-2 text-sm font-medium text-white"
+												>
+													<input
+														class="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-400 focus:ring-sky-500"
+														type="checkbox"
+														name={`decompositionEnabled${index}`}
+														value="true"
+													/>
+													<span>Child template {index + 1}</span>
+												</label>
+												<p class="text-xs text-slate-500">
+													Use only the rows you need. Keep each child scoped to one clear
+													deliverable.
+												</p>
+											</div>
+
+											<div class="mt-4 grid gap-4 lg:grid-cols-2">
+												<label class="grid gap-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Child title
+													</span>
+													<input
+														class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														type="text"
+														name={`decompositionTitle${index}`}
+														placeholder="Specialist child task title"
+													/>
+												</label>
+
+												<label class="grid gap-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Desired role
+													</span>
+													<select
+														class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														name={`decompositionDesiredRoleId${index}`}
+													>
+														<option value="">Select a specialist role</option>
+														{#each roles as role (role.id)}
+															<option value={role.id}>{role.name}</option>
+														{/each}
+													</select>
+												</label>
+
+												<label class="grid gap-2 lg:col-span-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Child brief
+													</span>
+													<textarea
+														class="min-h-24 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														name={`decompositionInstructions${index}`}
+														placeholder="Describe the bounded work this child should execute."
+													></textarea>
+												</label>
+
+												<label class="grid gap-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Delegation objective
+													</span>
+													<textarea
+														class="min-h-24 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														name={`decompositionObjective${index}`}
+														placeholder="What specialized outcome should this child own?"
+													></textarea>
+												</label>
+
+												<label class="grid gap-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Expected deliverable
+													</span>
+													<textarea
+														class="min-h-24 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														name={`decompositionExpectedDeliverable${index}`}
+														placeholder="Artifact, document, code change, or analysis expected back from the child."
+													></textarea>
+												</label>
+
+												<label class="grid gap-2 lg:col-span-2">
+													<span
+														class="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase"
+													>
+														Done condition
+													</span>
+													<textarea
+														class="min-h-24 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+														name={`decompositionDoneCondition${index}`}
+														placeholder="What must be true before the parent should accept the handoff?"
+													></textarea>
+												</label>
+											</div>
+										</fieldset>
+									{/each}
+
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<p class="text-xs text-slate-500">
+											Child tasks inherit the parent project, goal, governance settings, execution
+											requirements, and sandbox defaults.
+										</p>
+										<button
+											class="btn border border-amber-800/70 bg-amber-950/40 font-semibold text-amber-200"
+											type="submit"
+										>
+											Create delegated child tasks
+										</button>
+									</div>
+								</form>
 							{/if}
 						</div>
 					</div>

@@ -190,13 +190,11 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		const mobileCard = page.getByTestId('task-mobile-card-task_mobile');
+		const mobileCard = document.querySelector('[data-testid="task-mobile-card-task_mobile"]');
 
-		await expect.element(mobileCard).toBeInTheDocument();
-		await expect.element(mobileCard.getByRole('link', { name: 'Open task' })).toBeInTheDocument();
-		await expect
-			.element(mobileCard.getByRole('link', { name: 'Review assigned thread' }))
-			.toBeInTheDocument();
+		expect(mobileCard).not.toBeNull();
+		expect(mobileCard?.textContent).toContain('Open task');
+		expect(mobileCard?.textContent).toContain('Review assigned thread');
 	});
 
 	it('keeps the desktop queue in table view and renders action menus for panel opening', () => {
@@ -263,10 +261,15 @@ describe('/app/tasks/+page.svelte', () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
 
-		await expect
-			.element(page.getByRole('button', { name: 'Create task', exact: true }))
-			.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
+		const createForm = document.querySelector(
+			'form[action="?/createTask"]'
+		) as HTMLFormElement | null;
+		const formButtons = Array.from(createForm?.querySelectorAll('button') ?? []).map((button) =>
+			button.textContent?.trim()
+		);
+
+		expect(formButtons).toContain('Create task');
+		expect(formButtons).toContain('Create and run');
 
 		const assistButton = document.querySelector(
 			'form[action="?/createTask"] button[formaction="?/assistTaskWriting"]'
@@ -352,8 +355,12 @@ describe('/app/tasks/+page.svelte', () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
 
-		await expect.element(page.getByText('Advanced intake')).toBeInTheDocument();
-		await expect.element(page.getByText('Defaults stay lightweight')).toBeInTheDocument();
+		const createForm = document.querySelector(
+			'form[action="?/createTask"]'
+		) as HTMLFormElement | null;
+
+		expect(createForm?.textContent).toContain('Advanced intake');
+		expect(createForm?.textContent).toContain('Defaults stay lightweight');
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="priority"]')
 		).toBeNull();
@@ -366,7 +373,7 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(
 			document.querySelector('form[action="?/createTask"] textarea[name="blockedReason"]')
 		).not.toBeNull();
-		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
+		expect(createForm?.textContent).toContain('Existing dependency task');
 	});
 
 	it('restores a saved create-task draft after reload', async () => {
@@ -518,18 +525,14 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		const routedTaskCard = page.getByTestId('task-mobile-card-task_routed');
+		const routedTaskCard = document.querySelector('[data-testid="task-mobile-card-task_routed"]');
 
-		await expect.element(routedTaskCard.getByText('Urgent')).toBeInTheDocument();
-		await expect.element(routedTaskCard.getByText('High risk')).toBeInTheDocument();
-		await expect.element(routedTaskCard.getByText('Review optional')).toBeInTheDocument();
-		await expect.element(routedTaskCard.getByText('Role Reviewer')).toBeInTheDocument();
-		await expect
-			.element(routedTaskCard.getByText('Awaiting stakeholder sign-off.'))
-			.toBeInTheDocument();
-		await expect
-			.element(routedTaskCard.getByText('Depends on: Existing dependency task'))
-			.toBeInTheDocument();
+		expect(routedTaskCard?.textContent).toContain('Urgent');
+		expect(routedTaskCard?.textContent).toContain('High risk');
+		expect(routedTaskCard?.textContent).toContain('Review optional');
+		expect(routedTaskCard?.textContent).toContain('Role Reviewer');
+		expect(routedTaskCard?.textContent).toContain('Awaiting stakeholder sign-off.');
+		expect(routedTaskCard?.textContent).toContain('Depends on: Existing dependency task');
 	});
 
 	it('clears a saved create-task draft after successful creation', () => {
@@ -576,16 +579,13 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		const staleTaskCard = page.getByTestId('task-mobile-card-task_stale');
-		const freshTaskCard = page.getByTestId('task-mobile-card-task_fresh');
-
-		await expect.element(staleTaskCard).toBeInTheDocument();
-		await expect.element(freshTaskCard).toBeInTheDocument();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_stale"]')).not.toBeNull();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_fresh"]')).not.toBeNull();
 
 		await page.getByRole('button', { name: /Stale WIP \(1\)/i }).click();
 
-		await expect.element(staleTaskCard).toBeInTheDocument();
-		await expect.element(freshTaskCard).not.toBeInTheDocument();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_stale"]')).not.toBeNull();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_fresh"]')).toBeNull();
 	});
 
 	it('shows the target date in the queue when a task has one', async () => {
@@ -597,11 +597,11 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		await expect
-			.element(
-				page.getByTestId('task-mobile-card-task_target_date').getByText('Target Apr 18, 2026')
-			)
-			.toBeInTheDocument();
+		const targetDateCard = document.querySelector(
+			'[data-testid="task-mobile-card-task_target_date"]'
+		);
+
+		expect(targetDateCard?.textContent).toContain('Target Apr 18, 2026');
 	});
 
 	it('switches between active and completed task views with local tabs', async () => {
@@ -618,15 +618,12 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		const activeTaskCard = page.getByTestId('task-mobile-card-task_active');
-		const completedTaskCard = page.getByTestId('task-mobile-card-task_done');
-
-		await expect.element(activeTaskCard).toBeInTheDocument();
-		await expect.element(completedTaskCard).not.toBeInTheDocument();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_active"]')).not.toBeNull();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_done"]')).toBeNull();
 
 		await page.getByRole('tab', { name: /Completed work 1/i }).click();
 
-		await expect.element(completedTaskCard).toBeInTheDocument();
-		await expect.element(activeTaskCard).not.toBeInTheDocument();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_done"]')).not.toBeNull();
+		expect(document.querySelector('[data-testid="task-mobile-card-task_active"]')).toBeNull();
 	});
 });

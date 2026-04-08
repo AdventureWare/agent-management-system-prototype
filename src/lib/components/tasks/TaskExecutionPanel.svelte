@@ -3,7 +3,11 @@
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import { getTaskThreadReviewHref } from '$lib/task-thread-context';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
-	import type { AgentThreadState } from '$lib/types/agent-thread';
+	import {
+		formatAgentSandboxLabel,
+		type AgentSandbox,
+		type AgentThreadState
+	} from '$lib/types/agent-thread';
 	import { formatRunStatusLabel, runStatusToneClass } from '$lib/types/control-plane';
 	import { uniqueTopicLabels } from '$lib/topic-labels';
 
@@ -83,9 +87,48 @@
 		threadId: string | null;
 	};
 
+	type LaunchContextView = {
+		assignedWorker: {
+			name: string;
+			status: string;
+			skillNames: string[];
+		} | null;
+		provider: {
+			name: string;
+			launcher: string;
+			capabilityNames: string[];
+		} | null;
+		sandbox: {
+			effective: AgentSandbox;
+			taskRequirement: AgentSandbox | null;
+			workerOverride: AgentSandbox | null;
+			projectDefault: AgentSandbox | null;
+			providerDefault: AgentSandbox | null;
+		};
+		project: {
+			rootFolder: string;
+			defaultArtifactRoot: string;
+			additionalWritableRoots: string[];
+			totalInstalledSkillCount: number;
+			promptSkillNames: string[];
+		};
+		promptInputs: {
+			includesSuccessCriteria: boolean;
+			includesReadyCondition: boolean;
+			includesExpectedOutcome: boolean;
+			includesDelegationPacket: boolean;
+			publishedKnowledgeCount: number;
+		};
+		requirements: {
+			capabilityNames: string[];
+			toolNames: string[];
+		};
+	};
+
 	let {
 		task,
 		executionPreflight,
+		launchContext,
 		retrievedKnowledgeItems,
 		suggestedThread,
 		candidateThreads,
@@ -94,6 +137,7 @@
 	}: {
 		task: TaskExecutionView;
 		executionPreflight: ExecutionPreflightView;
+		launchContext: LaunchContextView;
 		retrievedKnowledgeItems: RetrievedKnowledgeItemView[];
 		suggestedThread: SuggestedThreadView | null;
 		candidateThreads: CandidateThreadView[];
@@ -156,6 +200,10 @@
 			(executionPreflight.hasDeclaredRequirements &&
 				executionPreflight.fullCoverageWorkerCount === 0)
 	);
+
+	function boolLabel(value: boolean, yesLabel: string, noLabel: string) {
+		return value ? yesLabel : noLabel;
+	}
 </script>
 
 <div id="task-detail-panel-execution" role="tabpanel" aria-labelledby="task-detail-tab-execution">
@@ -233,6 +281,224 @@
 						</p>
 					{/if}
 				{/if}
+			</div>
+		</div>
+
+		<div class="px-6 py-6">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+				Launch context
+			</p>
+			<h3 class="mt-2 text-xl font-semibold text-white">What a new thread will inherit</h3>
+			<p class="mt-2 max-w-2xl text-sm text-slate-400">
+				This mirrors the current launch plan so users can inspect the worker, provider,
+				sandbox, installed skills, and prompt inputs before starting work.
+			</p>
+
+			<div class="mt-5 grid gap-4 xl:grid-cols-2">
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Execution surface
+					</p>
+					<p class="mt-3 text-sm text-slate-300">
+						Worker:
+						{launchContext.assignedWorker
+							? `${launchContext.assignedWorker.name} · ${launchContext.assignedWorker.status}`
+							: 'Unassigned'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Provider:
+						{launchContext.provider
+							? `${launchContext.provider.name} · ${launchContext.provider.launcher}`
+							: 'No provider resolved'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Effective sandbox: {formatAgentSandboxLabel(launchContext.sandbox.effective)}
+					</p>
+					<p class="mt-2 text-xs text-slate-500">
+						Task requirement: {launchContext.sandbox.taskRequirement
+							? formatAgentSandboxLabel(launchContext.sandbox.taskRequirement)
+							: 'None'}
+						· Worker override: {launchContext.sandbox.workerOverride
+							? formatAgentSandboxLabel(launchContext.sandbox.workerOverride)
+							: 'None'}
+					</p>
+					<p class="mt-1 text-xs text-slate-500">
+						Project default: {launchContext.sandbox.projectDefault
+							? formatAgentSandboxLabel(launchContext.sandbox.projectDefault)
+							: 'None'}
+						· Provider default: {launchContext.sandbox.providerDefault
+							? formatAgentSandboxLabel(launchContext.sandbox.providerDefault)
+							: 'None'}
+					</p>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Prompt inputs
+					</p>
+					<p class="mt-3 text-sm text-slate-300">
+						Success criteria: {boolLabel(
+							launchContext.promptInputs.includesSuccessCriteria,
+							'Included',
+							'Not included'
+						)}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Ready condition: {boolLabel(
+							launchContext.promptInputs.includesReadyCondition,
+							'Included',
+							'Not included'
+						)}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Expected outcome: {boolLabel(
+							launchContext.promptInputs.includesExpectedOutcome,
+							'Included',
+							'Not included'
+						)}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Delegation packet: {boolLabel(
+							launchContext.promptInputs.includesDelegationPacket,
+							'Included',
+							'Not included'
+						)}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Published knowledge items: {launchContext.promptInputs.publishedKnowledgeCount}
+					</p>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Workspace context
+					</p>
+					<p class="mt-3 text-sm text-slate-300">{launchContext.project.rootFolder}</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Artifact root: {launchContext.project.defaultArtifactRoot || 'Not set'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Additional writable roots: {launchContext.project.additionalWritableRoots.length}
+					</p>
+					{#if launchContext.project.additionalWritableRoots.length > 0}
+						<p class="mt-2 text-xs text-slate-500">
+							{launchContext.project.additionalWritableRoots.join(', ')}
+						</p>
+					{/if}
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Installed skills in prompt
+					</p>
+					<p class="mt-3 text-sm text-slate-300">
+						{launchContext.project.totalInstalledSkillCount} installed skill{launchContext.project.totalInstalledSkillCount ===
+						1
+							? ''
+							: 's'} discovered for this project.
+					</p>
+					{#if launchContext.project.promptSkillNames.length === 0}
+						<p class="mt-2 text-sm text-slate-500">
+							No installed skills will be listed in the next launch prompt.
+						</p>
+					{:else}
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each launchContext.project.promptSkillNames as skillName (skillName)}
+								<span
+									class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+								>
+									{skillName}
+								</span>
+							{/each}
+						</div>
+						{#if launchContext.project.totalInstalledSkillCount > launchContext.project.promptSkillNames.length}
+							<p class="mt-2 text-xs text-slate-500">
+								The launch prompt currently lists the first
+								{launchContext.project.promptSkillNames.length} installed skills.
+							</p>
+						{/if}
+					{/if}
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Worker and provider capabilities
+					</p>
+					<div class="mt-3 space-y-3">
+						<div>
+							<p class="text-xs text-slate-500 uppercase">Worker skills</p>
+							{#if (launchContext.assignedWorker?.skillNames.length ?? 0) === 0}
+								<p class="mt-2 text-sm text-slate-500">No worker skills recorded.</p>
+							{:else}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#each launchContext.assignedWorker?.skillNames ?? [] as skillName (skillName)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{skillName}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						<div>
+							<p class="text-xs text-slate-500 uppercase">Provider capabilities</p>
+							{#if (launchContext.provider?.capabilityNames.length ?? 0) === 0}
+								<p class="mt-2 text-sm text-slate-500">No provider capabilities recorded.</p>
+							{:else}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#each launchContext.provider?.capabilityNames ?? [] as capabilityName (capabilityName)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{capabilityName}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Declared task requirements
+					</p>
+					<div class="mt-3 space-y-3">
+						<div>
+							<p class="text-xs text-slate-500 uppercase">Capabilities</p>
+							{#if launchContext.requirements.capabilityNames.length === 0}
+								<p class="mt-2 text-sm text-slate-500">No capability requirements declared.</p>
+							{:else}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#each launchContext.requirements.capabilityNames as capabilityName (capabilityName)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{capabilityName}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						<div>
+							<p class="text-xs text-slate-500 uppercase">Tools</p>
+							{#if launchContext.requirements.toolNames.length === 0}
+								<p class="mt-2 text-sm text-slate-500">No tool requirements declared.</p>
+							{:else}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#each launchContext.requirements.toolNames as toolName (toolName)}
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+										>
+											{toolName}
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 

@@ -286,7 +286,6 @@
 									class="textarea min-h-28 text-white"
 									name="delegationObjective"
 									placeholder="Describe the exact slice of work this child task owns."
-									required={Boolean(task.parentTaskId)}
 									>{task.delegationPacket?.objective ?? ''}</textarea
 								>
 							</label>
@@ -297,7 +296,6 @@
 									class="textarea min-h-28 text-white"
 									name="delegationDoneCondition"
 									placeholder="Describe what must be true before the parent can accept this handoff."
-									required={Boolean(task.parentTaskId)}
 									>{task.delegationPacket?.doneCondition ?? ''}</textarea
 								>
 							</label>

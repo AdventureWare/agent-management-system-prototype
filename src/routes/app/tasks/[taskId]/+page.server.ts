@@ -10,6 +10,10 @@ import {
 	TaskDeleteActionError
 } from '$lib/server/task-delete-action';
 import {
+	decomposeTaskFromParent,
+	TaskDecompositionActionError
+} from '$lib/server/task-decomposition-action';
+import {
 	attachTaskFile as attachTaskFileAction,
 	removeTaskAttachment as removeTaskAttachmentAction,
 	TaskDetailMutationActionError,
@@ -102,6 +106,18 @@ async function handleTaskDeleteAction(action: () => Promise<unknown>) {
 	}
 }
 
+async function handleTaskDecompositionAction(action: () => Promise<unknown>) {
+	try {
+		return await action();
+	} catch (caughtError) {
+		if (caughtError instanceof TaskDecompositionActionError) {
+			return fail(caughtError.status, { message: caughtError.message });
+		}
+
+		throw caughtError;
+	}
+}
+
 export const load: PageServerLoad = async ({ params }) => {
 	const pageData = await loadTaskDetailPageData(params.taskId);
 
@@ -141,6 +157,11 @@ export const actions: Actions = {
 	requestChildHandoffChanges: async ({ params, request }) => {
 		const form = await request.formData();
 		return handleTaskChildHandoffAction(() => requestTaskChildHandoffChanges(params.taskId, form));
+	},
+
+	decomposeTask: async ({ params, request }) => {
+		const form = await request.formData();
+		return handleTaskDecompositionAction(() => decomposeTaskFromParent(params.taskId, form));
 	},
 
 	launchTaskSession: async ({ params, request }) => {

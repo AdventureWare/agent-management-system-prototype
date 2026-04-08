@@ -39,6 +39,7 @@ export const DECISION_TYPE_OPTIONS = [
 	'task_plan_updated',
 	'task_thread_updated',
 	'task_recovered',
+	'task_decomposed',
 	'delegation_handoff_accepted',
 	'delegation_handoff_changes_requested',
 	'review_approved',
@@ -244,6 +245,8 @@ export function formatDecisionTypeLabel(type: string): string {
 			return 'Thread Updated';
 		case 'task_recovered':
 			return 'Task Recovered';
+		case 'task_decomposed':
+			return 'Task Decomposed';
 		case 'delegation_handoff_accepted':
 			return 'Handoff Accepted';
 		case 'delegation_handoff_changes_requested':

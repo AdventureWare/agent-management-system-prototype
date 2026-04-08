@@ -1,4 +1,5 @@
 import { loadControlPlane } from '$lib/server/control-plane';
+import { buildExecutionCapabilityCatalog } from '$lib/server/execution-capability-catalog';
 import { buildProjectPermissionSurface } from '$lib/server/project-access';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
@@ -162,6 +163,7 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 				.length,
 			workerAccessIssueCount: workers.filter((worker) => worker.accessState !== 'healthy').length
 		},
+		executionCatalog: buildExecutionCapabilityCatalog(data),
 		projects,
 		attentionPaths,
 		providers,
