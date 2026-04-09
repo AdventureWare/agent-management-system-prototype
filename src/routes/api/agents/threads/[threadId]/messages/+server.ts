@@ -21,6 +21,7 @@ function isAgentThreadContactContextItem(value: unknown): value is AgentThreadCo
 export const POST = async ({ params, request }) => {
 	const contentType = request.headers.get('content-type') ?? '';
 	let attachments: File[] = [];
+	let attachmentPaths: string[] = [];
 	let prompt: string;
 	let sourceThreadId: string;
 	let contactType: string;
@@ -32,6 +33,7 @@ export const POST = async ({ params, request }) => {
 	if (contentType.includes('application/json')) {
 		const body = (await request.json()) as {
 			prompt?: string;
+			attachmentPaths?: string[];
 			sourceThreadId?: string;
 			contactType?: string;
 			contextSummary?: string;
@@ -46,6 +48,12 @@ export const POST = async ({ params, request }) => {
 		contextSummary = body.contextSummary?.trim() ?? '';
 		contextItems = Array.isArray(body.contextItems)
 			? body.contextItems.filter(isAgentThreadContactContextItem)
+			: [];
+		attachmentPaths = Array.isArray(body.attachmentPaths)
+			? body.attachmentPaths
+					.filter((value): value is string => typeof value === 'string')
+					.map((value) => value.trim())
+					.filter(Boolean)
 			: [];
 		replyRequested = body.replyRequested !== false;
 		replyToContactId = body.replyToContactId?.trim() ?? '';
@@ -71,13 +79,17 @@ export const POST = async ({ params, request }) => {
 		attachments = form
 			.getAll('attachments')
 			.filter((value): value is File => value instanceof File && value.size > 0);
+		attachmentPaths = form
+			.getAll('attachmentPaths')
+			.map((value) => value.toString().trim())
+			.filter(Boolean);
 	}
 
 	if (sourceThreadId && !prompt) {
 		return json({ error: 'prompt is required when contacting another thread.' }, { status: 400 });
 	}
 
-	if (!prompt && attachments.length === 0) {
+	if (!prompt && attachments.length === 0 && attachmentPaths.length === 0) {
 		return json({ error: 'prompt or attachment is required.' }, { status: 400 });
 	}
 
@@ -87,13 +99,14 @@ export const POST = async ({ params, request }) => {
 					targetAgentThreadId: params.threadId,
 					prompt,
 					attachments,
+					attachmentPaths,
 					contactType: contactType || 'question',
 					contextSummary: contextSummary || null,
 					contextItems,
 					replyRequested,
 					replyToContactId: replyToContactId || null
 				})
-			: await sendAgentThreadMessage(params.threadId, { prompt, attachments });
+			: await sendAgentThreadMessage(params.threadId, { prompt, attachments, attachmentPaths });
 		return json(
 			{
 				...result,

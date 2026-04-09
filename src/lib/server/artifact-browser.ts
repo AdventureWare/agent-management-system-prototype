@@ -1,5 +1,7 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute } from 'node:path';
+import { Readable } from 'node:stream';
 import { normalizePathInput } from '$lib/server/path-tools';
 import type {
 	ArtifactBrowserData,
@@ -284,15 +286,14 @@ export async function createArtifactDownloadResponse(input: {
 		throw new Error('Only files can be downloaded.');
 	}
 
-	const payload = await readFile(path);
 	const encodedName = encodeURIComponent(input.name || basename(path));
 	const contentType = input.contentType || inferArtifactContentType(path);
 	const disposition = input.disposition ?? 'attachment';
 
-	return new Response(payload, {
+	return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, {
 		headers: {
 			'content-type': contentType,
-			'content-length': String(payload.byteLength),
+			'content-length': String(details.size),
 			'content-disposition': `${disposition}; filename*=UTF-8''${encodedName}`
 		}
 	});

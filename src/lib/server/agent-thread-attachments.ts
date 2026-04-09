@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { basename, extname, resolve } from 'node:path';
 import type { AgentThreadAttachment } from '$lib/types/agent-thread';
 import { sanitizeTaskAttachmentName } from '$lib/server/task-attachments';
 
@@ -55,6 +55,64 @@ function isInlineAttachment(upload: File) {
 	}
 
 	return INLINE_ATTACHMENT_EXTENSIONS.has(extname(upload.name).toLowerCase());
+}
+
+function inferAttachmentContentType(path: string) {
+	switch (extname(path).toLowerCase()) {
+		case '.md':
+		case '.markdown':
+			return 'text/markdown; charset=utf-8';
+		case '.txt':
+		case '.log':
+		case '.yml':
+		case '.yaml':
+		case '.csv':
+		case '.ts':
+		case '.tsx':
+		case '.js':
+		case '.jsx':
+		case '.mjs':
+		case '.cjs':
+		case '.svelte':
+		case '.css':
+		case '.xml':
+		case '.sh':
+			return 'text/plain; charset=utf-8';
+		case '.json':
+		case '.jsonl':
+			return 'application/json; charset=utf-8';
+		case '.html':
+			return 'text/html; charset=utf-8';
+		case '.svg':
+			return 'image/svg+xml';
+		case '.png':
+			return 'image/png';
+		case '.jpg':
+		case '.jpeg':
+			return 'image/jpeg';
+		case '.gif':
+			return 'image/gif';
+		case '.webp':
+			return 'image/webp';
+		case '.pdf':
+			return 'application/pdf';
+		default:
+			return 'application/octet-stream';
+	}
+}
+
+function isInlineAttachmentPath(path: string, sizeBytes: number) {
+	if (sizeBytes > MAX_INLINE_ATTACHMENT_BYTES) {
+		return false;
+	}
+
+	const contentType = inferAttachmentContentType(path);
+
+	if (contentType.startsWith('text/')) {
+		return true;
+	}
+
+	return INLINE_ATTACHMENT_EXTENSIONS.has(extname(path).toLowerCase());
 }
 
 function decodeInlineAttachment(buffer: Buffer) {
@@ -136,6 +194,66 @@ export async function persistThreadAttachments(input: {
 		}
 
 		const content = decodeInlineAttachment(buffer);
+
+		if (content) {
+			inlineAttachmentContents.push({ attachment, content });
+		}
+	}
+
+	return {
+		attachments,
+		inlineAttachmentContents
+	};
+}
+
+export async function persistThreadAttachmentPaths(input: {
+	rootPath: string;
+	threadId: string;
+	paths: string[];
+}) {
+	const attachmentDir = resolve(input.rootPath, input.threadId, 'attachments');
+
+	await mkdir(attachmentDir, { recursive: true });
+
+	const attachments: AgentThreadAttachment[] = [];
+	const inlineAttachmentContents: { attachment: AgentThreadAttachment; content: string }[] = [];
+	const normalizedPaths = [...new Set(input.paths.map((path) => path.trim()).filter(Boolean))];
+
+	for (const sourcePath of normalizedPaths) {
+		let details;
+
+		try {
+			details = await stat(sourcePath);
+		} catch {
+			throw new Error(`Attachment path is missing from disk: ${sourcePath}`);
+		}
+
+		if (!details.isFile()) {
+			throw new Error(`Attachment path must point to a file: ${sourcePath}`);
+		}
+
+		const attachmentId = createThreadAttachmentId();
+		const safeName = sanitizeTaskAttachmentName(basename(sourcePath));
+		const attachmentPath = resolve(attachmentDir, `${attachmentId}-${safeName}`);
+
+		await copyFile(sourcePath, attachmentPath);
+
+		const attachment: AgentThreadAttachment = {
+			id: attachmentId,
+			name: safeName,
+			path: attachmentPath,
+			contentType: inferAttachmentContentType(sourcePath),
+			sizeBytes: details.size,
+			attachedAt: new Date().toISOString()
+		};
+
+		attachments.push(attachment);
+
+		if (!isInlineAttachmentPath(sourcePath, details.size)) {
+			continue;
+		}
+
+		const content = decodeInlineAttachment(await readFile(attachmentPath));
 
 		if (content) {
 			inlineAttachmentContents.push({ attachment, content });

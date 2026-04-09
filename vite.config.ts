@@ -10,14 +10,24 @@ const remotePreviewAllowedHosts = (process.env.AMS_REMOTE_PREVIEW_ALLOWED_HOSTS 
 	.filter(Boolean);
 const enableBrowserTests = process.env.VITEST_BROWSER === '1';
 const ignoredRuntimeWatchGlobs = [
+	'**/data',
 	'**/data/**',
+	'**/agent_output',
 	'**/agent_output/**',
+	'**/output',
 	'**/output/**',
+	'**/screenshots',
 	'**/screenshots/**',
+	'**/__screenshots__/**',
+	'**/__snapshots__/**',
+	'**/__image_snapshots__/**',
 	'**/.playwright-cli/**',
 	'**/.playwright-mcp/**',
 	'**/.kwipoo-app-link',
-	'**/.kwipoo-app-link/**'
+	'**/.kwipoo-app-link/**',
+	'**/*.sqlite',
+	'**/*.sqlite-*',
+	'**/.DS_Store'
 ];
 
 export default defineConfig({

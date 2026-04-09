@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { fetchAgentThread } from '$lib/client/agent-threads';
+	import { fetchAgentThread, fetchAgentThreadStatuses } from '$lib/client/agent-threads';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
@@ -157,6 +157,9 @@
 	let followUpPrompt = $state('');
 	let pendingFollowUpAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
+	>([]);
+	let pendingReferencedArtifacts = $state.raw<
+		{ id: string; name: string; path: string; sourceLabel: string }[]
 	>([]);
 	let threadContactsState = $state.raw<AgentThreadContact[]>([]);
 	let threadContactTargetsState = $state.raw<ThreadContactTarget[]>([]);
@@ -318,6 +321,9 @@
 	);
 	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
+	let pendingFollowUpAttachmentCount = $derived(
+		pendingFollowUpAttachments.length + pendingReferencedArtifacts.length
+	);
 	let sidebarTabItems = $derived(
 		readOnly
 			? [
@@ -860,6 +866,39 @@
 		replaceFollowUpAttachmentFiles(nextFiles);
 	}
 
+	function mergeReferencedArtifacts(
+		artifacts: Iterable<{ name: string; path: string; sourceLabel: string }>
+	) {
+		const nextArtifacts = [...pendingReferencedArtifacts];
+
+		for (const artifact of artifacts) {
+			const normalizedPath = artifact.path.trim();
+
+			if (!normalizedPath) {
+				continue;
+			}
+
+			const nextArtifact = {
+				id: normalizedPath,
+				name: artifact.name.trim() || normalizedPath.split('/').pop() || 'Artifact',
+				path: normalizedPath,
+				sourceLabel: artifact.sourceLabel.trim() || 'Artifact reference'
+			};
+			const existingIndex = nextArtifacts.findIndex(
+				(existingArtifact) => existingArtifact.path === nextArtifact.path
+			);
+
+			if (existingIndex >= 0) {
+				nextArtifacts[existingIndex] = nextArtifact;
+				continue;
+			}
+
+			nextArtifacts.push(nextArtifact);
+		}
+
+		pendingReferencedArtifacts = nextArtifacts;
+	}
+
 	async function attachReferencedArtifactToFollowUp(input: { path: string; label: string }) {
 		if (!session?.canResume || sendState?.status === 'sending') {
 			return;
@@ -867,30 +906,18 @@
 
 		selectedSidebarView = 'follow_up';
 		await tick();
-
-		const response = await fetch(
-			resolve(`/api/artifacts/file?path=${encodeURIComponent(input.path)}`)
-		);
-
-		if (!response.ok) {
-			throw new Error('Could not load the referenced file.');
-		}
-
-		const blob = await response.blob();
-		const contentType =
-			response.headers.get('content-type')?.split(';')[0]?.trim() ||
-			blob.type ||
-			'application/octet-stream';
 		const fileName = input.path.split('/').pop() || input.label || 'attachment';
-		const attachment = new File([blob], fileName, {
-			type: contentType,
-			lastModified: 0
-		});
 
-		mergeFollowUpAttachmentFiles([attachment]);
+		mergeReferencedArtifacts([
+			{
+				name: fileName,
+				path: input.path,
+				sourceLabel: 'Referenced artifact'
+			}
+		]);
 		pageNotice = {
 			tone: 'success',
-			message: `${fileName} added to the follow-up attachments.`
+			message: `${fileName} added as a referenced follow-up artifact.`
 		};
 	}
 
@@ -900,6 +927,7 @@
 		}
 
 		pendingFollowUpAttachments = [];
+		pendingReferencedArtifacts = [];
 	}
 
 	function handleFollowUpAttachmentPaste(event: ClipboardEvent) {
@@ -990,6 +1018,15 @@
 		threadContactsState = contactPayload.contacts ?? [];
 	}
 
+	async function refreshThreadStatus() {
+		if (!session) {
+			throw new Error('Thread not found.');
+		}
+
+		const statuses = await fetchAgentThreadStatuses([session.id]);
+		agentThreadStore.patchThreadStatuses(statuses);
+	}
+
 	async function refreshThread(options: { force?: boolean } = {}) {
 		if (isRefreshing) {
 			return;
@@ -1002,7 +1039,11 @@
 		isRefreshing = true;
 
 		try {
-			await loadThread();
+			if (!options.force && session?.hasActiveRun) {
+				await refreshThreadStatus();
+			} else {
+				await loadThread();
+			}
 			pageNotice = null;
 		} catch (err) {
 			pageNotice = {
@@ -1072,9 +1113,13 @@
 
 		const formData = new FormData(formElement);
 		const prompt = formData.get('prompt')?.toString().trim() ?? '';
-		const attachmentCount = formData
+		for (const artifact of pendingReferencedArtifacts) {
+			formData.append('attachmentPaths', artifact.path);
+		}
+		const fileAttachmentCount = formData
 			.getAll('attachments')
 			.filter((value): value is File => value instanceof File && value.size > 0).length;
+		const attachmentCount = fileAttachmentCount + pendingReferencedArtifacts.length;
 
 		if (!prompt && attachmentCount === 0) {
 			sendState = {
@@ -2437,13 +2482,13 @@
 													onchange={syncPendingFollowUpAttachments}
 												/>
 											</label>
-											{#if pendingFollowUpAttachments.length > 0}
+											{#if pendingFollowUpAttachmentCount > 0}
 												<div class="space-y-3">
 													<div class="flex flex-wrap items-center justify-between gap-3">
 														<p class="ui-wrap-anywhere text-sm text-slate-200">
-															{pendingFollowUpAttachments.length === 1
+															{pendingFollowUpAttachmentCount === 1
 																? '1 attachment ready to send'
-																: `${pendingFollowUpAttachments.length} attachments ready to send`}
+																: `${pendingFollowUpAttachmentCount} attachments ready to send`}
 														</p>
 														<AppButton
 															size="sm"
@@ -2465,6 +2510,21 @@
 																</p>
 																<p class="mt-1 text-xs text-slate-400">
 																	{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
+																</p>
+															</div>
+														{/each}
+														{#each pendingReferencedArtifacts as artifact (artifact.id)}
+															<div
+																class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3"
+															>
+																<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																	{artifact.name}
+																</p>
+																<p class="ui-wrap-anywhere mt-1 text-xs text-slate-400">
+																	Referenced artifact · {artifact.sourceLabel}
+																</p>
+																<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
+																	{artifact.path}
 																</p>
 															</div>
 														{/each}

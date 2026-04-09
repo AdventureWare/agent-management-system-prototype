@@ -1,9 +1,11 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { resolveTaskThreadName } from '$lib/server/task-threads';
 import { deriveThreadCategorization } from '$lib/server/task-thread-topics';
@@ -20,6 +22,7 @@ import {
 } from '$lib/server/task-execution-workspace';
 import {
 	buildThreadAttachmentPrompt,
+	persistThreadAttachmentPaths,
 	persistThreadAttachments
 } from '$lib/server/agent-thread-attachments';
 import {
@@ -57,6 +60,7 @@ const STALE_RUN_GRACE_MS = 5 * 60 * 1000;
 const STARTUP_AUTH_FAILURE_GRACE_MS = 30 * 1000;
 const STARTUP_STDIN_STALL_GRACE_MS = 60 * 1000;
 const NATIVE_THREAD_CACHE_TTL_MS = 3_000;
+const MAX_LOG_TAIL_BYTES = 256 * 1024;
 const AUTH_REFRESH_FAILURE_MARKER = 'Auth(TokenRefreshFailed("Failed to parse server response"))';
 const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
 
@@ -769,127 +773,146 @@ async function buildNativeRunDetails(
 	thread: NativeCodexThread,
 	options: { beforeIso?: string | null } = {}
 ) {
-	const raw = await readOptionalText(thread.rolloutPath);
-
-	if (!raw) {
+	if (!existsSync(thread.rolloutPath)) {
 		const fallbackRun = createNativeSummaryRun(thread);
 		return fallbackRun ? [fallbackRun] : [];
 	}
 
 	const cutoff = options.beforeIso ?? null;
-	const lines = raw.split(/\r?\n/).filter(Boolean);
 	const runs: AgentRunDetail[] = [];
 	let currentRun: AgentRunDetail | null = null;
 
-	for (const line of lines) {
-		const record = parseNativeRolloutRecord(line);
+	try {
+		const lineReader = createInterface({
+			input: createReadStream(thread.rolloutPath, { encoding: 'utf8' }),
+			crlfDelay: Infinity
+		});
 
-		if (!record?.type) {
-			continue;
-		}
-
-		const timestamp = typeof record.timestamp === 'string' ? record.timestamp : null;
-		const payload = record.payload ?? {};
-
-		if (
-			record.type === 'event_msg' &&
-			payload.type === 'user_message' &&
-			payload.kind !== 'environment_context' &&
-			typeof payload.message === 'string'
-		) {
-			if (cutoff && timestamp && timestamp >= cutoff) {
-				break;
+		for await (const line of lineReader) {
+			if (!line.trim()) {
+				continue;
 			}
 
-			currentRun = createSyntheticNativeRun({
-				thread,
-				index: runs.length,
-				prompt: payload.message,
-				createdAt: timestamp ?? thread.createdAt
-			});
-			runs.push(currentRun);
-			continue;
-		}
+			const record = parseNativeRolloutRecord(line);
 
-		if (!currentRun) {
-			continue;
-		}
+			if (!record?.type) {
+				continue;
+			}
 
-		if (record.type === 'event_msg' && payload.type === 'agent_reasoning') {
-			pushRunLog(currentRun, 'Reasoning', typeof payload.text === 'string' ? payload.text : null);
-			continue;
-		}
+			const timestamp = typeof record.timestamp === 'string' ? record.timestamp : null;
+			const payload = record.payload ?? {};
 
-		if (record.type === 'event_msg' && payload.type === 'agent_message') {
-			const message =
-				typeof payload.message === 'string' ? normalizeMessageText(payload.message) : null;
+			if (
+				record.type === 'event_msg' &&
+				payload.type === 'user_message' &&
+				payload.kind !== 'environment_context' &&
+				typeof payload.message === 'string'
+			) {
+				if (cutoff && timestamp && timestamp >= cutoff) {
+					break;
+				}
 
-			if (message) {
-				const currentState = currentRun.state ?? {
-					status: 'completed',
-					pid: null,
-					startedAt: currentRun.createdAt,
-					finishedAt: currentRun.createdAt,
-					exitCode: 0,
-					signal: null,
-					codexThreadId: thread.id
-				};
-				currentRun.lastMessage = message;
-				currentRun.updatedAt = timestamp ?? currentRun.updatedAt;
+				currentRun = createSyntheticNativeRun({
+					thread,
+					index: runs.length,
+					prompt: payload.message,
+					createdAt: timestamp ?? thread.createdAt
+				});
+				runs.push(currentRun);
+				continue;
+			}
+
+			if (!currentRun) {
+				continue;
+			}
+
+			if (record.type === 'event_msg' && payload.type === 'agent_reasoning') {
+				pushRunLog(currentRun, 'Reasoning', typeof payload.text === 'string' ? payload.text : null);
+				continue;
+			}
+
+			if (record.type === 'event_msg' && payload.type === 'agent_message') {
+				const message =
+					typeof payload.message === 'string' ? normalizeMessageText(payload.message) : null;
+
+				if (message) {
+					const currentState = currentRun.state ?? {
+						status: 'completed',
+						pid: null,
+						startedAt: currentRun.createdAt,
+						finishedAt: currentRun.createdAt,
+						exitCode: 0,
+						signal: null,
+						codexThreadId: thread.id
+					};
+					currentRun.lastMessage = message;
+					currentRun.updatedAt = timestamp ?? currentRun.updatedAt;
+					currentRun.activityAt = latestIso([
+						currentRun.activityAt,
+						timestamp,
+						currentRun.updatedAt
+					]);
+					currentRun.state = {
+						...currentState,
+						finishedAt: timestamp ?? currentRun.state?.finishedAt ?? currentRun.createdAt
+					};
+					pushRunLog(currentRun, 'Assistant', message);
+				}
+
+				continue;
+			}
+
+			if (record.type !== 'response_item') {
+				continue;
+			}
+
+			if (payload.type === 'message' && payload.role === 'assistant') {
+				const message = extractRolloutContentText(payload.content);
+
+				if (message) {
+					const currentState = currentRun.state ?? {
+						status: 'completed',
+						pid: null,
+						startedAt: currentRun.createdAt,
+						finishedAt: currentRun.createdAt,
+						exitCode: 0,
+						signal: null,
+						codexThreadId: thread.id
+					};
+					currentRun.lastMessage = message;
+					currentRun.updatedAt = timestamp ?? currentRun.updatedAt;
+					currentRun.activityAt = latestIso([
+						currentRun.activityAt,
+						timestamp,
+						currentRun.updatedAt
+					]);
+					currentRun.state = {
+						...currentState,
+						finishedAt: timestamp ?? currentRun.state?.finishedAt ?? currentRun.createdAt
+					};
+				}
+
+				continue;
+			}
+
+			if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
 				currentRun.activityAt = latestIso([currentRun.activityAt, timestamp, currentRun.updatedAt]);
-				currentRun.state = {
-					...currentState,
-					finishedAt: timestamp ?? currentRun.state?.finishedAt ?? currentRun.createdAt
-				};
-				pushRunLog(currentRun, 'Assistant', message);
+				pushRunLog(currentRun, 'Tool call', typeof payload.name === 'string' ? payload.name : null);
+				continue;
 			}
 
-			continue;
-		}
-
-		if (record.type !== 'response_item') {
-			continue;
-		}
-
-		if (payload.type === 'message' && payload.role === 'assistant') {
-			const message = extractRolloutContentText(payload.content);
-
-			if (message) {
-				const currentState = currentRun.state ?? {
-					status: 'completed',
-					pid: null,
-					startedAt: currentRun.createdAt,
-					finishedAt: currentRun.createdAt,
-					exitCode: 0,
-					signal: null,
-					codexThreadId: thread.id
-				};
-				currentRun.lastMessage = message;
-				currentRun.updatedAt = timestamp ?? currentRun.updatedAt;
+			if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
 				currentRun.activityAt = latestIso([currentRun.activityAt, timestamp, currentRun.updatedAt]);
-				currentRun.state = {
-					...currentState,
-					finishedAt: timestamp ?? currentRun.state?.finishedAt ?? currentRun.createdAt
-				};
+				pushRunLog(
+					currentRun,
+					'Tool output',
+					typeof payload.output === 'string' ? payload.output : null
+				);
 			}
-
-			continue;
 		}
-
-		if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
-			currentRun.activityAt = latestIso([currentRun.activityAt, timestamp, currentRun.updatedAt]);
-			pushRunLog(currentRun, 'Tool call', typeof payload.name === 'string' ? payload.name : null);
-			continue;
-		}
-
-		if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
-			currentRun.activityAt = latestIso([currentRun.activityAt, timestamp, currentRun.updatedAt]);
-			pushRunLog(
-				currentRun,
-				'Tool output',
-				typeof payload.output === 'string' ? payload.output : null
-			);
-		}
+	} catch {
+		const fallbackRun = createNativeSummaryRun(thread);
+		return fallbackRun ? [fallbackRun] : [];
 	}
 
 	if (runs.length === 0) {
@@ -983,13 +1006,41 @@ async function readRunState(path: string): Promise<AgentRunState | null> {
 }
 
 async function readLogTail(path: string, lineCount = 80) {
-	const raw = await readOptionalText(path);
-
-	if (!raw) {
+	if (!existsSync(path) || lineCount <= 0) {
 		return [];
 	}
 
-	return raw.split(/\r?\n/).filter(Boolean).slice(-lineCount);
+	try {
+		const file = await open(path, 'r');
+
+		try {
+			const { size } = await file.stat();
+
+			if (size <= 0) {
+				return [];
+			}
+
+			const bytesToRead = Math.min(size, MAX_LOG_TAIL_BYTES);
+			const buffer = Buffer.alloc(bytesToRead);
+			await file.read(buffer, 0, bytesToRead, size - bytesToRead);
+
+			let raw = buffer.toString('utf8');
+
+			if (bytesToRead < size) {
+				const firstNewlineIndex = raw.indexOf('\n');
+
+				if (firstNewlineIndex >= 0) {
+					raw = raw.slice(firstNewlineIndex + 1);
+				}
+			}
+
+			return raw.split(/\r?\n/).filter(Boolean).slice(-lineCount);
+		} finally {
+			await file.close();
+		}
+	} catch {
+		return [];
+	}
 }
 
 function compareByCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
@@ -1304,6 +1355,16 @@ async function buildRunDetail(
 	});
 
 	return nextDetail;
+}
+
+async function buildStoredRunDetail(
+	run: AgentRun,
+	options: {
+		includePrompt?: boolean;
+		logTailLineCount?: number;
+	} = {}
+) {
+	return (await readRunSummaryDetail(run, options)) ?? (await buildRunDetail(run, options));
 }
 
 function getRunActivityAt(
@@ -2169,7 +2230,7 @@ async function buildLatestRunDetails(
 ) {
 	const latestRuns = [...runs].sort(compareByCreatedAtDesc).slice(0, 1);
 
-	return Promise.all(latestRuns.map((run) => buildRunDetail(run, options)));
+	return Promise.all(latestRuns.map((run) => buildStoredRunDetail(run, options)));
 }
 
 async function buildManagedThreadListDetail(
@@ -2279,7 +2340,7 @@ async function buildManagedThreadDetail(
 	taskContext: TaskContext
 ) {
 	const runDetails = await Promise.all(
-		[...runs].sort(compareByCreatedAtDesc).map((run) => buildRunDetail(run))
+		[...runs].sort(compareByCreatedAtDesc).map((run) => buildStoredRunDetail(run))
 	);
 
 	return finalizeThreadDetail({
@@ -2332,7 +2393,7 @@ async function buildExternalThreadDetail(
 	taskContext: TaskContext
 ) {
 	const localRunDetails = await Promise.all(
-		[...runs].sort(compareByCreatedAtDesc).map((run) => buildRunDetail(run))
+		[...runs].sort(compareByCreatedAtDesc).map((run) => buildStoredRunDetail(run))
 	);
 	const earliestLocalRunAt =
 		[...runs].map((run) => run.createdAt).sort((left, right) => left.localeCompare(right))[0] ??
@@ -3308,6 +3369,7 @@ export async function sendAgentThreadMessage(
 		| {
 				prompt: string;
 				attachments?: File[];
+				attachmentPaths?: string[];
 				sourceThread?: {
 					id: string;
 					name: string;
@@ -3321,6 +3383,14 @@ export async function sendAgentThreadMessage(
 	const prompt = typeof input === 'string' ? input : input.prompt;
 	const uploads =
 		typeof input === 'string' ? [] : (input.attachments ?? []).filter((file) => file.size > 0);
+	const attachmentPaths =
+		typeof input === 'string'
+			? []
+			: [
+					...new Set(
+						(input.attachmentPaths ?? []).map((path) => normalizePathInput(path)).filter(Boolean)
+					)
+				];
 	const sourceThread = typeof input === 'string' ? null : (input.sourceThread ?? null);
 	const contactId = typeof input === 'string' ? null : (input.contactId ?? null);
 	const replyToContactId = typeof input === 'string' ? null : (input.replyToContactId ?? null);
@@ -3371,10 +3441,21 @@ export async function sendAgentThreadMessage(
 					uploads
 				})
 			: { attachments: [], inlineAttachmentContents: [] };
+	const persistedAttachmentPaths =
+		attachmentPaths.length > 0
+			? await persistThreadAttachmentPaths({
+					rootPath: AGENT_THREADS_ROOT,
+					threadId: agentThreadId,
+					paths: attachmentPaths
+				})
+			: { attachments: [], inlineAttachmentContents: [] };
 	const nextPrompt = buildThreadAttachmentPrompt({
 		prompt,
-		attachments: persistedAttachments.attachments,
-		inlineAttachmentContents: persistedAttachments.inlineAttachmentContents
+		attachments: [...persistedAttachments.attachments, ...persistedAttachmentPaths.attachments],
+		inlineAttachmentContents: [
+			...persistedAttachments.inlineAttachmentContents,
+			...persistedAttachmentPaths.inlineAttachmentContents
+		]
 	});
 	const workspaceIssue = getWorkspaceExecutionIssue({
 		cwd: session.cwd,
@@ -3417,7 +3498,11 @@ export async function sendAgentThreadMessage(
 	const nextSession: AgentThread = {
 		...session,
 		threadId: detail.threadId,
-		attachments: [...persistedAttachments.attachments, ...nextSessionAttachments],
+		attachments: [
+			...persistedAttachments.attachments,
+			...persistedAttachmentPaths.attachments,
+			...nextSessionAttachments
+		],
 		updatedAt: now
 	};
 
@@ -3453,6 +3538,7 @@ export async function contactAgentThread(
 		targetAgentThreadId: string;
 		prompt: string;
 		attachments?: File[];
+		attachmentPaths?: string[];
 		contactType?: AgentThreadContactType | string | null;
 		contextSummary?: string | null;
 		contextItems?: AgentThreadContactContextItem[];
@@ -3520,6 +3606,7 @@ export async function contactAgentThread(
 			replyToContactId
 		}),
 		attachments: input.attachments,
+		attachmentPaths: input.attachmentPaths,
 		sourceThread: {
 			id: sourceThread.id,
 			name: sourceThread.name
