@@ -12,7 +12,7 @@ describe('buildTaskExecutionPreflight', () => {
 			[
 				{
 					executionSurfaceId: 'worker_local',
-					executionSurfaceName: 'Local worker',
+					executionSurfaceName: 'Local execution surface',
 					roleId: 'role_coordinator',
 					providerId: 'provider_local',
 					status: 'idle',
@@ -27,7 +27,7 @@ describe('buildTaskExecutionPreflight', () => {
 				},
 				{
 					executionSurfaceId: 'worker_cloud',
-					executionSurfaceName: 'Cloud worker',
+					executionSurfaceName: 'Cloud execution surface',
 					roleId: 'role_coordinator',
 					providerId: 'provider_cloud',
 					status: 'idle',
@@ -45,8 +45,8 @@ describe('buildTaskExecutionPreflight', () => {
 
 		expect(preflight).toMatchObject({
 			hasDeclaredRequirements: true,
-			eligibleWorkerCount: 1,
-			fullCoverageWorkerCount: 0,
+			eligibleExecutionSurfaceCount: 1,
+			fullCoverageExecutionSurfaceCount: 0,
 			uncoveredCapabilityNames: [],
 			uncoveredToolNames: ['playwright'],
 			currentAssignee: {
@@ -71,8 +71,8 @@ describe('buildTaskExecutionPreflight', () => {
 
 		expect(preflight).toMatchObject({
 			hasDeclaredRequirements: false,
-			eligibleWorkerCount: 0,
-			fullCoverageWorkerCount: 0,
+			eligibleExecutionSurfaceCount: 0,
+			fullCoverageExecutionSurfaceCount: 0,
 			uncoveredCapabilityNames: [],
 			uncoveredToolNames: [],
 			currentAssignee: null

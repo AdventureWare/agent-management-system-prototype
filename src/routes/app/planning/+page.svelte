@@ -47,7 +47,7 @@
 		}
 	}
 
-	function workerLoadClass(remainingHours: number) {
+	function executionSurfaceLoadClass(remainingHours: number) {
 		if (remainingHours < 0) {
 			return 'text-rose-200';
 		}
@@ -118,7 +118,7 @@
 		<MetricCard
 			label="Capacity hours"
 			value={data.metrics.totalCapacityHours}
-			detail={`${data.metrics.overAllocatedWorkerCount} execution surface(s) over capacity in this window.`}
+			detail={`${data.metrics.overAllocatedExecutionSurfaceCount} execution surface(s) over capacity in this window.`}
 		/>
 		<MetricCard
 			label="Slack"
@@ -190,9 +190,12 @@
 							<option selected={data.filters.executionSurfaceId === ''} value="">
 								All execution surfaces
 							</option>
-							{#each data.workerOptions as worker (worker.id)}
-								<option selected={data.filters.executionSurfaceId === worker.id} value={worker.id}>
-									{worker.name}
+							{#each data.executionSurfaceOptions as executionSurface (executionSurface.id)}
+								<option
+									selected={data.filters.executionSurfaceId === executionSurface.id}
+									value={executionSurface.id}
+								>
+									{executionSurface.name}
 								</option>
 							{/each}
 						</select>
@@ -444,11 +447,11 @@
 															{/each}
 														</div>
 													{/if}
-													{#if task.eligibleWorkerCount > 0}
+													{#if task.eligibleExecutionSurfaceCount > 0}
 														<p class="text-xs text-slate-400">
-															{task.eligibleWorkerCount} matching execution surface(s)
-															{#if task.suggestedWorkerNames.length > 0}
-																: {task.suggestedWorkerNames.join(', ')}
+															{task.eligibleExecutionSurfaceCount} matching execution surface(s)
+															{#if task.suggestedExecutionSurfaceNames.length > 0}
+																: {task.suggestedExecutionSurfaceNames.join(', ')}
 															{/if}
 														</p>
 													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
@@ -457,7 +460,7 @@
 															requirements.
 														</p>
 													{/if}
-													{#if task.assignedWorkerEligible === false}
+													{#if task.assignedExecutionSurfaceEligible === false}
 														<p class="text-xs text-amber-300">
 															The current assignee does not match the recorded requirements.
 														</p>
@@ -536,11 +539,11 @@
 															{/each}
 														</div>
 													{/if}
-													{#if task.eligibleWorkerCount > 0}
+													{#if task.eligibleExecutionSurfaceCount > 0}
 														<p class="text-xs text-slate-400">
-															{task.eligibleWorkerCount} matching execution surface(s)
-															{#if task.suggestedWorkerNames.length > 0}
-																: {task.suggestedWorkerNames.join(', ')}
+															{task.eligibleExecutionSurfaceCount} matching execution surface(s)
+															{#if task.suggestedExecutionSurfaceNames.length > 0}
+																: {task.suggestedExecutionSurfaceNames.join(', ')}
 															{/if}
 														</p>
 													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
@@ -549,7 +552,7 @@
 															requirements.
 														</p>
 													{/if}
-													{#if task.assignedWorkerEligible === false}
+													{#if task.assignedExecutionSurfaceEligible === false}
 														<p class="text-xs text-amber-300">
 															The current assignee does not match the recorded requirements.
 														</p>
@@ -628,31 +631,39 @@
 				</div>
 
 				<div class="space-y-3">
-					{#each data.workerLoads as worker (worker.id)}
+					{#each data.executionSurfaceLoads as executionSurface (executionSurface.id)}
 						<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="ui-wrap-anywhere font-medium text-white">{worker.name}</p>
-									<p class="mt-1 text-xs text-slate-500">{worker.status}</p>
+									<p class="ui-wrap-anywhere font-medium text-white">{executionSurface.name}</p>
+									<p class="mt-1 text-xs text-slate-500">{executionSurface.status}</p>
 								</div>
-								<p class={`text-sm font-medium ${workerLoadClass(worker.remainingHours)}`}>
-									{worker.remainingHours} hrs free
+								<p
+									class={`text-sm font-medium ${executionSurfaceLoadClass(executionSurface.remainingHours)}`}
+								>
+									{executionSurface.remainingHours} hrs free
 								</p>
 							</div>
 
 							<div class="mt-4 grid gap-3 sm:grid-cols-3">
 								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Capacity</p>
-									<p class="mt-2 text-lg font-semibold text-white">{worker.capacityHours}</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{executionSurface.capacityHours}
+									</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Planned</p>
-									<p class="mt-2 text-lg font-semibold text-white">{worker.plannedHours}</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{executionSurface.plannedHours}
+									</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Balance</p>
-									<p class={`mt-2 text-lg font-semibold ${workerLoadClass(worker.remainingHours)}`}>
-										{worker.remainingHours}
+									<p
+										class={`mt-2 text-lg font-semibold ${executionSurfaceLoadClass(executionSurface.remainingHours)}`}
+									>
+										{executionSurface.remainingHours}
 									</p>
 								</div>
 							</div>

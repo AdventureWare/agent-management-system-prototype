@@ -3,7 +3,7 @@ import type { ControlPlaneData } from '$lib/types/control-plane';
 
 export type ExecutionRequirementInventoryEntry = {
 	name: string;
-	workerCount: number;
+	executionSurfaceCount: number;
 	providerCount: number;
 };
 
@@ -49,7 +49,7 @@ function finalizeEntries(entries: Map<string, RequirementAccumulator>) {
 	return [...entries.values()]
 		.map((entry) => ({
 			name: entry.name,
-			workerCount: entry.executionSurfaceIds.size,
+			executionSurfaceCount: entry.executionSurfaceIds.size,
 			providerCount: entry.providerIds.size
 		}))
 		.sort((left, right) => left.name.localeCompare(right.name));
@@ -77,12 +77,12 @@ export function buildExecutionRequirementInventory(
 		}
 	}
 
-	for (const worker of data.executionSurfaces) {
-		for (const skillName of worker.skills ?? []) {
+	for (const executionSurface of data.executionSurfaces) {
+		for (const skillName of executionSurface.skills ?? []) {
 			const entry = getOrCreateEntry(capabilityEntries, skillName);
 
 			if (entry) {
-				entry.executionSurfaceIds.add(worker.id);
+				entry.executionSurfaceIds.add(executionSurface.id);
 			}
 		}
 	}

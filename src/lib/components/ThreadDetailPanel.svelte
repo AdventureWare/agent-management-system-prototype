@@ -55,7 +55,7 @@
 		taskApprovalMode: string;
 		taskRequiresReview: boolean;
 		taskDesiredRoleId: string;
-		taskAssigneeWorkerId: string;
+		taskAssigneeExecutionSurfaceId: string;
 		taskTargetDate: string;
 		taskRequiredCapabilityNames: string[];
 		taskRequiredToolNames: string[];
@@ -114,8 +114,11 @@
 		taskResponseAction = null,
 		threadContacts = [],
 		threadContactTargets = [],
+		lazyLoadThreadContactTargets = false,
 		responseContextArtifacts = [],
 		form = null,
+		embedded = false,
+		readOnly = false,
 		backHref = resolve('/app/threads')
 	} = $props<{
 		thread: AgentThreadDetail;
@@ -124,6 +127,7 @@
 		taskResponseAction?: TaskResponseAction | null;
 		threadContacts?: AgentThreadContact[];
 		threadContactTargets?: ThreadContactTarget[];
+		lazyLoadThreadContactTargets?: boolean;
 		responseContextArtifacts?: ResponseContextArtifact[];
 		form?: {
 			ok?: boolean;
@@ -133,6 +137,8 @@
 			threadId?: string;
 			previousThreadId?: string;
 		} | null;
+		embedded?: boolean;
+		readOnly?: boolean;
 		backHref?: string;
 	}>();
 
@@ -153,6 +159,10 @@
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
 	let threadContactsState = $state.raw<AgentThreadContact[]>([]);
+	let threadContactTargetsState = $state.raw<ThreadContactTarget[]>([]);
+	let isLoadingContactTargets = $state(false);
+	let contactTargetsLoadError = $state('');
+	let contactTargetsThreadId = $state('');
 	let sendState = $state<{ status: 'sending' | 'success' | 'error'; message: string } | null>(null);
 	let contactTargetThreadId = $state('');
 	let contactTargetQuery = $state('');
@@ -239,13 +249,13 @@
 	let contactTargetById = $derived.by<Map<string, ThreadContactTarget>>(
 		() =>
 			new Map(
-				threadContactTargets.map((target: ThreadContactTarget) => [target.id, target] as const)
+				threadContactTargetsState.map((target: ThreadContactTarget) => [target.id, target] as const)
 			)
 	);
 	let contactProjectOptions = $derived.by<string[]>(() =>
 		[
 			...new Set<string>(
-				threadContactTargets
+				threadContactTargetsState
 					.map((target: ThreadContactTarget) => target.projectLabel.trim())
 					.filter((label: string) => label.length > 0)
 			)
@@ -254,7 +264,7 @@
 	let contactRoleOptions = $derived.by<string[]>(() =>
 		[
 			...new Set<string>(
-				threadContactTargets
+				threadContactTargetsState
 					.map((target: ThreadContactTarget) => target.roleLabel.trim())
 					.filter((label: string) => label.length > 0)
 			)
@@ -263,7 +273,7 @@
 	let visibleContactTargets = $derived.by<ThreadContactTarget[]>(() => {
 		const query = contactTargetQuery.trim().toLowerCase();
 
-		return threadContactTargets.filter((target: ThreadContactTarget) => {
+		return threadContactTargetsState.filter((target: ThreadContactTarget) => {
 			if (contactAvailabilityFilter === 'available' && !target.canContact) {
 				return false;
 			}
@@ -308,6 +318,26 @@
 	);
 	let threadState = $derived.by(() => (session ? describeThreadState(session) : null));
 	let threadAttachments = $derived(session?.attachments ?? []);
+	let sidebarTabItems = $derived(
+		readOnly
+			? [
+					{ id: 'details', label: 'Thread details' },
+					{
+						id: 'attachments',
+						label: 'Attachments',
+						badge: threadAttachments.length
+					}
+				]
+			: [
+					{ id: 'follow_up', label: 'Follow-up' },
+					{ id: 'details', label: 'Thread details' },
+					{
+						id: 'attachments',
+						label: 'Attachments',
+						badge: threadAttachments.length
+					}
+				]
+	);
 	let combinedResponseContextArtifacts = $derived.by(() => [
 		...threadAttachments.map((attachment) => ({
 			path: attachment.path,
@@ -340,6 +370,30 @@
 	);
 	$effect(() => {
 		threadContactsState = threadContacts;
+	});
+
+	$effect(() => {
+		if (readOnly && selectedSidebarView === 'follow_up') {
+			selectedSidebarView = 'details';
+		}
+	});
+	$effect(() => {
+		if (contactTargetsThreadId === sessionProp.id) {
+			return;
+		}
+
+		contactTargetsThreadId = sessionProp.id;
+		threadContactTargetsState = threadContactTargets;
+		isLoadingContactTargets = false;
+		contactTargetsLoadError = '';
+		contactTargetThreadId =
+			threadContactTargets.find((target: ThreadContactTarget) => target.canContact)?.id ??
+			threadContactTargets[0]?.id ??
+			'';
+
+		if (lazyLoadThreadContactTargets && threadContactTargets.length === 0) {
+			void loadThreadContactTargets();
+		}
 	});
 	$effect(() => {
 		const nextBrowseMode = contactTargetQuery.trim() ? 'all' : 'top';
@@ -859,6 +913,55 @@
 		}
 
 		mergeFollowUpAttachmentFiles(pastedFiles);
+	}
+
+	async function loadThreadContactTargets() {
+		const threadId = sessionProp.id;
+
+		if (!threadId || isLoadingContactTargets) {
+			return;
+		}
+
+		isLoadingContactTargets = true;
+		contactTargetsLoadError = '';
+
+		try {
+			const response = await fetch(resolve(`/api/agents/threads/${threadId}/contact-targets`), {
+				cache: 'no-store'
+			});
+
+			if (!response.ok) {
+				throw new Error('Could not refresh available contact targets.');
+			}
+
+			const payload = (await response.json()) as {
+				targets?: ThreadContactTarget[];
+			};
+
+			if (sessionProp.id !== threadId) {
+				return;
+			}
+
+			threadContactTargetsState = payload.targets ?? [];
+
+			if (!threadContactTargetsState.some((target) => target.id === contactTargetThreadId)) {
+				contactTargetThreadId =
+					threadContactTargetsState.find((target) => target.canContact)?.id ??
+					threadContactTargetsState[0]?.id ??
+					'';
+			}
+		} catch (err) {
+			if (sessionProp.id !== threadId) {
+				return;
+			}
+
+			contactTargetsLoadError =
+				err instanceof Error ? err.message : 'Could not refresh available contact targets.';
+		} finally {
+			if (sessionProp.id === threadId) {
+				isLoadingContactTargets = false;
+			}
+		}
 	}
 
 	async function loadThread() {
@@ -1642,7 +1745,7 @@
 {/snippet}
 
 {#if session}
-	<AppPage width="full" class="gap-5 sm:gap-6">
+	{#snippet panelContent()}
 		<div
 			bind:this={threadDetailRoot}
 			class="space-y-5 sm:space-y-6"
@@ -1650,7 +1753,7 @@
 		>
 			<div style={`--ui-scroll-shrink-progress:${threadHeaderShrinkProgress};`}>
 				<DetailHeader
-					backHref={resolve(backHref)}
+					backHref={embedded ? undefined : backHref}
 					backLabel="Back to threads"
 					eyebrow="Thread detail"
 					title={session.name}
@@ -1668,7 +1771,7 @@
 							>
 								{isRefreshing ? 'Refreshing...' : 'Refresh thread'}
 							</button>
-							{#if session!.hasActiveRun}
+							{#if !readOnly && session!.hasActiveRun}
 								<button
 									class="thread-detail-header-action w-full rounded-lg border border-rose-900/70 bg-rose-950/30 font-medium text-rose-200 disabled:opacity-50 sm:w-auto"
 									type="button"
@@ -2201,15 +2304,7 @@
 							<PageTabs
 								ariaLabel="Thread sidebar views"
 								bind:value={selectedSidebarView}
-								items={[
-									{ id: 'follow_up', label: 'Follow-up' },
-									{ id: 'details', label: 'Thread details' },
-									{
-										id: 'attachments',
-										label: 'Attachments',
-										badge: threadAttachments.length
-									}
-								]}
+								items={sidebarTabItems}
 								panelIdPrefix="session-sidebar"
 							/>
 						</div>
@@ -2451,11 +2546,11 @@
 												name="desiredRoleId"
 												value={taskResponseAction.taskDesiredRoleId}
 											/>
-											{#if taskResponseAction.taskAssigneeWorkerId}
+											{#if taskResponseAction.taskAssigneeExecutionSurfaceId}
 												<input
 													type="hidden"
 													name="assigneeExecutionSurfaceId"
-													value={taskResponseAction.taskAssigneeWorkerId}
+													value={taskResponseAction.taskAssigneeExecutionSurfaceId}
 												/>
 											{/if}
 											{#if taskResponseAction.taskTargetDate}
@@ -2493,7 +2588,29 @@
 								description="Use this when this thread needs instructions, context, or an assignment from another thread. The selected thread receives a structured request with this thread’s name, linked task context, summary, and latest saved response."
 								bodyClass="space-y-4"
 							>
-								{#if threadContactTargets.length === 0}
+								{#if isLoadingContactTargets}
+									<p
+										class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
+									>
+										Loading the latest contact targets for this thread.
+									</p>
+								{:else if contactTargetsLoadError}
+									<div class="rounded-lg border border-rose-900/60 bg-rose-950/30 px-4 py-4">
+										<p class="ui-wrap-anywhere text-sm text-rose-200">
+											{contactTargetsLoadError}
+										</p>
+										<div class="mt-3">
+											<AppButton
+												type="button"
+												variant="neutral"
+												size="sm"
+												onclick={loadThreadContactTargets}
+											>
+												Retry loading threads
+											</AppButton>
+										</div>
+									</div>
+								{:else if threadContactTargetsState.length === 0}
 									<p
 										class="ui-wrap-anywhere rounded-lg border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-400"
 									>
@@ -3149,17 +3266,23 @@
 										>
 											Open task detail
 										</AppButton>
-										<form method="POST" action="?/approveTaskResponse">
-											<AppButton
-												class="w-full sm:w-auto"
-												type="submit"
-												variant="success"
-												disabled={!taskResponseAction.canApproveAndComplete}
-												title={taskResponseAction.disabledReason}
-											>
-												Approve response and complete task
-											</AppButton>
-										</form>
+										{#if readOnly}
+											<p class="text-sm text-slate-400">
+												Approval actions stay on the full thread page.
+											</p>
+										{:else}
+											<form method="POST" action="?/approveTaskResponse">
+												<AppButton
+													class="w-full sm:w-auto"
+													type="submit"
+													variant="success"
+													disabled={!taskResponseAction.canApproveAndComplete}
+													title={taskResponseAction.disabledReason}
+												>
+													Approve response and complete task
+												</AppButton>
+											</form>
+										{/if}
 									</div>
 
 									{#if taskResponseAction.disabledReason}
@@ -3213,45 +3336,55 @@
 										</p>
 									</div>
 
-									<div class="grid gap-3 lg:grid-cols-2">
-										<form method="POST" action="?/recoverThread">
-											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
-												<p class="text-sm font-medium text-white">Retry in this thread</p>
-												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-													Recover the current thread, then replay the latest saved request without
-													losing the existing conversation context.
-												</p>
-												<AppButton
-													class="mt-4 w-full"
-													type="submit"
-													variant="warning"
-													disabled={!canRecoverInPlace}
-													title={recoverInPlaceDisabledReason(session)}
-												>
-													Recover in this thread
-												</AppButton>
-											</div>
-										</form>
+									{#if readOnly}
+										<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+											<p class="text-sm font-medium text-white">Recovery controls</p>
+											<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+												Recovering a thread or moving work into a fresh thread is available on the
+												full thread page.
+											</p>
+										</div>
+									{:else}
+										<div class="grid gap-3 lg:grid-cols-2">
+											<form method="POST" action="?/recoverThread">
+												<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+													<p class="text-sm font-medium text-white">Retry in this thread</p>
+													<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+														Recover the current thread, then replay the latest saved request without
+														losing the existing conversation context.
+													</p>
+													<AppButton
+														class="mt-4 w-full"
+														type="submit"
+														variant="warning"
+														disabled={!canRecoverInPlace}
+														title={recoverInPlaceDisabledReason(session)}
+													>
+														Recover in this thread
+													</AppButton>
+												</div>
+											</form>
 
-										<form method="POST" action="?/moveLatestRequestToNewThread">
-											<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
-												<p class="text-sm font-medium text-white">Move latest request</p>
-												<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
-													Start a fresh thread from the latest saved request and carry linked task
-													work over to that new thread.
-												</p>
-												<AppButton
-													class="mt-4 w-full"
-													type="submit"
-													variant="accent"
-													disabled={!canMoveLatestRequestToNewThread}
-													title={moveLatestRequestDisabledReason(session)}
-												>
-													Move latest request to new thread
-												</AppButton>
-											</div>
-										</form>
-									</div>
+											<form method="POST" action="?/moveLatestRequestToNewThread">
+												<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+													<p class="text-sm font-medium text-white">Move latest request</p>
+													<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+														Start a fresh thread from the latest saved request and carry linked task
+														work over to that new thread.
+													</p>
+													<AppButton
+														class="mt-4 w-full"
+														type="submit"
+														variant="accent"
+														disabled={!canMoveLatestRequestToNewThread}
+														title={moveLatestRequestDisabledReason(session)}
+													>
+														Move latest request to new thread
+													</AppButton>
+												</div>
+											</form>
+										</div>
+									{/if}
 
 									{#if !canRecoverInPlace}
 										<p class="ui-wrap-anywhere text-sm text-slate-400">
@@ -3261,61 +3394,89 @@
 								</DetailSection>
 							{/if}
 
-							<form method="POST" action="?/updateThreadHandleAlias">
+							{#if readOnly}
 								<DetailSection
 									eyebrow="Identity"
 									title="Stable handle alias"
-									description="Optional durable contact handle. Use this when you want an explicit routing name like coordination.main or frontend.owner instead of the derived handle."
+									description="Optional durable contact handle for routing and coordination."
 								>
-									<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-										<label class="block min-w-[18rem] flex-1">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Handle alias
-											</span>
-											<input
-												class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
-												type="text"
-												name="handleAlias"
-												value={session.handleAlias ?? ''}
-												placeholder="coordination.main"
-												spellcheck="false"
-												autocomplete="off"
-											/>
-											<p class="mt-2 text-xs text-slate-500">
-												Letters, numbers, dots, and hyphens only. Leave blank to restore the derived
-												handle.
-											</p>
-										</label>
-										<AppButton type="submit" variant="primary">Save handle alias</AppButton>
+									<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+										<p class="text-sm font-medium text-white">
+											{session.handleAlias?.trim() || 'No custom handle alias'}
+										</p>
+										<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+											Handle alias and sandbox updates stay on the full thread page in the queue
+											panel.
+										</p>
 									</div>
 								</DetailSection>
-							</form>
 
-							<form method="POST" action="?/updateThreadSandbox">
 								<DetailSection
 									eyebrow="Thread access"
 									title="Sandbox for future follow-up runs"
-									description="Lower-priority thread setting: change what this thread can access the next time you resume it. The current run keeps its existing sandbox."
+									description="Current sandbox mode for this thread."
 								>
-									<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-										<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-											<label class="block min-w-[14rem]">
-												<span class="mb-2 block text-sm font-medium text-slate-200">
-													Sandbox mode
-												</span>
-												<select class="select text-white" name="sandbox">
-													{#each sandboxOptions as sandbox (sandbox)}
-														<option value={sandbox} selected={session.sandbox === sandbox}
-															>{sandbox}</option
-														>
-													{/each}
-												</select>
-											</label>
-											<AppButton type="submit" variant="primary">Update sandbox</AppButton>
-										</div>
+									<div class="rounded-lg border border-slate-800 bg-black/20 p-4">
+										<p class="text-sm font-medium text-white">{session.sandbox}</p>
 									</div>
 								</DetailSection>
-							</form>
+							{:else}
+								<form method="POST" action="?/updateThreadHandleAlias">
+									<DetailSection
+										eyebrow="Identity"
+										title="Stable handle alias"
+										description="Optional durable contact handle. Use this when you want an explicit routing name like coordination.main or frontend.owner instead of the derived handle."
+									>
+										<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+											<label class="block min-w-[18rem] flex-1">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Handle alias
+												</span>
+												<input
+													class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+													type="text"
+													name="handleAlias"
+													value={session.handleAlias ?? ''}
+													placeholder="coordination.main"
+													spellcheck="false"
+													autocomplete="off"
+												/>
+												<p class="mt-2 text-xs text-slate-500">
+													Letters, numbers, dots, and hyphens only. Leave blank to restore the
+													derived handle.
+												</p>
+											</label>
+											<AppButton type="submit" variant="primary">Save handle alias</AppButton>
+										</div>
+									</DetailSection>
+								</form>
+
+								<form method="POST" action="?/updateThreadSandbox">
+									<DetailSection
+										eyebrow="Thread access"
+										title="Sandbox for future follow-up runs"
+										description="Lower-priority thread setting: change what this thread can access the next time you resume it. The current run keeps its existing sandbox."
+									>
+										<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+											<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+												<label class="block min-w-[14rem]">
+													<span class="mb-2 block text-sm font-medium text-slate-200">
+														Sandbox mode
+													</span>
+													<select class="select text-white" name="sandbox">
+														{#each sandboxOptions as sandbox (sandbox)}
+															<option value={sandbox} selected={session.sandbox === sandbox}
+																>{sandbox}</option
+															>
+														{/each}
+													</select>
+												</label>
+												<AppButton type="submit" variant="primary">Update sandbox</AppButton>
+											</div>
+										</div>
+									</DetailSection>
+								</form>
+							{/if}
 						{:else}
 							<DetailSection
 								eyebrow="Attachments"
@@ -3371,5 +3532,13 @@
 				</div>
 			</div>
 		</div>
-	</AppPage>
+	{/snippet}
+
+	{#if embedded}
+		{@render panelContent()}
+	{:else}
+		<AppPage width="full" class="gap-5 sm:gap-6">
+			{@render panelContent()}
+		</AppPage>
+	{/if}
 {/if}

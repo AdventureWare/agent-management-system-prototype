@@ -88,9 +88,9 @@ describe('buildTaskLaunchContextSummary', () => {
 					additionalWritableRoots: ['/tmp/project/cache'],
 					defaultThreadSandbox: 'workspace-write'
 				},
-				worker: {
+				executionSurface: {
 					id: 'worker_local',
-					name: 'Local worker',
+					name: 'Local execution surface',
 					providerId: 'provider_local_codex',
 					supportedRoleIds: [],
 					location: 'local',
@@ -116,8 +116,8 @@ describe('buildTaskLaunchContextSummary', () => {
 				mcpIds: ['github'],
 				hasSystemPrompt: true
 			},
-			assignedWorker: {
-				name: 'Local worker',
+			assignedExecutionSurface: {
+				name: 'Local execution surface',
 				status: 'idle',
 				skillNames: ['svelte']
 			},
@@ -129,6 +129,7 @@ describe('buildTaskLaunchContextSummary', () => {
 			sandbox: {
 				effective: 'danger-full-access',
 				taskRequirement: 'danger-full-access',
+				executionSurfaceOverride: null,
 				projectDefault: 'workspace-write',
 				providerDefault: 'workspace-write'
 			},

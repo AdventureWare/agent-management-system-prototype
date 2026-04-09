@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import type { AgentThreadDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail, AgentThreadStatusSnapshot } from '$lib/types/agent-thread';
 
 type AgentThreadStoreState = {
 	byId: Record<string, AgentThreadDetail>;
@@ -20,6 +20,11 @@ function mergeThreadRecord(
 		existing && thread.categorization === undefined
 			? {
 					...thread,
+					name: existing.name,
+					handle: thread.handle ?? existing.handle,
+					contactLabel: thread.contactLabel ?? existing.contactLabel,
+					relatedTasks:
+						thread.relatedTasks.length > 0 ? thread.relatedTasks : existing.relatedTasks,
 					categorization: existing.categorization,
 					topicLabels:
 						(thread.topicLabels?.length ?? 0) > 0
@@ -57,6 +62,39 @@ function orderThreadIds(
 	return [...currentIds, ...appendedIds];
 }
 
+function sortThreadIdsByRecentActivity(byId: Record<string, AgentThreadDetail>) {
+	return Object.values(byId)
+		.sort((left, right) => {
+			const leftActivity = left.lastActivityAt ?? left.updatedAt;
+			const rightActivity = right.lastActivityAt ?? right.updatedAt;
+
+			if (rightActivity !== leftActivity) {
+				return rightActivity.localeCompare(leftActivity);
+			}
+
+			return left.name.localeCompare(right.name);
+		})
+		.map((thread) => thread.id);
+}
+
+function applyThreadStatusSnapshot(
+	thread: AgentThreadDetail,
+	status: AgentThreadStatusSnapshot
+): AgentThreadDetail {
+	return {
+		...thread,
+		threadId: status.threadId,
+		threadState: status.threadState,
+		latestRunStatus: status.latestRunStatus,
+		hasActiveRun: status.hasActiveRun,
+		canResume: status.canResume,
+		runCount: status.runCount,
+		lastActivityAt: status.lastActivityAt,
+		lastExitCode: status.lastExitCode,
+		latestRun: status.latestRun
+	};
+}
+
 function createAgentThreadStore() {
 	const { subscribe, update } = writable<AgentThreadStoreState>(initialState);
 
@@ -65,7 +103,10 @@ function createAgentThreadStore() {
 		reset() {
 			update(() => initialState);
 		},
-		seedThreads(threads: AgentThreadDetail[], options: { replace?: boolean } = {}) {
+		seedThreads(
+			threads: AgentThreadDetail[],
+			options: { replace?: boolean; resort?: boolean } = {}
+		) {
 			update((state) => {
 				let nextById = options.replace ? {} : state.byId;
 
@@ -75,9 +116,11 @@ function createAgentThreadStore() {
 
 				return {
 					byId: nextById,
-					orderedIds: orderThreadIds(state.orderedIds, threads, {
-						replace: options.replace ?? false
-					})
+					orderedIds: options.resort
+						? sortThreadIdsByRecentActivity(nextById)
+						: orderThreadIds(state.orderedIds, threads, {
+								replace: options.replace ?? false
+							})
 				};
 			});
 		},
@@ -115,6 +158,39 @@ function createAgentThreadStore() {
 				return {
 					...state,
 					byId: nextById
+				};
+			});
+		},
+		patchThreadStatuses(statuses: AgentThreadStatusSnapshot[]) {
+			if (statuses.length === 0) {
+				return;
+			}
+
+			update((state) => {
+				let nextById = state.byId;
+				let didChange = false;
+
+				for (const status of statuses) {
+					const current = nextById[status.id];
+
+					if (!current) {
+						continue;
+					}
+
+					nextById = {
+						...nextById,
+						[status.id]: applyThreadStatusSnapshot(current, status)
+					};
+					didChange = true;
+				}
+
+				if (!didChange) {
+					return state;
+				}
+
+				return {
+					byId: nextById,
+					orderedIds: sortThreadIdsByRecentActivity(nextById)
 				};
 			});
 		}

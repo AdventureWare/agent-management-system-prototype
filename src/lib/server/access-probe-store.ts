@@ -18,7 +18,7 @@ export type AccessProbeStatus =
 
 export type AccessProbeRecord = {
 	targetKey: string;
-	targetKind: 'local_path' | 'provider' | 'worker';
+	targetKind: 'local_path' | 'provider' | 'execution_surface';
 	targetLabel: string;
 	scopeLabel: string;
 	scopeHref: string;
@@ -89,10 +89,10 @@ function getProviderRecordStatus(
 	return 'healthy';
 }
 
-function getWorkerRecordStatus(
-	worker: AccessDashboardData['executionSurfaces'][number]
+function getExecutionSurfaceRecordStatus(
+	executionSurface: AccessDashboardData['executionSurfaces'][number]
 ): AccessProbeStatus {
-	switch (worker.accessState) {
+	switch (executionSurface.accessState) {
 		case 'provider_disabled':
 			return 'disabled';
 		case 'provider_needs_setup':
@@ -136,24 +136,24 @@ export function buildAccessProbeRecords(dashboard: AccessDashboardData, checkedA
 				checkedAt
 			}) satisfies AccessProbeRecord
 	);
-	const workerRecords = dashboard.executionSurfaces.map(
-		(worker) =>
+	const executionSurfaceRecords = dashboard.executionSurfaces.map(
+		(executionSurface) =>
 			({
-				targetKey: `worker:${worker.id}`,
-				targetKind: 'worker',
-				targetLabel: worker.name,
-				scopeLabel: worker.providerName,
-				scopeHref: worker.workerHref,
-				status: getWorkerRecordStatus(worker),
+				targetKey: `execution_surface:${executionSurface.id}`,
+				targetKind: 'execution_surface',
+				targetLabel: executionSurface.name,
+				scopeLabel: executionSurface.providerName,
+				scopeHref: executionSurface.executionSurfaceHref,
+				status: getExecutionSurfaceRecordStatus(executionSurface),
 				summary:
-					worker.accessState === 'healthy'
-						? 'ExecutionSurface and provider look ready.'
-						: `ExecutionSurface access state: ${worker.accessState.replace(/_/g, ' ')}.`,
+					executionSurface.accessState === 'healthy'
+						? 'Execution surface and provider look ready.'
+						: `Execution surface access state: ${executionSurface.accessState.replace(/_/g, ' ')}.`,
 				checkedAt
 			}) satisfies AccessProbeRecord
 	);
 
-	return [...localPathRecords, ...providerRecords, ...workerRecords];
+	return [...localPathRecords, ...providerRecords, ...executionSurfaceRecords];
 }
 
 export function applyAccessProbeSnapshot(

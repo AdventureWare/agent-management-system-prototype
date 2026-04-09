@@ -98,6 +98,8 @@
 		roles: RoleOption[];
 		dependencyTasks: DependencyTaskView[];
 		recentDecisions: RecentDecisionView[];
+		actionBasePath?: string;
+		readOnly?: boolean;
 	};
 
 	let {
@@ -107,9 +109,15 @@
 		childTasks,
 		roles,
 		dependencyTasks,
-		recentDecisions
+		recentDecisions,
+		actionBasePath = '',
+		readOnly = false
 	}: TaskGovernancePanelProps = $props();
 	let remainingChildSlots = $derived(Math.max(0, 3 - childTasks.length));
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
 </script>
 
 <div id="task-detail-panel-governance" role="tabpanel" aria-labelledby="task-detail-tab-governance">
@@ -145,9 +153,9 @@
 						{/if}
 					</div>
 
-					{#if task.openReview}
+					{#if !readOnly && task.openReview}
 						<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-							<form method="POST" action="?/approveReview">
+							<form method="POST" action={taskAction('approveReview')}>
 								<button
 									class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
 									type="submit"
@@ -155,7 +163,7 @@
 									Approve review
 								</button>
 							</form>
-							<form method="POST" action="?/requestChanges">
+							<form method="POST" action={taskAction('requestChanges')}>
 								<button
 									class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
 									type="submit"
@@ -188,9 +196,9 @@
 						{/if}
 					</div>
 
-					{#if task.pendingApproval}
+					{#if !readOnly && task.pendingApproval}
 						<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-							<form method="POST" action="?/approveApproval">
+							<form method="POST" action={taskAction('approveApproval')}>
 								<button
 									class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
 									type="submit"
@@ -198,7 +206,7 @@
 									Approve gate
 								</button>
 							</form>
-							<form method="POST" action="?/rejectApproval">
+							<form method="POST" action={taskAction('rejectApproval')}>
 								<button
 									class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
 									type="submit"
@@ -370,9 +378,9 @@
 													{/if}
 												</div>
 											{/if}
-											{#if childTask.integrationStatus === 'pending'}
+											{#if !readOnly && childTask.integrationStatus === 'pending'}
 												<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-													<form method="POST" action="?/acceptChildHandoff">
+													<form method="POST" action={taskAction('acceptChildHandoff')}>
 														<input type="hidden" name="childTaskId" value={childTask.id} />
 														<button
 															class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
@@ -381,7 +389,7 @@
 															Accept handoff
 														</button>
 													</form>
-													<form method="POST" action="?/requestChildHandoffChanges">
+													<form method="POST" action={taskAction('requestChildHandoffChanges')}>
 														<input type="hidden" name="childTaskId" value={childTask.id} />
 														<button
 															class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
@@ -423,8 +431,8 @@
 									This task already owns the maximum number of delegated child tasks for the current
 									orchestration flow.
 								</p>
-							{:else}
-								<form class="mt-4 space-y-4" method="POST" action="?/decomposeTask">
+							{:else if !readOnly}
+								<form class="mt-4 space-y-4" method="POST" action={taskAction('decomposeTask')}>
 									{#each [0, 1, 2] as index (index)}
 										<fieldset class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
 											<div class="flex flex-wrap items-center justify-between gap-3">
@@ -545,6 +553,12 @@
 										</button>
 									</div>
 								</form>
+							{:else}
+								<p
+									class="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3 text-sm text-slate-300"
+								>
+									Delegation and approval actions stay on the full task page.
+								</p>
 							{/if}
 						</div>
 					</div>

@@ -11,12 +11,12 @@
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
 	import {
+		executionSurfaceStatusToneClass,
 		formatRunStatusLabel,
 		formatTaskStatusLabel,
 		formatExecutionSurfaceStatusLabel,
 		runStatusToneClass,
-		taskStatusToneClass,
-		workerStatusToneClass
+		taskStatusToneClass
 	} from '$lib/types/control-plane';
 	import { fromStore } from 'svelte/store';
 
@@ -24,18 +24,18 @@
 	let form = $derived(props.form);
 	let refreshedData = $state.raw<PageData | null>(null);
 	let sourceData = $derived(refreshedData ?? props.data);
-	const workerRecordState = fromStore(executionSurfaceRecordStore);
+	const executionSurfaceRecordState = fromStore(executionSurfaceRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
 		executionSurface: mergeStoredExecutionSurfaceRecord(
 			sourceData.executionSurface,
-			workerRecordState.current.byId
+			executionSurfaceRecordState.current.byId
 		)
 	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 
-	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateWorker');
+	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateExecutionSurface');
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 	function runIsActive(run: PageData['recentRuns'][number]) {
 		return ['queued', 'starting', 'running'].includes(run.status);
@@ -53,11 +53,11 @@
 		executionSurfaceRecordStore.seedExecutionSurface(sourceData.executionSurface);
 	});
 
-	function shouldAutoRefreshWorkerDetail() {
+	function shouldAutoRefreshExecutionSurfaceDetail() {
 		return data.executionSurface.status === 'busy' || hasActiveRecentRun;
 	}
 
-	async function refreshWorkerDetail(options: { force?: boolean } = {}) {
+	async function refreshExecutionSurfaceDetail(options: { force?: boolean } = {}) {
 		if (isRefreshing || shouldPauseRefresh({ force: options.force })) {
 			return;
 		}
@@ -79,7 +79,7 @@
 	}
 
 	function handleWindowFocus() {
-		void refreshWorkerDetail();
+		void refreshExecutionSurfaceDetail();
 	}
 
 	function handleVisibilityChange() {
@@ -87,16 +87,16 @@
 			return;
 		}
 
-		void refreshWorkerDetail();
+		void refreshExecutionSurfaceDetail();
 	}
 
 	$effect(() => {
-		if (!shouldAutoRefreshWorkerDetail()) {
+		if (!shouldAutoRefreshExecutionSurfaceDetail()) {
 			return;
 		}
 
 		const intervalId = window.setInterval(() => {
-			void refreshWorkerDetail();
+			void refreshExecutionSurfaceDetail();
 		}, ACTIVE_REFRESH_INTERVAL_MS);
 
 		return () => {
@@ -119,7 +119,7 @@
 		{#snippet meta()}
 			<div class="flex flex-wrap gap-2">
 				<span
-					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(data.executionSurface.status)}`}
+					class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${executionSurfaceStatusToneClass(data.executionSurface.status)}`}
 				>
 					{formatExecutionSurfaceStatusLabel(data.executionSurface.status)}
 				</span>
@@ -132,13 +132,13 @@
 			class="rounded-full border border-slate-800 bg-slate-950/70 px-3 py-2 font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
 			type="button"
 			onclick={() => {
-				void refreshWorkerDetail({ force: true });
+				void refreshExecutionSurfaceDetail({ force: true });
 			}}
 			disabled={isRefreshing}
 		>
 			{isRefreshing ? 'Refreshing...' : 'Refresh state'}
 		</button>
-		{#if shouldAutoRefreshWorkerDetail()}
+		{#if shouldAutoRefreshExecutionSurfaceDetail()}
 			<span
 				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
 			>
@@ -206,7 +206,7 @@
 		<form
 			class="space-y-4 card border border-slate-800 bg-slate-950/70 p-6"
 			method="POST"
-			action="?/updateWorker"
+			action="?/updateExecutionSurface"
 		>
 			<div class="space-y-2">
 				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
@@ -250,8 +250,7 @@
 						{/each}
 					</select>
 					<p class="mt-2 text-xs text-slate-500">
-						Hold Command or Control to select multiple supported roles. The first selected role is
-						kept as the compatibility fallback for older code paths.
+						Hold Command or Control to select multiple supported roles.
 					</p>
 				</label>
 			</div>

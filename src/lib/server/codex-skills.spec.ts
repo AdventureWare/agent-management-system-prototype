@@ -1,11 +1,12 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	createProjectCodexSkill,
 	listInstalledCodexSkills,
-	normalizeCodexSkillId
+	normalizeCodexSkillId,
+	writeProjectCodexSkill
 } from './codex-skills';
 
 const tempRoots: string[] = [];
@@ -71,6 +72,25 @@ describe('listInstalledCodexSkills', () => {
 		]);
 	});
 
+	it('also reads project-local skills from the non-hidden agents fallback path', () => {
+		const projectRoot = createTempRoot();
+
+		writeSkill(projectRoot, ['agents', 'skills', 'role-creator'], {
+			name: 'role-creator',
+			description: 'Create and refine role definitions'
+		});
+
+		expect(listInstalledCodexSkills(projectRoot, createTempRoot())).toEqual([
+			{
+				description: 'Create and refine role definitions',
+				global: false,
+				id: 'role-creator',
+				project: true,
+				sourceLabel: 'Project'
+			}
+		]);
+	});
+
 	it('still returns global skills when no project workspace is configured', () => {
 		const codexHome = createTempRoot();
 
@@ -111,6 +131,12 @@ describe('createProjectCodexSkill', () => {
 		});
 
 		expect(createdSkill.skillId).toBe('docs-writer');
+		expect(readFileSync(createdSkill.openAIYamlPath, 'utf8')).toContain(
+			'display_name: "Docs Writer"'
+		);
+		expect(readFileSync(createdSkill.openAIYamlPath, 'utf8')).toContain(
+			'default_prompt: "Use $docs-writer'
+		);
 		expect(listInstalledCodexSkills(projectRoot, codexHome)).toEqual([
 			expect.objectContaining({
 				id: 'docs-writer',
@@ -137,5 +163,33 @@ describe('createProjectCodexSkill', () => {
 				description: 'Another description.'
 			})
 		).toThrow('Project skill "docs-writer" already exists.');
+	});
+
+	it('writes companion reference files under references/', () => {
+		const projectRoot = createTempRoot();
+
+		const createdSkill = writeProjectCodexSkill({
+			projectRootFolder: projectRoot,
+			skillId: 'launch-context',
+			description: 'Guide task launch context and prompt-skill handoff.',
+			bodyMarkdown: '# launch-context\n\n## When to use this skill\n',
+			referenceFiles: [
+				{
+					path: 'references/context.md',
+					content: '# Context\n\nLaunch details.'
+				}
+			],
+			scriptFiles: [
+				{
+					path: 'scripts/check-context.sh',
+					content: '#!/usr/bin/env bash\necho "checking context"'
+				}
+			]
+		});
+
+		expect(createdSkill.referenceFilePaths).toHaveLength(1);
+		expect(readFileSync(createdSkill.referenceFilePaths[0], 'utf8')).toContain('Launch details.');
+		expect(createdSkill.scriptFilePaths).toHaveLength(1);
+		expect(readFileSync(createdSkill.scriptFilePaths[0], 'utf8')).toContain('checking context');
 	});
 });

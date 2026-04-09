@@ -34,8 +34,8 @@ export const load: PageServerLoad = async () => {
 			.map((task) => ({ id: task.id, title: task.title }))
 			.sort((left, right) => left.title.localeCompare(right.title)),
 		executionSurfaces: [...data.executionSurfaces]
-			.filter((worker) => executionSurfaceIdsWithRuns.has(worker.id))
-			.map((worker) => ({ id: worker.id, name: worker.name }))
+			.filter((executionSurface) => executionSurfaceIdsWithRuns.has(executionSurface.id))
+			.map((executionSurface) => ({ id: executionSurface.id, name: executionSurface.name }))
 			.sort((left, right) => left.name.localeCompare(right.name)),
 		providers: [...data.providers]
 			.filter((provider) => providerIdsWithRuns.has(provider.id))

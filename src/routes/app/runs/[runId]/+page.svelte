@@ -21,13 +21,13 @@
 	let props = $props<{ data: PageData }>();
 	let refreshedData = $state.raw<PageData | null>(null);
 	let sourceData = $derived(refreshedData ?? props.data);
-	const workerRecordState = fromStore(executionSurfaceRecordStore);
+	const executionSurfaceRecordState = fromStore(executionSurfaceRecordStore);
 	let data = $derived.by(() => ({
 		...sourceData,
 		executionSurface: sourceData.executionSurface
 			? mergeStoredExecutionSurfaceRecord(
 					sourceData.executionSurface,
-					workerRecordState.current.byId
+					executionSurfaceRecordState.current.byId
 				)
 			: null
 	}));
@@ -184,7 +184,7 @@
 					class="ui-wrap-inline mt-3 text-lg font-semibold text-sky-300 transition hover:text-sky-200"
 					href={resolve(`/app/execution-surfaces/${data.executionSurface.id}`)}
 				>
-					{data.run.workerName}
+					{data.run.executionSurfaceName}
 				</a>
 				<p class="mt-2 text-sm text-slate-400">
 					{formatExecutionSurfaceStatusLabel(data.executionSurface.status)} surface

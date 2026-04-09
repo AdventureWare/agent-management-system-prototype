@@ -128,7 +128,7 @@ describe('roles page server', () => {
 	it('loads role demand and staffing counts', async () => {
 		const result = (await load({} as never)) as {
 			roleAreaOptions: string[];
-			roles: Array<{ id: string; taskCount: number; workerCount: number }>;
+			roles: Array<{ id: string; taskCount: number; executionSurfaceCount: number }>;
 		};
 
 		expect(result.roleAreaOptions).toEqual(['shared', 'product', 'growth', 'ops']);
@@ -136,7 +136,7 @@ describe('roles page server', () => {
 			expect.objectContaining({
 				id: 'role_writer',
 				taskCount: 1,
-				workerCount: 1
+				executionSurfaceCount: 1
 			})
 		]);
 	});

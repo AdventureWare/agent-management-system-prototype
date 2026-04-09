@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { fetchAgentThreads, updateAgentThreadArchiveState } from '$lib/client/agent-threads';
+	import {
+		fetchAgentThreadStatuses,
+		fetchAgentThreads,
+		updateAgentThreadArchiveState
+	} from '$lib/client/agent-threads';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import AppButton from '$lib/components/AppButton.svelte';
@@ -23,16 +27,26 @@
 	import { fade } from 'svelte/transition';
 
 	let { data } = $props<{
-		data: { threads?: AgentThreadDetail[] };
+		data: {
+			threads?: AgentThreadDetail[];
+			visibleRegistryHydrated?: boolean;
+			archivedRegistryHydrated?: boolean;
+		};
 	}>();
 	let query = $state('');
 	let autoRefresh = $state(true);
 	let showArchived = $state(false);
 	let isRefreshing = $state(false);
 	let isUpdatingArchive = $state(false);
+	let isHydratingVisibleRegistry = $state(false);
+	let isHydratingImportedRegistry = $state(false);
+	let isLoadingArchivedRegistry = $state(false);
 	let now = $state(Date.now());
 	let selectedThreadIds = $state.raw<string[]>([]);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
+	let hasLoadedVisibleRegistry = $state(false);
+	let hasLoadedImportedRegistry = $state(false);
+	let hasLoadedArchivedRegistry = $state(false);
 	const threadStoreState = fromStore(agentThreadStore);
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
@@ -41,6 +55,8 @@
 	});
 	const THREADS_REFRESH_INTERVAL_MS = Math.max(ACTIVE_REFRESH_INTERVAL_MS, 5_000);
 	const THREADS_ACTIVITY_CLOCK_INTERVAL_MS = 5_000;
+	const THREADS_VISIBLE_REGISTRY_HYDRATE_DELAY_MS = 250;
+	const THREADS_IMPORTED_REGISTRY_HYDRATE_DELAY_MS = 1_500;
 	const autoRefreshIntervalLabel = `${THREADS_REFRESH_INTERVAL_MS / 1000}s`;
 	let threadLayoutMode = $state<'mobile' | 'desktop'>('desktop');
 	let sessions = $derived.by(() =>
@@ -193,6 +209,20 @@
 
 	onMount(() => {
 		const mediaQuery = window.matchMedia('(min-width: 1024px)');
+		const visibleHydrateTimeoutId = window.setTimeout(() => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
+			void hydrateVisibleRegistry();
+		}, THREADS_VISIBLE_REGISTRY_HYDRATE_DELAY_MS);
+		const importedHydrateTimeoutId = window.setTimeout(() => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
+			void hydrateImportedRegistry();
+		}, THREADS_IMPORTED_REGISTRY_HYDRATE_DELAY_MS);
 		const syncThreadLayoutMode = () => {
 			threadLayoutMode = mediaQuery.matches ? 'desktop' : 'mobile';
 		};
@@ -201,6 +231,8 @@
 		mediaQuery.addEventListener('change', syncThreadLayoutMode);
 
 		return () => {
+			window.clearTimeout(visibleHydrateTimeoutId);
+			window.clearTimeout(importedHydrateTimeoutId);
 			mediaQuery.removeEventListener('change', syncThreadLayoutMode);
 		};
 	});
@@ -240,16 +272,112 @@
 		return (sessionSearchTextById.get(session.id) ?? '').includes(term);
 	}
 
-	async function loadSessions(options: { includeCategorization?: boolean } = {}) {
+	async function loadSessions(
+		options: {
+			includeArchived?: boolean;
+			includeCategorization?: boolean;
+			includeExternal?: boolean;
+			includeManaged?: boolean;
+			replace?: boolean;
+			threadIds?: string[];
+		} = {}
+	) {
 		agentThreadStore.seedThreads(
 			await fetchAgentThreads({
-				includeArchived: true,
-				includeCategorization: options.includeCategorization
+				includeArchived: options.includeArchived,
+				includeCategorization: options.includeCategorization,
+				includeTargets: false,
+				includeExternal: options.includeExternal,
+				includeManaged: options.includeManaged,
+				reconcileTaskState: false,
+				threadIds: options.threadIds
 			}),
 			{
-				replace: true
+				replace: options.replace ?? true,
+				resort: true
 			}
 		);
+	}
+
+	async function hydrateVisibleRegistry() {
+		if (hasLoadedVisibleRegistry || isHydratingVisibleRegistry) {
+			return;
+		}
+
+		isHydratingVisibleRegistry = true;
+
+		try {
+			await loadSessions({
+				includeArchived: false,
+				includeCategorization: true,
+				includeExternal: false,
+				includeManaged: true,
+				replace: true
+			});
+			hasLoadedVisibleRegistry = true;
+			pageNotice = null;
+		} catch (err) {
+			pageNotice = {
+				tone: 'error',
+				message:
+					err instanceof Error
+						? err.message
+						: 'Could not finish loading the visible thread registry.'
+			};
+		} finally {
+			isHydratingVisibleRegistry = false;
+		}
+	}
+
+	async function hydrateImportedRegistry() {
+		if (hasLoadedImportedRegistry || isHydratingImportedRegistry) {
+			return;
+		}
+
+		isHydratingImportedRegistry = true;
+
+		try {
+			await loadSessions({
+				includeArchived: false,
+				includeCategorization: true,
+				includeExternal: true,
+				includeManaged: false,
+				replace: false
+			});
+			hasLoadedImportedRegistry = true;
+		} finally {
+			isHydratingImportedRegistry = false;
+		}
+	}
+
+	async function loadArchivedRegistry() {
+		if (hasLoadedArchivedRegistry || isLoadingArchivedRegistry) {
+			return;
+		}
+
+		isLoadingArchivedRegistry = true;
+
+		try {
+			await loadSessions({
+				includeArchived: true,
+				includeCategorization: true,
+				includeExternal: true,
+				includeManaged: true,
+				replace: true
+			});
+			hasLoadedVisibleRegistry = true;
+			hasLoadedImportedRegistry = true;
+			hasLoadedArchivedRegistry = true;
+			pageNotice = null;
+		} catch (err) {
+			pageNotice = {
+				tone: 'error',
+				message: err instanceof Error ? err.message : 'Could not load archived thread history.'
+			};
+			throw err;
+		} finally {
+			isLoadingArchivedRegistry = false;
+		}
 	}
 
 	async function refreshSessions(options: { force?: boolean } = {}) {
@@ -261,10 +389,30 @@
 			return;
 		}
 
+		const isFullRefresh = options.force === true;
+		const activeThreadIds = activeSessions.map((session) => session.id);
+
+		if (!isFullRefresh && activeThreadIds.length === 0) {
+			return;
+		}
+
 		isRefreshing = true;
 
 		try {
-			await loadSessions({ includeCategorization: options.force === true });
+			if (isFullRefresh) {
+				await loadSessions({
+					includeArchived: true,
+					includeCategorization: true,
+					includeExternal: true,
+					includeManaged: true,
+					replace: true
+				});
+				hasLoadedVisibleRegistry = true;
+				hasLoadedImportedRegistry = true;
+				hasLoadedArchivedRegistry = true;
+			} else {
+				agentThreadStore.patchThreadStatuses(await fetchAgentThreadStatuses(activeThreadIds));
+			}
 			pageNotice = null;
 		} catch (err) {
 			pageNotice = {
@@ -309,7 +457,16 @@
 		selectedThreadIds = [];
 	}
 
-	function handleShowArchivedChange(checked: boolean) {
+	async function handleShowArchivedChange(checked: boolean) {
+		if (checked && !hasLoadedArchivedRegistry) {
+			try {
+				await loadArchivedRegistry();
+			} catch {
+				showArchived = false;
+				return;
+			}
+		}
+
 		showArchived = checked;
 
 		if (checked) {
@@ -837,7 +994,11 @@
 		<MetricCard label="Available" value={availableCount} />
 		<MetricCard label="Closed / idle" value={inactiveCount} />
 		<MetricCard label="Needs attention" value={attentionCount} />
-		<MetricCard label="Archived" value={archivedCount} />
+		<MetricCard
+			label="Archived"
+			value={hasLoadedArchivedRegistry ? archivedCount : 'Deferred'}
+			detail={hasLoadedArchivedRegistry ? '' : 'Loads on demand'}
+		/>
 	</div>
 
 	<div class="space-y-6">
@@ -864,14 +1025,28 @@
 					<input
 						type="checkbox"
 						checked={showArchived}
+						disabled={isLoadingArchivedRegistry}
 						onchange={(event) => {
 							if (event.currentTarget instanceof HTMLInputElement) {
-								handleShowArchivedChange(event.currentTarget.checked);
+								void handleShowArchivedChange(event.currentTarget.checked);
 							}
 						}}
 					/>
-					<span>Show archived threads</span>
+					<span>
+						{isLoadingArchivedRegistry ? 'Loading archived threads...' : 'Show archived threads'}
+					</span>
 				</label>
+				{#if !hasLoadedArchivedRegistry}
+					<p class="text-sm text-slate-500">
+						Archived history stays deferred until you ask for it, which keeps the default registry
+						view faster to open.
+					</p>
+				{/if}
+				{#if !hasLoadedImportedRegistry}
+					<p class="text-sm text-slate-500">
+						Imported Codex threads are still loading in the background.
+					</p>
+				{/if}
 				{#if archivedCount > 0 && !showArchived}
 					<p class="text-sm text-slate-500">
 						{archivedCount} archived {archivedCount === 1 ? 'thread is' : 'threads are'} hidden from the

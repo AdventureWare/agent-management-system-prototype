@@ -50,17 +50,20 @@ function readProviderForm(form: FormData) {
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
-	const workerCounts = new Map<string, number>();
+	const executionSurfaceCounts = new Map<string, number>();
 
-	for (const worker of data.executionSurfaces) {
-		workerCounts.set(worker.providerId, (workerCounts.get(worker.providerId) ?? 0) + 1);
+	for (const executionSurface of data.executionSurfaces) {
+		executionSurfaceCounts.set(
+			executionSurface.providerId,
+			(executionSurfaceCounts.get(executionSurface.providerId) ?? 0) + 1
+		);
 	}
 
 	return {
 		providers: [...data.providers]
 			.map((provider) => ({
 				...provider,
-				workerCount: workerCounts.get(provider.id) ?? 0
+				executionSurfaceCount: executionSurfaceCounts.get(provider.id) ?? 0
 			}))
 			.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)),
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,

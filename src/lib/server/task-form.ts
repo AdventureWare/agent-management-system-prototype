@@ -42,7 +42,7 @@ export type CreateTaskFormInput = {
 export type TaskDetailFormInput = CreateTaskFormInput & {
 	hasDelegationPacketFields: boolean;
 	hasGoalId: boolean;
-	hasAssigneeWorkerId: boolean;
+	hasAssigneeExecutionSurfaceId: boolean;
 	hasPriority: boolean;
 	hasRiskLevel: boolean;
 	hasApprovalMode: boolean;
@@ -189,7 +189,7 @@ export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 			form.has('delegationDoneCondition') ||
 			form.has('delegationIntegrationNotes'),
 		hasGoalId: form.has('goalId'),
-		hasAssigneeWorkerId: form.has('assigneeExecutionSurfaceId'),
+		hasAssigneeExecutionSurfaceId: form.has('assigneeExecutionSurfaceId'),
 		hasPriority: form.has('priority'),
 		hasRiskLevel: form.has('riskLevel'),
 		hasApprovalMode: form.has('approvalMode'),

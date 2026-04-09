@@ -5,11 +5,20 @@
 	import type { ArtifactBrowserData } from '$lib/types/artifacts';
 	import type { TaskAttachment } from '$lib/types/control-plane';
 
-	let { taskId, attachments, attachmentRoot, artifactBrowser } = $props<{
+	let {
+		taskId,
+		attachments,
+		attachmentRoot,
+		artifactBrowser,
+		actionBasePath = '',
+		readOnly = false
+	} = $props<{
 		taskId: string;
 		attachments: TaskAttachment[];
 		attachmentRoot: string;
 		artifactBrowser: ArtifactBrowserData;
+		actionBasePath?: string;
+		readOnly?: boolean;
 	}>();
 
 	function formatAttachmentSize(sizeBytes: number) {
@@ -22,6 +31,10 @@
 		}
 
 		return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
 	}
 </script>
 
@@ -38,44 +51,58 @@
 			<h3 class="mt-2 text-xl font-semibold text-white">Attached files</h3>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
 				Upload supporting files for this task. Files are stored under the task artifact area so the
-				worker thread and human reviewer can reference the same source material.
+				execution thread and human reviewer can reference the same source material.
 			</p>
 
-			<form
-				class="mt-5 space-y-4"
-				method="POST"
-				action="?/attachTaskFile"
-				enctype="multipart/form-data"
-			>
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Choose file</span>
-					<input
-						class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
-						name="attachment"
-						type="file"
-						required
-					/>
-				</label>
-
-				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
+			{#if readOnly}
+				<div
+					class="mt-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300"
+				>
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 						Storage root
 					</p>
 					<p class="ui-wrap-anywhere mt-2">{attachmentRoot || 'Not configured'}</p>
+					<p class="mt-3 text-slate-400">Uploads and file removal stay on the full task page.</p>
 				</div>
+			{:else}
+				<form
+					class="mt-5 space-y-4"
+					method="POST"
+					action={taskAction('attachTaskFile')}
+					enctype="multipart/form-data"
+				>
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Choose file</span>
+						<input
+							class="file-input w-full border border-slate-700 bg-slate-900 text-slate-100"
+							name="attachment"
+							type="file"
+							required
+						/>
+					</label>
 
-				<button class="btn border border-slate-700 font-semibold text-slate-100" type="submit">
-					Attach file
-				</button>
-			</form>
+					<div
+						class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300"
+					>
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Storage root
+						</p>
+						<p class="ui-wrap-anywhere mt-2">{attachmentRoot || 'Not configured'}</p>
+					</div>
+
+					<button class="btn border border-slate-700 font-semibold text-slate-100" type="submit">
+						Attach file
+					</button>
+				</form>
+			{/if}
 
 			<div class="mt-5 space-y-4">
 				{#if attachments.length === 0}
 					<p
 						class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 					>
-						No files are attached to this task yet. Upload one above when the worker or reviewer
-						needs shared source material.
+						No files are attached to this task yet. Upload one above when the execution surface or
+						reviewer needs shared source material.
 					</p>
 				{:else}
 					{#each attachments as attachment (attachment.id)}
@@ -99,15 +126,17 @@
 									>
 										Download
 									</a>
-									<form method="POST" action="?/removeTaskAttachment">
-										<input type="hidden" name="attachmentId" value={attachment.id} />
-										<button
-											class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-rose-400/40 hover:text-rose-200"
-											type="submit"
-										>
-											Detach
-										</button>
-									</form>
+									{#if !readOnly}
+										<form method="POST" action={taskAction('removeTaskAttachment')}>
+											<input type="hidden" name="attachmentId" value={attachment.id} />
+											<button
+												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-rose-400/40 hover:text-rose-200"
+												type="submit"
+											>
+												Detach
+											</button>
+										</form>
+									{/if}
 								</div>
 							</div>
 						</article>

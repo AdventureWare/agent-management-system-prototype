@@ -49,7 +49,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 	const current = await loadControlPlane();
 	const project = current.projects.find((candidate) => candidate.id === projectId);
 	const goal = goalId ? (current.goals.find((candidate) => candidate.id === goalId) ?? null) : null;
-	const assigneeWorker = assigneeExecutionSurfaceId
+	const assignedExecutionSurface = assigneeExecutionSurfaceId
 		? (current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId) ??
 			null)
 		: null;
@@ -65,8 +65,8 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		throw new TaskUpdateActionError(400, 'Goal not found.');
 	}
 
-	if (assigneeExecutionSurfaceId && !assigneeWorker) {
-		throw new TaskUpdateActionError(400, 'ExecutionSurface not found.');
+	if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
+		throw new TaskUpdateActionError(400, 'Execution surface not found.');
 	}
 
 	const existingTask = current.tasks.find((candidate) => candidate.id === taskId);
@@ -138,7 +138,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		nextDelegationPacket,
 		nextGoalId,
 		nextStatus,
-		nextAssigneeWorker,
+		nextAssignedExecutionSurface,
 		nextPriority,
 		nextRiskLevel,
 		nextApprovalMode,
@@ -159,7 +159,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		form: normalizedTaskInput,
 		project,
 		goal,
-		assigneeWorker
+		assignedExecutionSurface
 	});
 	const now = new Date().toISOString();
 	let taskUpdated = false;
@@ -184,7 +184,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 				projectId: project.id,
 				goalId: nextGoalId,
 				status: nextStatus,
-				assigneeExecutionSurfaceId: nextAssigneeWorker?.id ?? null,
+				assigneeExecutionSurfaceId: nextAssignedExecutionSurface?.id ?? null,
 				priority: nextPriority,
 				riskLevel: nextRiskLevel,
 				approvalMode: nextApprovalMode,

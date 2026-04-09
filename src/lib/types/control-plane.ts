@@ -291,7 +291,7 @@ export function formatExecutionSurfaceStatusLabel(status: string): string {
 	return formatEnumLabel(status);
 }
 
-export function workerStatusToneClass(status: string): string {
+export function executionSurfaceStatusToneClass(status: string): string {
 	switch (status) {
 		case 'idle':
 			return statusToneClass('ready');
@@ -372,6 +372,7 @@ export type Project = {
 	id: string;
 	name: string;
 	summary: string;
+	parentProjectId?: string | null;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
 	defaultRepoPath: string;

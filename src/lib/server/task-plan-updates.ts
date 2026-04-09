@@ -28,7 +28,7 @@ type TaskPlanDecisionSummaryInput = {
 	nextGoalName: string | null;
 	currentGoalName: string | null;
 	nextStatus: Task['status'];
-	nextAssigneeWorker: ExecutionSurface | null;
+	nextAssignedExecutionSurface: ExecutionSurface | null;
 	nextPriority: Priority;
 	nextRiskLevel: TaskRiskLevel;
 	nextApprovalMode: TaskApprovalMode;
@@ -56,7 +56,7 @@ export type ResolvedTaskPlanUpdate = {
 	nextDelegationPacket: Task['delegationPacket'] | null;
 	nextGoalId: string;
 	nextStatus: Task['status'];
-	nextAssigneeWorker: ExecutionSurface | null;
+	nextAssignedExecutionSurface: ExecutionSurface | null;
 	nextPriority: Priority;
 	nextRiskLevel: TaskRiskLevel;
 	nextApprovalMode: TaskApprovalMode;
@@ -160,10 +160,13 @@ function buildTaskPlanDecisionSummary(input: TaskPlanDecisionSummaryInput) {
 		changes.push(`set status to ${formatTaskStatusLabel(input.nextStatus)}`);
 	}
 
-	if ((input.nextAssigneeWorker?.id ?? null) !== (input.task.assigneeExecutionSurfaceId ?? null)) {
+	if (
+		(input.nextAssignedExecutionSurface?.id ?? null) !==
+		(input.task.assigneeExecutionSurfaceId ?? null)
+	) {
 		changes.push(
-			input.nextAssigneeWorker
-				? `assigned the task to ${input.nextAssigneeWorker.name}`
+			input.nextAssignedExecutionSurface
+				? `assigned the task to ${input.nextAssignedExecutionSurface.name}`
 				: 'cleared the task assignee'
 		);
 	}
@@ -264,9 +267,9 @@ export function resolveTaskPlanUpdate(input: {
 	form: TaskDetailFormInput;
 	project: Project;
 	goal: Goal | null;
-	assigneeWorker: ExecutionSurface | null;
+	assignedExecutionSurface: ExecutionSurface | null;
 }): ResolvedTaskPlanUpdate {
-	const { current, task, status, form, project, goal, assigneeWorker } = input;
+	const { current, task, status, form, project, goal, assignedExecutionSurface } = input;
 	const nextTitle = form.name;
 	const nextInstructions = form.instructions;
 	const nextSuccessCriteria = form.successCriteria;
@@ -284,8 +287,8 @@ export function resolveTaskPlanUpdate(input: {
 			: (task.delegationPacket ?? null);
 	const nextGoalId = form.hasGoalId ? (goal?.id ?? '') : task.goalId;
 	const nextStatus = status;
-	const nextAssigneeWorker = form.hasAssigneeWorkerId
-		? assigneeWorker
+	const nextAssignedExecutionSurface = form.hasAssigneeExecutionSurfaceId
+		? assignedExecutionSurface
 		: task.assigneeExecutionSurfaceId
 			? (current.executionSurfaces.find(
 					(candidate) => candidate.id === task.assigneeExecutionSurfaceId
@@ -331,7 +334,7 @@ export function resolveTaskPlanUpdate(input: {
 			? (current.goals.find((candidate) => candidate.id === task.goalId)?.name ?? null)
 			: null,
 		nextStatus,
-		nextAssigneeWorker,
+		nextAssignedExecutionSurface,
 		nextPriority,
 		nextRiskLevel,
 		nextApprovalMode,
@@ -369,7 +372,7 @@ export function resolveTaskPlanUpdate(input: {
 		nextDelegationPacket,
 		nextGoalId,
 		nextStatus,
-		nextAssigneeWorker,
+		nextAssignedExecutionSurface,
 		nextPriority,
 		nextRiskLevel,
 		nextApprovalMode,

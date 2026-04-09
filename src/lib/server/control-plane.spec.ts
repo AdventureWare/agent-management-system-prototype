@@ -9,11 +9,13 @@ import {
 	deleteGoal,
 	deleteProject,
 	deleteTask,
+	getProjectScopeProjectIds,
 	projectMatchesPath,
 	resolveThreadSandbox,
 	syncGovernanceQueues,
 	summarizeControlPlane,
-	taskHasUnmetDependencies
+	taskHasUnmetDependencies,
+	wouldCreateProjectCycle
 } from './control-plane';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
@@ -400,6 +402,7 @@ describe('control-plane helpers', () => {
 				id: 'project_1',
 				name: 'Primary project',
 				summary: 'Project summary',
+				parentProjectId: null,
 				projectRootFolder: '/tmp/project',
 				defaultArtifactRoot: '/tmp/project/agent_output',
 				defaultRepoPath: '',
@@ -410,6 +413,7 @@ describe('control-plane helpers', () => {
 				id: 'project_2',
 				name: 'Secondary project',
 				summary: 'Other summary',
+				parentProjectId: 'project_1',
 				projectRootFolder: '/tmp/project-2',
 				defaultArtifactRoot: '/tmp/project-2/agent_output',
 				defaultRepoPath: '',
@@ -453,6 +457,7 @@ describe('control-plane helpers', () => {
 		const next = deleteProject(data, 'project_1');
 
 		expect(next.projects.map((project) => project.id)).toEqual(['project_2']);
+		expect(next.projects[0]?.parentProjectId).toBeNull();
 		expect(next.goals[0]?.projectIds).toEqual(['project_2']);
 		expect(next.planningSessions?.[0]?.projectId).toBeNull();
 	});
@@ -511,6 +516,16 @@ describe('control-plane helpers', () => {
 		expect(project.defaultThreadSandbox).toBeNull();
 	});
 
+	it('creates projects with an optional parent project link', () => {
+		const project = createProject({
+			name: 'Kwipoo website',
+			summary: 'Marketing site',
+			parentProjectId: 'project_kwipoo'
+		});
+
+		expect(project.parentProjectId).toBe('project_kwipoo');
+	});
+
 	it('strips shell-style wrapping quotes from project paths', () => {
 		const project = createProject({
 			name: 'Quoted project',
@@ -548,6 +563,80 @@ describe('control-plane helpers', () => {
 		expect(projectMatchesPath(project, '/tmp/unrelated/output')).toBe(false);
 	});
 
+	it('collects a project scope across descendant subprojects', () => {
+		const projects = [
+			{
+				id: 'project_kwipoo',
+				name: 'Kwipoo',
+				summary: '',
+				parentProjectId: null,
+				projectRootFolder: '/tmp/kwipoo',
+				defaultArtifactRoot: '',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			},
+			{
+				id: 'project_app',
+				name: 'Kwipoo app',
+				summary: '',
+				parentProjectId: 'project_kwipoo',
+				projectRootFolder: '/tmp/kwipoo/app',
+				defaultArtifactRoot: '',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			},
+			{
+				id: 'project_ios',
+				name: 'Kwipoo iOS wrapper',
+				summary: '',
+				parentProjectId: 'project_app',
+				projectRootFolder: '/tmp/kwipoo/ios',
+				defaultArtifactRoot: '',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			}
+		];
+
+		expect(getProjectScopeProjectIds(projects, 'project_kwipoo')).toEqual([
+			'project_kwipoo',
+			'project_app',
+			'project_ios'
+		]);
+	});
+
+	it('detects project parent cycles before saving them', () => {
+		const projects = [
+			{
+				id: 'project_kwipoo',
+				name: 'Kwipoo',
+				summary: '',
+				parentProjectId: null,
+				projectRootFolder: '/tmp/kwipoo',
+				defaultArtifactRoot: '',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			},
+			{
+				id: 'project_app',
+				name: 'Kwipoo app',
+				summary: '',
+				parentProjectId: 'project_kwipoo',
+				projectRootFolder: '/tmp/kwipoo/app',
+				defaultArtifactRoot: '',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: ''
+			}
+		];
+
+		expect(wouldCreateProjectCycle(projects, 'project_kwipoo', 'project_app')).toBe(true);
+		expect(wouldCreateProjectCycle(projects, 'project_app', 'project_kwipoo')).toBe(false);
+	});
+
 	it('prefers the project default sandbox before the provider default', () => {
 		expect(
 			resolveThreadSandbox({
@@ -557,11 +646,11 @@ describe('control-plane helpers', () => {
 		).toBe('danger-full-access');
 	});
 
-	it('prefers the task sandbox requirement before worker, project, and provider defaults', () => {
+	it('prefers the task sandbox requirement before execution surface, project, and provider defaults', () => {
 		expect(
 			resolveThreadSandbox({
 				task: { requiredThreadSandbox: 'read-only' },
-				worker: { threadSandboxOverride: 'danger-full-access' },
+				executionSurface: { threadSandboxOverride: 'danger-full-access' },
 				project: { defaultThreadSandbox: 'workspace-write' },
 				provider: { defaultThreadSandbox: 'danger-full-access' }
 			})

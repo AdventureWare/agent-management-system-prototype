@@ -5,8 +5,8 @@ export type TaskExecutionPreflight = {
 	requiredCapabilityNames: string[];
 	requiredToolNames: string[];
 	hasDeclaredRequirements: boolean;
-	eligibleWorkerCount: number;
-	fullCoverageWorkerCount: number;
+	eligibleExecutionSurfaceCount: number;
+	fullCoverageExecutionSurfaceCount: number;
 	uncoveredCapabilityNames: string[];
 	uncoveredToolNames: string[];
 	currentAssignee: {
@@ -43,8 +43,8 @@ export function buildTaskExecutionPreflight(
 		requiredCapabilityNames,
 		requiredToolNames,
 		hasDeclaredRequirements: requiredCapabilityNames.length > 0 || requiredToolNames.length > 0,
-		eligibleWorkerCount: suggestions.filter((suggestion) => suggestion.eligible).length,
-		fullCoverageWorkerCount: suggestions.filter(
+		eligibleExecutionSurfaceCount: suggestions.filter((suggestion) => suggestion.eligible).length,
+		fullCoverageExecutionSurfaceCount: suggestions.filter(
 			(suggestion) =>
 				suggestion.missingCapabilityNames.length === 0 && suggestion.missingToolNames.length === 0
 		).length,

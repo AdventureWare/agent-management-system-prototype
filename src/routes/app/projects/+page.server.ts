@@ -6,8 +6,11 @@ import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput, normalizePathListInput } from '$lib/server/path-tools';
 import {
 	createProject,
+	getProjectChildProjects,
+	getProjectLineage,
 	goalLinksProject,
 	loadControlPlane,
+	wouldCreateProjectCycle,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -20,6 +23,7 @@ function readProjectForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
+		parentProjectId: form.get('parentProjectId')?.toString().trim() ?? '',
 		projectRootFolder: normalizePathInput(form.get('projectRootFolder')?.toString()),
 		defaultArtifactRoot: normalizePathInput(form.get('defaultArtifactRoot')?.toString()),
 		defaultRepoPath: normalizePathInput(form.get('defaultRepoPath')?.toString()),
@@ -35,6 +39,7 @@ function readProjectForm(form: FormData) {
 export const load: PageServerLoad = async ({ url }) => {
 	const data = await loadControlPlane();
 	const taskCounts = new Map<string, number>();
+	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 
 	for (const task of data.tasks) {
 		taskCounts.set(task.projectId, (taskCounts.get(task.projectId) ?? 0) + 1);
@@ -55,6 +60,13 @@ export const load: PageServerLoad = async ({ url }) => {
 
 				return {
 					...project,
+					parentProjectName: project.parentProjectId
+						? (projectMap.get(project.parentProjectId)?.name ?? '')
+						: '',
+					childProjectCount: getProjectChildProjects(data.projects, project.id).length,
+					lineageLabel: getProjectLineage(data.projects, project.id)
+						.map((candidate) => candidate.name)
+						.join(' / '),
 					taskCount: taskCounts.get(project.id) ?? 0,
 					goalCount,
 					readinessCount: [
@@ -66,6 +78,14 @@ export const load: PageServerLoad = async ({ url }) => {
 				};
 			})
 			.sort((a, b) => a.name.localeCompare(b.name)),
+		parentProjectOptions: [...data.projects]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((project) => ({
+				id: project.id,
+				label: getProjectLineage(data.projects, project.id)
+					.map((candidate) => candidate.name)
+					.join(' / ')
+			})),
 		folderOptions: await loadFolderPickerOptions(),
 		sandboxOptions: AGENT_SANDBOX_OPTIONS
 	};
@@ -77,16 +97,26 @@ export const actions: Actions = {
 		const {
 			name,
 			summary,
+			parentProjectId,
 			projectRootFolder,
 			defaultArtifactRoot,
 			defaultRepoPath,
 			defaultRepoUrl,
 			defaultBranch,
-			additionalWritableRoots
+			additionalWritableRoots,
+			defaultThreadSandbox
 		} = readProjectForm(form);
 
 		if (!name || !summary) {
 			return fail(400, { message: 'Name and summary are required.' });
+		}
+
+		if (parentProjectId) {
+			const current = await loadControlPlane();
+
+			if (!current.projects.some((project) => project.id === parentProjectId)) {
+				return fail(400, { message: 'Selected parent project was not found.' });
+			}
 		}
 
 		await updateControlPlane((data) => ({
@@ -95,12 +125,14 @@ export const actions: Actions = {
 				createProject({
 					name,
 					summary,
+					parentProjectId: parentProjectId || null,
 					projectRootFolder,
 					defaultArtifactRoot,
 					defaultRepoPath,
 					defaultRepoUrl,
 					defaultBranch,
-					additionalWritableRoots
+					additionalWritableRoots,
+					defaultThreadSandbox
 				}),
 				...data.projects
 			]
@@ -113,6 +145,7 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const projectId = form.get('projectId')?.toString().trim() ?? '';
 		const projectUpdates = readProjectForm(form);
+		const current = await loadControlPlane();
 
 		if (!projectId) {
 			return fail(400, { message: 'Project ID is required.' });
@@ -120,6 +153,17 @@ export const actions: Actions = {
 
 		if (!projectUpdates.name || !projectUpdates.summary) {
 			return fail(400, { message: 'Name and summary are required.' });
+		}
+
+		if (
+			projectUpdates.parentProjectId &&
+			!current.projects.some((project) => project.id === projectUpdates.parentProjectId)
+		) {
+			return fail(400, { message: 'Selected parent project was not found.' });
+		}
+
+		if (wouldCreateProjectCycle(current.projects, projectId, projectUpdates.parentProjectId)) {
+			return fail(400, { message: 'This parent project would create a cycle.' });
 		}
 
 		let projectUpdated = false;
@@ -134,7 +178,8 @@ export const actions: Actions = {
 				projectUpdated = true;
 				return {
 					...project,
-					...projectUpdates
+					...projectUpdates,
+					parentProjectId: projectUpdates.parentProjectId || null
 				};
 			})
 		}));

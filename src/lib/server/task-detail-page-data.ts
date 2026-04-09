@@ -42,7 +42,9 @@ export async function loadTaskDetailPageData(taskId: string) {
 	}
 
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
+	const executionSurfaceMap = new Map(
+		data.executionSurfaces.map((executionSurface) => [executionSurface.id, executionSurface])
+	);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
@@ -54,7 +56,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 			data,
 			task,
 			projectMap,
-			workerMap,
+			executionSurfaceMap,
 			providerMap,
 			formatRelativeTime
 		});
@@ -77,8 +79,8 @@ export async function loadTaskDetailPageData(taskId: string) {
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
 	const availableSkillSummary = summarizeInstalledSkills(availableSkills);
-	const assignedWorker = task.assigneeExecutionSurfaceId
-		? (workerMap.get(task.assigneeExecutionSurfaceId) ?? null)
+	const assignedExecutionSurface = task.assigneeExecutionSurfaceId
+		? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId) ?? null)
 		: null;
 	const recentDecisions = buildRecentTaskDecisionViews(
 		data.decisions ?? [],
@@ -115,7 +117,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		{
 			task,
 			project,
-			worker: assignedWorker,
+			executionSurface: assignedExecutionSurface,
 			publishedKnowledgeCount: retrievedKnowledgeItems.length
 		}
 	);
@@ -126,7 +128,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 			projectMap,
 			goalMap,
 			roleMap,
-			workerMap,
+			executionSurfaceMap: executionSurfaceMap,
 			latestRun,
 			activeRun,
 			threadContext,

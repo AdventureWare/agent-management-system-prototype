@@ -297,7 +297,7 @@ function buildExecutionOpportunities(data: ControlPlaneData) {
 				],
 				recommendedActions: [
 					'Capture the failure mode in a durable runbook or troubleshooting note.',
-					'Add a preflight or retry guard before the worker attempts the same step again.',
+					'Add a preflight or retry guard before the execution surface attempts the same step again.',
 					'Create a focused repair task instead of leaving the task in repeated execution churn.'
 				],
 				relatedTaskIds: [task.id],

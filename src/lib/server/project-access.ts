@@ -200,7 +200,7 @@ export function buildProjectPermissionSurface(project: Project): ProjectPermissi
 		effectiveSandbox,
 		sandboxSource: project.defaultThreadSandbox
 			? 'Project default'
-			: 'Fallback until a worker or provider override is chosen',
+			: 'Fallback until an execution surface or provider override is chosen',
 		localPaths,
 		summary: {
 			trackedPathCount: localPaths.length,

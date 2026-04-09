@@ -13,26 +13,26 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
-		formatExecutionSurfaceStatusLabel,
-		workerStatusToneClass
+		executionSurfaceStatusToneClass,
+		formatExecutionSurfaceStatusLabel
 	} from '$lib/types/control-plane';
 	import { fromStore } from 'svelte/store';
 
 	let { data, form } = $props();
-	const CREATE_WORKER_DRAFT_KEY = 'ams:create-worker';
-	const workerRecordState = fromStore(executionSurfaceRecordStore);
+	const CREATE_EXECUTION_SURFACE_DRAFT_KEY = 'ams:create-execution-surface';
+	const executionSurfaceRecordState = fromStore(executionSurfaceRecordStore);
 
-	let createWorkerDraftReady = $state(false);
-	let workerName = $state('');
-	let workerProviderId = $state('');
-	let workerSupportedRoleIds = $state.raw<string[]>([]);
-	let workerLocation = $state('cloud');
-	let workerStatus = $state('idle');
-	let workerCapacity = $state('1');
-	let workerMaxConcurrentRuns = $state('');
-	let workerNote = $state('');
-	let workerTags = $state('');
-	let workerSkills = $state('');
+	let createExecutionSurfaceDraftReady = $state(false);
+	let executionSurfaceName = $state('');
+	let executionSurfaceProviderId = $state('');
+	let executionSurfaceSupportedRoleIds = $state.raw<string[]>([]);
+	let executionSurfaceLocation = $state('cloud');
+	let executionSurfaceStatus = $state('idle');
+	let executionSurfaceCapacity = $state('1');
+	let executionSurfaceMaxConcurrentRuns = $state('');
+	let executionSurfaceNote = $state('');
+	let executionSurfaceTags = $state('');
+	let executionSurfaceSkills = $state('');
 	let query = $state('');
 
 	function modalShouldStartOpen() {
@@ -42,7 +42,7 @@
 	let isCreateModalOpen = $state(modalShouldStartOpen());
 	let executionSurfaces = $derived.by(() =>
 		data.executionSurfaces.map((surface) =>
-			mergeStoredExecutionSurfaceRecord(surface, workerRecordState.current.byId)
+			mergeStoredExecutionSurfaceRecord(surface, executionSurfaceRecordState.current.byId)
 		)
 	);
 
@@ -99,11 +99,11 @@
 		executionSurfaceRecordStore.seedExecutionSurfaces(data.executionSurfaces);
 	});
 
-	function defaultWorkerProviderId() {
+	function defaultExecutionSurfaceProviderId() {
 		return data.providers[0]?.id ?? '';
 	}
 
-	function defaultWorkerSupportedRoleIds() {
+	function defaultExecutionSurfaceSupportedRoleIds() {
 		return data.roles[0]?.id ? [data.roles[0].id] : [];
 	}
 
@@ -127,8 +127,8 @@
 
 	onMount(() => {
 		if (createSuccess) {
-			clearFormDraft(CREATE_WORKER_DRAFT_KEY);
-			createWorkerDraftReady = true;
+			clearFormDraft(CREATE_EXECUTION_SURFACE_DRAFT_KEY);
+			createExecutionSurfaceDraftReady = true;
 			return;
 		}
 
@@ -143,53 +143,65 @@
 			note: string;
 			tags: string;
 			skills: string;
-		}>(CREATE_WORKER_DRAFT_KEY);
+		}>(CREATE_EXECUTION_SURFACE_DRAFT_KEY);
 
 		if (savedDraft) {
 			const savedSupportedRoleIds = savedDraft.supportedRoleIds ?? [];
 
-			workerName = savedDraft.name ?? '';
-			workerProviderId = savedDraft.providerId ?? defaultWorkerProviderId();
-			workerSupportedRoleIds =
-				savedSupportedRoleIds.length > 0 ? savedSupportedRoleIds : defaultWorkerSupportedRoleIds();
-			workerLocation = normalizeExecutionSurfaceLocation(savedDraft.location);
-			workerStatus = normalizeExecutionSurfaceStatus(savedDraft.status);
-			workerCapacity = savedDraft.capacity ?? '1';
-			workerMaxConcurrentRuns = savedDraft.maxConcurrentRuns ?? '';
-			workerNote = savedDraft.note ?? '';
-			workerTags = savedDraft.tags ?? '';
-			workerSkills = savedDraft.skills ?? '';
+			executionSurfaceName = savedDraft.name ?? '';
+			executionSurfaceProviderId = savedDraft.providerId ?? defaultExecutionSurfaceProviderId();
+			executionSurfaceSupportedRoleIds =
+				savedSupportedRoleIds.length > 0
+					? savedSupportedRoleIds
+					: defaultExecutionSurfaceSupportedRoleIds();
+			executionSurfaceLocation = normalizeExecutionSurfaceLocation(savedDraft.location);
+			executionSurfaceStatus = normalizeExecutionSurfaceStatus(savedDraft.status);
+			executionSurfaceCapacity = savedDraft.capacity ?? '1';
+			executionSurfaceMaxConcurrentRuns = savedDraft.maxConcurrentRuns ?? '';
+			executionSurfaceNote = savedDraft.note ?? '';
+			executionSurfaceTags = savedDraft.tags ?? '';
+			executionSurfaceSkills = savedDraft.skills ?? '';
 			isCreateModalOpen = true;
 		}
 
-		workerProviderId = workerProviderId || defaultWorkerProviderId();
-		workerSupportedRoleIds =
-			workerSupportedRoleIds.length > 0 ? workerSupportedRoleIds : defaultWorkerSupportedRoleIds();
-		workerLocation = normalizeExecutionSurfaceLocation(workerLocation);
-		workerStatus = normalizeExecutionSurfaceStatus(workerStatus);
+		executionSurfaceProviderId = executionSurfaceProviderId || defaultExecutionSurfaceProviderId();
+		executionSurfaceSupportedRoleIds =
+			executionSurfaceSupportedRoleIds.length > 0
+				? executionSurfaceSupportedRoleIds
+				: defaultExecutionSurfaceSupportedRoleIds();
+		executionSurfaceLocation = normalizeExecutionSurfaceLocation(executionSurfaceLocation);
+		executionSurfaceStatus = normalizeExecutionSurfaceStatus(executionSurfaceStatus);
 
-		createWorkerDraftReady = true;
+		createExecutionSurfaceDraftReady = true;
 	});
 
 	$effect(() => {
-		if (!createWorkerDraftReady) {
+		if (!createExecutionSurfaceDraftReady) {
 			return;
 		}
 
-		writeFormDraft(CREATE_WORKER_DRAFT_KEY, {
-			name: workerName,
-			providerId: workerProviderId === defaultWorkerProviderId() ? '' : workerProviderId,
+		writeFormDraft(CREATE_EXECUTION_SURFACE_DRAFT_KEY, {
+			name: executionSurfaceName,
+			providerId:
+				executionSurfaceProviderId === defaultExecutionSurfaceProviderId()
+					? ''
+					: executionSurfaceProviderId,
 			supportedRoleIds:
-				workerSupportedRoleIds.join(',') === defaultWorkerSupportedRoleIds().join(',')
+				executionSurfaceSupportedRoleIds.join(',') ===
+				defaultExecutionSurfaceSupportedRoleIds().join(',')
 					? []
-					: workerSupportedRoleIds,
-			location: workerLocation === defaultExecutionSurfaceLocation() ? '' : workerLocation,
-			status: workerStatus === defaultExecutionSurfaceStatus() ? '' : workerStatus,
-			capacity: workerCapacity === '1' ? '' : workerCapacity,
-			maxConcurrentRuns: workerMaxConcurrentRuns,
-			note: workerNote,
-			tags: workerTags,
-			skills: workerSkills
+					: executionSurfaceSupportedRoleIds,
+			location:
+				executionSurfaceLocation === defaultExecutionSurfaceLocation()
+					? ''
+					: executionSurfaceLocation,
+			status:
+				executionSurfaceStatus === defaultExecutionSurfaceStatus() ? '' : executionSurfaceStatus,
+			capacity: executionSurfaceCapacity === '1' ? '' : executionSurfaceCapacity,
+			maxConcurrentRuns: executionSurfaceMaxConcurrentRuns,
+			note: executionSurfaceNote,
+			tags: executionSurfaceTags,
+			skills: executionSurfaceSkills
 		});
 	});
 </script>
@@ -249,9 +261,9 @@
 	>
 		{#snippet controls()}
 			<div class="w-full xl:w-80">
-				<label class="sr-only" for="worker-search">Search execution surfaces</label>
+				<label class="sr-only" for="execution-surface-search">Search execution surfaces</label>
 				<input
-					id="worker-search"
+					id="execution-surface-search"
 					bind:value={query}
 					class="input text-white placeholder:text-slate-500"
 					placeholder="Search execution surfaces"
@@ -277,7 +289,7 @@
 										{executionSurface.name}
 									</h3>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(executionSurface.status)}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${executionSurfaceStatusToneClass(executionSurface.status)}`}
 									>
 										{formatExecutionSurfaceStatusLabel(executionSurface.status)}
 									</span>
@@ -383,7 +395,7 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 				<input
-					bind:value={workerName}
+					bind:value={executionSurfaceName}
 					class="input text-white placeholder:text-slate-500"
 					name="name"
 					placeholder="Cloud growth researcher"
@@ -394,7 +406,11 @@
 			<div class="grid gap-4 sm:grid-cols-2">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Provider</span>
-					<select bind:value={workerProviderId} class="select text-white" name="providerId">
+					<select
+						bind:value={executionSurfaceProviderId}
+						class="select text-white"
+						name="providerId"
+					>
 						{#each data.providers as provider (provider.id)}
 							<option value={provider.id}>{provider.name}</option>
 						{/each}
@@ -404,7 +420,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Supported roles</span>
 					<select
-						bind:value={workerSupportedRoleIds}
+						bind:value={executionSurfaceSupportedRoleIds}
 						class="select min-h-36 text-white"
 						name="supportedRoleIds"
 						multiple
@@ -414,8 +430,7 @@
 						{/each}
 					</select>
 					<p class="mt-2 text-xs text-slate-500">
-						Hold Command or Control to select multiple supported roles. The first selected role is
-						kept as the compatibility fallback.
+						Hold Command or Control to select multiple supported roles.
 					</p>
 				</label>
 			</div>
@@ -423,7 +438,7 @@
 			<div class="grid gap-4 sm:grid-cols-3">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Location</span>
-					<select bind:value={workerLocation} class="select text-white" name="location">
+					<select bind:value={executionSurfaceLocation} class="select text-white" name="location">
 						{#each data.locationOptions as location (location)}
 							<option value={location}>{location}</option>
 						{/each}
@@ -432,7 +447,7 @@
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
-					<select bind:value={workerStatus} class="select text-white" name="status">
+					<select bind:value={executionSurfaceStatus} class="select text-white" name="status">
 						{#each data.statusOptions as status (status)}
 							<option value={status}>{formatExecutionSurfaceStatusLabel(status)}</option>
 						{/each}
@@ -442,7 +457,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Capacity</span>
 					<input
-						bind:value={workerCapacity}
+						bind:value={executionSurfaceCapacity}
 						class="input text-white"
 						name="capacity"
 						type="number"
@@ -455,7 +470,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Skills</span>
 					<input
-						bind:value={workerSkills}
+						bind:value={executionSurfaceSkills}
 						class="input text-white placeholder:text-slate-500"
 						name="skills"
 						placeholder="planning, svelte, citations"
@@ -465,7 +480,7 @@
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200"> Max concurrent runs </span>
 					<input
-						bind:value={workerMaxConcurrentRuns}
+						bind:value={executionSurfaceMaxConcurrentRuns}
 						class="input text-white placeholder:text-slate-500"
 						name="maxConcurrentRuns"
 						type="number"
@@ -478,17 +493,17 @@
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Note</span>
 				<textarea
-					bind:value={workerNote}
+					bind:value={executionSurfaceNote}
 					class="textarea min-h-24 text-white placeholder:text-slate-500"
 					name="note"
-					placeholder="What this worker is best used for."
+					placeholder="What this execution surface is best used for."
 				></textarea>
 			</label>
 
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Tags</span>
 				<input
-					bind:value={workerTags}
+					bind:value={executionSurfaceTags}
 					class="input text-white placeholder:text-slate-500"
 					name="tags"
 					placeholder="svelte, ios, growth, research"

@@ -15,7 +15,7 @@ const deleteProjectMock = vi.hoisted(() =>
 const buildProjectPermissionSurfaceMock = vi.hoisted(() =>
 	vi.fn((project: { additionalWritableRoots?: string[] }) => ({
 		effectiveSandbox: 'workspace-write',
-		sandboxSource: 'Fallback until a worker or provider override is chosen',
+		sandboxSource: 'Fallback until an execution surface or provider override is chosen',
 		summary: {
 			trackedPathCount: 3 + (project.additionalWritableRoots?.length ?? 0),
 			blockerCount: 0,
@@ -42,12 +42,63 @@ const buildProjectPermissionSurfaceMock = vi.hoisted(() =>
 vi.mock('$lib/server/control-plane', () => ({
 	deleteProject: deleteProjectMock,
 	formatRelativeTime: vi.fn(() => 'just now'),
+	getProjectChildProjects: vi.fn(
+		(projects: Array<{ id: string; parentProjectId?: string | null }>, projectId: string) =>
+			projects.filter((project) => project.parentProjectId === projectId)
+	),
+	getProjectLineage: vi.fn(
+		(
+			projects: Array<{ id: string; name: string; parentProjectId?: string | null }>,
+			projectId: string
+		) => {
+			const projectById = new Map(projects.map((project) => [project.id, project]));
+			const lineage: Array<{ id: string; name: string; parentProjectId?: string | null }> = [];
+			const seen = new Set<string>();
+			let current = projectById.get(projectId) ?? null;
+
+			while (current && !seen.has(current.id)) {
+				lineage.unshift(current);
+				seen.add(current.id);
+				current = current.parentProjectId
+					? (projectById.get(current.parentProjectId) ?? null)
+					: null;
+			}
+
+			return lineage;
+		}
+	),
+	getProjectScopeProjectIds: vi.fn(
+		(projects: Array<{ id: string; parentProjectId?: string | null }>, projectId: string) => {
+			const ids = [projectId];
+			const queue = projects
+				.filter((project) => project.parentProjectId === projectId)
+				.map((project) => project.id);
+
+			while (queue.length > 0) {
+				const currentProjectId = queue.shift();
+
+				if (!currentProjectId || ids.includes(currentProjectId)) {
+					continue;
+				}
+
+				ids.push(currentProjectId);
+				queue.push(
+					...projects
+						.filter((project) => project.parentProjectId === currentProjectId)
+						.map((project) => project.id)
+				);
+			}
+
+			return ids;
+		}
+	),
 	goalLinksProject: vi.fn(() => false),
 	getOpenReviewForTask: vi.fn(() => null),
 	getPendingApprovalForTask: vi.fn(() => null),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	resolveThreadSandbox: vi.fn(({ project, fallback }) => project?.defaultThreadSandbox ?? fallback),
 	taskHasUnmetDependencies: vi.fn(() => false),
+	wouldCreateProjectCycle: vi.fn(() => false),
 	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
 		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
 		controlPlaneState.current = controlPlaneState.saved;
@@ -77,8 +128,21 @@ describe('project detail page server actions', () => {
 					id: 'project_1',
 					name: 'Agent Management System Prototype',
 					summary: 'Prototype project',
+					parentProjectId: null,
 					projectRootFolder: '/tmp/project',
 					defaultArtifactRoot: '/tmp/project/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: '',
+					additionalWritableRoots: []
+				},
+				{
+					id: 'project_2',
+					name: 'Kwipoo website',
+					summary: 'Marketing site',
+					parentProjectId: 'project_1',
+					projectRootFolder: '/tmp/project/site',
+					defaultArtifactRoot: '/tmp/project/site/agent_output',
 					defaultRepoPath: '',
 					defaultRepoUrl: '',
 					defaultBranch: '',
@@ -155,12 +219,43 @@ describe('project detail page server actions', () => {
 			}),
 			'project_1'
 		);
-		expect(controlPlaneState.saved?.projects).toEqual([]);
+		expect(controlPlaneState.saved?.projects).toEqual([
+			expect.objectContaining({
+				id: 'project_2',
+				parentProjectId: 'project_1'
+			})
+		]);
 	});
 
 	it('loads a project permissions surface for local paths', async () => {
 		(controlPlaneState.current as ControlPlaneData).projects[0]!.additionalWritableRoots = [
 			'/tmp/project/shared'
+		];
+		(controlPlaneState.current as ControlPlaneData).tasks = [
+			{
+				id: 'task_2',
+				title: 'Ship site',
+				summary: 'Work in the website subproject',
+				projectId: 'project_2',
+				area: 'product',
+				goalId: '',
+				priority: 'medium',
+				status: 'ready',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: false,
+				desiredRoleId: 'role_1',
+				assigneeExecutionSurfaceId: null,
+				agentThreadId: null,
+				blockedReason: '',
+				dependencyTaskIds: [],
+				runCount: 0,
+				latestRunId: null,
+				artifactPath: '/tmp/project/site/agent_output/task_2',
+				attachments: [],
+				createdAt: '2026-04-03T10:00:00.000Z',
+				updatedAt: '2026-04-03T10:00:00.000Z'
+			}
 		];
 
 		const result = await load({
@@ -190,6 +285,21 @@ describe('project detail page server actions', () => {
 					coverageStatus: 'project_root'
 				})
 			])
+		);
+		expect(pageData.childProjects).toEqual(
+			expect.arrayContaining([expect.objectContaining({ id: 'project_2', name: 'Kwipoo website' })])
+		);
+		expect(pageData.relatedTasks).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ id: 'task_2', projectName: 'Kwipoo website' })
+			])
+		);
+		expect(pageData.contextScope).toEqual(
+			expect.objectContaining({
+				directTaskCount: 0,
+				rolledUpTaskCount: 1,
+				childProjectCount: 1
+			})
 		);
 		expect(buildProjectPermissionSurfaceMock).toHaveBeenCalled();
 	});

@@ -1,4 +1,4 @@
-import type { AgentThreadDetail } from '$lib/types/agent-thread';
+import type { AgentThreadDetail, AgentThreadStatusSnapshot } from '$lib/types/agent-thread';
 import type {
 	SelfImprovementCategory,
 	SelfImprovementDecisionReason,
@@ -22,7 +22,15 @@ export async function fetchJson<T>(path: string, errorMessage: string): Promise<
 }
 
 export async function fetchAgentThreads(
-	options: { includeArchived?: boolean; includeCategorization?: boolean } = {}
+	options: {
+		includeArchived?: boolean;
+		includeCategorization?: boolean;
+		includeTargets?: boolean;
+		includeExternal?: boolean;
+		includeManaged?: boolean;
+		reconcileTaskState?: boolean;
+		threadIds?: string[];
+	} = {}
 ) {
 	const params = new URLSearchParams();
 
@@ -34,6 +42,28 @@ export async function fetchAgentThreads(
 		params.set('includeCategorization', '0');
 	}
 
+	if (options.includeTargets === false) {
+		params.set('includeTargets', '0');
+	}
+
+	if (options.includeExternal === false) {
+		params.set('includeExternal', '0');
+	}
+
+	if (options.includeManaged === false) {
+		params.set('includeManaged', '0');
+	}
+
+	if (options.reconcileTaskState === false) {
+		params.set('reconcileTaskState', '0');
+	}
+
+	for (const threadId of options.threadIds ?? []) {
+		if (threadId.trim()) {
+			params.append('threadId', threadId.trim());
+		}
+	}
+
 	const payload = await fetchJson<{
 		threads?: AgentThreadDetail[];
 	}>(
@@ -42,6 +72,26 @@ export async function fetchAgentThreads(
 	);
 
 	return payload.threads ?? [];
+}
+
+export async function fetchAgentThreadStatuses(threadIds: string[]) {
+	const params = new URLSearchParams();
+
+	for (const threadId of threadIds) {
+		if (threadId.trim()) {
+			params.append('threadId', threadId.trim());
+		}
+	}
+
+	if (params.size === 0) {
+		return [];
+	}
+
+	const payload = await fetchJson<{
+		statuses?: AgentThreadStatusSnapshot[];
+	}>(`/api/agents/threads/status?${params.toString()}`, 'Could not refresh thread activity.');
+
+	return payload.statuses ?? [];
 }
 
 export async function updateAgentThreadArchiveState(threadIds: string[], archived: boolean) {

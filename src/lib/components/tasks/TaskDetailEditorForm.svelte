@@ -76,7 +76,7 @@
 		label: string;
 	};
 
-	type WorkerOption = {
+	type ExecutionSurfaceOption = {
 		id: string;
 		name: string;
 	};
@@ -99,7 +99,7 @@
 
 	type AssignmentSuggestionView = {
 		executionSurfaceId: string;
-		workerName: string;
+		executionSurfaceName: string;
 		eligible: boolean;
 		isCurrentAssignee: boolean;
 		roleName: string;
@@ -123,7 +123,7 @@
 
 	type ExecutionRequirementInventoryEntry = {
 		name: string;
-		workerCount: number;
+		executionSurfaceCount: number;
 		providerCount: number;
 	};
 
@@ -145,19 +145,21 @@
 		dependencyTasksCount,
 		availableDependencyTasks,
 		executionRequirementInventory,
-		projectInstalledSkills
+		projectInstalledSkills,
+		actionBasePath = ''
 	}: {
 		task: TaskEditorView;
 		projects: ProjectOption[];
 		goals: GoalOption[];
 		statusOptions: TaskStatus[];
-		executionSurfaces: WorkerOption[];
+		executionSurfaces: ExecutionSurfaceOption[];
 		assignmentSuggestions: AssignmentSuggestionView[];
 		roles: RoleOption[];
 		dependencyTasksCount: number;
 		availableDependencyTasks: AvailableDependencyTaskView[];
 		executionRequirementInventory: ExecutionRequirementInventory;
 		projectInstalledSkills: InstalledSkillOption[];
+		actionBasePath?: string;
 	} = $props();
 
 	let desiredRoleIdInput = $state('');
@@ -199,11 +201,16 @@
 			: 'border-slate-800 bg-slate-950/70';
 	}
 
-	function formatInventoryCoverageLabel(entry: { workerCount: number; providerCount: number }) {
+	function formatInventoryCoverageLabel(entry: {
+		executionSurfaceCount: number;
+		providerCount: number;
+	}) {
 		const parts: string[] = [];
 
-		if (entry.workerCount > 0) {
-			parts.push(`${entry.workerCount} worker${entry.workerCount === 1 ? '' : 's'}`);
+		if (entry.executionSurfaceCount > 0) {
+			parts.push(
+				`${entry.executionSurfaceCount} execution surface${entry.executionSurfaceCount === 1 ? '' : 's'}`
+			);
 		}
 
 		if (entry.providerCount > 0) {
@@ -211,6 +218,10 @@
 		}
 
 		return parts.join(' · ') || 'No current coverage';
+	}
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
 	}
 
 	$effect(() => {
@@ -228,7 +239,7 @@
 	});
 </script>
 
-<form id="task-update-form" method="POST" action="?/updateTask">
+<form id="task-update-form" method="POST" action={taskAction('updateTask')}>
 	<DetailSection
 		id="task-configuration"
 		eyebrow="Task details"
@@ -241,7 +252,7 @@
 				<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">Task brief</p>
 				<h3 class="text-lg font-semibold text-white">Core task definition</h3>
 				<p class="text-sm text-slate-400">
-					Set the title and worker-facing instructions that define the task itself.
+					Set the title and execution-facing instructions that define the task itself.
 				</p>
 			</div>
 
@@ -433,9 +444,12 @@
 				>
 				<select class="select text-white" name="assigneeExecutionSurfaceId">
 					<option value="" selected={!task.assigneeExecutionSurfaceId}>Unassigned</option>
-					{#each executionSurfaces as worker (worker.id)}
-						<option value={worker.id} selected={task.assigneeExecutionSurfaceId === worker.id}>
-							{worker.name}
+					{#each executionSurfaces as executionSurface (executionSurface.id)}
+						<option
+							value={executionSurface.id}
+							selected={task.assigneeExecutionSurfaceId === executionSurface.id}
+						>
+							{executionSurface.name}
 						</option>
 					{/each}
 				</select>
@@ -463,7 +477,7 @@
 							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div class="min-w-0">
 									<div class="flex flex-wrap items-center gap-2">
-										<p class="font-medium text-white">{suggestion.workerName}</p>
+										<p class="font-medium text-white">{suggestion.executionSurfaceName}</p>
 										{#if suggestion.eligible}
 											<span
 												class="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-2 py-1 text-[0.7rem] text-emerald-200"
@@ -578,8 +592,8 @@
 					</p>
 					{#if executionRequirementInventory.capabilities.length === 0}
 						<p class="mt-2 text-xs text-slate-500">
-							No worker or provider capability inventory is registered yet. These labels stay
-							free-form for now.
+							No execution-surface or provider capability inventory is registered yet. These labels
+							stay free-form for now.
 						</p>
 					{:else}
 						<div class="mt-3 flex flex-wrap gap-2">
@@ -600,7 +614,8 @@
 							{/each}
 						</div>
 						<p class="mt-2 text-xs text-slate-500">
-							Select a known label to append it from the current worker and provider inventory.
+							Select a known label to append it from the current execution-surface and provider
+							inventory.
 						</p>
 					{/if}
 					{#if executionRequirementInventory.capabilities.length > 0 && unknownCapabilityNames.length > 0}
@@ -726,7 +741,7 @@
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required sandbox</span>
 					<select class="select text-white" name="requiredThreadSandbox">
 						<option value="" selected={!task.requiredThreadSandbox}>
-							Inherit worker and project defaults
+							Inherit execution-surface and project defaults
 						</option>
 						{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
 							<option value={sandbox} selected={task.requiredThreadSandbox === sandbox}>

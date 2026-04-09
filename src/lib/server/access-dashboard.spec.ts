@@ -69,7 +69,7 @@ vi.mock('$lib/server/project-access', () => ({
 import { buildAccessDashboardData } from './access-dashboard';
 
 describe('buildAccessDashboardData', () => {
-	it('rolls up project, provider, and worker access signals', () => {
+	it('rolls up project, provider, and execution-surface access signals', () => {
 		const result = buildAccessDashboardData({
 			providers: [
 				{
@@ -158,7 +158,7 @@ describe('buildAccessDashboardData', () => {
 				},
 				{
 					id: 'worker_2',
-					name: 'Disabled provider worker',
+					name: 'Disabled provider execution surface',
 					providerId: 'provider_2',
 					supportedRoleIds: [],
 					location: 'cloud',
@@ -212,7 +212,7 @@ describe('buildAccessDashboardData', () => {
 			macosPromptCount: 1,
 			projectsMissingRequestedPromptSkillsCount: 1,
 			providerNeedsSetupCount: 1,
-			workerAccessIssueCount: 1
+			executionSurfaceAccessIssueCount: 1
 		});
 		expect(result.attentionPaths[0]).toMatchObject({
 			projectName: 'Vault Ops',
@@ -223,14 +223,14 @@ describe('buildAccessDashboardData', () => {
 			expect.arrayContaining([
 				expect.objectContaining({
 					name: 'GitHub',
-					workerCount: 1
+					executionSurfaceCount: 1
 				})
 			])
 		);
 		expect(result.executionSurfaces).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					name: 'Disabled provider worker',
+					name: 'Disabled provider execution surface',
 					accessState: 'provider_disabled'
 				})
 			])

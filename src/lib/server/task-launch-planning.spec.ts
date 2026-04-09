@@ -39,7 +39,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		requiredToolNames: [],
 		hasDelegationPacketFields: false,
 		hasGoalId: false,
-		hasAssigneeWorkerId: false,
+		hasAssigneeExecutionSurfaceId: false,
 		hasPriority: false,
 		hasRiskLevel: false,
 		hasApprovalMode: false,
@@ -138,9 +138,9 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 			executionSurfaces: [
 				{
 					id: 'worker_builder',
-					name: 'Builder worker',
+					name: 'Builder execution surface',
 					providerId: 'provider_local',
-					supportedRoleIds: [],
+					supportedRoleIds: ['role_builder'],
 					location: 'local',
 					status: 'idle',
 					capacity: 1,
@@ -154,9 +154,9 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 				},
 				{
 					id: 'worker_other',
-					name: 'Other worker',
+					name: 'Other execution surface',
 					providerId: 'provider_local',
-					supportedRoleIds: [],
+					supportedRoleIds: ['role_builder'],
 					location: 'local',
 					status: 'offline',
 					capacity: 1,
@@ -178,17 +178,17 @@ function buildFixture(taskOverrides: Partial<Task> = {}): {
 }
 
 describe('buildTaskLaunchPlan', () => {
-	it('auto-selects the best eligible worker when requirements are declared', async () => {
+	it('auto-selects the best eligible execution surface when requirements are declared', async () => {
 		const { current, task } = buildFixture();
 
 		const plan = await buildTaskLaunchPlan(current, task, buildTaskDetailInput());
 
-		expect(plan.effectiveWorker?.id).toBe('worker_builder');
+		expect(plan.effectiveExecutionSurface?.id).toBe('worker_builder');
 		expect(plan.provider?.id).toBe('provider_local');
 		expect(plan.effectiveRequiredCapabilityNames).toEqual(['planning']);
 	});
 
-	it('blocks launch when the assigned worker does not cover declared tools', async () => {
+	it('blocks launch when the assigned execution surface does not cover declared tools', async () => {
 		const { current, task } = buildFixture({
 			assigneeExecutionSurfaceId: 'worker_builder',
 			requiredToolNames: ['playwright']

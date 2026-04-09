@@ -1,1 +1,0 @@
-/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/app/src/lib/components/media/UserAvatar.svelte

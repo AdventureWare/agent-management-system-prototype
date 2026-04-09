@@ -144,7 +144,7 @@ function createFormInput(overrides: Partial<TaskDetailFormInput> = {}): TaskDeta
 		requiredToolNames: [],
 		hasDelegationPacketFields: false,
 		hasGoalId: false,
-		hasAssigneeWorkerId: false,
+		hasAssigneeExecutionSurfaceId: false,
 		hasPriority: false,
 		hasRiskLevel: false,
 		hasApprovalMode: false,
@@ -170,7 +170,7 @@ describe('task-plan-updates', () => {
 			form: createFormInput(),
 			project,
 			goal: null,
-			assigneeWorker: null
+			assignedExecutionSurface: null
 		});
 
 		expect(result.nextPriority).toBe('medium');
@@ -189,7 +189,7 @@ describe('task-plan-updates', () => {
 				goalId: 'goal_cleanup',
 				hasGoalId: true,
 				assigneeExecutionSurfaceId: 'worker_1',
-				hasAssigneeWorkerId: true,
+				hasAssigneeExecutionSurfaceId: true,
 				priority: 'high',
 				hasPriority: true,
 				blockedReason: 'Waiting on review',
@@ -201,11 +201,11 @@ describe('task-plan-updates', () => {
 			}),
 			project,
 			goal,
-			assigneeWorker: worker
+			assignedExecutionSurface: worker
 		});
 
 		expect(result.nextTitle).toBe('Refined task');
-		expect(result.nextAssigneeWorker?.id).toBe('worker_1');
+		expect(result.nextAssignedExecutionSurface?.id).toBe('worker_1');
 		expect(result.nextPriority).toBe('high');
 		expect(result.nextDependencyTaskIds).toEqual([]);
 		expect(result.nextTargetDate).toBe('2026-04-12');

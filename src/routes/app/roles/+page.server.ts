@@ -55,8 +55,8 @@ function countRoleDemand(data: Awaited<ReturnType<typeof loadControlPlane>>) {
 		taskCounts.set(task.desiredRoleId, (taskCounts.get(task.desiredRoleId) ?? 0) + 1);
 	}
 
-	for (const worker of getExecutionSurfaces(data)) {
-		const supportedRoleIds = worker.supportedRoleIds ?? [];
+	for (const executionSurface of getExecutionSurfaces(data)) {
+		const supportedRoleIds = executionSurface.supportedRoleIds ?? [];
 
 		for (const roleId of supportedRoleIds) {
 			executionSurfaceCounts.set(roleId, (executionSurfaceCounts.get(roleId) ?? 0) + 1);
@@ -76,7 +76,7 @@ export const load: PageServerLoad = async () => {
 			.map((role) => ({
 				...role,
 				taskCount: taskCounts.get(role.id) ?? 0,
-				workerCount: executionSurfaceCounts.get(role.id) ?? 0
+				executionSurfaceCount: executionSurfaceCounts.get(role.id) ?? 0
 			}))
 			.sort((a, b) => a.name.localeCompare(b.name))
 	};

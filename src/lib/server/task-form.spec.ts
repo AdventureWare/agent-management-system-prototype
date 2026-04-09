@@ -93,7 +93,7 @@ describe('task-form', () => {
 			projectId: 'project_1',
 			hasDelegationPacketFields: true,
 			hasGoalId: true,
-			hasAssigneeWorkerId: true,
+			hasAssigneeExecutionSurfaceId: true,
 			hasPriority: true,
 			hasRiskLevel: false,
 			hasApprovalMode: false,

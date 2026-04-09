@@ -21,7 +21,7 @@ import type {
 	OntologyWorkAttempt
 } from '$lib/types/ontology';
 
-function toActorIdFromWorkerId(executionSurfaceId: string) {
+function toActorIdFromExecutionSurfaceId(executionSurfaceId: string) {
 	return `actor_${executionSurfaceId}`;
 }
 
@@ -41,8 +41,11 @@ function toolNamesForProvider(provider: Provider) {
 	return uniqueStrings([provider.launcher]);
 }
 
-function capabilityNamesForWorker(worker: ExecutionSurface, provider: Provider | null) {
-	return uniqueStrings([...(worker.skills ?? []), ...(provider?.capabilities ?? [])]);
+function capabilityNamesForExecutionSurface(
+	executionSurface: ExecutionSurface,
+	provider: Provider | null
+) {
+	return uniqueStrings([...(executionSurface.skills ?? []), ...(provider?.capabilities ?? [])]);
 }
 
 export function summarizeOntologyV1Gaps(
@@ -91,11 +94,11 @@ export function buildOntologyV1Snapshot(input: {
 		const roleIds = Array.from(new Set([...(executionSurface.supportedRoleIds ?? [])]));
 
 		return {
-			id: toActorIdFromWorkerId(executionSurface.id),
+			id: toActorIdFromExecutionSurfaceId(executionSurface.id),
 			name: executionSurface.name,
 			kind: 'ai',
 			roleIds,
-			capabilityNames: capabilityNamesForWorker(executionSurface, provider),
+			capabilityNames: capabilityNamesForExecutionSurface(executionSurface, provider),
 			executionSurfaceIds: [executionSurface.id]
 		};
 	});
@@ -111,7 +114,7 @@ export function buildOntologyV1Snapshot(input: {
 				status: executionSurface.status,
 				providerId: executionSurface.providerId || null,
 				roleIds,
-				capabilityNames: capabilityNamesForWorker(executionSurface, provider),
+				capabilityNames: capabilityNamesForExecutionSurface(executionSurface, provider),
 				toolNames: provider ? toolNamesForProvider(provider) : [],
 				sandbox: executionSurface.threadSandboxOverride ?? provider?.defaultThreadSandbox ?? null
 			};
@@ -120,8 +123,8 @@ export function buildOntologyV1Snapshot(input: {
 
 	const capabilityMap = new Map<string, OntologyCapability>();
 
-	for (const worker of data.executionSurfaces) {
-		for (const skill of worker.skills ?? []) {
+	for (const executionSurface of data.executionSurfaces) {
+		for (const skill of executionSurface.skills ?? []) {
 			const name = skill.trim();
 			if (!name) {
 				continue;
@@ -131,7 +134,7 @@ export function buildOntologyV1Snapshot(input: {
 			capabilityMap.set(id, {
 				id,
 				name,
-				source: 'worker_skill'
+				source: 'execution_surface_skill'
 			});
 		}
 	}
@@ -254,7 +257,7 @@ export function buildOntologyV1Snapshot(input: {
 			kind: 'run',
 			taskId: run.taskId || null,
 			performedByActorId: run.executionSurfaceId
-				? toActorIdFromWorkerId(run.executionSurfaceId)
+				? toActorIdFromExecutionSurfaceId(run.executionSurfaceId)
 				: null,
 			executionSurfaceId: run.executionSurfaceId,
 			providerId: run.providerId,
@@ -356,7 +359,7 @@ export function buildOntologyV1Snapshot(input: {
 		dependencyTaskIds: task.dependencyTaskIds,
 		desiredRoleId: task.desiredRoleId || null,
 		assignedActorId: task.assigneeExecutionSurfaceId
-			? toActorIdFromWorkerId(task.assigneeExecutionSurfaceId)
+			? toActorIdFromExecutionSurfaceId(task.assigneeExecutionSurfaceId)
 			: null,
 		primaryThreadId: task.agentThreadId,
 		workAttemptIds: workAttemptIdsByTask.get(task.id) ?? [],
@@ -375,7 +378,7 @@ export function buildOntologyV1Snapshot(input: {
 		workAttemptId: review.runId,
 		status: review.status,
 		reviewerActorId: review.reviewerExecutionSurfaceId
-			? toActorIdFromWorkerId(review.reviewerExecutionSurfaceId)
+			? toActorIdFromExecutionSurfaceId(review.reviewerExecutionSurfaceId)
 			: null,
 		summary: review.summary
 	}));
@@ -387,7 +390,7 @@ export function buildOntologyV1Snapshot(input: {
 		status: approval.status,
 		mode: approval.mode,
 		approverActorId: approval.approverExecutionSurfaceId
-			? toActorIdFromWorkerId(approval.approverExecutionSurfaceId)
+			? toActorIdFromExecutionSurfaceId(approval.approverExecutionSurfaceId)
 			: null,
 		summary: approval.summary
 	}));

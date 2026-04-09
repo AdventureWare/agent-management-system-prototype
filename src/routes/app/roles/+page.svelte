@@ -8,9 +8,13 @@
 
 	let { data, form } = $props();
 
-	let staffedRoleCount = $derived(data.roles.filter((role) => role.workerCount > 0).length);
+	let staffedRoleCount = $derived(
+		data.roles.filter((role) => role.executionSurfaceCount > 0).length
+	);
 	let queuedTaskCount = $derived(data.roles.reduce((count, role) => count + role.taskCount, 0));
-	let maxWorkerCount = $derived(Math.max(1, ...data.roles.map((role) => role.workerCount)));
+	let maxExecutionSurfaceCount = $derived(
+		Math.max(1, ...data.roles.map((role) => role.executionSurfaceCount))
+	);
 	let maxTaskCount = $derived(Math.max(1, ...data.roles.map((role) => role.taskCount)));
 	let createRoleSuccess = $derived(form?.ok && form?.successAction === 'createRole');
 	let updateRoleSuccess = $derived(form?.ok && form?.successAction === 'updateRole');
@@ -229,15 +233,19 @@
 										<div class="flex items-center justify-between gap-3">
 											<p class="text-sm font-medium text-slate-200">Execution-surface coverage</p>
 											<p class="text-sm text-slate-400">
-												{role.workerCount} execution surfaces
+												{role.executionSurfaceCount} execution surfaces
 											</p>
 										</div>
-										<Progress max={maxWorkerCount} value={role.workerCount} class="mt-3 space-y-2">
+										<Progress
+											max={maxExecutionSurfaceCount}
+											value={role.executionSurfaceCount}
+											class="mt-3 space-y-2"
+										>
 											<Progress.Track class="h-2 overflow-hidden rounded-full bg-slate-800">
 												<Progress.Range class="h-full rounded-full bg-sky-400" />
 											</Progress.Track>
 											<Progress.ValueText class="text-xs text-slate-500">
-												{role.workerCount} of {maxWorkerCount} currently registered
+												{role.executionSurfaceCount} of {maxExecutionSurfaceCount} currently registered
 											</Progress.ValueText>
 										</Progress>
 									</div>

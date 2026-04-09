@@ -191,20 +191,20 @@ vi.mock('$lib/server/control-plane', () => ({
 	resolveThreadSandbox: vi.fn(
 		(input: {
 			task?: { requiredThreadSandbox?: string | null } | null;
-			worker?: { threadSandboxOverride: string | null } | null;
+			executionSurface?: { threadSandboxOverride: string | null } | null;
 			project?: { defaultThreadSandbox?: string | null } | null;
 			provider?: { defaultThreadSandbox: string } | null;
 		}) =>
 			input.task?.requiredThreadSandbox ??
-			input.worker?.threadSandboxOverride ??
+			input.executionSurface?.threadSandboxOverride ??
 			input.project?.defaultThreadSandbox ??
 			input.provider?.defaultThreadSandbox ??
 			'workspace-write'
 	),
 	selectExecutionProvider: vi.fn(
-		(data: ControlPlaneData, worker?: { providerId: string } | null) =>
-			(worker?.providerId
-				? data.providers.find((provider) => provider.id === worker.providerId)
+		(data: ControlPlaneData, executionSurface?: { providerId: string } | null) =>
+			(executionSurface?.providerId
+				? data.providers.find((provider) => provider.id === executionSurface.providerId)
 				: null) ??
 			data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
 			data.providers[0] ??

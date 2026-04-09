@@ -16,6 +16,7 @@
 	let createProjectDraftReady = $state(false);
 	let projectName = $state('');
 	let projectSummary = $state('');
+	let parentProjectId = $state('');
 	let projectRootFolder = $state('');
 	let defaultArtifactRoot = $state('');
 	let defaultRepoPath = $state('');
@@ -46,6 +47,8 @@
 
 		return [
 			project.name,
+			project.parentProjectName ?? '',
+			project.lineageLabel ?? '',
 			project.summary,
 			project.projectRootFolder,
 			project.defaultArtifactRoot,
@@ -78,6 +81,7 @@
 		const savedDraft = readFormDraft<{
 			name: string;
 			summary: string;
+			parentProjectId: string;
 			projectRootFolder: string;
 			defaultArtifactRoot: string;
 			defaultRepoPath: string;
@@ -90,6 +94,7 @@
 		if (savedDraft) {
 			projectName = savedDraft.name ?? '';
 			projectSummary = savedDraft.summary ?? '';
+			parentProjectId = savedDraft.parentProjectId ?? '';
 			projectRootFolder = savedDraft.projectRootFolder ?? '';
 			defaultArtifactRoot = savedDraft.defaultArtifactRoot ?? '';
 			defaultRepoPath = savedDraft.defaultRepoPath ?? '';
@@ -111,6 +116,7 @@
 		writeFormDraft(CREATE_PROJECT_DRAFT_KEY, {
 			name: projectName,
 			summary: projectSummary,
+			parentProjectId,
 			projectRootFolder,
 			defaultArtifactRoot,
 			defaultRepoPath,
@@ -218,6 +224,12 @@
 
 						<div class="mt-4 space-y-2 text-sm text-slate-400">
 							<p class="ui-clamp-2">
+								<span class="text-slate-500">Hierarchy:</span>
+								{project.parentProjectName
+									? `Subproject of ${project.parentProjectName}`
+									: 'Top-level project'}
+							</p>
+							<p class="ui-clamp-2">
 								<span class="text-slate-500">Root:</span>
 								{project.projectRootFolder || 'Not configured'}
 							</p>
@@ -234,6 +246,10 @@
 								{project.additionalWritableRoots?.length
 									? `${project.additionalWritableRoots.length} linked`
 									: 'None'}
+							</p>
+							<p class="ui-clamp-2">
+								<span class="text-slate-500">Subprojects:</span>
+								{project.childProjectCount || 'None'}
 							</p>
 							<p class="ui-clamp-2">
 								<span class="text-slate-500">Thread sandbox:</span>
@@ -291,6 +307,20 @@
 						placeholder="What this project covers and what defaults other work should inherit."
 						required
 					></textarea>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Parent project</span>
+					<select bind:value={parentProjectId} class="select text-white" name="parentProjectId">
+						<option value="">No parent project</option>
+						{#each data.parentProjectOptions as project (project.id)}
+							<option value={project.id}>{project.label}</option>
+						{/each}
+					</select>
+					<span class="mt-2 block text-xs text-slate-500">
+						Use this when the new project is a subproject like an app, website, or wrapper inside a
+						larger product.
+					</span>
 				</label>
 
 				<div class="grid gap-4 lg:grid-cols-2">

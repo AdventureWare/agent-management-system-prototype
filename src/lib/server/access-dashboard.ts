@@ -75,10 +75,13 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 	const executionCatalog = buildExecutionCapabilityCatalog(data);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
-	const workerCounts = new Map<string, number>();
+	const executionSurfaceCounts = new Map<string, number>();
 
-	for (const worker of data.executionSurfaces) {
-		workerCounts.set(worker.providerId, (workerCounts.get(worker.providerId) ?? 0) + 1);
+	for (const executionSurface of data.executionSurfaces) {
+		executionSurfaceCounts.set(
+			executionSurface.providerId,
+			(executionSurfaceCounts.get(executionSurface.providerId) ?? 0) + 1
+		);
 	}
 
 	const projects = [...data.projects]
@@ -111,7 +114,7 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 	const providers = [...data.providers]
 		.map((provider) => ({
 			...provider,
-			workerCount: workerCounts.get(provider.id) ?? 0,
+			executionSurfaceCount: executionSurfaceCounts.get(provider.id) ?? 0,
 			providerHref: `/app/providers/${provider.id}`
 		}))
 		.sort(
@@ -153,7 +156,7 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 				roleName: supportedRoleNames[0] ?? 'Unknown role',
 				supportedRoleIds,
 				supportedRoleNames,
-				workerHref: `/app/execution-surfaces/${executionSurface.id}`,
+				executionSurfaceHref: `/app/execution-surfaces/${executionSurface.id}`,
 				accessState
 			};
 		})
@@ -173,8 +176,9 @@ function buildAccessDashboardData(data: ControlPlaneData) {
 			).length,
 			providerNeedsSetupCount: providers.filter((provider) => provider.setupStatus !== 'connected')
 				.length,
-			workerAccessIssueCount: executionSurfaces.filter((worker) => worker.accessState !== 'healthy')
-				.length
+			executionSurfaceAccessIssueCount: executionSurfaces.filter(
+				(executionSurface) => executionSurface.accessState !== 'healthy'
+			).length
 		},
 		executionCatalog,
 		projects,

@@ -289,8 +289,12 @@
 
 							<div class="mt-4 grid gap-3 sm:grid-cols-3">
 								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Workers</p>
-									<p class="mt-2 text-lg font-semibold text-white">{provider.workerCount}</p>
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Execution surfaces
+									</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{provider.executionSurfaceCount}
+									</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Model</p>

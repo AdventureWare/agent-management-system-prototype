@@ -11,6 +11,7 @@
 	taskResponseAction={data.taskResponseAction}
 	threadContacts={data.threadContacts}
 	threadContactTargets={data.threadContactTargets}
+	lazyLoadThreadContactTargets
 	responseContextArtifacts={data.responseContextArtifacts}
 	{form}
 	backHref="/app/threads"

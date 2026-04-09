@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildExecutionRequirementInventory } from './execution-requirement-inventory';
 
 describe('buildExecutionRequirementInventory', () => {
-	it('aggregates worker skills, provider capabilities, and provider launchers', () => {
+	it('aggregates execution-surface skills, provider capabilities, and provider launchers', () => {
 		const inventory = buildExecutionRequirementInventory({
 			providers: [
 				{
@@ -77,11 +77,13 @@ describe('buildExecutionRequirementInventory', () => {
 		});
 
 		expect(inventory.capabilities).toEqual([
-			{ name: 'Citations', workerCount: 0, providerCount: 1 },
-			{ name: 'Planning', workerCount: 1, providerCount: 2 },
-			{ name: 'research', workerCount: 2, providerCount: 0 }
+			{ name: 'Citations', executionSurfaceCount: 0, providerCount: 1 },
+			{ name: 'Planning', executionSurfaceCount: 1, providerCount: 2 },
+			{ name: 'research', executionSurfaceCount: 2, providerCount: 0 }
 		]);
-		expect(inventory.tools).toEqual([{ name: 'codex', workerCount: 0, providerCount: 2 }]);
+		expect(inventory.tools).toEqual([
+			{ name: 'codex', executionSurfaceCount: 0, providerCount: 2 }
+		]);
 		expect(inventory.capabilityNames).toEqual(['Citations', 'Planning', 'research']);
 		expect(inventory.toolNames).toEqual(['codex']);
 	});

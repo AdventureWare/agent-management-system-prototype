@@ -9,9 +9,9 @@
 		formatRunStatusLabel,
 		formatProviderSetupStatusLabel,
 		formatExecutionSurfaceStatusLabel,
+		executionSurfaceStatusToneClass,
 		providerSetupStatusToneClass,
-		runStatusToneClass,
-		workerStatusToneClass
+		runStatusToneClass
 	} from '$lib/types/control-plane';
 
 	let { data, form } = $props();
@@ -61,9 +61,9 @@
 			detail={`Launcher: ${data.provider.launcher || 'Not set'} | Thread sandbox: ${data.provider.defaultThreadSandbox}`}
 		/>
 		<MetricCard
-			label="Workers"
-			value={data.attachedWorkers.length}
-			detail="Workers currently configured against this provider."
+			label="Execution surfaces"
+			value={data.attachedExecutionSurfaces.length}
+			detail="Execution surfaces currently configured against this provider."
 		/>
 		<MetricCard
 			label="Recent runs"
@@ -263,35 +263,35 @@
 				{/snippet}
 
 				<div class="space-y-4">
-					{#if data.attachedWorkers.length === 0}
+					{#if data.attachedExecutionSurfaces.length === 0}
 						<p
 							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
 						>
 							No execution surfaces are attached to this provider yet.
 						</p>
 					{:else}
-						{#each data.attachedWorkers as worker (worker.id)}
+						{#each data.attachedExecutionSurfaces as executionSurface (executionSurface.id)}
 							<a
 								class="block rounded-2xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-400/40 hover:bg-slate-900"
-								href={resolve(`/app/execution-surfaces/${worker.id}`)}
+								href={resolve(`/app/execution-surfaces/${executionSurface.id}`)}
 							>
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div class="min-w-0 flex-1">
-										<h3 class="ui-wrap-anywhere font-medium text-white">{worker.name}</h3>
+										<h3 class="ui-wrap-anywhere font-medium text-white">{executionSurface.name}</h3>
 										<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
-											{worker.supportedRoleNames?.length > 0
-												? worker.supportedRoleNames.join(', ')
-												: worker.roleName}
+											{executionSurface.supportedRoleNames?.length > 0
+												? executionSurface.supportedRoleNames.join(', ')
+												: executionSurface.roleName}
 										</p>
 									</div>
 									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workerStatusToneClass(worker.status)}`}
+										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${executionSurfaceStatusToneClass(executionSurface.status)}`}
 									>
-										{formatExecutionSurfaceStatusLabel(worker.status)}
+										{formatExecutionSurfaceStatusLabel(executionSurface.status)}
 									</span>
 								</div>
 								<p class="ui-clamp-3 mt-3 text-sm text-slate-300">
-									{worker.note || 'No note saved.'}
+									{executionSurface.note || 'No note saved.'}
 								</p>
 							</a>
 						{/each}

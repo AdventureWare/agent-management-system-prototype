@@ -58,16 +58,16 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
-	const attachedWorkers = data.executionSurfaces
-		.filter((worker) => worker.providerId === provider.id)
-		.map((worker) => {
-			const supportedRoleIds = Array.from(new Set([...(worker.supportedRoleIds ?? [])]));
+	const attachedExecutionSurfaces = data.executionSurfaces
+		.filter((executionSurface) => executionSurface.providerId === provider.id)
+		.map((executionSurface) => {
+			const supportedRoleIds = Array.from(new Set([...(executionSurface.supportedRoleIds ?? [])]));
 			const supportedRoleNames = supportedRoleIds.map(
 				(roleId) => roleMap.get(roleId)?.name ?? 'Unknown role'
 			);
 
 			return {
-				...worker,
+				...executionSurface,
 				roleName: supportedRoleNames[0] ?? 'Unknown role',
 				supportedRoleIds,
 				supportedRoleNames
@@ -86,7 +86,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	return {
 		provider,
-		attachedWorkers,
+		attachedExecutionSurfaces,
 		recentRuns,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
 		kindOptions: PROVIDER_KIND_OPTIONS,

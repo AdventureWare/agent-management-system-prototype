@@ -81,7 +81,7 @@ function createControlPlane(): ControlPlaneData {
 		executionSurfaces: [
 			{
 				id: 'worker_1',
-				name: 'Operator worker',
+				name: 'Operator execution surface',
 				providerId: 'provider_local',
 				supportedRoleIds: [],
 				location: 'local',

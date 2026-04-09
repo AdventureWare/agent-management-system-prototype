@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import type { PageData as TaskDetailPageData } from './[taskId]/$types';
+	import type { PageData as ThreadDetailPageData } from '../threads/[threadId]/$types';
+	import TaskDetailPageContent from './[taskId]/TaskDetailPageContent.svelte';
+	import ThreadDetailPanel from '$lib/components/ThreadDetailPanel.svelte';
+	import { fetchJson } from '$lib/client/agent-data';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import {
@@ -53,6 +58,7 @@
 		title: string;
 		description: string;
 		rowTaskId: string;
+		detailId: string;
 	};
 	type TaskLayoutMode = 'mobile' | 'desktop';
 
@@ -66,6 +72,14 @@
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
 	let createTaskDraftReady = $state(false);
 	let createTaskAdvancedOpen = $state(false);
+	let taskDetailPanelCache = $state.raw<Record<string, TaskDetailPageData>>({});
+	let taskDetailPanelData = $state.raw<TaskDetailPageData | null>(null);
+	let taskDetailPanelLoadError = $state<string | null>(null);
+	let taskDetailPanelLoadingTaskId = $state('');
+	let threadDetailPanelCache = $state.raw<Record<string, ThreadDetailPageData>>({});
+	let threadDetailPanelData = $state.raw<ThreadDetailPageData | null>(null);
+	let threadDetailPanelLoadError = $state<string | null>(null);
+	let threadDetailPanelLoadingThreadId = $state('');
 	let pendingCreateAttachments = $state.raw<
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
@@ -155,20 +169,14 @@
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
 
-	function buildEmbeddedPanelHref(href: string) {
-		const [baseHref, hashFragment] = href.split('#');
-		const separator = baseHref.includes('?') ? '&' : '?';
-
-		return `${baseHref}${separator}embed=panel${hashFragment ? `#${hashFragment}` : ''}`;
-	}
-
 	function openTaskDetailPanel(task: TaskRow) {
 		queueDetailPanel = {
 			kind: 'task',
 			href: resolve(`/app/tasks/${task.id}`),
 			title: task.title,
 			description: 'Task detail panel',
-			rowTaskId: task.id
+			rowTaskId: task.id,
+			detailId: task.id
 		};
 	}
 
@@ -182,7 +190,8 @@
 			href: resolve(getTaskThreadReviewHref(task.linkThread.id)),
 			title: task.linkThread.name,
 			description: `Thread linked to ${task.title}`,
-			rowTaskId: task.id
+			rowTaskId: task.id,
+			detailId: task.linkThread.id
 		};
 	}
 
@@ -209,6 +218,96 @@
 		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
 
+	async function loadTaskDetailPanel(taskId: string, options: { force?: boolean } = {}) {
+		if (!taskId.trim()) {
+			return;
+		}
+
+		if (!options.force && taskDetailPanelCache[taskId]) {
+			taskDetailPanelData = taskDetailPanelCache[taskId] ?? null;
+			taskDetailPanelLoadError = null;
+			return;
+		}
+
+		taskDetailPanelLoadingTaskId = taskId;
+		taskDetailPanelLoadError = null;
+
+		if (!taskDetailPanelCache[taskId]) {
+			taskDetailPanelData = null;
+		}
+
+		try {
+			const detail = await fetchJson<TaskDetailPageData>(
+				`/api/tasks/${taskId}`,
+				'Could not load the task detail panel.'
+			);
+
+			taskDetailPanelCache = {
+				...taskDetailPanelCache,
+				[taskId]: detail
+			};
+
+			if (queueDetailPanel?.kind === 'task' && queueDetailPanel.rowTaskId === taskId) {
+				taskDetailPanelData = detail;
+				taskDetailPanelLoadError = null;
+			}
+		} catch (err) {
+			if (queueDetailPanel?.kind === 'task' && queueDetailPanel.rowTaskId === taskId) {
+				taskDetailPanelLoadError =
+					err instanceof Error ? err.message : 'Could not load the task detail panel.';
+			}
+		} finally {
+			if (taskDetailPanelLoadingTaskId === taskId) {
+				taskDetailPanelLoadingTaskId = '';
+			}
+		}
+	}
+
+	async function loadThreadDetailPanel(threadId: string, options: { force?: boolean } = {}) {
+		if (!threadId.trim()) {
+			return;
+		}
+
+		if (!options.force && threadDetailPanelCache[threadId]) {
+			threadDetailPanelData = threadDetailPanelCache[threadId] ?? null;
+			threadDetailPanelLoadError = null;
+			return;
+		}
+
+		threadDetailPanelLoadingThreadId = threadId;
+		threadDetailPanelLoadError = null;
+
+		if (!threadDetailPanelCache[threadId]) {
+			threadDetailPanelData = null;
+		}
+
+		try {
+			const detail = await fetchJson<ThreadDetailPageData>(
+				`/api/agents/threads/${threadId}/panel`,
+				'Could not load the thread detail panel.'
+			);
+
+			threadDetailPanelCache = {
+				...threadDetailPanelCache,
+				[threadId]: detail
+			};
+
+			if (queueDetailPanel?.kind === 'thread' && queueDetailPanel.detailId === threadId) {
+				threadDetailPanelData = detail;
+				threadDetailPanelLoadError = null;
+			}
+		} catch (err) {
+			if (queueDetailPanel?.kind === 'thread' && queueDetailPanel.detailId === threadId) {
+				threadDetailPanelLoadError =
+					err instanceof Error ? err.message : 'Could not load the thread detail panel.';
+			}
+		} finally {
+			if (threadDetailPanelLoadingThreadId === threadId) {
+				threadDetailPanelLoadingThreadId = '';
+			}
+		}
+	}
+
 	function formatAttachmentSize(sizeBytes: number) {
 		if (sizeBytes < 1024) {
 			return `${sizeBytes} B`;
@@ -221,11 +320,16 @@
 		return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
-	function formatInventoryCoverageLabel(entry: { workerCount: number; providerCount: number }) {
+	function formatInventoryCoverageLabel(entry: {
+		executionSurfaceCount: number;
+		providerCount: number;
+	}) {
 		const parts: string[] = [];
 
-		if (entry.workerCount > 0) {
-			parts.push(`${entry.workerCount} execution surface${entry.workerCount === 1 ? '' : 's'}`);
+		if (entry.executionSurfaceCount > 0) {
+			parts.push(
+				`${entry.executionSurfaceCount} execution surface${entry.executionSurfaceCount === 1 ? '' : 's'}`
+			);
 		}
 
 		if (entry.providerCount > 0) {
@@ -494,9 +598,47 @@
 		return rowTaskId ? (tasks.find((task) => task.id === rowTaskId) ?? null) : null;
 	});
 	let activePanelRowTaskId = $derived(queueDetailPanel?.rowTaskId ?? '');
-	let embeddedQueueDetailPanelHref = $derived(
-		queueDetailPanel ? buildEmbeddedPanelHref(queueDetailPanel.href) : ''
+	let isTaskDetailPanelLoading = $derived(
+		queueDetailPanel?.kind === 'task' && taskDetailPanelLoadingTaskId === queueDetailPanel.detailId
 	);
+	let isThreadDetailPanelLoading = $derived(
+		queueDetailPanel?.kind === 'thread' &&
+			threadDetailPanelLoadingThreadId === queueDetailPanel.detailId
+	);
+
+	$effect(() => {
+		const panel = queueDetailPanel;
+
+		if (!panel || panel.kind !== 'task') {
+			taskDetailPanelData = null;
+			taskDetailPanelLoadError = null;
+			return;
+		}
+
+		taskDetailPanelData = taskDetailPanelCache[panel.detailId] ?? null;
+		taskDetailPanelLoadError = null;
+
+		if (!taskDetailPanelData) {
+			void loadTaskDetailPanel(panel.detailId);
+		}
+	});
+
+	$effect(() => {
+		const panel = queueDetailPanel;
+
+		if (!panel || panel.kind !== 'thread') {
+			threadDetailPanelData = null;
+			threadDetailPanelLoadError = null;
+			return;
+		}
+
+		threadDetailPanelData = threadDetailPanelCache[panel.detailId] ?? null;
+		threadDetailPanelLoadError = null;
+
+		if (!threadDetailPanelData) {
+			void loadThreadDetailPanel(panel.detailId);
+		}
+	});
 
 	$effect(() => {
 		const nextSelectedTaskIds = selectedTaskIds.filter((taskId) => visibleTaskRowIdSet.has(taskId));
@@ -616,7 +758,7 @@
 	let createTaskSuccessCriteria = $state('');
 	let createTaskReadyCondition = $state('');
 	let createTaskExpectedOutcome = $state('');
-	let createTaskAssigneeWorkerId = $state('');
+	let createTaskAssigneeExecutionSurfaceId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
 	let createTaskArea = $state('product');
@@ -863,7 +1005,7 @@
 		createTaskSuccessCriteria = prefill?.successCriteria ?? '';
 		createTaskReadyCondition = prefill?.readyCondition ?? '';
 		createTaskExpectedOutcome = prefill?.expectedOutcome ?? '';
-		createTaskAssigneeWorkerId = prefill?.assigneeExecutionSurfaceId ?? '';
+		createTaskAssigneeExecutionSurfaceId = prefill?.assigneeExecutionSurfaceId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
 		createTaskArea = (prefill as { area?: string } | null | undefined)?.area ?? 'product';
@@ -931,7 +1073,7 @@
 			createTaskSuccessCriteria = createTaskFormValues.successCriteria;
 			createTaskReadyCondition = createTaskFormValues.readyCondition;
 			createTaskExpectedOutcome = createTaskFormValues.expectedOutcome;
-			createTaskAssigneeWorkerId = createTaskFormValues.assigneeExecutionSurfaceId;
+			createTaskAssigneeExecutionSurfaceId = createTaskFormValues.assigneeExecutionSurfaceId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
 			createTaskArea = createTaskFormValues.area;
@@ -1030,7 +1172,7 @@
 			createTaskSuccessCriteria = savedDraft.successCriteria ?? '';
 			createTaskReadyCondition = savedDraft.readyCondition ?? '';
 			createTaskExpectedOutcome = savedDraft.expectedOutcome ?? '';
-			createTaskAssigneeWorkerId = savedDraft.assigneeExecutionSurfaceId ?? '';
+			createTaskAssigneeExecutionSurfaceId = savedDraft.assigneeExecutionSurfaceId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
 			createTaskArea = savedDraft.area ?? 'product';
@@ -1088,7 +1230,7 @@
 			successCriteria: createTaskSuccessCriteria,
 			readyCondition: createTaskReadyCondition,
 			expectedOutcome: createTaskExpectedOutcome,
-			assigneeExecutionSurfaceId: createTaskAssigneeWorkerId,
+			assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
 			area: createTaskArea === 'product' ? '' : createTaskArea,
@@ -1573,16 +1715,104 @@
 							{/if}
 
 							<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80">
-								<iframe
-									class="h-[78vh] min-h-[42rem] w-full bg-slate-950"
-									src={embeddedQueueDetailPanelHref}
-									title={`${queueDetailPanel.kind} detail side panel`}
-								></iframe>
+								{#if queueDetailPanel.kind === 'task'}
+									<div class="h-[78vh] min-h-[42rem] overflow-y-auto p-5">
+										<div class="mb-4 flex items-center justify-end">
+											<AppButton
+												type="button"
+												size="sm"
+												variant="ghost"
+												disabled={isTaskDetailPanelLoading}
+												onclick={() => {
+													if (queueDetailPanel?.kind !== 'task') {
+														return;
+													}
+
+													void loadTaskDetailPanel(queueDetailPanel.rowTaskId, { force: true });
+												}}
+											>
+												{isTaskDetailPanelLoading ? 'Refreshing...' : 'Refresh panel'}
+											</AppButton>
+										</div>
+
+										{#if taskDetailPanelData}
+											<TaskDetailPageContent
+												data={taskDetailPanelData}
+												embedded
+												actionBasePath={queueDetailPanel.href}
+											/>
+										{:else if taskDetailPanelLoadError}
+											<div class="rounded-2xl border border-rose-900/60 bg-rose-950/30 p-4">
+												<p class="text-sm text-rose-200">{taskDetailPanelLoadError}</p>
+											</div>
+										{:else}
+											<div
+												class="flex h-full min-h-[32rem] items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 px-6 py-10"
+											>
+												<p class="text-sm text-slate-400">
+													{isTaskDetailPanelLoading
+														? 'Loading task detail panel.'
+														: 'Preparing task detail panel.'}
+												</p>
+											</div>
+										{/if}
+									</div>
+								{:else}
+									<div class="h-[78vh] min-h-[42rem] overflow-y-auto p-5">
+										<div class="mb-4 flex items-center justify-end">
+											<AppButton
+												type="button"
+												size="sm"
+												variant="ghost"
+												disabled={isThreadDetailPanelLoading}
+												onclick={() => {
+													if (queueDetailPanel?.kind !== 'thread') {
+														return;
+													}
+
+													void loadThreadDetailPanel(queueDetailPanel.detailId, {
+														force: true
+													});
+												}}
+											>
+												{isThreadDetailPanelLoading ? 'Refreshing...' : 'Refresh panel'}
+											</AppButton>
+										</div>
+
+										{#if threadDetailPanelData}
+											<ThreadDetailPanel
+												thread={threadDetailPanelData.thread}
+												sandboxOptions={threadDetailPanelData.sandboxOptions}
+												threadFocusTask={threadDetailPanelData.threadFocusTask}
+												taskResponseAction={threadDetailPanelData.taskResponseAction}
+												threadContacts={threadDetailPanelData.threadContacts}
+												threadContactTargets={threadDetailPanelData.threadContactTargets}
+												responseContextArtifacts={threadDetailPanelData.responseContextArtifacts}
+												embedded
+												readOnly
+											/>
+										{:else if threadDetailPanelLoadError}
+											<div class="rounded-2xl border border-rose-900/60 bg-rose-950/30 p-4">
+												<p class="text-sm text-rose-200">{threadDetailPanelLoadError}</p>
+											</div>
+										{:else}
+											<div
+												class="flex h-full min-h-[32rem] items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 px-6 py-10"
+											>
+												<p class="text-sm text-slate-400">
+													{isThreadDetailPanelLoading
+														? 'Loading thread detail panel.'
+														: 'Preparing thread detail panel.'}
+												</p>
+											</div>
+										{/if}
+									</div>
+								{/if}
 							</div>
 
 							<p class="text-xs text-slate-500">
-								The queue stays visible on the left while the full detail route remains usable here
-								for quick review and action.
+								The queue stays visible on the left while task and thread detail stay available here
+								for quick review.
 							</p>
 						</aside>
 					{/if}
@@ -2162,13 +2392,13 @@
 									Assign to execution surface
 								</span>
 								<select
-									bind:value={createTaskAssigneeWorkerId}
+									bind:value={createTaskAssigneeExecutionSurfaceId}
 									class="select text-white"
 									name="assigneeExecutionSurfaceId"
 								>
 									<option value="">Leave unassigned</option>
-									{#each data.executionSurfaces as worker (worker.id)}
-										<option value={worker.id}>{worker.name}</option>
+									{#each data.executionSurfaces as executionSurface (executionSurface.id)}
+										<option value={executionSurface.id}>{executionSurface.name}</option>
 									{/each}
 								</select>
 							</label>

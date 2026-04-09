@@ -29,9 +29,9 @@ export type ControlSummary = {
 	highRiskTaskCount: number;
 	projectCount: number;
 	goalCount: number;
-	workerCount: number;
-	onlineWorkerCount: number;
-	busyWorkerCount: number;
+	executionSurfaceCount: number;
+	onlineExecutionSurfaceCount: number;
+	busyExecutionSurfaceCount: number;
 };
 
 export type DashboardTaskAttentionItem = TaskWorkItem & {

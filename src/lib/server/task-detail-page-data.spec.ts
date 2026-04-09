@@ -7,9 +7,14 @@ const getOpenReviewForTask = vi.hoisted(() => vi.fn(() => null));
 const getPendingApprovalForTask = vi.hoisted(() => vi.fn(() => null));
 const selectExecutionProvider = vi.hoisted(() =>
 	vi.fn(
-		(data: Pick<ControlPlaneData, 'providers'>, worker?: { providerId?: string | null } | null) => {
-			if (worker?.providerId) {
-				return data.providers.find((provider) => provider.id === worker.providerId) ?? null;
+		(
+			data: Pick<ControlPlaneData, 'providers'>,
+			executionSurface?: { providerId?: string | null } | null
+		) => {
+			if (executionSurface?.providerId) {
+				return (
+					data.providers.find((provider) => provider.id === executionSurface.providerId) ?? null
+				);
 			}
 
 			return data.providers[0] ?? null;
@@ -20,12 +25,12 @@ const resolveThreadSandbox = vi.hoisted(() =>
 	vi.fn(
 		(input: {
 			task?: { requiredThreadSandbox?: string | null } | null;
-			worker?: { threadSandboxOverride?: string | null } | null;
+			executionSurface?: { threadSandboxOverride?: string | null } | null;
 			project?: { defaultThreadSandbox?: string | null } | null;
 			provider?: { defaultThreadSandbox?: string | null } | null;
 		}) =>
 			input.task?.requiredThreadSandbox ??
-			input.worker?.threadSandboxOverride ??
+			input.executionSurface?.threadSandboxOverride ??
 			input.project?.defaultThreadSandbox ??
 			input.provider?.defaultThreadSandbox ??
 			'workspace-write'

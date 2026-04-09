@@ -48,6 +48,8 @@
 		showLiveUpdates,
 		autoRefreshIntervalLabel,
 		refreshError,
+		actionBasePath = '',
+		readOnly = false,
 		task,
 		project,
 		threadActionLabel,
@@ -72,6 +74,8 @@
 		showLiveUpdates: boolean;
 		autoRefreshIntervalLabel: string;
 		refreshError: string | null;
+		actionBasePath?: string;
+		readOnly?: boolean;
 		task: TaskOverviewView;
 		project: ProjectView | null;
 		threadActionLabel: string;
@@ -109,6 +113,10 @@
 			year: 'numeric',
 			timeZone: 'UTC'
 		}).format(new Date(Date.UTC(year, month - 1, day)));
+	}
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
 	}
 </script>
 
@@ -341,12 +349,12 @@
 							{threadActionLabel || 'Open current work thread'}
 						</a>
 					{/if}
-					{#if stalledRecovery?.eligible}
+					{#if !readOnly && stalledRecovery?.eligible}
 						<button
 							class="inline-flex w-full items-center justify-center rounded-full border border-amber-700/70 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-500/60 hover:text-white sm:w-auto"
 							type="submit"
 							form="task-update-form"
-							formaction="?/recoverTaskSession"
+							formaction={taskAction('recoverTaskSession')}
 						>
 							Recover stalled run
 						</button>

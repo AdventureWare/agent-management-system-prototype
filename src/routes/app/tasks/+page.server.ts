@@ -313,7 +313,7 @@ export const actions: Actions = {
 		const parentTask = parentTaskId
 			? current.tasks.find((candidate) => candidate.id === parentTaskId)
 			: null;
-		const assigneeWorker = assigneeExecutionSurfaceId
+		const assignedExecutionSurface = assigneeExecutionSurfaceId
 			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
 
@@ -352,9 +352,9 @@ export const actions: Actions = {
 			});
 		}
 
-		if (assigneeExecutionSurfaceId && !assigneeWorker) {
+		if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
 			return failTaskCreate(400, {
-				message: 'ExecutionSurface not found.',
+				message: 'Execution surface not found.',
 				...failureContext
 			});
 		}
@@ -422,7 +422,7 @@ export const actions: Actions = {
 			requiredThreadSandbox,
 			requiresReview,
 			desiredRoleId: nextDesiredRoleId,
-			assigneeExecutionSurfaceId: assigneeWorker?.id ?? null,
+			assigneeExecutionSurfaceId: assignedExecutionSurface?.id ?? null,
 			blockedReason,
 			dependencyTaskIds,
 			targetDate: targetDate || null,
@@ -472,10 +472,10 @@ export const actions: Actions = {
 			requiredPromptSkillNames: effectivePromptSkillNames,
 			preferredRole
 		});
-		const provider = selectExecutionProvider(current, assigneeWorker);
+		const provider = selectExecutionProvider(current, assignedExecutionSurface);
 		const sandbox = resolveThreadSandbox({
 			task: createdTask,
-			worker: assigneeWorker,
+			executionSurface: assignedExecutionSurface,
 			project,
 			provider
 		});
@@ -518,7 +518,7 @@ export const actions: Actions = {
 		const now = new Date().toISOString();
 		const run = createRun({
 			taskId: createdTask.id,
-			executionSurfaceId: assigneeWorker?.id ?? null,
+			executionSurfaceId: assignedExecutionSurface?.id ?? null,
 			assumedRoleId: createdTask.desiredRoleId || null,
 			providerId,
 			status: 'running',
@@ -656,7 +656,7 @@ export const actions: Actions = {
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === projectId);
-		const assigneeWorker = assigneeExecutionSurfaceId
+		const assignedExecutionSurface = assigneeExecutionSurfaceId
 			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
 
@@ -664,8 +664,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'Project not found.' });
 		}
 
-		if (assigneeExecutionSurfaceId && !assigneeWorker) {
-			return fail(400, { message: 'ExecutionSurface not found.' });
+		if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
+			return fail(400, { message: 'Execution surface not found.' });
 		}
 
 		await updateControlPlane((data) => {
@@ -685,7 +685,7 @@ export const actions: Actions = {
 						projectId: project.id,
 						status,
 						requiredThreadSandbox,
-						assigneeExecutionSurfaceId: assigneeWorker?.id ?? null,
+						assigneeExecutionSurfaceId: assignedExecutionSurface?.id ?? null,
 						targetDate: targetDate || null,
 						delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
 						artifactPath:
@@ -729,11 +729,11 @@ export const actions: Actions = {
 		const effectiveReadyCondition = task.readyCondition ?? '';
 		const effectiveExpectedOutcome = task.expectedOutcome ?? '';
 		const effectiveProjectId = projectId || task.projectId;
-		const assigneeWorker = assigneeExecutionSurfaceId
+		const assignedExecutionSurface = assigneeExecutionSurfaceId
 			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
-		const effectiveWorker =
-			assigneeWorker ??
+		const effectiveExecutionSurface =
+			assignedExecutionSurface ??
 			(task.assigneeExecutionSurfaceId
 				? (current.executionSurfaces.find(
 						(candidate) => candidate.id === task.assigneeExecutionSurfaceId
@@ -745,8 +745,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'Task project not found.' });
 		}
 
-		if (assigneeExecutionSurfaceId && !assigneeWorker) {
-			return fail(400, { message: 'ExecutionSurface not found.' });
+		if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
+			return fail(400, { message: 'Execution surface not found.' });
 		}
 
 		if (!project.projectRootFolder) {
@@ -784,10 +784,10 @@ export const actions: Actions = {
 			requiredPromptSkillNames: effectivePromptSkillNames,
 			preferredRole
 		});
-		const provider = selectExecutionProvider(current, effectiveWorker);
+		const provider = selectExecutionProvider(current, effectiveExecutionSurface);
 		const sandbox = resolveThreadSandbox({
 			task,
-			worker: effectiveWorker,
+			executionSurface: effectiveExecutionSurface,
 			project,
 			provider
 		});
@@ -880,7 +880,7 @@ export const actions: Actions = {
 		const providerId = provider?.id ?? null;
 		const run = createRun({
 			taskId,
-			executionSurfaceId: effectiveWorker?.id ?? null,
+			executionSurfaceId: effectiveExecutionSurface?.id ?? null,
 			assumedRoleId: task.desiredRoleId || null,
 			providerId,
 			status: 'running',
@@ -912,7 +912,7 @@ export const actions: Actions = {
 							summary: effectiveInstructions,
 							projectId: project.id,
 							assigneeExecutionSurfaceId:
-								assigneeWorker?.id ?? candidate.assigneeExecutionSurfaceId,
+								assignedExecutionSurface?.id ?? candidate.assigneeExecutionSurfaceId,
 							agentThreadId,
 							delegationAcceptance: null,
 							artifactPath:

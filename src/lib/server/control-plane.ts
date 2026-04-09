@@ -554,6 +554,10 @@ function normalizeProject(
 		id: typeof legacyProject.id === 'string' ? legacyProject.id : createProjectId(),
 		name: typeof legacyProject.name === 'string' ? legacyProject.name : '',
 		summary: typeof legacyProject.summary === 'string' ? legacyProject.summary : '',
+		parentProjectId:
+			typeof legacyProject.parentProjectId === 'string' && legacyProject.parentProjectId.trim()
+				? legacyProject.parentProjectId.trim()
+				: null,
 		projectRootFolder: normalizePathInput(projectRootFolder),
 		defaultArtifactRoot: normalizePathInput(defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(defaultRepoPath),
@@ -564,6 +568,31 @@ function normalizeProject(
 		additionalWritableRoots,
 		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox)
 	};
+}
+
+function normalizeProjectHierarchy(projects: Project[]) {
+	const projectIds = new Set(projects.map((project) => project.id));
+
+	return projects.map((project) => {
+		const parentProjectId = project.parentProjectId?.trim() ?? '';
+
+		if (
+			!parentProjectId ||
+			!projectIds.has(parentProjectId) ||
+			parentProjectId === project.id ||
+			wouldCreateProjectCycle(projects, project.id, parentProjectId)
+		) {
+			return {
+				...project,
+				parentProjectId: null
+			};
+		}
+
+		return {
+			...project,
+			parentProjectId
+		};
+	});
 }
 
 function inferTaskProjectId(task: LegacyTask, projects: Project[]) {
@@ -1021,7 +1050,9 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		? parsed.executionSurfaces
 		: [];
 	const projects = Array.isArray(parsed.projects)
-		? parsed.projects.map((project) => normalizeProject(project as Project))
+		? normalizeProjectHierarchy(
+				parsed.projects.map((project) => normalizeProject(project as Project))
+			)
 		: [];
 	const runs = Array.isArray(parsed.runs)
 		? parsed.runs.map((run) => normalizeRun(run as LegacyRun))
@@ -1158,8 +1189,12 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 	const blockedRuns = data.runs.filter((run) => run.status === 'blocked');
 	const openReviews = data.reviews.filter((review) => review.status === 'open');
 	const pendingApprovals = data.approvals.filter((approval) => approval.status === 'pending');
-	const onlineWorkers = data.executionSurfaces.filter((worker) => worker.status !== 'offline');
-	const busyWorkers = data.executionSurfaces.filter((worker) => worker.status === 'busy');
+	const onlineExecutionSurfaces = data.executionSurfaces.filter(
+		(executionSurface) => executionSurface.status !== 'offline'
+	);
+	const busyExecutionSurfaces = data.executionSurfaces.filter(
+		(executionSurface) => executionSurface.status === 'busy'
+	);
 
 	return {
 		taskCount: data.tasks.length,
@@ -1177,9 +1212,9 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 		highRiskTaskCount: highRiskTasks.length,
 		projectCount: data.projects.length,
 		goalCount: data.goals.length,
-		workerCount: data.executionSurfaces.length,
-		onlineWorkerCount: onlineWorkers.length,
-		busyWorkerCount: busyWorkers.length
+		executionSurfaceCount: data.executionSurfaces.length,
+		onlineExecutionSurfaceCount: onlineExecutionSurfaces.length,
+		busyExecutionSurfaceCount: busyExecutionSurfaces.length
 	};
 }
 
@@ -1406,6 +1441,7 @@ export function createGoal(input: {
 export function createProject(input: {
 	name: string;
 	summary: string;
+	parentProjectId?: string | null;
 	projectRootFolder?: string;
 	defaultArtifactRoot?: string;
 	defaultRepoPath?: string;
@@ -1418,6 +1454,7 @@ export function createProject(input: {
 		id: createProjectId(),
 		name: input.name,
 		summary: input.summary,
+		parentProjectId: input.parentProjectId?.trim() || null,
 		projectRootFolder: normalizePathInput(input.projectRootFolder),
 		defaultArtifactRoot: normalizePathInput(input.defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
@@ -1426,6 +1463,97 @@ export function createProject(input: {
 		additionalWritableRoots: normalizePathListInput(input.additionalWritableRoots),
 		defaultThreadSandbox: input.defaultThreadSandbox ?? null
 	};
+}
+
+export function getProjectChildProjects(projects: Project[], projectId: string) {
+	return projects.filter((project) => project.parentProjectId === projectId);
+}
+
+export function getProjectDescendantProjectIds(projects: Project[], projectId: string) {
+	const descendantIds: string[] = [];
+	const queue = getProjectChildProjects(projects, projectId).map((project) => project.id);
+	const seen = new Set(queue);
+
+	while (queue.length > 0) {
+		const currentProjectId = queue.shift();
+
+		if (!currentProjectId) {
+			continue;
+		}
+
+		descendantIds.push(currentProjectId);
+
+		for (const childProject of getProjectChildProjects(projects, currentProjectId)) {
+			if (seen.has(childProject.id)) {
+				continue;
+			}
+
+			seen.add(childProject.id);
+			queue.push(childProject.id);
+		}
+	}
+
+	return descendantIds;
+}
+
+export function getProjectScopeProjectIds(projects: Project[], projectId: string) {
+	if (!projects.some((project) => project.id === projectId)) {
+		return [];
+	}
+
+	return [projectId, ...getProjectDescendantProjectIds(projects, projectId)];
+}
+
+export function getProjectLineage(projects: Project[], projectId: string) {
+	const projectById = new Map(projects.map((project) => [project.id, project]));
+	const lineage: Project[] = [];
+	const seen = new Set<string>();
+	let currentProject = projectById.get(projectId) ?? null;
+
+	while (currentProject && !seen.has(currentProject.id)) {
+		lineage.unshift(currentProject);
+		seen.add(currentProject.id);
+		currentProject = currentProject.parentProjectId
+			? (projectById.get(currentProject.parentProjectId) ?? null)
+			: null;
+	}
+
+	return lineage;
+}
+
+export function wouldCreateProjectCycle(
+	projects: Project[],
+	projectId: string,
+	parentProjectId: string | null | undefined
+) {
+	const normalizedParentProjectId = parentProjectId?.trim() ?? '';
+
+	if (!normalizedParentProjectId) {
+		return false;
+	}
+
+	if (normalizedParentProjectId === projectId) {
+		return true;
+	}
+
+	const projectById = new Map(projects.map((project) => [project.id, project]));
+	const seen = new Set<string>();
+	let currentProjectId = normalizedParentProjectId;
+
+	while (currentProjectId) {
+		if (currentProjectId === projectId) {
+			return true;
+		}
+
+		if (seen.has(currentProjectId)) {
+			return false;
+		}
+
+		seen.add(currentProjectId);
+		currentProjectId = projectById.get(currentProjectId)?.parentProjectId?.trim() ?? '';
+	}
+
+	return false;
 }
 
 export function projectMatchesPath(project: Project, path: string) {
@@ -1494,9 +1622,24 @@ export function deleteGoal(data: ControlPlaneData, goalId: string): ControlPlane
 }
 
 export function deleteProject(data: ControlPlaneData, projectId: string): ControlPlaneData {
+	const deletedProject = data.projects.find((project) => project.id === projectId);
+
+	if (!deletedProject) {
+		return data;
+	}
+
 	return {
 		...data,
-		projects: data.projects.filter((project) => project.id !== projectId),
+		projects: data.projects
+			.filter((project) => project.id !== projectId)
+			.map((project) =>
+				project.parentProjectId === projectId
+					? {
+							...project,
+							parentProjectId: deletedProject.parentProjectId ?? null
+						}
+					: project
+			),
 		goals: data.goals.map((goal) => ({
 			...goal,
 			projectIds: (goal.projectIds ?? []).filter(
@@ -1843,14 +1986,14 @@ export function createExecutionSurface(input: {
 
 export function resolveThreadSandbox(input: {
 	task?: Pick<Task, 'requiredThreadSandbox'> | null;
-	worker?: Pick<ExecutionSurface, 'threadSandboxOverride'> | null;
+	executionSurface?: Pick<ExecutionSurface, 'threadSandboxOverride'> | null;
 	project?: Pick<Project, 'defaultThreadSandbox'> | null;
 	provider?: Pick<Provider, 'defaultThreadSandbox'> | null;
 	fallback?: AgentSandbox;
 }) {
 	return (
 		input.task?.requiredThreadSandbox ??
-		input.worker?.threadSandboxOverride ??
+		input.executionSurface?.threadSandboxOverride ??
 		input.project?.defaultThreadSandbox ??
 		input.provider?.defaultThreadSandbox ??
 		input.fallback ??
@@ -1860,11 +2003,11 @@ export function resolveThreadSandbox(input: {
 
 export function selectExecutionProvider(
 	data: Pick<ControlPlaneData, 'providers'>,
-	worker?: Pick<ExecutionSurface, 'providerId'> | null
+	executionSurface?: Pick<ExecutionSurface, 'providerId'> | null
 ) {
 	return (
-		(worker?.providerId
-			? data.providers.find((provider) => provider.id === worker.providerId)
+		(executionSurface?.providerId
+			? data.providers.find((provider) => provider.id === executionSurface.providerId)
 			: null) ??
 		data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
 		data.providers[0] ??

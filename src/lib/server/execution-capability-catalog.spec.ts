@@ -131,33 +131,33 @@ describe('buildExecutionCapabilityCatalog', () => {
 		expect(catalog.capabilities).toEqual([
 			{
 				name: 'citations',
-				workerSkillCount: 0,
-				supportedWorkerCount: 1,
-				onlineSupportedWorkerCount: 0,
+				executionSurfaceSkillCount: 0,
+				supportedExecutionSurfaceCount: 1,
+				onlineSupportedExecutionSurfaceCount: 0,
 				providerCapabilityCount: 1,
 				connectedProviderCount: 0
 			},
 			{
 				name: 'planning',
-				workerSkillCount: 1,
-				supportedWorkerCount: 1,
-				onlineSupportedWorkerCount: 1,
+				executionSurfaceSkillCount: 1,
+				supportedExecutionSurfaceCount: 1,
+				onlineSupportedExecutionSurfaceCount: 1,
 				providerCapabilityCount: 1,
 				connectedProviderCount: 1
 			},
 			{
 				name: 'research',
-				workerSkillCount: 1,
-				supportedWorkerCount: 1,
-				onlineSupportedWorkerCount: 0,
+				executionSurfaceSkillCount: 1,
+				supportedExecutionSurfaceCount: 1,
+				onlineSupportedExecutionSurfaceCount: 0,
 				providerCapabilityCount: 0,
 				connectedProviderCount: 0
 			},
 			{
 				name: 'svelte',
-				workerSkillCount: 1,
-				supportedWorkerCount: 1,
-				onlineSupportedWorkerCount: 1,
+				executionSurfaceSkillCount: 1,
+				supportedExecutionSurfaceCount: 1,
+				onlineSupportedExecutionSurfaceCount: 1,
 				providerCapabilityCount: 0,
 				connectedProviderCount: 0
 			}
@@ -167,8 +167,8 @@ describe('buildExecutionCapabilityCatalog', () => {
 				name: 'codex',
 				providerCount: 2,
 				connectedProviderCount: 1,
-				workerCount: 2,
-				onlineWorkerCount: 1
+				executionSurfaceCount: 2,
+				onlineExecutionSurfaceCount: 1
 			}
 		]);
 	});

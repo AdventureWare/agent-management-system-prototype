@@ -111,9 +111,9 @@ describe('/app/home/+page.svelte', () => {
 					highRiskTaskCount: 1,
 					projectCount: 1,
 					goalCount: 1,
-					workerCount: 0,
-					onlineWorkerCount: 0,
-					busyWorkerCount: 0
+					executionSurfaceCount: 0,
+					onlineExecutionSurfaceCount: 0,
+					busyExecutionSurfaceCount: 0
 				},
 				taskAttention: [createDashboardTask()],
 				staleTaskSummary: {

@@ -77,7 +77,7 @@ const FOCUS_PROFILES = [
 			'orchestration',
 			'queue',
 			'routing',
-			'worker',
+			'surface',
 			'workflow'
 		]
 	},
@@ -211,7 +211,7 @@ const ENTITY_PROFILES = [
 	},
 	{
 		label: 'ExecutionSurface',
-		keywords: ['provider', 'providers', 'role', 'roles', 'worker', 'executionSurfaces']
+		keywords: ['provider', 'providers', 'role', 'roles', 'surface', 'surfaces']
 	},
 	{
 		label: 'Run',

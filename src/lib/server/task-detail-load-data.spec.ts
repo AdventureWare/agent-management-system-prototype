@@ -163,14 +163,14 @@ describe('task-detail-load-data', () => {
 			data: createData(),
 			task: parentTask,
 			projectMap: new Map([[project.id, project]]),
-			workerMap: new Map([[worker.id, worker]]),
+			executionSurfaceMap: new Map([[worker.id, worker]]),
 			providerMap: new Map([[provider.id, provider]]),
 			formatRelativeTime: (value) => `relative:${value}`
 		});
 
 		expect(result.relatedRuns[0]).toMatchObject({
 			id: 'run_1',
-			workerName: 'Planner',
+			executionSurfaceName: 'Planner',
 			providerName: 'Local Codex ExecutionSurface'
 		});
 		expect(result.dependencyTasks).toEqual([

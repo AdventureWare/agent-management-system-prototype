@@ -10,7 +10,7 @@ import type {
 type RelativeTimeFormatter = (value: string) => string;
 
 export type RelatedRunView = Run & {
-	workerName: string;
+	executionSurfaceName: string;
 	providerName: string;
 	updatedAtLabel: string;
 };
@@ -58,18 +58,18 @@ export function buildTaskDetailCollections(input: {
 	data: ControlPlaneData;
 	task: Task;
 	projectMap: Map<string, Project>;
-	workerMap: Map<string, ExecutionSurface>;
+	executionSurfaceMap: Map<string, ExecutionSurface>;
 	providerMap: Map<string, Provider>;
 	formatRelativeTime: RelativeTimeFormatter;
 }) {
-	const { data, task, projectMap, workerMap, providerMap, formatRelativeTime } = input;
+	const { data, task, projectMap, executionSurfaceMap, providerMap, formatRelativeTime } = input;
 	const dependencyTaskIds = new Set(task.dependencyTaskIds);
 	const relatedRuns: RelatedRunView[] = data.runs
 		.filter((run) => run.taskId === task.id)
 		.map((run) => ({
 			...run,
-			workerName: run.executionSurfaceId
-				? (workerMap.get(run.executionSurfaceId)?.name ?? 'Unknown worker')
+			executionSurfaceName: run.executionSurfaceId
+				? (executionSurfaceMap.get(run.executionSurfaceId)?.name ?? 'Unknown execution surface')
 				: 'Unassigned',
 			providerName: run.providerId
 				? (providerMap.get(run.providerId)?.name ?? 'Unknown provider')

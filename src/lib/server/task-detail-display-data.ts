@@ -74,7 +74,7 @@ export function buildTaskDetailTaskView(input: {
 	projectMap: Map<string, Project>;
 	goalMap: Map<string, { name: string }>;
 	roleMap: Map<string, { name: string }>;
-	workerMap: Map<string, ExecutionSurface>;
+	executionSurfaceMap: Map<string, ExecutionSurface>;
 	latestRun: RelatedRunView | null;
 	activeRun: RelatedRunView | null;
 	threadContext: ThreadContextView;
@@ -87,7 +87,7 @@ export function buildTaskDetailTaskView(input: {
 		projectMap,
 		goalMap,
 		roleMap,
-		workerMap,
+		executionSurfaceMap,
 		latestRun,
 		activeRun,
 		threadContext,
@@ -110,7 +110,8 @@ export function buildTaskDetailTaskView(input: {
 			? (roleMap.get(task.desiredRoleId)?.name ?? task.desiredRoleId)
 			: '',
 		assigneeName: task.assigneeExecutionSurfaceId
-			? (workerMap.get(task.assigneeExecutionSurfaceId)?.name ?? 'Unknown worker')
+			? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId)?.name ??
+				'Unknown execution surface')
 			: 'Unassigned',
 		latestRun,
 		activeRun,

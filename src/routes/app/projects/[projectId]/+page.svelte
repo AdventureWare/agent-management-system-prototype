@@ -17,7 +17,7 @@
 	let { data, form } = $props();
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProject');
-	let deleteBlocked = $derived(data.relatedTasks.length > 0);
+	let deleteBlocked = $derived(data.contextScope.directTaskCount > 0);
 
 	function accessToneClass(status: string) {
 		switch (status) {
@@ -76,9 +76,9 @@
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 		<MetricCard
-			label="Open tasks"
+			label="Tasks in scope"
 			value={data.metrics.activeTasks}
-			detail="Related tasks that still need attention."
+			detail="Direct project work plus rolled-up subproject work when this is a parent project."
 		/>
 		<MetricCard
 			label="Linked goals"
@@ -89,6 +89,11 @@
 			label="Review tasks"
 			value={data.metrics.reviewTasks}
 			detail="Tasks currently waiting on explicit review."
+		/>
+		<MetricCard
+			label="Subprojects"
+			value={data.metrics.childProjectCount}
+			detail="Direct child projects linked under this project."
 		/>
 		<MetricCard
 			label="Pending approvals"
@@ -119,6 +124,68 @@
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
 		<section class="space-y-6">
 			<DetailSection
+				eyebrow="Project structure"
+				title="Parent and subproject context"
+				description="Each project keeps its own defaults. Parent projects roll up descendant work for broader planning, while tasks still use the defaults on the exact linked project."
+				bodyClass="space-y-4"
+			>
+				<div class="grid gap-4 md:grid-cols-2">
+					<DetailFactCard
+						label="Project lineage"
+						value={data.projectLineage.map((project) => project.name).join(' / ') ||
+							data.project.name}
+					/>
+					<DetailFactCard
+						label="Context scope"
+						value={data.contextScope.rolledUpTaskCount > 0
+							? `${data.contextScope.directTaskCount} direct task(s) and ${data.contextScope.rolledUpTaskCount} rolled up from subprojects`
+							: 'Focused on this project only'}
+					/>
+				</div>
+
+				<div class="grid gap-4 lg:grid-cols-2">
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Parent project</p>
+						{#if data.parentProject}
+							<a
+								class="mt-2 inline-flex text-sm font-medium text-sky-300 transition hover:text-sky-200"
+								href={resolve(`/app/projects/${data.parentProject.id}`)}
+							>
+								{data.parentProject.name}
+							</a>
+							<p class="mt-2 text-sm text-slate-400">{data.parentProject.summary}</p>
+						{:else}
+							<p class="mt-2 text-sm text-slate-400">This project is currently top-level.</p>
+						{/if}
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Direct subprojects</p>
+						{#if data.childProjects.length === 0}
+							<p class="mt-2 text-sm text-slate-400">No child projects linked yet.</p>
+						{:else}
+							<div class="mt-2 space-y-3">
+								{#each data.childProjects as childProject (childProject.id)}
+									<a
+										class="block rounded-xl border border-slate-800 bg-slate-950/70 p-3 transition hover:border-sky-400/40"
+										href={resolve(`/app/projects/${childProject.id}`)}
+									>
+										<p class="ui-wrap-anywhere text-sm font-medium text-white">
+											{childProject.name}
+										</p>
+										<p class="mt-2 text-sm text-slate-400">{childProject.summary}</p>
+										<p class="mt-2 text-xs text-slate-500">
+											{childProject.taskCount} task(s) · {childProject.goalCount} goal(s)
+										</p>
+									</a>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+			</DetailSection>
+
+			<DetailSection
 				eyebrow="Project details"
 				title="Edit defaults and repo context"
 				description="Collection pages help you find the project. This page holds the actual project setup."
@@ -137,6 +204,18 @@
 						<textarea class="textarea min-h-28 text-white" name="summary" required
 							>{data.project.summary}</textarea
 						>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Parent project</span>
+						<select class="select text-white" name="parentProjectId">
+							<option value="" selected={!data.project.parentProjectId}>No parent project</option>
+							{#each data.parentProjectOptions as project (project.id)}
+								<option value={project.id} selected={data.project.parentProjectId === project.id}>
+									{project.label}
+								</option>
+							{/each}
+						</select>
 					</label>
 
 					<div class="grid gap-4 lg:grid-cols-2">
@@ -363,6 +442,14 @@
 				bodyClass="grid gap-4 md:grid-cols-2"
 			>
 				<DetailFactCard
+					label="Parent project"
+					value={data.parentProject?.name || 'Top-level project'}
+				/>
+				<DetailFactCard
+					label="Direct subprojects"
+					value={data.childProjects.length ? `${data.childProjects.length}` : 'None'}
+				/>
+				<DetailFactCard
 					class="md:col-span-2"
 					label="Project root folder"
 					value={data.project.projectRootFolder || 'Not configured'}
@@ -401,8 +488,8 @@
 				eyebrow="Danger zone"
 				title="Delete project"
 				description={deleteBlocked
-					? `This project still has ${data.relatedTasks.length} linked task${data.relatedTasks.length === 1 ? '' : 's'}. Reassign or delete those tasks first because tasks require a project.`
-					: `This removes the project from the control plane, clears explicit links from ${data.relatedGoals.length} related goal${data.relatedGoals.length === 1 ? '' : 's'}, and removes it from planning session scope.`}
+					? `This project still has ${data.contextScope.directTaskCount} directly linked task${data.contextScope.directTaskCount === 1 ? '' : 's'}. Reassign or delete those tasks first because tasks require a project.`
+					: `This removes the project from the control plane, clears explicit links from ${data.relatedGoals.length} related goal${data.relatedGoals.length === 1 ? '' : 's'}, removes it from planning session scope, and promotes any child projects to the next parent level.`}
 				tone="rose"
 			>
 				<form class="mt-5" method="POST" action="?/deleteProject">
@@ -421,7 +508,9 @@
 			<DetailSection
 				eyebrow="Related tasks"
 				title="Queued and active work"
-				description="Every task explicitly linked to this project, newest activity first."
+				description={data.contextScope.rolledUpTaskCount > 0
+					? 'Direct project tasks appear alongside rolled-up child-project work so parent projects can stay broad without losing each subproject’s own defaults.'
+					: 'Every task explicitly linked to this project, newest activity first.'}
 				bodyClass="space-y-4"
 			>
 				{#snippet actions()}
@@ -485,7 +574,13 @@
 									</div>
 								</div>
 
-								<div class="mt-4 grid gap-3 sm:grid-cols-3">
+								<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Project</p>
+										<p class="ui-wrap-anywhere mt-2 text-sm text-white">
+											{task.projectName}
+										</p>
+									</div>
 									<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Goal</p>
 										<p class="ui-wrap-anywhere mt-2 text-sm text-white">{task.goalName}</p>

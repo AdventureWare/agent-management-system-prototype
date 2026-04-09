@@ -41,6 +41,7 @@ import {
 	type AgentThreadContact,
 	type AgentThreadDetail,
 	type AgentThreadOrigin,
+	type AgentThreadStatusSnapshot,
 	type AgentTimelineStep,
 	type AgentThreadsDb
 } from '$lib/types/agent-thread';
@@ -63,6 +64,16 @@ let nativeThreadCache: {
 	expiresAt: number;
 	threads: NativeCodexThread[];
 } | null = null;
+const runDetailCache = new Map<
+	string,
+	{
+		runSignature: string;
+		stateUpdatedAt: string | null;
+		messageUpdatedAt: string | null;
+		logUpdatedAt: string | null;
+		detail: AgentRunDetail;
+	}
+>();
 
 function defaultDb(): AgentThreadsDb {
 	return {
@@ -487,6 +498,7 @@ function getRunPaths(agentThreadId: string, runId: string) {
 		logPath: resolve(runDir, 'codex.log'),
 		statePath: resolve(runDir, 'state.json'),
 		messagePath: resolve(runDir, 'last-message.txt'),
+		summaryPath: resolve(runDir, 'summary.json'),
 		configPath: resolve(runDir, 'config.json')
 	};
 }
@@ -611,6 +623,29 @@ function latestIso(values: Array<string | null | undefined>) {
 			.sort((left, right) => left.localeCompare(right))
 			.at(-1) ?? null
 	);
+}
+
+function buildRunDetailCacheKey(
+	runId: string,
+	options: {
+		includePrompt?: boolean;
+		logTailLineCount?: number;
+	}
+) {
+	return `${runId}:${options.includePrompt === false ? 'noprompt' : 'prompt'}:${options.logTailLineCount ?? 80}`;
+}
+
+function buildRunDetailSignature(run: AgentRun) {
+	return [
+		run.updatedAt,
+		run.createdAt,
+		run.prompt,
+		run.mode,
+		run.requestedThreadId ?? '',
+		run.sourceAgentThreadId ?? '',
+		run.contactId ?? '',
+		run.replyToContactId ?? ''
+	].join('\u0000');
 }
 
 function pushRunLog(run: AgentRunDetail, label: string, value: string | null) {
@@ -899,7 +934,8 @@ async function writeRunnerConfig(input: {
 		threadId: input.threadId,
 		logPath: input.run.logPath,
 		statePath: input.run.statePath,
-		messagePath: input.run.messagePath
+		messagePath: input.run.messagePath,
+		summaryPath: getRunPaths(input.session.id, input.run.id).summaryPath
 	};
 
 	await mkdir(resolve(input.run.configPath, '..'), { recursive: true });
@@ -914,6 +950,10 @@ function launchRunner(configPath: string) {
 	});
 
 	child.unref();
+}
+
+function getRunSummaryPath(run: Pick<AgentRun, 'statePath'> | Pick<AgentRunDetail, 'statePath'>) {
+	return resolve(dirname(run.statePath), 'summary.json');
 }
 
 async function readOptionalText(path: string) {
@@ -998,6 +1038,53 @@ async function readOptionalTimestamp(path: string) {
 
 	try {
 		return (await stat(path)).mtime.toISOString();
+	} catch {
+		return null;
+	}
+}
+
+async function readRunSummaryDetail(
+	run: AgentRun,
+	options: {
+		includePrompt?: boolean;
+		logTailLineCount?: number;
+	}
+): Promise<AgentRunDetail | null> {
+	const raw = await readOptionalText(getRunSummaryPath(run));
+
+	if (!raw) {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(raw) as {
+			state?: AgentRunState | null;
+			lastMessage?: string | null;
+			logTail?: unknown;
+			activityAt?: string | null;
+		};
+		const logTail = Array.isArray(parsed.logTail)
+			? parsed.logTail.filter((line): line is string => typeof line === 'string')
+			: [];
+		const detail = {
+			...run,
+			prompt: options.includePrompt === false ? '' : run.prompt,
+			state: parsed.state ?? null,
+			lastMessage:
+				typeof parsed.lastMessage === 'string' && parsed.lastMessage.trim().length > 0
+					? parsed.lastMessage.trim()
+					: null,
+			logTail: logTail.slice(-(options.logTailLineCount ?? 80)),
+			activityAt:
+				typeof parsed.activityAt === 'string' && parsed.activityAt.trim().length > 0
+					? parsed.activityAt
+					: null
+		} satisfies AgentRunDetail;
+
+		return {
+			...detail,
+			state: deriveRunState(detail)
+		};
 	} catch {
 		return null;
 	}
@@ -1161,15 +1248,30 @@ async function buildRunDetail(
 		logTailLineCount?: number;
 	} = {}
 ): Promise<AgentRunDetail> {
-	const [state, lastMessage, logTail, stateUpdatedAt, messageUpdatedAt, logUpdatedAt] =
-		await Promise.all([
-			readRunState(run.statePath),
-			readOptionalText(run.messagePath),
-			readLogTail(run.logPath, options.logTailLineCount ?? 80),
-			readOptionalTimestamp(run.statePath),
-			readOptionalTimestamp(run.messagePath),
-			readOptionalTimestamp(run.logPath)
-		]);
+	const [stateUpdatedAt, messageUpdatedAt, logUpdatedAt] = await Promise.all([
+		readOptionalTimestamp(run.statePath),
+		readOptionalTimestamp(run.messagePath),
+		readOptionalTimestamp(run.logPath)
+	]);
+	const cacheKey = buildRunDetailCacheKey(run.id, options);
+	const runSignature = buildRunDetailSignature(run);
+	const cached = runDetailCache.get(cacheKey);
+
+	if (
+		cached &&
+		cached.runSignature === runSignature &&
+		cached.stateUpdatedAt === stateUpdatedAt &&
+		cached.messageUpdatedAt === messageUpdatedAt &&
+		cached.logUpdatedAt === logUpdatedAt
+	) {
+		return cached.detail;
+	}
+
+	const [state, lastMessage, logTail] = await Promise.all([
+		readRunState(run.statePath),
+		readOptionalText(run.messagePath),
+		readLogTail(run.logPath, options.logTailLineCount ?? 80)
+	]);
 
 	const detail = {
 		...run,
@@ -1188,10 +1290,20 @@ async function buildRunDetail(
 		])
 	} satisfies AgentRunDetail;
 
-	return {
+	const nextDetail = {
 		...detail,
 		state: deriveRunState(detail)
 	};
+
+	runDetailCache.set(cacheKey, {
+		runSignature,
+		stateUpdatedAt,
+		messageUpdatedAt,
+		logUpdatedAt,
+		detail: nextDetail
+	});
+
+	return nextDetail;
 }
 
 function getRunActivityAt(
@@ -2082,6 +2194,85 @@ async function buildManagedThreadListDetail(
 	});
 }
 
+async function buildManagedThreadListDetailFast(session: AgentThread, runs: AgentRun[]) {
+	const latestRun = [...runs].sort(compareByCreatedAtDesc)[0] ?? null;
+	const latestRunDetail = latestRun
+		? ((await readRunSummaryDetail(latestRun, {
+				includePrompt: false,
+				logTailLineCount: 12
+			})) ??
+			(
+				await buildLatestRunDetails([latestRun], {
+					includePrompt: false,
+					logTailLineCount: 12
+				})
+			)[0] ??
+			null)
+		: null;
+	const runDetails = latestRunDetail ? [latestRunDetail] : [];
+	const latestRunStatus = getLatestRunStatus(runDetails);
+	const latestRunForState = runDetails[0] ?? null;
+	const threadId = getDiscoveredThreadId(session, runDetails);
+	const hasActive = hasActiveRun(runDetails);
+	const canResume = Boolean(threadId) && !hasActive;
+	const threadState = getThreadState({
+		latestRunStatus,
+		canResume,
+		hasActiveRun: hasActive,
+		lastMessage: latestRunForState?.lastMessage ?? null,
+		threadId
+	});
+	const lastActivityAt = getRunLastActivityAt(latestRunForState) ?? session.updatedAt;
+
+	return {
+		...session,
+		origin: 'managed' as const,
+		threadId,
+		handle: undefined,
+		contactLabel: undefined,
+		topicLabels: [],
+		categorization: undefined,
+		threadState,
+		latestRunStatus,
+		hasActiveRun: hasActive,
+		canResume,
+		runCount: runs.length,
+		lastActivityAt,
+		lastActivityLabel: formatRelativeTime(lastActivityAt),
+		threadSummary: getThreadSummary({
+			threadState,
+			latestRunStatus,
+			hasActiveRun: hasActive,
+			canResume,
+			lastMessage: latestRunForState?.lastMessage ?? null,
+			threadId
+		}),
+		lastExitCode: latestRunForState?.state?.exitCode ?? null,
+		runTimeline: buildRunTimeline({
+			run: latestRunForState,
+			threadId
+		}),
+		relatedTasks: [],
+		latestRun: latestRunForState,
+		runs: []
+	} satisfies AgentThreadDetail;
+}
+
+function pickThreadStatusSnapshot(detail: AgentThreadDetail): AgentThreadStatusSnapshot {
+	return {
+		id: detail.id,
+		threadId: detail.threadId,
+		threadState: detail.threadState,
+		latestRunStatus: detail.latestRunStatus,
+		hasActiveRun: detail.hasActiveRun,
+		canResume: detail.canResume,
+		runCount: detail.runCount,
+		lastActivityAt: detail.lastActivityAt,
+		lastExitCode: detail.lastExitCode,
+		latestRun: detail.latestRun
+	};
+}
+
 async function buildManagedThreadDetail(
 	session: AgentThread,
 	runs: AgentRun[],
@@ -2622,32 +2813,97 @@ async function reconcileTaskStateFromSessionDetails(
 	};
 }
 
+export async function listManagedAgentThreadStatuses(threadIds: string[]) {
+	const requestedThreadIds = new Set(
+		threadIds.map((threadId) => threadId.trim()).filter((threadId) => threadId.length > 0)
+	);
+
+	if (requestedThreadIds.size === 0) {
+		return [];
+	}
+
+	const db = await loadAgentThreadsDb();
+	const runsBySessionId = groupRunsByThreadId(db.runs);
+	const details = await Promise.all(
+		db.threads
+			.filter((session) => requestedThreadIds.has(session.id))
+			.map((session) =>
+				buildManagedThreadListDetailFast(session, runsBySessionId.get(session.id) ?? [])
+			)
+	);
+
+	return details
+		.filter((detail) => !isAbandonedThreadDetail(detail))
+		.map((detail) => pickThreadStatusSnapshot(detail));
+}
+
 export async function listAgentThreads(
 	options: {
 		includeArchived?: boolean;
 		includeCategorization?: boolean;
+		includeExternal?: boolean;
+		includeManaged?: boolean;
+		reconcileTaskState?: boolean;
+		threadIds?: string[];
 		controlPlane?: ControlPlaneData | Promise<ControlPlaneData>;
 	} = {}
 ) {
 	const db = await loadAgentThreadsDb();
+	const includeExternal = options.includeExternal !== false;
+	const includeManaged = options.includeManaged !== false;
+	const requestedThreadIds =
+		Array.isArray(options.threadIds) && options.threadIds.length > 0
+			? new Set(options.threadIds.filter((threadId) => threadId.trim().length > 0))
+			: null;
+	const candidateManagedSessions = requestedThreadIds
+		? db.threads.filter((session) => requestedThreadIds.has(session.id))
+		: db.threads;
+	const filteredSessions = includeManaged ? candidateManagedSessions : [];
+	const useFastManagedList =
+		includeManaged &&
+		!includeExternal &&
+		options.includeCategorization === false &&
+		options.reconcileTaskState === false;
+
+	if (useFastManagedList) {
+		const runsBySessionId = groupRunsByThreadId(db.runs);
+		const details = await Promise.all(
+			filteredSessions.map((session) =>
+				buildManagedThreadListDetailFast(session, runsBySessionId.get(session.id) ?? [])
+			)
+		);
+
+		return details
+			.filter((detail) => options.includeArchived || !detail.archivedAt)
+			.filter((detail) => !isAbandonedThreadDetail(detail))
+			.sort((left, right) =>
+				(right.lastActivityAt ?? right.updatedAt).localeCompare(
+					left.lastActivityAt ?? left.updatedAt
+				)
+			);
+	}
+
 	const controlPlanePromise = options.controlPlane
 		? Promise.resolve(options.controlPlane)
 		: loadControlPlane();
 	const [controlPlane, nativeThreads] = await Promise.all([
 		controlPlanePromise,
-		listNativeCodexThreads()
+		includeExternal ? listNativeCodexThreads() : Promise.resolve([])
 	]);
+	const filteredNativeThreads = requestedThreadIds
+		? nativeThreads.filter((thread) => requestedThreadIds.has(thread.id))
+		: nativeThreads;
 	const taskContext = buildTaskContextFromControlPlane(controlPlane);
-	const nativeThreadsById = new Map(nativeThreads.map((thread) => [thread.id, thread]));
+	const nativeThreadsById = new Map(filteredNativeThreads.map((thread) => [thread.id, thread]));
 	const runsBySessionId = groupRunsByThreadId(db.runs);
-	const existingSessionIds = new Set(db.threads.map((session) => session.id));
+	const existingSessionIds = new Set(filteredSessions.map((session) => session.id));
 	const managedThreadIds = new Set(
-		db.threads
+		candidateManagedSessions
 			.map((session) => session.threadId)
 			.filter((threadId): threadId is string => Boolean(threadId))
 	);
 	const details = await Promise.all([
-		...db.threads.map((session) => {
+		...filteredSessions.map((session) => {
 			const nativeThread = nativeThreadsById.get(session.id);
 			const runs = runsBySessionId.get(session.id) ?? [];
 
@@ -2667,7 +2923,7 @@ export async function listAgentThreads(
 				options.includeCategorization !== false
 			);
 		}),
-		...nativeThreads
+		...filteredNativeThreads
 			.filter((thread) => !existingSessionIds.has(thread.id) && !managedThreadIds.has(thread.id))
 			.map((thread) =>
 				buildExternalThreadListDetail(
@@ -2678,6 +2934,17 @@ export async function listAgentThreads(
 				)
 			)
 	]);
+	if (options.reconcileTaskState === false) {
+		return details
+			.filter((detail) => options.includeArchived || !detail.archivedAt)
+			.filter((detail) => !isAbandonedThreadDetail(detail))
+			.sort((left, right) =>
+				(right.lastActivityAt ?? right.updatedAt).localeCompare(
+					left.lastActivityAt ?? left.updatedAt
+				)
+			);
+	}
+
 	const reconciled = await reconcileTaskStateFromSessionDetails(details, controlPlane);
 
 	return reconciled.details
@@ -2993,7 +3260,7 @@ export async function updateAgentThreadHandleAlias(
 	if (normalizedHandleAlias) {
 		const conflictingThread =
 			threads.find(
-				(thread) => thread.id !== agentThreadId && thread.handle === normalizedHandleAlias
+				(thread) => thread.id !== agentThreadId && (thread.handle ?? '') === normalizedHandleAlias
 			) ?? null;
 
 		if (conflictingThread) {
@@ -3344,6 +3611,19 @@ export async function recoverAgentThread(agentThreadId: string) {
 
 	await mkdir(dirname(detail.latestRun.statePath), { recursive: true });
 	await writeFile(detail.latestRun.statePath, JSON.stringify(nextState, null, 2));
+	await writeFile(
+		getRunSummaryPath(detail.latestRun),
+		JSON.stringify(
+			{
+				state: nextState,
+				lastMessage: detail.latestRun.lastMessage,
+				logTail: detail.latestRun.logTail.slice(-12),
+				activityAt: now
+			},
+			null,
+			2
+		)
+	);
 
 	const controlPlane = await loadControlPlane();
 	const reconciledControlPlane = reconcileControlPlaneThreadState(controlPlane, {
@@ -3389,6 +3669,19 @@ export async function cancelAgentThread(agentThreadId: string) {
 		};
 
 		await writeFile(detail.latestRun.statePath, JSON.stringify(nextState, null, 2));
+		await writeFile(
+			getRunSummaryPath(detail.latestRun),
+			JSON.stringify(
+				{
+					state: nextState,
+					lastMessage: detail.latestRun.lastMessage,
+					logTail: detail.latestRun.logTail.slice(-12),
+					activityAt: nextState.finishedAt ?? new Date().toISOString()
+				},
+				null,
+				2
+			)
+		);
 		return true;
 	} catch {
 		return false;

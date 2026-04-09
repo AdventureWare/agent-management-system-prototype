@@ -24,6 +24,9 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
 	server: {
 		watch: {
+			// Prevent traversal into repo-root symlinks such as .kwipoo-app-link, which can point at
+			// large external app trees and exhaust watcher/memory limits during long-running dev sessions.
+			followSymlinks: false,
 			// Ignore live runtime artifacts so Vite only watches source files during dev.
 			ignored: ignoredRuntimeWatchGlobs
 		}

@@ -19,7 +19,7 @@ describe('/app/runs/+page.svelte', () => {
 						taskProjectId: 'project_1',
 						taskProjectName: 'Agent Management System Prototype',
 						executionSurfaceId: 'worker_1',
-						workerName: 'Coordinator',
+						executionSurfaceName: 'Coordinator',
 						providerId: 'provider_1',
 						providerName: 'Local Codex',
 						status: 'running',

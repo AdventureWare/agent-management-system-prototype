@@ -11,6 +11,7 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 					id: 'project_1',
 					name: 'Agent Management System Prototype',
 					summary: 'Prototype summary',
+					parentProjectId: null,
 					projectRootFolder: '/tmp/project',
 					defaultArtifactRoot: '/tmp/project/agent_output',
 					defaultRepoPath: '/tmp/project',
@@ -18,9 +19,31 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 					defaultBranch: 'main',
 					defaultThreadSandbox: null
 				},
+				parentProject: null,
+				projectLineage: [
+					{
+						id: 'project_1',
+						name: 'Agent Management System Prototype'
+					}
+				],
+				parentProjectOptions: [
+					{
+						id: 'project_2',
+						label: 'Agent Management System Prototype / Kwipoo website'
+					}
+				],
+				childProjects: [
+					{
+						id: 'project_2',
+						name: 'Kwipoo website',
+						summary: 'Marketing site',
+						taskCount: 1,
+						goalCount: 1
+					}
+				],
 				permissionSurface: {
 					effectiveSandbox: 'workspace-write',
-					sandboxSource: 'Fallback until a worker or provider override is chosen',
+					sandboxSource: 'Fallback until an execution surface or provider override is chosen',
 					summary: {
 						trackedPathCount: 3,
 						blockerCount: 0,
@@ -79,6 +102,7 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 						summary: 'Wire delete behavior',
 						status: 'ready',
 						priority: 'high',
+						projectName: 'Kwipoo website',
 						artifactPath: '/tmp/project/agent_output/tasks/task_1',
 						goalName: 'Ship deletion',
 						assigneeName: 'Coordinator',
@@ -90,27 +114,33 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 				],
 				folderOptions: [],
 				sandboxOptions: ['workspace-write'],
+				contextScope: {
+					projectIds: ['project_1', 'project_2'],
+					directTaskCount: 0,
+					rolledUpTaskCount: 1,
+					childProjectCount: 1
+				},
 				metrics: {
 					totalTasks: 1,
 					activeTasks: 1,
 					reviewTasks: 0,
 					pendingApprovals: 0,
 					blockedTasks: 0,
-					goalCount: 1
+					goalCount: 1,
+					childProjectCount: 1
 				}
 			} as never
 		});
 
+		expect(document.body.textContent).toContain('Parent and subproject context');
+		expect(document.body.textContent).toContain('Kwipoo website');
 		expect(document.body.textContent).toContain('Delete project');
 		expect(document.body.textContent).toContain('Local access and sandbox coverage');
 		expect(document.body.textContent).toContain('macOS protected');
 		expect(document.body.textContent).toContain('Outside sandbox');
 		expect(document.body.textContent).toContain(
-			'Reassign or delete those tasks first because tasks require a project.'
+			'promotes any child projects to the next parent level'
 		);
-		expect(
-			(document.querySelector('button[type="submit"][disabled]') as HTMLButtonElement | null)
-				?.textContent
-		).toContain('Delete project');
+		expect(document.querySelector('button[type="submit"][disabled]')).toBeNull();
 	});
 });

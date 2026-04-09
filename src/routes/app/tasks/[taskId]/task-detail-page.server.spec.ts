@@ -221,20 +221,20 @@ vi.mock('$lib/server/control-plane', () => ({
 	resolveThreadSandbox: vi.fn(
 		(input: {
 			task?: { requiredThreadSandbox?: string | null } | null;
-			worker?: { threadSandboxOverride: string | null } | null;
+			executionSurface?: { threadSandboxOverride: string | null } | null;
 			project?: { defaultThreadSandbox?: string | null } | null;
 			provider?: { defaultThreadSandbox: string } | null;
 		}) =>
 			input.task?.requiredThreadSandbox ??
-			input.worker?.threadSandboxOverride ??
+			input.executionSurface?.threadSandboxOverride ??
 			input.project?.defaultThreadSandbox ??
 			input.provider?.defaultThreadSandbox ??
 			'workspace-write'
 	),
 	selectExecutionProvider: vi.fn(
-		(data: ControlPlaneData, worker?: { providerId: string } | null) =>
-			(worker?.providerId
-				? data.providers.find((provider) => provider.id === worker.providerId)
+		(data: ControlPlaneData, executionSurface?: { providerId: string } | null) =>
+			(executionSurface?.providerId
+				? data.providers.find((provider) => provider.id === executionSurface.providerId)
 				: null) ??
 			data.providers.find((provider) => provider.kind === 'local' && provider.enabled) ??
 			data.providers[0] ??
@@ -782,20 +782,23 @@ describe('task detail page server actions', () => {
 	it('decomposes a task into delegated child tasks within the fan-out limit', async () => {
 		const form = new FormData();
 		form.set('decompositionEnabled0', 'true');
-		form.set('decompositionTitle0', 'Research current worker constraints');
+		form.set('decompositionTitle0', 'Research current execution-surface constraints');
 		form.set(
 			'decompositionInstructions0',
-			'Audit the current worker capacity and concurrency constraints.'
+			'Audit the current execution-surface capacity and concurrency constraints.'
 		);
 		form.set('decompositionDesiredRoleId0', 'role_reviewer');
-		form.set('decompositionObjective0', 'Produce a bounded analysis of worker constraints.');
+		form.set(
+			'decompositionObjective0',
+			'Produce a bounded analysis of execution-surface constraints.'
+		);
 		form.set(
 			'decompositionExpectedDeliverable0',
 			'A short design note with the current limits and gaps.'
 		);
 		form.set(
 			'decompositionDoneCondition0',
-			'The parent can decide whether worker routing changes are needed.'
+			'The parent can decide whether execution-surface routing changes are needed.'
 		);
 		form.set('decompositionEnabled1', 'true');
 		form.set('decompositionTitle1', 'Draft orchestration UI copy');
@@ -833,14 +836,16 @@ describe('task detail page server actions', () => {
 		expect(controlPlaneState.saved?.tasks.filter((task) => task.parentTaskId === 'task_1')).toEqual(
 			[
 				expect.objectContaining({
-					title: 'Research current worker constraints',
+					title: 'Research current execution-surface constraints',
 					desiredRoleId: 'role_reviewer',
 					parentTaskId: 'task_1',
-					successCriteria: 'The parent can decide whether worker routing changes are needed.',
+					successCriteria:
+						'The parent can decide whether execution-surface routing changes are needed.',
 					expectedOutcome: 'A short design note with the current limits and gaps.',
 					delegationPacket: expect.objectContaining({
-						objective: 'Produce a bounded analysis of worker constraints.',
-						doneCondition: 'The parent can decide whether worker routing changes are needed.',
+						objective: 'Produce a bounded analysis of execution-surface constraints.',
+						doneCondition:
+							'The parent can decide whether execution-surface routing changes are needed.',
 						inputContext: expect.stringContaining('Parent task: Attach a brief')
 					})
 				}),
@@ -858,7 +863,7 @@ describe('task detail page server actions', () => {
 			expect.objectContaining({
 				taskId: 'task_1',
 				decisionType: 'task_decomposed',
-				summary: expect.stringContaining('Research current worker constraints')
+				summary: expect.stringContaining('Research current execution-surface constraints')
 			})
 		);
 	});
@@ -1442,7 +1447,7 @@ describe('task detail page server actions', () => {
 		expect(controlPlaneState.saved).toBeNull();
 	});
 
-	it('uses a worker thread sandbox override when starting a new task thread', async () => {
+	it('uses an execution-surface thread sandbox override when starting a new task thread', async () => {
 		controlPlaneState.current = {
 			...(controlPlaneState.current as ControlPlaneData),
 			roles: [
@@ -1517,7 +1522,7 @@ describe('task detail page server actions', () => {
 		);
 	});
 
-	it('uses the task sandbox requirement over worker and project defaults on the task detail page', async () => {
+	it('uses the task sandbox requirement over execution-surface and project defaults on the task detail page', async () => {
 		(controlPlaneState.current as ControlPlaneData).projects[0]!.defaultThreadSandbox =
 			'danger-full-access';
 		controlPlaneState.current = {

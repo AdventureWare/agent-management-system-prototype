@@ -22,6 +22,7 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+.vitest-attachments/
 # Playwright
 test-results
 playwright-report/

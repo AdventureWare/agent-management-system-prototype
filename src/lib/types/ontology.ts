@@ -13,7 +13,7 @@ import type { AgentSandbox, AgentThreadState } from '$lib/types/agent-thread';
 
 export type OntologyActorKind = 'human' | 'ai' | 'unknown';
 export type OntologyWorkAttemptKind = 'run' | 'human_work_session';
-export type OntologyCapabilitySource = 'worker_skill' | 'provider_capability' | 'manual';
+export type OntologyCapabilitySource = 'execution_surface_skill' | 'provider_capability' | 'manual';
 export type OntologyToolSource = 'provider_launcher' | 'manual';
 export type OntologyArtifactSource = 'run_artifact_path';
 export type OntologyContextSource = 'task_attachment' | 'thread_attachment';

@@ -10,31 +10,31 @@ describe('executionSurfaceRecordStore', () => {
 		executionSurfaceRecordStore.reset();
 	});
 
-	it('keeps the newest worker fields across list and detail snapshots', () => {
+	it('keeps the newest execution surface fields across list and detail snapshots', () => {
 		executionSurfaceRecordStore.seedExecutionSurfaces([
 			{
 				id: 'worker-1',
-				name: 'Original worker',
+				name: 'Original execution surface',
 				status: 'idle'
 			}
 		]);
 
 		executionSurfaceRecordStore.seedExecutionSurface({
 			id: 'worker-1',
-			name: 'Updated worker',
+			name: 'Updated execution surface',
 			status: 'busy',
 			note: 'Handling a long-running task'
 		});
 
 		expect(get(executionSurfaceRecordStore).byId['worker-1']).toMatchObject({
 			id: 'worker-1',
-			name: 'Updated worker',
+			name: 'Updated execution surface',
 			status: 'busy',
 			note: 'Handling a long-running task'
 		});
 	});
 
-	it('overlays stored worker fields onto page-local worker shapes', () => {
+	it('overlays stored execution-surface fields onto page-local execution-surface shapes', () => {
 		executionSurfaceRecordStore.seedExecutionSurface({
 			id: 'worker-7',
 			status: 'offline',

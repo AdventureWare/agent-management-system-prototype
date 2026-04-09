@@ -44,7 +44,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					taskProjectId: 'project_1',
 					taskProjectName: 'Agent Management System Prototype',
 					executionSurfaceId: 'worker_1',
-					workerName: 'Coordinator',
+					executionSurfaceName: 'Coordinator',
 					providerId: 'provider_1',
 					providerName: 'Local Codex',
 					status: 'failed',
@@ -66,14 +66,14 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					lastHeartbeatAt: '2026-03-30T12:04:30.000Z',
 					heartbeatAgeLabel: '30s ago',
 					isHeartbeatStale: true,
-					errorSummary: 'Route load failed on missing worker filter.',
+					errorSummary: 'Route load failed on missing execution-surface filter.',
 					createdAtLabel: '5m ago',
 					updatedAtLabel: 'just now'
 				},
 				task: {
 					id: 'task_1'
 				},
-				worker: {
+				executionSurface: {
 					id: 'worker_1',
 					status: 'busy'
 				},
@@ -93,7 +93,9 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Captured execution inputs');
 		expect(document.body.textContent).toContain('digest: add runs index and detail');
 		expect(document.body.textContent).toContain('thread_1');
-		expect(document.body.textContent).toContain('Route load failed on missing worker filter.');
+		expect(document.body.textContent).toContain(
+			'Route load failed on missing execution-surface filter.'
+		);
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1/log.txt');
 		expect(document.body.textContent).toContain('Recorded output');
 	});

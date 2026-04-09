@@ -17,6 +17,10 @@ export type ProjectSkillCatalogEntry = {
 		id: string;
 		requestingTaskCount: number;
 	}>;
+	installedSkills: Array<{
+		id: string;
+		sourceLabel: string;
+	}>;
 	previewSkills: Array<{
 		id: string;
 		sourceLabel: string;
@@ -25,9 +29,9 @@ export type ProjectSkillCatalogEntry = {
 
 export type CapabilityCatalogEntry = {
 	name: string;
-	workerSkillCount: number;
-	supportedWorkerCount: number;
-	onlineSupportedWorkerCount: number;
+	executionSurfaceSkillCount: number;
+	supportedExecutionSurfaceCount: number;
+	onlineSupportedExecutionSurfaceCount: number;
 	providerCapabilityCount: number;
 	connectedProviderCount: number;
 };
@@ -36,8 +40,8 @@ export type ToolCatalogEntry = {
 	name: string;
 	providerCount: number;
 	connectedProviderCount: number;
-	workerCount: number;
-	onlineWorkerCount: number;
+	executionSurfaceCount: number;
+	onlineExecutionSurfaceCount: number;
 };
 
 export type ExecutionCapabilityCatalog = {
@@ -49,8 +53,8 @@ export type ExecutionCapabilityCatalog = {
 type CapabilityAccumulator = {
 	name: string;
 	executionSurfaceIds: Set<string>;
-	supportedWorkerIds: Set<string>;
-	onlineSupportedWorkerIds: Set<string>;
+	supportedExecutionSurfaceIds: Set<string>;
+	onlineSupportedExecutionSurfaceIds: Set<string>;
 	providerIds: Set<string>;
 	connectedProviderIds: Set<string>;
 };
@@ -60,7 +64,7 @@ type ToolAccumulator = {
 	providerIds: Set<string>;
 	connectedProviderIds: Set<string>;
 	executionSurfaceIds: Set<string>;
-	onlineWorkerIds: Set<string>;
+	onlineExecutionSurfaceIds: Set<string>;
 };
 
 function getOrCreateCapabilityEntry(
@@ -82,8 +86,8 @@ function getOrCreateCapabilityEntry(
 	const nextEntry = {
 		name: name.trim(),
 		executionSurfaceIds: new Set<string>(),
-		supportedWorkerIds: new Set<string>(),
-		onlineSupportedWorkerIds: new Set<string>(),
+		supportedExecutionSurfaceIds: new Set<string>(),
+		onlineSupportedExecutionSurfaceIds: new Set<string>(),
 		providerIds: new Set<string>(),
 		connectedProviderIds: new Set<string>()
 	};
@@ -112,7 +116,7 @@ function getOrCreateToolEntry(
 		providerIds: new Set<string>(),
 		connectedProviderIds: new Set<string>(),
 		executionSurfaceIds: new Set<string>(),
-		onlineWorkerIds: new Set<string>()
+		onlineExecutionSurfaceIds: new Set<string>()
 	};
 	entries.set(normalizedName, nextEntry);
 	return nextEntry;
@@ -122,9 +126,9 @@ function finalizeCapabilityEntries(entries: Map<string, CapabilityAccumulator>) 
 	return [...entries.values()]
 		.map((entry) => ({
 			name: entry.name,
-			workerSkillCount: entry.executionSurfaceIds.size,
-			supportedWorkerCount: entry.supportedWorkerIds.size,
-			onlineSupportedWorkerCount: entry.onlineSupportedWorkerIds.size,
+			executionSurfaceSkillCount: entry.executionSurfaceIds.size,
+			supportedExecutionSurfaceCount: entry.supportedExecutionSurfaceIds.size,
+			onlineSupportedExecutionSurfaceCount: entry.onlineSupportedExecutionSurfaceIds.size,
 			providerCapabilityCount: entry.providerIds.size,
 			connectedProviderCount: entry.connectedProviderIds.size
 		}))
@@ -137,8 +141,8 @@ function finalizeToolEntries(entries: Map<string, ToolAccumulator>) {
 			name: entry.name,
 			providerCount: entry.providerIds.size,
 			connectedProviderCount: entry.connectedProviderIds.size,
-			workerCount: entry.executionSurfaceIds.size,
-			onlineWorkerCount: entry.onlineWorkerIds.size
+			executionSurfaceCount: entry.executionSurfaceIds.size,
+			onlineExecutionSurfaceCount: entry.onlineExecutionSurfaceIds.size
 		}))
 		.sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -149,12 +153,13 @@ export function buildExecutionCapabilityCatalog(
 	const capabilityEntries = new Map<string, CapabilityAccumulator>();
 	const toolEntries = new Map<string, ToolAccumulator>();
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
-	const workersByProviderId = new Map<string, ControlPlaneData['executionSurfaces']>();
+	const executionSurfacesByProviderId = new Map<string, ControlPlaneData['executionSurfaces']>();
 
-	for (const worker of data.executionSurfaces) {
-		const providerWorkers = workersByProviderId.get(worker.providerId) ?? [];
-		providerWorkers.push(worker);
-		workersByProviderId.set(worker.providerId, providerWorkers);
+	for (const executionSurface of data.executionSurfaces) {
+		const providerExecutionSurfaces =
+			executionSurfacesByProviderId.get(executionSurface.providerId) ?? [];
+		providerExecutionSurfaces.push(executionSurface);
+		executionSurfacesByProviderId.set(executionSurface.providerId, providerExecutionSurfaces);
 	}
 
 	for (const provider of data.providers) {
@@ -168,11 +173,11 @@ export function buildExecutionCapabilityCatalog(
 					entry.connectedProviderIds.add(provider.id);
 				}
 
-				for (const worker of workersByProviderId.get(provider.id) ?? []) {
-					entry.supportedWorkerIds.add(worker.id);
+				for (const executionSurface of executionSurfacesByProviderId.get(provider.id) ?? []) {
+					entry.supportedExecutionSurfaceIds.add(executionSurface.id);
 
-					if (worker.status !== 'offline') {
-						entry.onlineSupportedWorkerIds.add(worker.id);
+					if (executionSurface.status !== 'offline') {
+						entry.onlineSupportedExecutionSurfaceIds.add(executionSurface.id);
 					}
 				}
 			}
@@ -189,18 +194,18 @@ export function buildExecutionCapabilityCatalog(
 		}
 	}
 
-	for (const worker of data.executionSurfaces) {
-		const provider = providerMap.get(worker.providerId) ?? null;
+	for (const executionSurface of data.executionSurfaces) {
+		const provider = providerMap.get(executionSurface.providerId) ?? null;
 
-		for (const skillName of worker.skills ?? []) {
+		for (const skillName of executionSurface.skills ?? []) {
 			const entry = getOrCreateCapabilityEntry(capabilityEntries, skillName);
 
 			if (entry) {
-				entry.executionSurfaceIds.add(worker.id);
-				entry.supportedWorkerIds.add(worker.id);
+				entry.executionSurfaceIds.add(executionSurface.id);
+				entry.supportedExecutionSurfaceIds.add(executionSurface.id);
 
-				if (worker.status !== 'offline') {
-					entry.onlineSupportedWorkerIds.add(worker.id);
+				if (executionSurface.status !== 'offline') {
+					entry.onlineSupportedExecutionSurfaceIds.add(executionSurface.id);
 				}
 			}
 		}
@@ -208,10 +213,10 @@ export function buildExecutionCapabilityCatalog(
 		const toolEntry = getOrCreateToolEntry(toolEntries, provider?.launcher ?? '');
 
 		if (toolEntry) {
-			toolEntry.executionSurfaceIds.add(worker.id);
+			toolEntry.executionSurfaceIds.add(executionSurface.id);
 
-			if (worker.status !== 'offline') {
-				toolEntry.onlineWorkerIds.add(worker.id);
+			if (executionSurface.status !== 'offline') {
+				toolEntry.onlineExecutionSurfaceIds.add(executionSurface.id);
 			}
 		}
 	}
@@ -282,6 +287,10 @@ export function buildExecutionCapabilityCatalog(
 					missingRequestedSkillCount: missingRequestedSkills.length,
 					tasksMissingRequestedSkillCount,
 					missingRequestedSkills: missingRequestedSkills.slice(0, 8),
+					installedSkills: installedSkills.map((skill) => ({
+						id: skill.id,
+						sourceLabel: skill.sourceLabel
+					})),
 					previewSkills: installedSkills.slice(0, 8).map((skill) => ({
 						id: skill.id,
 						sourceLabel: skill.sourceLabel

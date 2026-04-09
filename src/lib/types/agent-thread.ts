@@ -191,3 +191,17 @@ export type AgentThreadDetail = AgentThread & {
 	latestRun: AgentRunDetail | null;
 	runs: AgentRunDetail[];
 };
+
+export type AgentThreadStatusSnapshot = Pick<
+	AgentThreadDetail,
+	| 'id'
+	| 'threadId'
+	| 'threadState'
+	| 'latestRunStatus'
+	| 'hasActiveRun'
+	| 'canResume'
+	| 'runCount'
+	| 'lastActivityAt'
+	| 'lastExitCode'
+	| 'latestRun'
+>;

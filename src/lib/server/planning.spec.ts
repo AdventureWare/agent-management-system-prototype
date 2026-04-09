@@ -86,7 +86,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'worker_1',
 				name: 'Local builder',
 				providerId: 'provider_local',
-				supportedRoleIds: [],
+				supportedRoleIds: ['role_product'],
 				location: 'local',
 				status: 'busy',
 				capacity: 2,
@@ -105,7 +105,7 @@ function buildFixture(): ControlPlaneData {
 				id: 'worker_2',
 				name: 'Cloud coordinator',
 				providerId: 'provider_cloud',
-				supportedRoleIds: [],
+				supportedRoleIds: ['role_coordinator'],
 				location: 'cloud',
 				status: 'idle',
 				capacity: 1,
@@ -186,7 +186,7 @@ function buildFixture(): ControlPlaneData {
 }
 
 describe('planning helpers', () => {
-	it('builds planning metrics, goal summaries, and worker loads', () => {
+	it('builds planning metrics, goal summaries, and execution-surface loads', () => {
 		const snapshot = buildPlanningPageData(buildFixture(), {
 			startDate: '2026-04-01',
 			endDate: '2026-04-15',
@@ -214,9 +214,9 @@ describe('planning helpers', () => {
 				id: 'task_1',
 				requiredCapabilityNames: ['svelte'],
 				requiredToolNames: ['codex'],
-				eligibleWorkerCount: 1,
-				suggestedWorkerNames: ['Local builder'],
-				assignedWorkerEligible: true
+				eligibleExecutionSurfaceCount: 1,
+				suggestedExecutionSurfaceNames: ['Local builder'],
+				assignedExecutionSurfaceEligible: true
 			})
 		]);
 		expect(snapshot.unscheduledTasks).toEqual([
@@ -224,12 +224,14 @@ describe('planning helpers', () => {
 				id: 'task_2',
 				requiredCapabilityNames: ['planning'],
 				requiredToolNames: [],
-				eligibleWorkerCount: 1,
-				suggestedWorkerNames: ['Cloud coordinator'],
-				assignedWorkerEligible: null
+				eligibleExecutionSurfaceCount: 1,
+				suggestedExecutionSurfaceNames: ['Cloud coordinator'],
+				assignedExecutionSurfaceEligible: null
 			})
 		]);
-		expect(snapshot.workerLoads.find((worker) => worker.id === 'worker_1')).toEqual(
+		expect(
+			snapshot.executionSurfaceLoads.find((executionSurface) => executionSurface.id === 'worker_1')
+		).toEqual(
 			expect.objectContaining({
 				plannedHours: 12,
 				capacityHours: 18,
@@ -238,7 +240,7 @@ describe('planning helpers', () => {
 		);
 	});
 
-	it('narrows planning scope by worker filter', () => {
+	it('narrows planning scope by execution-surface filter', () => {
 		const snapshot = buildPlanningPageData(buildFixture(), {
 			startDate: '2026-04-01',
 			endDate: '2026-04-15',
@@ -249,5 +251,61 @@ describe('planning helpers', () => {
 		expect(snapshot.scheduledTasks.map((task) => task.id)).toEqual(['task_1']);
 		expect(snapshot.unscheduledTasks).toEqual([]);
 		expect(snapshot.goalsInScope.map((goal) => goal.id)).toEqual(['goal_1']);
+	});
+
+	it('treats a parent project filter as including linked subprojects', () => {
+		const fixture = buildFixture();
+		fixture.projects.push({
+			id: 'project_2',
+			name: 'Kwipoo website',
+			summary: 'Website subproject',
+			parentProjectId: 'project_1',
+			projectRootFolder: '/tmp/ams-site',
+			defaultArtifactRoot: '/tmp/ams-site/agent_output',
+			defaultRepoPath: '',
+			defaultRepoUrl: '',
+			defaultBranch: 'main'
+		});
+		fixture.tasks.push({
+			id: 'task_3',
+			title: 'Refine website copy',
+			summary: 'Ship the website content updates.',
+			projectId: 'project_2',
+			area: 'product',
+			goalId: 'goal_1',
+			priority: 'medium',
+			status: 'ready',
+			riskLevel: 'low',
+			approvalMode: 'none',
+			requiresReview: false,
+			desiredRoleId: 'role_coordinator',
+			assigneeExecutionSurfaceId: null,
+			agentThreadId: null,
+			blockedReason: '',
+			dependencyTaskIds: [],
+			estimateHours: 4,
+			targetDate: '2026-04-12',
+			requiredCapabilityNames: ['planning'],
+			requiredToolNames: [],
+			runCount: 0,
+			latestRunId: null,
+			artifactPath: '/tmp/ams-site/agent_output',
+			attachments: [],
+			createdAt: '2026-03-31T00:00:00.000Z',
+			updatedAt: '2026-03-31T00:00:00.000Z'
+		});
+
+		const snapshot = buildPlanningPageData(fixture, {
+			startDate: '2026-04-01',
+			endDate: '2026-04-15',
+			projectId: 'project_1',
+			includeUnscheduled: true
+		});
+
+		expect(snapshot.scheduledTasks.map((task) => task.id)).toEqual(['task_1', 'task_3']);
+		expect(snapshot.scheduledTasks.map((task) => task.projectName)).toEqual([
+			'Agent Management System Prototype',
+			'Kwipoo website'
+		]);
 	});
 });

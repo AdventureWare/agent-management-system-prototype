@@ -4,7 +4,6 @@ import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import {
 	getAgentThread,
 	listAgentThreadContacts,
-	listAgentThreads,
 	parseAgentSandbox,
 	recoverAgentThread,
 	sendAgentThreadMessage,
@@ -22,7 +21,6 @@ import {
 	loadControlPlane,
 	updateControlPlane
 } from '$lib/server/control-plane';
-import { buildThreadContactTargets } from '$lib/server/thread-contact-targets';
 import { buildPromptDigest } from '$lib/server/task-threads';
 import type { Approval, ControlPlaneData, Review, Run, Task } from '$lib/types/control-plane';
 
@@ -38,7 +36,7 @@ type ThreadTaskResponseAction = {
 	taskApprovalMode: Task['approvalMode'];
 	taskRequiresReview: boolean;
 	taskDesiredRoleId: string;
-	taskAssigneeWorkerId: string;
+	taskAssigneeExecutionSurfaceId: string;
 	taskTargetDate: string;
 	taskRequiredCapabilityNames: string[];
 	taskRequiredToolNames: string[];
@@ -214,7 +212,7 @@ function buildTaskResponseAction(input: {
 		taskApprovalMode: task.approvalMode,
 		taskRequiresReview: task.requiresReview,
 		taskDesiredRoleId: task.desiredRoleId,
-		taskAssigneeWorkerId: task.assigneeExecutionSurfaceId ?? '',
+		taskAssigneeExecutionSurfaceId: task.assigneeExecutionSurfaceId ?? '',
 		taskTargetDate: task.targetDate ?? '',
 		taskRequiredCapabilityNames: task.requiredCapabilityNames ?? [],
 		taskRequiredToolNames: task.requiredToolNames ?? [],
@@ -419,13 +417,9 @@ function reopenTasksForThreadRetry(input: {
 
 export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlane();
-	const [data, thread, allThreads, contacts] = await Promise.all([
+	const [data, thread, contacts] = await Promise.all([
 		controlPlanePromise,
 		getAgentThread(params.threadId, { controlPlane: controlPlanePromise }),
-		listAgentThreads({
-			includeArchived: false,
-			controlPlane: controlPlanePromise
-		}),
 		listAgentThreadContacts({
 			threadId: params.threadId,
 			limit: 12
@@ -450,9 +444,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			data
 		}),
 		threadContacts: contacts,
-		threadContactTargets: buildThreadContactTargets(allThreads, {
-			sourceThreadId: params.threadId
-		}),
+		threadContactTargets: [],
 		responseContextArtifacts: buildThreadResponseContextArtifacts({
 			threadId: params.threadId,
 			thread,

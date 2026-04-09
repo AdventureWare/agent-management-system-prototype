@@ -9,10 +9,15 @@ import { buildThreadContactTarget } from '$lib/server/thread-contact-targets';
 
 export const GET = async ({ url }) => {
 	const limitValue = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
+	const includeTargets = url.searchParams.get('includeTargets') !== '0';
 	const threads = rankAgentThreadsForRouting(
 		await listAgentThreads({
 			includeArchived: url.searchParams.get('includeArchived') === '1',
-			includeCategorization: url.searchParams.get('includeCategorization') !== '0'
+			includeCategorization: url.searchParams.get('includeCategorization') !== '0',
+			includeExternal: url.searchParams.get('includeExternal') !== '0',
+			includeManaged: url.searchParams.get('includeManaged') !== '0',
+			reconcileTaskState: url.searchParams.get('reconcileTaskState') !== '0',
+			threadIds: url.searchParams.getAll('threadId')
 		}),
 		{
 			q: url.searchParams.get('q'),
@@ -25,7 +30,9 @@ export const GET = async ({ url }) => {
 		}
 	);
 
-	return json({ threads, targets: threads.map(buildThreadContactTarget) });
+	return json(
+		includeTargets ? { threads, targets: threads.map(buildThreadContactTarget) } : { threads }
+	);
 };
 
 export const POST = async ({ request }) => {

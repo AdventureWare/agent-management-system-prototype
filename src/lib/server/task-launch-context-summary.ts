@@ -14,7 +14,7 @@ export type TaskLaunchContextSummary = {
 		mcpIds: string[];
 		hasSystemPrompt: boolean;
 	} | null;
-	assignedWorker: {
+	assignedExecutionSurface: {
 		id: string;
 		name: string;
 		status: ExecutionSurface['status'];
@@ -29,7 +29,7 @@ export type TaskLaunchContextSummary = {
 	sandbox: {
 		effective: AgentSandbox;
 		taskRequirement: AgentSandbox | null;
-		workerOverride: AgentSandbox | null;
+		executionSurfaceOverride: AgentSandbox | null;
 		projectDefault: AgentSandbox | null;
 		providerDefault: AgentSandbox | null;
 	};
@@ -60,11 +60,11 @@ export function buildTaskLaunchContextSummary(
 	input: {
 		task: Task;
 		project: Project | null;
-		worker: ExecutionSurface | null;
+		executionSurface: ExecutionSurface | null;
 		publishedKnowledgeCount: number;
 	}
 ): TaskLaunchContextSummary {
-	const provider = selectExecutionProvider(data, input.worker);
+	const provider = selectExecutionProvider(data, input.executionSurface);
 	const installedSkills = input.project
 		? listInstalledCodexSkills(input.project.projectRootFolder)
 		: [];
@@ -89,12 +89,12 @@ export function buildTaskLaunchContextSummary(
 					hasSystemPrompt: Boolean(role.systemPrompt.trim())
 				}
 			: null,
-		assignedWorker: input.worker
+		assignedExecutionSurface: input.executionSurface
 			? {
-					id: input.worker.id,
-					name: input.worker.name,
-					status: input.worker.status,
-					skillNames: [...(input.worker.skills ?? [])]
+					id: input.executionSurface.id,
+					name: input.executionSurface.name,
+					status: input.executionSurface.status,
+					skillNames: [...(input.executionSurface.skills ?? [])]
 				}
 			: null,
 		provider: provider
@@ -108,12 +108,12 @@ export function buildTaskLaunchContextSummary(
 		sandbox: {
 			effective: resolveThreadSandbox({
 				task: input.task,
-				worker: input.worker,
+				executionSurface: input.executionSurface,
 				project: input.project,
 				provider
 			}),
 			taskRequirement: input.task.requiredThreadSandbox ?? null,
-			workerOverride: input.worker?.threadSandboxOverride ?? null,
+			executionSurfaceOverride: input.executionSurface?.threadSandboxOverride ?? null,
 			projectDefault: input.project?.defaultThreadSandbox ?? null,
 			providerDefault: provider?.defaultThreadSandbox ?? null
 		},

@@ -51,7 +51,7 @@ export const load: PageServerLoad = async () => {
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const assignedTaskCounts = new Map<string, number>();
-	const latestRunByWorker = new Map<string, string>();
+	const latestRunByExecutionSurface = new Map<string, string>();
 	const activeRunCounts = new Map<string, number>();
 
 	for (const task of data.tasks) {
@@ -66,10 +66,10 @@ export const load: PageServerLoad = async () => {
 	}
 
 	for (const run of [...data.runs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
-		if (!run.executionSurfaceId || latestRunByWorker.has(run.executionSurfaceId)) {
-			// Keep counting active runs below even if this worker already has a latest timestamp.
+		if (!run.executionSurfaceId || latestRunByExecutionSurface.has(run.executionSurfaceId)) {
+			// Keep counting active runs below even if this execution surface already has a latest timestamp.
 		} else {
-			latestRunByWorker.set(run.executionSurfaceId, run.updatedAt);
+			latestRunByExecutionSurface.set(run.executionSurfaceId, run.updatedAt);
 		}
 
 		if (run.executionSurfaceId && ACTIVE_RUN_STATUSES.has(run.status)) {
@@ -83,7 +83,7 @@ export const load: PageServerLoad = async () => {
 	const executionSurfacesView = [...executionSurfaces]
 		.map((executionSurface) => {
 			const provider = providerMap.get(executionSurface.providerId) ?? null;
-			const workerSkills = executionSurface.skills ?? [];
+			const executionSurfaceSkills = executionSurface.skills ?? [];
 			const providerCapabilities = provider?.capabilities ?? [];
 			const supportedRoleIds = getSupportedRoleIds(executionSurface);
 			const supportedRoleNames = supportedRoleIds.map(
@@ -98,9 +98,9 @@ export const load: PageServerLoad = async () => {
 				supportedRoleNames,
 				assignedTaskCount: assignedTaskCounts.get(executionSurface.id) ?? 0,
 				activeRunCount: activeRunCounts.get(executionSurface.id) ?? 0,
-				latestRunAt: latestRunByWorker.get(executionSurface.id) ?? null,
+				latestRunAt: latestRunByExecutionSurface.get(executionSurface.id) ?? null,
 				providerCapabilities,
-				effectiveCapabilities: [...new Set([...workerSkills, ...providerCapabilities])],
+				effectiveCapabilities: [...new Set([...executionSurfaceSkills, ...providerCapabilities])],
 				effectiveConcurrencyLimit:
 					typeof executionSurface.maxConcurrentRuns === 'number' &&
 					Number.isFinite(executionSurface.maxConcurrentRuns)
@@ -172,10 +172,10 @@ export const actions: Actions = {
 
 		await updateControlPlane((data) => ({
 			...data,
-			executionSurfaces: data.executionSurfaces.map((worker) =>
-				worker.id === executionSurfaceId
-					? { ...worker, status, lastSeenAt: new Date().toISOString() }
-					: worker
+			executionSurfaces: data.executionSurfaces.map((executionSurface) =>
+				executionSurface.id === executionSurfaceId
+					? { ...executionSurface, status, lastSeenAt: new Date().toISOString() }
+					: executionSurface
 			)
 		}));
 

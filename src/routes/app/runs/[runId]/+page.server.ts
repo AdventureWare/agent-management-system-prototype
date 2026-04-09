@@ -34,10 +34,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		),
 		task: data.tasks.find((task) => task.id === run.taskId) ?? null,
 		executionSurface: run.executionSurfaceId
-			? (getExecutionSurfaces(data).find((worker) => worker.id === run.executionSurfaceId) ?? null)
-			: null,
-		worker: run.executionSurfaceId
-			? (getExecutionSurfaces(data).find((worker) => worker.id === run.executionSurfaceId) ?? null)
+			? (getExecutionSurfaces(data).find((surface) => surface.id === run.executionSurfaceId) ??
+				null)
 			: null,
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)

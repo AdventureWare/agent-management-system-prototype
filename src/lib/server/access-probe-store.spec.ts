@@ -11,7 +11,7 @@ describe('access probe store', () => {
 					macosPromptCount: 0,
 					projectsMissingRequestedPromptSkillsCount: 0,
 					providerNeedsSetupCount: 1,
-					workerAccessIssueCount: 1
+					executionSurfaceAccessIssueCount: 1
 				},
 				executionCatalog: {
 					projectSkills: [],
@@ -79,14 +79,14 @@ describe('access probe store', () => {
 						capabilities: [],
 						defaultThreadSandbox: 'workspace-write',
 						notes: '',
-						workerCount: 1,
+						executionSurfaceCount: 1,
 						providerHref: '/app/providers/provider_1'
 					}
 				],
 				executionSurfaces: [
 					{
 						id: 'worker_1',
-						name: 'Local worker',
+						name: 'Local execution surface',
 						providerId: 'provider_1',
 						location: 'local',
 						status: 'idle',
@@ -101,7 +101,7 @@ describe('access probe store', () => {
 						roleName: 'Engineer',
 						supportedRoleIds: ['role_1'],
 						supportedRoleNames: ['Engineer'],
-						workerHref: '/app/execution-surfaces/worker_1',
+						executionSurfaceHref: '/app/execution-surfaces/worker_1',
 						accessState: 'provider_needs_setup'
 					}
 				]
@@ -120,7 +120,7 @@ describe('access probe store', () => {
 					status: 'needs_setup'
 				}),
 				expect.objectContaining({
-					targetKey: 'worker:worker_1',
+					targetKey: 'execution_surface:worker_1',
 					status: 'needs_setup'
 				})
 			])

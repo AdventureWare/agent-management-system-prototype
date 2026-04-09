@@ -14,13 +14,13 @@ const initialState: ExecutionSurfaceRecordStoreState = {
 
 function mergeExecutionSurfaceRecord(
 	current: Record<string, ExecutionSurfaceRecord>,
-	worker: ExecutionSurfaceRecord
+	executionSurface: ExecutionSurfaceRecord
 ) {
 	return {
 		...current,
-		[worker.id]: {
-			...(current[worker.id] ?? {}),
-			...worker
+		[executionSurface.id]: {
+			...(current[executionSurface.id] ?? {}),
+			...executionSurface
 		}
 	};
 }
@@ -33,17 +33,17 @@ function createExecutionSurfaceRecordStore() {
 		reset() {
 			update(() => initialState);
 		},
-		seedExecutionSurface(worker: ExecutionSurfaceRecord) {
+		seedExecutionSurface(executionSurface: ExecutionSurfaceRecord) {
 			update((state) => ({
-				byId: mergeExecutionSurfaceRecord(state.byId, worker)
+				byId: mergeExecutionSurfaceRecord(state.byId, executionSurface)
 			}));
 		},
 		seedExecutionSurfaces(executionSurfaces: ExecutionSurfaceRecord[]) {
 			update((state) => {
 				let nextById = state.byId;
 
-				for (const worker of executionSurfaces) {
-					nextById = mergeExecutionSurfaceRecord(nextById, worker);
+				for (const executionSurface of executionSurfaces) {
+					nextById = mergeExecutionSurfaceRecord(nextById, executionSurface);
 				}
 
 				return {
@@ -57,17 +57,17 @@ function createExecutionSurfaceRecordStore() {
 export const executionSurfaceRecordStore = createExecutionSurfaceRecordStore();
 
 export function mergeStoredExecutionSurfaceRecord<T extends { id: string }>(
-	worker: T,
-	workersById: ExecutionSurfaceRecordStoreState['byId']
+	executionSurface: T,
+	executionSurfacesById: ExecutionSurfaceRecordStoreState['byId']
 ): T {
-	const storedWorker = workersById[worker.id];
+	const storedExecutionSurface = executionSurfacesById[executionSurface.id];
 
-	if (!storedWorker) {
-		return worker;
+	if (!storedExecutionSurface) {
+		return executionSurface;
 	}
 
 	return {
-		...worker,
-		...storedWorker
+		...executionSurface,
+		...storedExecutionSurface
 	} as T;
 }

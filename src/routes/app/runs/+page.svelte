@@ -18,7 +18,7 @@
 	let query = $state('');
 	let selectedStatus = $state('all');
 	let selectedTaskId = $state('all');
-	let selectedWorkerId = $state('all');
+	let selectedExecutionSurfaceId = $state('all');
 	let selectedProviderId = $state('all');
 	let selectedTime = $state<(typeof timeOptions)[number]['value']>('all');
 
@@ -63,7 +63,7 @@
 			run.status,
 			run.taskTitle,
 			run.taskProjectName,
-			run.workerName,
+			run.executionSurfaceName,
 			run.providerName,
 			run.agentThreadId ?? '',
 			run.threadName ?? '',
@@ -91,7 +91,10 @@
 				return false;
 			}
 
-			if (selectedWorkerId !== 'all' && run.executionSurfaceId !== selectedWorkerId) {
+			if (
+				selectedExecutionSurfaceId !== 'all' &&
+				run.executionSurfaceId !== selectedExecutionSurfaceId
+			) {
 				return false;
 			}
 
@@ -153,7 +156,7 @@
 			<div>
 				<h2 class="text-xl font-semibold text-white">Filters</h2>
 				<p class="mt-1 text-sm text-slate-400">
-					Narrow by status, task, worker, provider, and recent activity window.
+					Narrow by status, task, execution surface, provider, and recent activity window.
 				</p>
 			</div>
 			<div class="w-full xl:max-w-sm">
@@ -189,11 +192,11 @@
 			</label>
 
 			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">ExecutionSurface</span>
-				<select bind:value={selectedWorkerId} class="select text-white">
-					<option value="all">All executionSurfaces</option>
-					{#each data.executionSurfaces as worker (worker.id)}
-						<option value={worker.id}>{worker.name}</option>
+				<span class="mb-2 block text-sm font-medium text-slate-200">Execution surface</span>
+				<select bind:value={selectedExecutionSurfaceId} class="select text-white">
+					<option value="all">All execution surfaces</option>
+					{#each data.executionSurfaces as executionSurface (executionSurface.id)}
+						<option value={executionSurface.id}>{executionSurface.name}</option>
 					{/each}
 				</select>
 			</label>
@@ -245,7 +248,7 @@
 						<tr>
 							<th class="px-3 py-3 font-medium">Run</th>
 							<th class="px-3 py-3 font-medium">Task</th>
-							<th class="px-3 py-3 font-medium">ExecutionSurface</th>
+							<th class="px-3 py-3 font-medium">Execution surface</th>
 							<th class="px-3 py-3 font-medium">Provider</th>
 							<th class="px-3 py-3 font-medium">Prompt + thread</th>
 							<th class="px-3 py-3 font-medium">Heartbeat + errors</th>
@@ -285,7 +288,7 @@
 										<p class="text-sm text-slate-400">{run.taskProjectName}</p>
 									</div>
 								</td>
-								<td class="px-3 py-3 text-sm text-slate-300">{run.workerName}</td>
+								<td class="px-3 py-3 text-sm text-slate-300">{run.executionSurfaceName}</td>
 								<td class="px-3 py-3 text-sm text-slate-300">{run.providerName}</td>
 								<td class="px-3 py-3">
 									<div class="min-w-[18rem] space-y-2 text-sm text-slate-300">

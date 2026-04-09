@@ -27,6 +27,8 @@
 		runTaskDisabled,
 		runTaskButtonLabel,
 		runTaskDisabledTitle,
+		actionBasePath = '',
+		readOnly = false,
 		delegationInputContext,
 		delegationIntegrationNotes,
 		delegatedSubtaskInstructions,
@@ -37,6 +39,8 @@
 		runTaskDisabled: boolean;
 		runTaskButtonLabel: string;
 		runTaskDisabledTitle: string;
+		actionBasePath?: string;
+		readOnly?: boolean;
 		delegationInputContext: string;
 		delegationIntegrationNotes: string;
 		delegatedSubtaskInstructions: string;
@@ -47,6 +51,10 @@
 	let taskInstructionsExpanded = $state(false);
 	let taskTitleNeedsClamp = $derived(task.title.trim().length > 140);
 	let taskInstructionsNeedClamp = $derived(task.summary.trim().length > 360);
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
 </script>
 
 <DetailHeader
@@ -60,44 +68,50 @@
 >
 	{#snippet actions()}
 		<div class="flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
-			<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
-				<input type="hidden" name="create" value="1" />
-				<input type="hidden" name="projectId" value={task.projectId} />
-				<input type="hidden" name="goalId" value={task.goalId} />
-				<input type="hidden" name="parentTaskId" value={task.id} />
-				<input type="hidden" name="desiredRoleId" value={task.desiredRoleId} />
-				<input type="hidden" name="delegationInputContext" value={delegationInputContext} />
-				<input type="hidden" name="delegationIntegrationNotes" value={delegationIntegrationNotes} />
-				<input type="hidden" name="name" value={`Delegated subtask: ${task.title}`} />
-				<input type="hidden" name="instructions" value={delegatedSubtaskInstructions} />
-				<AppButton class="w-full sm:w-auto" type="submit" variant="primary">
-					Delegate subtask
+			{#if !readOnly}
+				<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
+					<input type="hidden" name="create" value="1" />
+					<input type="hidden" name="projectId" value={task.projectId} />
+					<input type="hidden" name="goalId" value={task.goalId} />
+					<input type="hidden" name="parentTaskId" value={task.id} />
+					<input type="hidden" name="desiredRoleId" value={task.desiredRoleId} />
+					<input type="hidden" name="delegationInputContext" value={delegationInputContext} />
+					<input
+						type="hidden"
+						name="delegationIntegrationNotes"
+						value={delegationIntegrationNotes}
+					/>
+					<input type="hidden" name="name" value={`Delegated subtask: ${task.title}`} />
+					<input type="hidden" name="instructions" value={delegatedSubtaskInstructions} />
+					<AppButton class="w-full sm:w-auto" type="submit" variant="primary">
+						Delegate subtask
+					</AppButton>
+				</form>
+				<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
+					<input type="hidden" name="create" value="1" />
+					<input type="hidden" name="projectId" value={task.projectId} />
+					<input type="hidden" name="name" value={`Follow-up: ${task.title}`} />
+					<input type="hidden" name="instructions" value={followUpTaskInstructions} />
+					<AppButton class="w-full sm:w-auto" type="submit" variant="accent">
+						Create follow-up task
+					</AppButton>
+				</form>
+				<AppButton class="w-full sm:w-auto" type="submit" variant="neutral" form="task-update-form">
+					Save changes
 				</AppButton>
-			</form>
-			<form class="w-full sm:w-auto" method="GET" action={resolve('/app/tasks')}>
-				<input type="hidden" name="create" value="1" />
-				<input type="hidden" name="projectId" value={task.projectId} />
-				<input type="hidden" name="name" value={`Follow-up: ${task.title}`} />
-				<input type="hidden" name="instructions" value={followUpTaskInstructions} />
-				<AppButton class="w-full sm:w-auto" type="submit" variant="accent">
-					Create follow-up task
+				<AppButton
+					class="w-full sm:w-auto"
+					variant={runTaskDisabled ? 'neutral' : 'primary'}
+					type="submit"
+					form="task-update-form"
+					formaction={taskAction('launchTaskSession')}
+					disabled={runTaskDisabled}
+					reserveLabel="Task starting"
+					title={runTaskDisabledTitle || undefined}
+				>
+					{runTaskButtonLabel}
 				</AppButton>
-			</form>
-			<AppButton class="w-full sm:w-auto" type="submit" variant="neutral" form="task-update-form">
-				Save changes
-			</AppButton>
-			<AppButton
-				class="w-full sm:w-auto"
-				variant={runTaskDisabled ? 'neutral' : 'primary'}
-				type="submit"
-				form="task-update-form"
-				formaction="?/launchTaskSession"
-				disabled={runTaskDisabled}
-				reserveLabel="Task starting"
-				title={runTaskDisabledTitle || undefined}
-			>
-				{runTaskButtonLabel}
-			</AppButton>
+			{/if}
 			{#if task.linkThread}
 				<AppButton
 					class="w-full sm:w-auto"

@@ -7,7 +7,7 @@ export type RunRecord = Run & {
 	taskTitle: string;
 	taskProjectId: string | null;
 	taskProjectName: string;
-	workerName: string;
+	executionSurfaceName: string;
 	providerName: string;
 	threadName: string | null;
 	threadState: AgentThreadDetail['threadState'] | null;
@@ -24,7 +24,9 @@ export type RunRecord = Run & {
 export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDetail[]): RunRecord[] {
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const workerMap = new Map(data.executionSurfaces.map((worker) => [worker.id, worker]));
+	const executionSurfaceMap = new Map(
+		data.executionSurfaces.map((executionSurface) => [executionSurface.id, executionSurface])
+	);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
 	const staleHeartbeatCutoffMs = 5 * 60 * 1000;
@@ -33,8 +35,8 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 		.map((run) => {
 			const task = taskMap.get(run.taskId) ?? null;
 			const project = task ? (projectMap.get(task.projectId) ?? null) : null;
-			const worker = run.executionSurfaceId
-				? (workerMap.get(run.executionSurfaceId) ?? null)
+			const executionSurface = run.executionSurfaceId
+				? (executionSurfaceMap.get(run.executionSurfaceId) ?? null)
 				: null;
 			const provider = run.providerId ? (providerMap.get(run.providerId) ?? null) : null;
 			const thread = run.agentThreadId ? (threadMap.get(run.agentThreadId) ?? null) : null;
@@ -47,7 +49,7 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 				taskTitle: task?.title ?? 'Unknown task',
 				taskProjectId: task?.projectId ?? null,
 				taskProjectName: project?.name ?? 'Unknown project',
-				workerName: worker?.name ?? 'Unassigned',
+				executionSurfaceName: executionSurface?.name ?? 'Unassigned',
 				providerName: provider?.name ?? 'No provider',
 				threadName: thread?.name ?? null,
 				threadState: thread?.threadState ?? thread?.threadState ?? null,

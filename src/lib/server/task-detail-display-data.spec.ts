@@ -110,7 +110,7 @@ describe('task-detail-display-data', () => {
 			projectMap: new Map([[project.id, project]]),
 			goalMap: new Map([['goal_cleanup', { name: 'Cleanup' }]]),
 			roleMap: new Map([['role_reviewer', { name: 'Reviewer' }]]),
-			workerMap: new Map([[worker.id, worker]]),
+			executionSurfaceMap: new Map([[worker.id, worker]]),
 			latestRun: null,
 			activeRun: null,
 			threadContext: {

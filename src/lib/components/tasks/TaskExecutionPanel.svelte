@@ -35,12 +35,12 @@
 
 	type ExecutionPreflightView = {
 		hasDeclaredRequirements: boolean;
-		eligibleWorkerCount: number;
-		fullCoverageWorkerCount: number;
+		eligibleExecutionSurfaceCount: number;
+		fullCoverageExecutionSurfaceCount: number;
 		uncoveredCapabilityNames: string[];
 		uncoveredToolNames: string[];
 		currentAssignee: {
-			workerName: string;
+			executionSurfaceName: string;
 			withinConcurrencyLimit: boolean;
 			missingCapabilityNames: string[];
 			missingToolNames: string[];
@@ -81,7 +81,7 @@
 		status: string;
 		summary: string | null;
 		updatedAtLabel: string;
-		workerName: string;
+		executionSurfaceName: string;
 		providerName: string;
 		agentThreadId: string | null;
 		threadId: string | null;
@@ -96,7 +96,7 @@
 			mcpIds: string[];
 			hasSystemPrompt: boolean;
 		} | null;
-		assignedWorker: {
+		assignedExecutionSurface: {
 			name: string;
 			status: string;
 			skillNames: string[];
@@ -109,7 +109,7 @@
 		sandbox: {
 			effective: AgentSandbox;
 			taskRequirement: AgentSandbox | null;
-			workerOverride: AgentSandbox | null;
+			executionSurfaceOverride: AgentSandbox | null;
 			projectDefault: AgentSandbox | null;
 			providerDefault: AgentSandbox | null;
 		};
@@ -143,7 +143,9 @@
 		suggestedThread,
 		candidateThreads,
 		relatedRuns,
-		threadActionLabel
+		threadActionLabel,
+		actionBasePath = '',
+		readOnly = false
 	}: {
 		task: TaskExecutionView;
 		executionPreflight: ExecutionPreflightView;
@@ -153,6 +155,8 @@
 		candidateThreads: CandidateThreadView[];
 		relatedRuns: RelatedRunView[];
 		threadActionLabel: string;
+		actionBasePath?: string;
+		readOnly?: boolean;
 	} = $props();
 
 	let showAllCandidateThreads = $state(false);
@@ -208,11 +212,15 @@
 					!executionPreflight.currentAssignee.withinConcurrencyLimit)
 			) ||
 			(executionPreflight.hasDeclaredRequirements &&
-				executionPreflight.fullCoverageWorkerCount === 0)
+				executionPreflight.fullCoverageExecutionSurfaceCount === 0)
 	);
 
 	function boolLabel(value: boolean, yesLabel: string, noLabel: string) {
 		return value ? yesLabel : noLabel;
+	}
+
+	function taskAction(actionName: string) {
+		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
 	}
 </script>
 
@@ -241,8 +249,8 @@
 				<p class={`text-sm ${hasCoverageWarnings ? 'text-amber-100' : 'text-emerald-100'}`}>
 					{#if !executionPreflight.hasDeclaredRequirements}
 						No required capabilities or tools are declared for this task yet.
-					{:else if executionPreflight.fullCoverageWorkerCount > 0}
-						{executionPreflight.fullCoverageWorkerCount} execution surface{executionPreflight.fullCoverageWorkerCount ===
+					{:else if executionPreflight.fullCoverageExecutionSurfaceCount > 0}
+						{executionPreflight.fullCoverageExecutionSurfaceCount} execution surface{executionPreflight.fullCoverageExecutionSurfaceCount ===
 						1
 							? ''
 							: 's'} currently cover all declared capability and tool requirements.
@@ -251,7 +259,7 @@
 					{/if}
 				</p>
 				<p class="mt-2 text-sm text-slate-300">
-					Eligible now: {executionPreflight.eligibleWorkerCount} execution surface{executionPreflight.eligibleWorkerCount ===
+					Eligible now: {executionPreflight.eligibleExecutionSurfaceCount} execution surface{executionPreflight.eligibleExecutionSurfaceCount ===
 					1
 						? ''
 						: 's'}
@@ -271,7 +279,7 @@
 
 				{#if executionPreflight.currentAssignee}
 					<p class="mt-3 text-sm text-slate-300">
-						Assigned execution surface: {executionPreflight.currentAssignee.workerName}
+						Assigned execution surface: {executionPreflight.currentAssignee.executionSurfaceName}
 					</p>
 					{#if !executionPreflight.currentAssignee.withinConcurrencyLimit}
 						<p class="mt-2 text-sm text-amber-100">
@@ -309,8 +317,8 @@
 					</p>
 					<p class="mt-3 text-sm text-slate-300">
 						Surface:
-						{launchContext.assignedWorker
-							? `${launchContext.assignedWorker.name} · ${launchContext.assignedWorker.status}`
+						{launchContext.assignedExecutionSurface
+							? `${launchContext.assignedExecutionSurface.name} · ${launchContext.assignedExecutionSurface.status}`
 							: 'Unassigned'}
 					</p>
 					<p class="mt-2 text-sm text-slate-300">
@@ -326,8 +334,8 @@
 						Task requirement: {launchContext.sandbox.taskRequirement
 							? formatAgentSandboxLabel(launchContext.sandbox.taskRequirement)
 							: 'None'}
-						· Surface override: {launchContext.sandbox.workerOverride
-							? formatAgentSandboxLabel(launchContext.sandbox.workerOverride)
+						· Surface override: {launchContext.sandbox.executionSurfaceOverride
+							? formatAgentSandboxLabel(launchContext.sandbox.executionSurfaceOverride)
 							: 'None'}
 					</p>
 					<p class="mt-1 text-xs text-slate-500">
@@ -486,11 +494,11 @@
 					<div class="mt-3 space-y-3">
 						<div>
 							<p class="text-xs text-slate-500 uppercase">Surface skills</p>
-							{#if (launchContext.assignedWorker?.skillNames.length ?? 0) === 0}
+							{#if (launchContext.assignedExecutionSurface?.skillNames.length ?? 0) === 0}
 								<p class="mt-2 text-sm text-slate-500">No execution-surface skills recorded.</p>
 							{:else}
 								<div class="mt-2 flex flex-wrap gap-2">
-									{#each launchContext.assignedWorker?.skillNames ?? [] as skillName (skillName)}
+									{#each launchContext.assignedExecutionSurface?.skillNames ?? [] as skillName (skillName)}
 										<span
 											class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
 										>
@@ -668,15 +676,17 @@
 						</div>
 
 						<div class="flex flex-col gap-2 sm:items-end">
-							<form method="POST" action="?/updateTaskThread">
-								<input type="hidden" name="agentThreadId" value={suggestedThread.id} />
-								<button
-									class="rounded-full border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-500/60 hover:text-emerald-100"
-									type="submit"
-								>
-									Assign suggested thread
-								</button>
-							</form>
+							{#if !readOnly}
+								<form method="POST" action={taskAction('updateTaskThread')}>
+									<input type="hidden" name="agentThreadId" value={suggestedThread.id} />
+									<button
+										class="rounded-full border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-500/60 hover:text-emerald-100"
+										type="submit"
+									>
+										Assign suggested thread
+									</button>
+								</form>
+							{/if}
 							<a
 								class="text-sm text-sky-300 transition hover:text-sky-200"
 								href={resolve(getTaskThreadReviewHref(suggestedThread.id))}
@@ -688,43 +698,51 @@
 				</div>
 			{/if}
 
-			<form class="mt-5 space-y-4" method="POST" action="?/updateTaskThread">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Assigned thread</span>
-					<select class="select text-white" name="agentThreadId">
-						<option value="" selected={!task.agentThreadId}>
-							Create a new thread when this task runs
-						</option>
-						{#each candidateThreads as thread (thread.id)}
-							<option value={thread.id} selected={task.agentThreadId === thread.id}>
-								{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
-								{formatThreadStateLabel(thread.threadState ?? 'idle')} ·
-								{thread.canResume ? 'ready' : thread.hasActiveRun ? 'busy' : 'blocked'}{thread
-									.topicLabels?.length
-									? ` · ${thread.topicLabels.join(', ')}`
-									: ''}
-							</option>
-						{/each}
-					</select>
-				</label>
-				<p class="text-sm text-slate-400">
-					Leave the task unassigned if the next run should start a new thread from scratch.
+			{#if readOnly}
+				<p
+					class="mt-5 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-400"
+				>
+					Thread assignment changes stay on the full task page.
 				</p>
+			{:else}
+				<form class="mt-5 space-y-4" method="POST" action={taskAction('updateTaskThread')}>
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Assigned thread</span>
+						<select class="select text-white" name="agentThreadId">
+							<option value="" selected={!task.agentThreadId}>
+								Create a new thread when this task runs
+							</option>
+							{#each candidateThreads as thread (thread.id)}
+								<option value={thread.id} selected={task.agentThreadId === thread.id}>
+									{thread.isSuggested ? 'Suggested · ' : ''}{thread.name} ·
+									{formatThreadStateLabel(thread.threadState ?? 'idle')} ·
+									{thread.canResume ? 'ready' : thread.hasActiveRun ? 'busy' : 'blocked'}{thread
+										.topicLabels?.length
+										? ` · ${thread.topicLabels.join(', ')}`
+										: ''}
+								</option>
+							{/each}
+						</select>
+					</label>
+					<p class="text-sm text-slate-400">
+						Leave the task unassigned if the next run should start a new thread from scratch.
+					</p>
 
-				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<button class="btn border border-slate-700 font-semibold text-slate-100" type="submit">
-						Save thread assignment
-					</button>
-					{#if task.linkThread}
-						<a
-							class="text-sm text-sky-300 transition hover:text-sky-200"
-							href={resolve(getTaskThreadReviewHref(task.linkThread.id))}
-						>
-							{threadActionLabel}
-						</a>
-					{/if}
-				</div>
-			</form>
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<button class="btn border border-slate-700 font-semibold text-slate-100" type="submit">
+							Save thread assignment
+						</button>
+						{#if task.linkThread}
+							<a
+								class="text-sm text-sky-300 transition hover:text-sky-200"
+								href={resolve(getTaskThreadReviewHref(task.linkThread.id))}
+							>
+								{threadActionLabel}
+							</a>
+						{/if}
+					</div>
+				</form>
+			{/if}
 
 			{#if candidateThreads.length > 0}
 				<div class="mt-5 space-y-3">
@@ -870,7 +888,7 @@
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 										Execution surface
 									</p>
-									<p class="mt-2 text-sm text-white">{run.workerName}</p>
+									<p class="mt-2 text-sm text-white">{run.executionSurfaceName}</p>
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Provider</p>

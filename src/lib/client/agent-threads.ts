@@ -1,1 +1,6 @@
-export { fetchAgentThread, fetchAgentThreads, updateAgentThreadArchiveState } from './agent-data';
+export {
+	fetchAgentThread,
+	fetchAgentThreads,
+	fetchAgentThreadStatuses,
+	updateAgentThreadArchiveState
+} from './agent-data';
