@@ -111,7 +111,8 @@ function parseArgs(argv) {
 function getDataPaths(targetRoot) {
 	return {
 		dataDir: resolve(targetRoot, 'data'),
-		appDbFile: resolve(targetRoot, 'data', 'app.sqlite')
+		appDbFile: resolve(targetRoot, 'data', 'app.sqlite'),
+		backupsDir: resolve(targetRoot, 'data', 'backups')
 	};
 }
 
@@ -185,7 +186,29 @@ function readJsonFile(path, createDefault) {
 	}
 }
 
+function createSqliteBackup(targetRoot, reason) {
+	const { appDbFile, backupsDir } = getDataPaths(targetRoot);
+
+	if (!existsSync(appDbFile)) {
+		return null;
+	}
+
+	mkdirSync(backupsDir, { recursive: true });
+	const timestamp = new Date().toISOString().replaceAll(':', '-');
+	const backupPath = resolve(backupsDir, `app.sqlite.${timestamp}.${reason}.bak`);
+	const escapedBackupPath = backupPath.replaceAll("'", "''");
+	const db = openAppDb(targetRoot);
+
+	try {
+		db.exec(`vacuum main into '${escapedBackupPath}'`);
+		return backupPath;
+	} finally {
+		db.close();
+	}
+}
+
 function importJson(targetRoot) {
+	const backupPath = createSqliteBackup(targetRoot, 'pre-import-json');
 	migrateAppDb(targetRoot);
 	const db = openAppDb(targetRoot);
 
@@ -218,6 +241,10 @@ function importJson(targetRoot) {
 
 			replaceStore(data);
 			console.log(`Imported ${store.name} from ${jsonPath}`);
+		}
+
+		if (backupPath) {
+			console.log(`Created safety backup at ${backupPath}`);
 		}
 	} finally {
 		db.close();

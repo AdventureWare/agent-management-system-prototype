@@ -34,6 +34,8 @@ type PlanningTaskSummary = {
 	id: string;
 	title: string;
 	status: Task['status'];
+	priority: Task['priority'];
+	riskLevel: Task['riskLevel'];
 	projectName: string;
 	goalId: string;
 	goalName: string;
@@ -46,6 +48,37 @@ type PlanningTaskSummary = {
 	eligibleExecutionSurfaceCount: number;
 	suggestedExecutionSurfaceNames: string[];
 	assignedExecutionSurfaceEligible: boolean | null;
+};
+
+type PlanningBacklogBucketId = 'now' | 'next' | 'later';
+
+type PlanningBacklogItem = PlanningTaskSummary & {
+	bucket: PlanningBacklogBucketId;
+	score: number;
+	priorityReasons: string[];
+};
+
+type PlanningBacklogBucket = {
+	id: PlanningBacklogBucketId;
+	label: string;
+	description: string;
+	items: PlanningBacklogItem[];
+};
+
+const PRIORITY_WEIGHTS: Record<Task['priority'], number> = {
+	low: 0,
+	medium: 2,
+	high: 5,
+	urgent: 8
+};
+
+const STATUS_WEIGHTS: Record<Task['status'], number> = {
+	in_draft: 0,
+	ready: 4,
+	in_progress: 7,
+	review: 6,
+	blocked: -8,
+	done: -20
 };
 
 function getExecutionSurfaceCapacityHours(executionSurface: ExecutionSurface) {
@@ -75,6 +108,216 @@ function sortTasks(tasks: Task[]) {
 
 		return left.title.localeCompare(right.title);
 	});
+}
+
+function addDays(date: string, days: number) {
+	const next = new Date(`${date}T12:00:00`);
+	next.setDate(next.getDate() + days);
+	return next.toISOString().slice(0, 10);
+}
+
+function compareTaskSummaries(left: PlanningTaskSummary, right: PlanningTaskSummary) {
+	const leftDate = left.targetDate ?? '9999-12-31';
+	const rightDate = right.targetDate ?? '9999-12-31';
+
+	if (leftDate !== rightDate) {
+		return leftDate.localeCompare(rightDate);
+	}
+
+	return left.title.localeCompare(right.title);
+}
+
+function mapPlanningTaskSummary(
+	task: Task,
+	data: ControlPlaneData,
+	goalMap: ReadonlyMap<string, Goal>,
+	projectMap: ReadonlyMap<string, { name: string }>,
+	executionSurfaceMap: ReadonlyMap<string, ExecutionSurface>
+): PlanningTaskSummary {
+	const executionSurfaceSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
+	const eligibleSuggestions = executionSurfaceSuggestions.filter(
+		(suggestion) => suggestion.eligible
+	);
+	const assignedExecutionSurfaceSuggestion = task.assigneeExecutionSurfaceId
+		? (executionSurfaceSuggestions.find(
+				(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
+			) ?? null)
+		: null;
+
+	return {
+		id: task.id,
+		title: task.title,
+		status: task.status,
+		priority: task.priority,
+		riskLevel: task.riskLevel,
+		projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
+		goalId: task.goalId,
+		goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
+		assigneeName: task.assigneeExecutionSurfaceId
+			? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId)?.name ??
+				'Unknown execution surface')
+			: 'Unassigned',
+		estimateHours: task.estimateHours ?? null,
+		targetDate: task.targetDate ?? null,
+		blockedReason: task.blockedReason,
+		requiredCapabilityNames: task.requiredCapabilityNames ?? [],
+		requiredToolNames: task.requiredToolNames ?? [],
+		eligibleExecutionSurfaceCount: eligibleSuggestions.length,
+		suggestedExecutionSurfaceNames: eligibleSuggestions
+			.slice(0, 3)
+			.map((suggestion) => suggestion.executionSurfaceName),
+		assignedExecutionSurfaceEligible: assignedExecutionSurfaceSuggestion
+			? assignedExecutionSurfaceSuggestion.eligible
+			: null
+	};
+}
+
+function summarizeTaskNames(tasks: Task[]) {
+	if (tasks.length === 0) {
+		return '';
+	}
+
+	if (tasks.length === 1) {
+		return tasks[0]?.title ?? '';
+	}
+
+	if (tasks.length === 2) {
+		return `${tasks[0]?.title ?? ''} and ${tasks[1]?.title ?? ''}`;
+	}
+
+	return `${tasks[0]?.title ?? ''}, ${tasks[1]?.title ?? ''}, and ${tasks.length - 2} more`;
+}
+
+function buildBacklogItem(input: {
+	task: Task;
+	taskSummary: PlanningTaskSummary;
+	goal: Goal | null;
+	referenceDate: string;
+	taskMap: ReadonlyMap<string, Task>;
+	dependentTaskCount: number;
+}) {
+	const { task, taskSummary, goal, referenceDate, taskMap, dependentTaskCount } = input;
+	const openDependencies = task.dependencyTaskIds
+		.map((dependencyTaskId) => taskMap.get(dependencyTaskId) ?? null)
+		.filter((dependencyTask): dependencyTask is Task => Boolean(dependencyTask))
+		.filter((dependencyTask) => dependencyTask.status !== 'done');
+	const reasons: string[] = [];
+	let score =
+		(PRIORITY_WEIGHTS[task.priority] ?? 0) +
+		(STATUS_WEIGHTS[task.status] ?? 0) +
+		(goal?.planningPriority ?? 0) * 2;
+	const targetDate = task.targetDate ?? null;
+	const goalTargetDate = goal?.targetDate ?? null;
+	const dueSoonCutoff = addDays(referenceDate, 2);
+	const goalDueSoonCutoff = addDays(referenceDate, 7);
+	const lacksExecutableSurface = taskSummary.eligibleExecutionSurfaceCount === 0;
+	const isBlocked =
+		task.status === 'blocked' ||
+		task.blockedReason.trim().length > 0 ||
+		openDependencies.length > 0;
+
+	if (task.status === 'in_progress') {
+		reasons.push('Urgency: already in progress, so finishing it first avoids churn.');
+	}
+
+	if (task.status === 'review') {
+		reasons.push('Urgency: already waiting on review, so it is close to done.');
+	}
+
+	if (targetDate) {
+		if (targetDate <= referenceDate) {
+			score += 8;
+			reasons.push(`Urgency: due ${targetDate}.`);
+		} else if (targetDate <= dueSoonCutoff) {
+			score += 6;
+			reasons.push(`Urgency: due soon on ${targetDate}.`);
+		} else {
+			score += 3;
+		}
+	} else {
+		score -= 1;
+	}
+
+	if (!targetDate && goalTargetDate && goalTargetDate <= goalDueSoonCutoff) {
+		score += 4;
+		reasons.push(`Urgency: supports goal due ${goalTargetDate}.`);
+	}
+
+	if (dependentTaskCount > 0) {
+		score += Math.min(6, dependentTaskCount * 2);
+		reasons.push(
+			`Leverage: unblocks ${dependentTaskCount} dependent task${dependentTaskCount === 1 ? '' : 's'}.`
+		);
+	}
+
+	if (task.riskLevel === 'high') {
+		score += 3;
+		reasons.push('Risk: high-risk work needs slack for iteration.');
+	} else if (task.riskLevel === 'medium') {
+		score += 1;
+	}
+
+	if (goal && (goal.planningPriority ?? 0) >= 3) {
+		reasons.push(
+			`Leverage: supports planning priority ${goal.planningPriority} goal ${goal.name}.`
+		);
+	}
+
+	if (task.blockedReason.trim()) {
+		score -= 10;
+		reasons.push(`Deferral: ${task.blockedReason.trim()}.`);
+	}
+
+	if (openDependencies.length > 0) {
+		score -= 8;
+		reasons.push(`Dependency order: waits on ${summarizeTaskNames(openDependencies)}.`);
+	}
+
+	if (lacksExecutableSurface) {
+		score -= 6;
+		reasons.push('Risk: no matching execution surface can run this yet.');
+	}
+
+	let bucket: PlanningBacklogBucketId = 'later';
+
+	if (isBlocked || lacksExecutableSurface) {
+		bucket = 'later';
+	} else if (
+		task.status === 'in_progress' ||
+		task.status === 'review' ||
+		(targetDate !== null && targetDate <= dueSoonCutoff) ||
+		score >= 15
+	) {
+		bucket = 'now';
+	} else if (
+		score >= 7 ||
+		targetDate !== null ||
+		task.priority !== 'low' ||
+		dependentTaskCount > 0
+	) {
+		bucket = 'next';
+	} else {
+		bucket = 'later';
+	}
+
+	if (bucket === 'next' && reasons.every((reason) => !reason.startsWith('Deferral:'))) {
+		reasons.push('Deferral: important, but it follows the current now commitments.');
+	}
+
+	if (
+		bucket === 'later' &&
+		reasons.every((reason) => !reason.startsWith('Deferral:')) &&
+		!targetDate
+	) {
+		reasons.push('Deferral: no target date or active pull signal yet.');
+	}
+
+	return {
+		...taskSummary,
+		bucket,
+		score,
+		priorityReasons: reasons.slice(0, 3)
+	} satisfies PlanningBacklogItem;
 }
 
 function goalMatchesProject(
@@ -202,6 +445,17 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 		: [];
 	const scheduledOpenTasks = scheduledTasks.filter((task) => task.status !== 'done');
 	const inScopeTasks = uniqueTasks([...scheduledTasks, ...unscheduledTasks]);
+	const openInScopeTasks = inScopeTasks.filter((task) => task.status !== 'done');
+	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
+	const dependentTaskCounts = new Map<string, number>();
+	for (const candidate of data.tasks) {
+		for (const dependencyTaskId of candidate.dependencyTaskIds) {
+			dependentTaskCounts.set(
+				dependencyTaskId,
+				(dependentTaskCounts.get(dependencyTaskId) ?? 0) + (candidate.status === 'done' ? 0 : 1)
+			);
+		}
+	}
 	const inScopeGoalIds = new Set(
 		[
 			...scheduledGoalIds,
@@ -230,6 +484,56 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 	const goalTaskMap = new Map(
 		goalsInScope.map((goal) => [goal.id, inScopeTasks.filter((task) => task.goalId === goal.id)])
 	);
+	const scheduledTaskSummaries = scheduledTasks
+		.map((task) => mapPlanningTaskSummary(task, data, goalMap, projectMap, executionSurfaceMap))
+		.sort(compareTaskSummaries);
+	const unscheduledTaskSummaries = unscheduledTasks
+		.map((task) => mapPlanningTaskSummary(task, data, goalMap, projectMap, executionSurfaceMap))
+		.sort(compareTaskSummaries);
+	const taskSummaryMap = new Map(
+		[...scheduledTaskSummaries, ...unscheduledTaskSummaries].map((task) => [task.id, task])
+	);
+	const backlogItems = openInScopeTasks
+		.map((task) =>
+			buildBacklogItem({
+				task,
+				taskSummary:
+					taskSummaryMap.get(task.id) ??
+					mapPlanningTaskSummary(task, data, goalMap, projectMap, executionSurfaceMap),
+				goal: task.goalId ? (goalMap.get(task.goalId) ?? null) : null,
+				referenceDate: filters.startDate,
+				taskMap,
+				dependentTaskCount: dependentTaskCounts.get(task.id) ?? 0
+			})
+		)
+		.sort((left, right) => {
+			if (right.score !== left.score) {
+				return right.score - left.score;
+			}
+
+			return compareTaskSummaries(left, right);
+		});
+	const backlogBuckets: PlanningBacklogBucket[] = [
+		{
+			id: 'now',
+			label: 'Now',
+			description:
+				'Active or near-due work that should be protected before pulling new commitments.',
+			items: backlogItems.filter((item) => item.bucket === 'now')
+		},
+		{
+			id: 'next',
+			label: 'Next',
+			description: 'Ready follow-on work that should move after the current now set clears.',
+			items: backlogItems.filter((item) => item.bucket === 'next')
+		},
+		{
+			id: 'later',
+			label: 'Later',
+			description: 'Deferred, blocked, or lower-pull work that still belongs in view.',
+			items: backlogItems.filter((item) => item.bucket === 'later')
+		}
+	];
 	const executionSurfaceLoads = data.executionSurfaces
 		.map((executionSurface) => {
 			const plannedHours = scheduledOpenTasks.reduce((total, task) => {
@@ -313,78 +617,9 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				).length
 			};
 		}),
-		scheduledTasks: scheduledTasks.map((task): PlanningTaskSummary => {
-			const executionSurfaceSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
-			const eligibleSuggestions = executionSurfaceSuggestions.filter(
-				(suggestion) => suggestion.eligible
-			);
-			const assignedExecutionSurfaceSuggestion = task.assigneeExecutionSurfaceId
-				? (executionSurfaceSuggestions.find(
-						(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
-					) ?? null)
-				: null;
-
-			return {
-				id: task.id,
-				title: task.title,
-				status: task.status,
-				projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
-				goalId: task.goalId,
-				goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
-				assigneeName: task.assigneeExecutionSurfaceId
-					? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId)?.name ??
-						'Unknown execution surface')
-					: 'Unassigned',
-				estimateHours: task.estimateHours ?? null,
-				targetDate: task.targetDate ?? null,
-				blockedReason: task.blockedReason,
-				requiredCapabilityNames: task.requiredCapabilityNames ?? [],
-				requiredToolNames: task.requiredToolNames ?? [],
-				eligibleExecutionSurfaceCount: eligibleSuggestions.length,
-				suggestedExecutionSurfaceNames: eligibleSuggestions
-					.slice(0, 3)
-					.map((suggestion) => suggestion.executionSurfaceName),
-				assignedExecutionSurfaceEligible: assignedExecutionSurfaceSuggestion
-					? assignedExecutionSurfaceSuggestion.eligible
-					: null
-			};
-		}),
-		unscheduledTasks: unscheduledTasks.map((task): PlanningTaskSummary => {
-			const executionSurfaceSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
-			const eligibleSuggestions = executionSurfaceSuggestions.filter(
-				(suggestion) => suggestion.eligible
-			);
-			const assignedExecutionSurfaceSuggestion = task.assigneeExecutionSurfaceId
-				? (executionSurfaceSuggestions.find(
-						(suggestion) => suggestion.executionSurfaceId === task.assigneeExecutionSurfaceId
-					) ?? null)
-				: null;
-
-			return {
-				id: task.id,
-				title: task.title,
-				status: task.status,
-				projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
-				goalId: task.goalId,
-				goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : 'No goal',
-				assigneeName: task.assigneeExecutionSurfaceId
-					? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId)?.name ??
-						'Unknown execution surface')
-					: 'Unassigned',
-				estimateHours: task.estimateHours ?? null,
-				targetDate: null,
-				blockedReason: task.blockedReason,
-				requiredCapabilityNames: task.requiredCapabilityNames ?? [],
-				requiredToolNames: task.requiredToolNames ?? [],
-				eligibleExecutionSurfaceCount: eligibleSuggestions.length,
-				suggestedExecutionSurfaceNames: eligibleSuggestions
-					.slice(0, 3)
-					.map((suggestion) => suggestion.executionSurfaceName),
-				assignedExecutionSurfaceEligible: assignedExecutionSurfaceSuggestion
-					? assignedExecutionSurfaceSuggestion.eligible
-					: null
-			};
-		}),
+		backlogBuckets,
+		scheduledTasks: scheduledTaskSummaries,
+		unscheduledTasks: unscheduledTaskSummaries,
 		executionSurfaceLoads,
 		projectOptions: [...data.projects]
 			.sort((left, right) => left.name.localeCompare(right.name))

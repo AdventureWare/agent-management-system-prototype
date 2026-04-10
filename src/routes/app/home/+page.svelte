@@ -650,8 +650,8 @@
 							work.
 						</p>
 					</div>
-					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/tasks')}
-						>Open task board</a
+					<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/governance')}
+						>Open governance inbox</a
 					>
 				</div>
 

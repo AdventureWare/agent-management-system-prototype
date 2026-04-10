@@ -1,9 +1,6 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
-import {
-	bumpStoreRevision,
-	readStoreRevision
-} from '$lib/server/db/store-revisions';
+import { bumpStoreRevision, readStoreRevision } from '$lib/server/db/store-revisions';
 import type {
 	SelfImprovementCapturedSuggestion,
 	SelfImprovementSuggestionDecision,
@@ -126,22 +123,22 @@ export function saveSelfImprovementToSqlite(
 		const replaceAllEntries = db.transaction(
 			(input: SelfImprovementStoreDb, expectedRevision?: number) => {
 				bumpStoreRevision(db, SELF_IMPROVEMENT_STORE_NAME, expectedRevision);
-			db.exec('delete from self_improvement_entries');
+				db.exec('delete from self_improvement_entries');
 
-			const insertEntry = db.prepare(
-				`
+				const insertEntry = db.prepare(
+					`
 					insert into self_improvement_entries (collection, id, position, payload)
 					values (?, ?, ?, ?)
 				`
-			);
+				);
 
-			for (const collection of SELF_IMPROVEMENT_COLLECTIONS) {
-				const records = input[collection] ?? [];
+				for (const collection of SELF_IMPROVEMENT_COLLECTIONS) {
+					const records = input[collection] ?? [];
 
-				for (const [position, record] of records.entries()) {
-					insertEntry.run(collection, record.id, position, JSON.stringify(record));
+					for (const [position, record] of records.entries()) {
+						insertEntry.run(collection, record.id, position, JSON.stringify(record));
+					}
 				}
-			}
 			}
 		);
 

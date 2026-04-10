@@ -1120,8 +1120,7 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 	const taskIds = new Set(tasks.map((task) => task.id));
 	const repairedTasks = tasks.map((task) => ({
 		...task,
-		parentTaskId:
-			task.parentTaskId && taskIds.has(task.parentTaskId) ? task.parentTaskId : null,
+		parentTaskId: task.parentTaskId && taskIds.has(task.parentTaskId) ? task.parentTaskId : null,
 		dependencyTaskIds: task.dependencyTaskIds.filter(
 			(dependencyTaskId) => dependencyTaskId !== task.id && taskIds.has(dependencyTaskId)
 		)
@@ -1179,7 +1178,10 @@ async function ensureDataFile() {
 }
 
 function getControlPlaneStorageBackend() {
-	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+	return (process.env.NODE_ENV === 'test' || (process.env.VITEST && !process.env.NODE_ENV)) &&
+		process.env.APP_STORAGE_BACKEND?.trim() === 'json'
+		? 'json'
+		: 'sqlite';
 }
 
 function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPlaneData {
@@ -1233,9 +1235,7 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		decisions
 	});
 
-	return syncGovernanceQueues(
-		syncTaskExecutionState(normalized)
-	);
+	return syncGovernanceQueues(syncTaskExecutionState(normalized));
 }
 
 function parseControlPlaneData(raw: string) {
@@ -1340,8 +1340,7 @@ export async function updateControlPlane(
 
 			try {
 				await saveControlPlane(next, {
-					expectedRevision:
-						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+					expectedRevision: typeof snapshot.revision === 'number' ? snapshot.revision : undefined
 				});
 				return next;
 			} catch (error) {
@@ -1353,7 +1352,9 @@ export async function updateControlPlane(
 			}
 		}
 
-		throw new Error('Could not save control-plane data after repeated concurrent update conflicts.');
+		throw new Error(
+			'Could not save control-plane data after repeated concurrent update conflicts.'
+		);
 	};
 
 	const queuedUpdate = controlPlaneUpdateQueue.catch(() => undefined).then(runUpdate);

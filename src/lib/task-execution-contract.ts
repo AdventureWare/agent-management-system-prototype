@@ -81,7 +81,10 @@ export function getTaskLaunchContractBlockerMessage(
 }
 
 export function getTaskReviewContractGapMessage(
-	contract: Pick<TaskExecutionContractStatus, 'canReviewAgainstContract' | 'missingReviewFieldLabels'>
+	contract: Pick<
+		TaskExecutionContractStatus,
+		'canReviewAgainstContract' | 'missingReviewFieldLabels'
+	>
 ) {
 	if (contract.canReviewAgainstContract) {
 		return null;

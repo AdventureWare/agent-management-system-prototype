@@ -586,15 +586,15 @@ export const actions: Actions = {
 
 		const matchedProject =
 			(recoveryDraft.projectRootFolder
-				? current.projects.find(
+				? (current.projects.find(
 						(project) => project.projectRootFolder === recoveryDraft.projectRootFolder
-					) ?? null
+					) ?? null)
 				: null) ??
 			(thread.cwd
-				? current.projects.find((project) => project.projectRootFolder === thread.cwd) ?? null
+				? (current.projects.find((project) => project.projectRootFolder === thread.cwd) ?? null)
 				: null) ??
 			(recoveryDraft.projectName
-				? current.projects.find((project) => project.name === recoveryDraft.projectName) ?? null
+				? (current.projects.find((project) => project.name === recoveryDraft.projectName) ?? null)
 				: null);
 
 		if (!matchedProject) {
@@ -611,7 +611,9 @@ export const actions: Actions = {
 		);
 		const earliestTaskTimestamp = [
 			thread.createdAt,
-			...current.runs.filter((run) => run.taskId === recoveryDraft.taskId).map((run) => run.createdAt)
+			...current.runs
+				.filter((run) => run.taskId === recoveryDraft.taskId)
+				.map((run) => run.createdAt)
 		]
 			.filter(Boolean)
 			.sort()[0];

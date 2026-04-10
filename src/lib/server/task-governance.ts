@@ -15,12 +15,23 @@ export type GovernanceInboxItem = TaskWorkItem & {
 	escalationReasons: string[];
 };
 
+export type GovernanceInboxQueueKind = 'review' | 'approval' | 'escalation';
+
+export type GovernanceInboxQueueItem = GovernanceInboxItem & {
+	queueKinds: GovernanceInboxQueueKind[];
+	primaryQueueKind: GovernanceInboxQueueKind;
+	queueSummary: string;
+};
+
 export type GovernanceInboxData = {
 	reviewItems: GovernanceInboxItem[];
 	approvalItems: GovernanceInboxItem[];
 	escalationItems: GovernanceInboxItem[];
+	queueItems: GovernanceInboxQueueItem[];
 	summary: {
+		queueCount: number;
 		reviewCount: number;
+		reviewFollowUpCount: number;
 		approvalCount: number;
 		blockedCount: number;
 		dependencyCount: number;
@@ -61,6 +72,21 @@ function updateLatestRunForTask(
 
 function compareByUpdatedAtDesc(left: Task, right: Task) {
 	return right.updatedAt.localeCompare(left.updatedAt);
+}
+
+function isReviewFollowUpTask(task: GovernanceInboxItem) {
+	return Boolean(task.openReview) || (task.status === 'review' && !task.pendingApproval);
+}
+
+function isEscalationTask(task: GovernanceInboxItem) {
+	return (
+		!task.openReview &&
+		!task.pendingApproval &&
+		(task.status === 'review' ||
+			task.status === 'blocked' ||
+			task.hasUnmetDependencies ||
+			task.freshness.isStale)
+	);
 }
 
 function buildStaleReason(task: TaskWorkItem, signal: TaskStaleSignalKey) {
@@ -110,6 +136,84 @@ function toGovernanceInboxItem(task: TaskWorkItem, goalNameById: Map<string, str
 	} satisfies GovernanceInboxItem;
 }
 
+function buildQueueKinds(task: GovernanceInboxItem): GovernanceInboxQueueKind[] {
+	const kinds: GovernanceInboxQueueKind[] = [];
+
+	if (isReviewFollowUpTask(task)) {
+		kinds.push('review');
+	}
+
+	if (task.pendingApproval) {
+		kinds.push('approval');
+	}
+
+	if (isEscalationTask(task)) {
+		kinds.push('escalation');
+	}
+
+	return kinds;
+}
+
+function buildQueueSummary(task: GovernanceInboxItem) {
+	if (task.openReview && task.pendingApproval) {
+		return 'Review follow-up and approval gate are both waiting.';
+	}
+
+	if (task.openReview) {
+		return task.openReview.summary?.trim() || 'Waiting on reviewer decision.';
+	}
+
+	if (task.pendingApproval) {
+		return task.pendingApproval.summary?.trim() || 'Waiting on approval decision.';
+	}
+
+	return task.escalationReasons[0] ?? 'Needs operator follow-up.';
+}
+
+function getQueueKindRank(kind: GovernanceInboxQueueKind) {
+	switch (kind) {
+		case 'review':
+			return 3;
+		case 'approval':
+			return 2;
+		case 'escalation':
+			return 1;
+	}
+}
+
+function compareEscalationItems(left: GovernanceInboxItem, right: GovernanceInboxItem) {
+	if (left.escalationReasons.length !== right.escalationReasons.length) {
+		return right.escalationReasons.length - left.escalationReasons.length;
+	}
+
+	return compareByUpdatedAtDesc(left, right);
+}
+
+function compareQueueItems(left: GovernanceInboxQueueItem, right: GovernanceInboxQueueItem) {
+	const leftRank = getQueueKindRank(left.primaryQueueKind);
+	const rightRank = getQueueKindRank(right.primaryQueueKind);
+
+	if (leftRank !== rightRank) {
+		return rightRank - leftRank;
+	}
+
+	if (left.primaryQueueKind === 'review' && right.primaryQueueKind === 'review') {
+		if (Boolean(left.openReview) !== Boolean(right.openReview)) {
+			return Number(Boolean(right.openReview)) - Number(Boolean(left.openReview));
+		}
+	}
+
+	if (left.queueKinds.length !== right.queueKinds.length) {
+		return right.queueKinds.length - left.queueKinds.length;
+	}
+
+	if (left.primaryQueueKind === 'escalation' && right.primaryQueueKind === 'escalation') {
+		return compareEscalationItems(left, right);
+	}
+
+	return compareByUpdatedAtDesc(left, right);
+}
+
 export async function loadGovernanceInboxData(): Promise<GovernanceInboxData> {
 	const controlPlanePromise = loadControlPlane();
 	const [controlPlane, threads] = await Promise.all([
@@ -127,30 +231,35 @@ export async function loadGovernanceInboxData(): Promise<GovernanceInboxData> {
 	const approvalItems = governanceItems
 		.filter((task) => Boolean(task.pendingApproval))
 		.sort(compareByUpdatedAtDesc);
-	const escalationItems = governanceItems
-		.filter(
-			(task) =>
-				!task.openReview &&
-				!task.pendingApproval &&
-				(task.status === 'review' ||
-					task.status === 'blocked' ||
-					task.hasUnmetDependencies ||
-					task.freshness.isStale)
-		)
-		.sort((left, right) => {
-			if (left.escalationReasons.length !== right.escalationReasons.length) {
-				return right.escalationReasons.length - left.escalationReasons.length;
+	const escalationItems = governanceItems.filter(isEscalationTask).sort(compareEscalationItems);
+	const queueItems = governanceItems
+		.map((task) => {
+			const queueKinds = buildQueueKinds(task);
+
+			if (queueKinds.length === 0) {
+				return null;
 			}
 
-			return compareByUpdatedAtDesc(left, right);
-		});
+			return {
+				...task,
+				queueKinds,
+				primaryQueueKind: queueKinds[0],
+				queueSummary: buildQueueSummary(task)
+			} satisfies GovernanceInboxQueueItem;
+		})
+		.filter((task): task is GovernanceInboxQueueItem => Boolean(task))
+		.sort(compareQueueItems);
+	const reviewFollowUpCount = governanceItems.filter(isReviewFollowUpTask).length;
 
 	return {
 		reviewItems,
 		approvalItems,
 		escalationItems,
+		queueItems,
 		summary: {
+			queueCount: queueItems.length,
 			reviewCount: reviewItems.length,
+			reviewFollowUpCount,
 			approvalCount: approvalItems.length,
 			blockedCount: governanceItems.filter((task) => task.status === 'blocked').length,
 			dependencyCount: governanceItems.filter((task) => task.hasUnmetDependencies).length,

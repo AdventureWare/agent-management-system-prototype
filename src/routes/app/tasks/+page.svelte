@@ -2153,7 +2153,9 @@
 					aria-labelledby={`task-list-tab-${selectedTaskView}`}
 				>
 					{#if hiddenTaskViewNotice}
-						<div class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+						<div
+							class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+						>
 							<p class="text-sm text-amber-100">
 								{hiddenTaskViewNotice.description}
 								{` ${hiddenTaskViewNotice.count} matching task${hiddenTaskViewNotice.count === 1 ? ' is' : 's are'} available in ${hiddenTaskViewNotice.label}.`}
@@ -2525,10 +2527,12 @@
 										<p
 											class={`mt-2 text-sm ${createTaskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}
 										>
-											{createTaskLaunchContractBlocker || 'Create and run can start immediately once this contract is saved.'}
+											{createTaskLaunchContractBlocker ||
+												'Create and run can start immediately once this contract is saved.'}
 										</p>
 										<p class="mt-2 text-sm text-slate-300">
-											{createTaskReviewContractGap || 'Reviewers will have an explicit outcome and acceptance standard for this task.'}
+											{createTaskReviewContractGap ||
+												'Reviewers will have an explicit outcome and acceptance standard for this task.'}
 										</p>
 									</div>
 

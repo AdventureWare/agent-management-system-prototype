@@ -19,7 +19,9 @@ describe('task-execution-contract', () => {
 			missingLaunchFieldLabels: ['ready condition', 'expected outcome'],
 			missingReviewFieldLabels: ['expected outcome']
 		});
-		expect(getTaskLaunchContractBlockerMessage(contract)).toContain('ready condition and expected outcome');
+		expect(getTaskLaunchContractBlockerMessage(contract)).toContain(
+			'ready condition and expected outcome'
+		);
 		expect(getTaskReviewContractGapMessage(contract)).toContain('expected outcome');
 	});
 

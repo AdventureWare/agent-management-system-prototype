@@ -209,7 +209,9 @@
 			expectedOutcome: expectedOutcomeInput
 		})
 	);
-	let taskLaunchContractBlocker = $derived(getTaskLaunchContractBlockerMessage(taskExecutionContract));
+	let taskLaunchContractBlocker = $derived(
+		getTaskLaunchContractBlockerMessage(taskExecutionContract)
+	);
 	let taskReviewContractGap = $derived(getTaskReviewContractGapMessage(taskExecutionContract));
 
 	function assignmentSuggestionClass(eligible: boolean) {
@@ -329,11 +331,15 @@
 					>
 						Execution contract
 					</p>
-					<p class={`mt-2 text-sm ${taskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}>
-						{taskLaunchContractBlocker || 'This task can launch with an explicit ready condition, expected outcome, and acceptance standard.'}
+					<p
+						class={`mt-2 text-sm ${taskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}
+					>
+						{taskLaunchContractBlocker ||
+							'This task can launch with an explicit ready condition, expected outcome, and acceptance standard.'}
 					</p>
 					<p class="mt-2 text-sm text-slate-300">
-						{taskReviewContractGap || 'Reviews can validate this task against the recorded success criteria and expected outcome.'}
+						{taskReviewContractGap ||
+							'Reviews can validate this task against the recorded success criteria and expected outcome.'}
 					</p>
 				</div>
 

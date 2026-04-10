@@ -42,6 +42,8 @@ export function extractThreadTaskReference(threadName: string): ThreadTaskRefere
 	return {
 		taskId,
 		taskTitle: taskAndProjectSegment.slice(0, projectSeparatorIndex).trim(),
-		projectName: taskAndProjectSegment.slice(projectSeparatorIndex + THREAD_NAME_SEPARATOR.length).trim()
+		projectName: taskAndProjectSegment
+			.slice(projectSeparatorIndex + THREAD_NAME_SEPARATOR.length)
+			.trim()
 	};
 }

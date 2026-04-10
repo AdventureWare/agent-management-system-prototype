@@ -20,6 +20,7 @@ describe('control-plane project migration', () => {
 		readFile.mockReset();
 		writeFile.mockReset();
 		vi.unstubAllEnvs();
+		vi.stubEnv('NODE_ENV', 'test');
 		vi.stubEnv('APP_STORAGE_BACKEND', 'json');
 	});
 

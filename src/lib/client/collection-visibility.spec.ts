@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	getHiddenCollapsedRowCount,
-	getHiddenTaskViewNotice
-} from './collection-visibility';
+import { getHiddenCollapsedRowCount, getHiddenTaskViewNotice } from './collection-visibility';
 
 describe('collection visibility helpers', () => {
 	it('reports rows hidden by collapsed goal branches', () => {

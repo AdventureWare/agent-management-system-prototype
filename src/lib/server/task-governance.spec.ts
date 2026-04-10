@@ -432,6 +432,34 @@ describe('task-governance helpers', () => {
 			'task_stale',
 			'task_manual_review'
 		]);
+		expect(
+			result.queueItems.map((item) => ({
+				id: item.id,
+				primaryQueueKind: item.primaryQueueKind,
+				queueKinds: item.queueKinds
+			}))
+		).toEqual([
+			{
+				id: 'task_review',
+				primaryQueueKind: 'review',
+				queueKinds: ['review']
+			},
+			{
+				id: 'task_manual_review',
+				primaryQueueKind: 'review',
+				queueKinds: ['review', 'escalation']
+			},
+			{
+				id: 'task_approval',
+				primaryQueueKind: 'approval',
+				queueKinds: ['approval']
+			},
+			{
+				id: 'task_stale',
+				primaryQueueKind: 'escalation',
+				queueKinds: ['escalation']
+			}
+		]);
 		expect(result.escalationItems[0]?.escalationReasons).toEqual(
 			expect.arrayContaining([
 				'Waiting on operator input.',
@@ -444,7 +472,9 @@ describe('task-governance helpers', () => {
 		]);
 		expect(result.summary).toEqual(
 			expect.objectContaining({
+				queueCount: 4,
 				reviewCount: 1,
+				reviewFollowUpCount: 2,
 				approvalCount: 1,
 				blockedCount: 1,
 				dependencyCount: 1,

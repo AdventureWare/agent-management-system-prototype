@@ -324,7 +324,9 @@
 		emptyMessage="No goals match the current search or status filter."
 	>
 		{#if hiddenCollapsedGoalRowCount > 0}
-			<div class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+			<div
+				class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+			>
 				<p class="text-sm text-amber-100">
 					{hiddenCollapsedGoalRowCount} matching goal{hiddenCollapsedGoalRowCount === 1
 						? ' is'

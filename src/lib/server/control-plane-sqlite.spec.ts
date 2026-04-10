@@ -131,6 +131,44 @@ describe('control-plane sqlite backend', () => {
 		});
 	});
 
+	it('keeps sqlite as the runtime backend outside tests even when APP_STORAGE_BACKEND=json', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('NODE_ENV', 'development');
+		vi.stubEnv('APP_STORAGE_BACKEND', 'json');
+
+		mkdirSync(resolve(root, 'data'), { recursive: true });
+		writeFileSync(
+			resolve(root, 'data', 'control-plane.json'),
+			JSON.stringify({
+				providers: [],
+				roles: [
+					{
+						id: 'role_seeded',
+						name: 'Seeded role',
+						area: 'shared',
+						description: 'Loaded from json'
+					}
+				],
+				projects: [],
+				goals: [],
+				executionSurfaces: [],
+				tasks: [],
+				runs: [],
+				reviews: [],
+				approvals: [],
+				decisions: [],
+				planningSessions: []
+			})
+		);
+
+		const { loadControlPlane } = await importControlPlaneModule();
+		const loaded = await loadControlPlane();
+
+		expect(loaded.roles.map((role) => role.id)).toEqual(['role_seeded']);
+		expect(existsSync(resolve(root, 'data', 'app.sqlite'))).toBe(true);
+	});
+
 	it('ignores stale sqlite rows with unknown collections while loading', async () => {
 		const root = createTempDir();
 		process.chdir(root);
@@ -326,14 +364,16 @@ describe('control-plane sqlite backend', () => {
 
 		const verifyDb = new Database(dbPath, { readonly: true, fileMustExist: true });
 		const orphanRunRow = verifyDb
-			.prepare<[], { count: number }>(
-				"select count(*) as count from control_plane_records where collection = 'runs' and id = 'run_orphan'"
-			)
+			.prepare<
+				[],
+				{ count: number }
+			>("select count(*) as count from control_plane_records where collection = 'runs' and id = 'run_orphan'")
 			.get();
 		const orphanReviewRow = verifyDb
-			.prepare<[], { count: number }>(
-				"select count(*) as count from control_plane_records where collection = 'reviews' and id = 'review_orphan'"
-			)
+			.prepare<
+				[],
+				{ count: number }
+			>("select count(*) as count from control_plane_records where collection = 'reviews' and id = 'review_orphan'")
 			.get();
 		verifyDb.close();
 
@@ -458,7 +498,9 @@ describe('control-plane sqlite backend', () => {
 		await firstUpdate;
 
 		const loaded = await secondModule.loadControlPlane();
-		const jsonMirror = JSON.parse(readFileSync(resolve(root, 'data', 'control-plane.json'), 'utf8'));
+		const jsonMirror = JSON.parse(
+			readFileSync(resolve(root, 'data', 'control-plane.json'), 'utf8')
+		);
 
 		expect(loaded.tasks.map((task) => task.id)).toContain(createdTask.id);
 		expect(loaded.roles.map((role) => role.id)).toContain('role_parallel');

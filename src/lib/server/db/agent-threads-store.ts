@@ -1,9 +1,6 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
-import {
-	bumpStoreRevision,
-	readStoreRevision
-} from '$lib/server/db/store-revisions';
+import { bumpStoreRevision, readStoreRevision } from '$lib/server/db/store-revisions';
 import type {
 	AgentRun,
 	AgentThread,
@@ -109,9 +106,8 @@ export function saveAgentThreadsToSqlite(
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction(
-			(input: AgentThreadsDb, expectedRevision?: number) => {
-				bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
+		const replaceAllRecords = db.transaction((input: AgentThreadsDb, expectedRevision?: number) => {
+			bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
 			db.exec('delete from agent_thread_records');
 
 			const insertRecord = db.prepare(
@@ -128,8 +124,7 @@ export function saveAgentThreadsToSqlite(
 					insertRecord.run(collection, record.id, position, JSON.stringify(record));
 				}
 			}
-			}
-		);
+		});
 
 		replaceAllRecords(data, options.expectedRevision);
 	} finally {

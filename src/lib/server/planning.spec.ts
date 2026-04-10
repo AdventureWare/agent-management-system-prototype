@@ -308,4 +308,73 @@ describe('planning helpers', () => {
 			'Kwipoo website'
 		]);
 	});
+
+	it('builds an explicit now next later backlog with ranking reasons', () => {
+		const fixture = buildFixture();
+		fixture.tasks.push({
+			id: 'task_3',
+			title: 'Resolve approval routing gap',
+			summary: 'Blocked on governance clarifications.',
+			projectId: 'project_1',
+			area: 'product',
+			goalId: 'goal_2',
+			priority: 'low',
+			status: 'blocked',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: false,
+			desiredRoleId: 'role_coordinator',
+			assigneeExecutionSurfaceId: null,
+			agentThreadId: null,
+			blockedReason: 'Waiting for approval policy decision',
+			dependencyTaskIds: ['task_1'],
+			estimateHours: 3,
+			targetDate: null,
+			requiredCapabilityNames: ['planning'],
+			requiredToolNames: [],
+			runCount: 0,
+			latestRunId: null,
+			artifactPath: '/tmp/ams/agent_output',
+			attachments: [],
+			createdAt: '2026-03-31T00:00:00.000Z',
+			updatedAt: '2026-03-31T00:00:00.000Z'
+		});
+
+		const snapshot = buildPlanningPageData(fixture, {
+			startDate: '2026-04-01',
+			endDate: '2026-04-15',
+			projectId: 'project_1',
+			includeUnscheduled: true
+		});
+
+		expect(snapshot.backlogBuckets.find((bucket) => bucket.id === 'now')?.items).toEqual([
+			expect.objectContaining({
+				id: 'task_1',
+				bucket: 'now',
+				priorityReasons: expect.arrayContaining([
+					'Urgency: already in progress, so finishing it first avoids churn.'
+				])
+			})
+		]);
+		expect(snapshot.backlogBuckets.find((bucket) => bucket.id === 'next')?.items).toEqual([
+			expect.objectContaining({
+				id: 'task_2',
+				bucket: 'next',
+				priorityReasons: expect.arrayContaining([
+					'Leverage: supports planning priority 3 goal Ship planning surface.',
+					'Deferral: important, but it follows the current now commitments.'
+				])
+			})
+		]);
+		expect(snapshot.backlogBuckets.find((bucket) => bucket.id === 'later')?.items).toEqual([
+			expect.objectContaining({
+				id: 'task_3',
+				bucket: 'later',
+				priorityReasons: expect.arrayContaining([
+					'Deferral: Waiting for approval policy decision.',
+					'Dependency order: waits on Build planning route.'
+				])
+			})
+		]);
+	});
 });

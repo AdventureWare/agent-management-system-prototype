@@ -57,13 +57,13 @@ npm run lint
 npm run test
 ```
 
-Legacy JSON fallback:
+Legacy JSON files:
 
 ```sh
-export APP_STORAGE_BACKEND=json
+npm run db:export-json
 ```
 
-By default, the prototype now uses `data/app.sqlite` for the control-plane store, app-managed agent threads, and self-improvement data. Set `APP_STORAGE_BACKEND=json` only if you need to temporarily fall back to the legacy JSON files.
+The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store, app-managed agent threads, and self-improvement data. The JSON files under `data/` are for explicit export/import and recovery workflows, not normal runtime persistence.
 
 Database helpers:
 

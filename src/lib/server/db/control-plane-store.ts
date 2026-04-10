@@ -1,9 +1,6 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
-import {
-	bumpStoreRevision,
-	readStoreRevision
-} from '$lib/server/db/store-revisions';
+import { bumpStoreRevision, readStoreRevision } from '$lib/server/db/store-revisions';
 import type {
 	Approval,
 	ControlPlaneData,
@@ -151,22 +148,22 @@ export function saveControlPlaneToSqlite(
 		const replaceAllRecords = db.transaction(
 			(input: ControlPlaneData, expectedRevision?: number) => {
 				bumpStoreRevision(db, CONTROL_PLANE_STORE_NAME, expectedRevision);
-			db.exec('delete from control_plane_records');
+				db.exec('delete from control_plane_records');
 
-			const insertRecord = db.prepare(
-				`
+				const insertRecord = db.prepare(
+					`
 					insert into control_plane_records (collection, id, position, payload)
 					values (?, ?, ?, ?)
 				`
-			);
+				);
 
-			for (const collection of CONTROL_PLANE_COLLECTIONS) {
-				const records = input[collection] ?? [];
+				for (const collection of CONTROL_PLANE_COLLECTIONS) {
+					const records = input[collection] ?? [];
 
-				for (const [position, record] of records.entries()) {
-					insertRecord.run(collection, record.id, position, JSON.stringify(record));
+					for (const [position, record] of records.entries()) {
+						insertRecord.run(collection, record.id, position, JSON.stringify(record));
+					}
 				}
-			}
 			}
 		);
 

@@ -83,7 +83,10 @@ function createDefaultRecord(
 }
 
 function getSelfImprovementStorageBackend() {
-	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+	return (process.env.NODE_ENV === 'test' || (process.env.VITEST && !process.env.NODE_ENV)) &&
+		process.env.APP_STORAGE_BACKEND?.trim() === 'json'
+		? 'json'
+		: 'sqlite';
 }
 
 async function ensureSelfImprovementDb() {
@@ -230,8 +233,7 @@ async function updateSelfImprovementDb(
 
 			try {
 				await saveSelfImprovementDb(next, {
-					expectedRevision:
-						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+					expectedRevision: typeof snapshot.revision === 'number' ? snapshot.revision : undefined
 				});
 				return next;
 			} catch (error) {
@@ -1135,9 +1137,7 @@ export async function setSelfImprovementKnowledgeItemStatus(input: {
 			status: input.status,
 			updatedAt: now,
 			publishedAt:
-				input.status === 'published'
-					? (existingItem.publishedAt ?? now)
-					: existingItem.publishedAt,
+				input.status === 'published' ? (existingItem.publishedAt ?? now) : existingItem.publishedAt,
 			archivedAt:
 				input.status === 'archived'
 					? now

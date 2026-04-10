@@ -444,6 +444,25 @@
   ],
   "goals": [
     {
+      "id": "goal_9d2f54c4-9a20-4bd4-b023-c8198a6c52a7",
+      "name": "My Grandma and I consistently use Kwipoo",
+      "summary": "My Grandma and I consistently use Kwipoo",
+      "area": "product",
+      "status": "ready",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
+      "successSignal": "My Grandma and I consistently use Kwipoo",
+      "parentGoalId": "goal_d6d74659-eb0f-4060-8343-ee8d3f577117",
+      "projectIds": [
+        "project_e133e364-2a20-4a99-98a9-6d414e0e9098"
+      ],
+      "taskIds": [
+        "task_ae620901-ffb5-4327-962f-a75614eb9fef"
+      ],
+      "targetDate": "2026-05-08",
+      "planningPriority": 0,
+      "confidence": "medium"
+    },
+    {
       "id": "goal_d6d74659-eb0f-4060-8343-ee8d3f577117",
       "name": "Get a paying Kwipoo customer",
       "summary": "We need people to pay for Kwipoo, so we can sustain the business.",
@@ -747,12 +766,12 @@
       "expectedOutcome": "",
       "projectId": "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
       "area": "product",
-      "goalId": "",
+      "goalId": "goal_9d2f54c4-9a20-4bd4-b023-c8198a6c52a7",
       "parentTaskId": null,
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "medium",
-      "status": "ready",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiredThreadSandbox": null,
@@ -772,7 +791,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
       "attachments": [],
       "createdAt": "2026-04-09T23:30:28.512Z",
-      "updatedAt": "2026-04-10T16:03:34.465Z"
+      "updatedAt": "2026-04-10T18:59:30.156Z"
     },
     {
       "id": "task_f62cf868-5d78-4501-b690-cf7af5d6438e",
@@ -808,7 +827,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:35:30.974Z",
-      "updatedAt": "2026-04-10T17:10:09.747Z"
+      "updatedAt": "2026-04-10T18:11:43.967Z"
     },
     {
       "id": "task_bb0e6498-6137-4bfb-a9b2-fd75ee7c24ad",
@@ -844,7 +863,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-04-09T17:38:28.991Z",
-      "updatedAt": "2026-04-10T17:13:19.376Z"
+      "updatedAt": "2026-04-10T18:54:21.326Z"
     },
     {
       "id": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
@@ -926,9 +945,9 @@
       "id": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
       "title": "Create a first class escalation and approval inbox",
       "summary": "Add a queue-centric inbox for escalations, review follow-ups, and approval gates so human intervention points are visible without opening individual task detail pages one by one. Reuse existing governance primitives instead of inventing a separate system.",
-      "successCriteria": "",
-      "readyCondition": "",
-      "expectedOutcome": "",
+      "successCriteria": "The instructions have been satisfied",
+      "readyCondition": "The instructions have been satisfied",
+      "expectedOutcome": "The instructions have been satisfied",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "area": "ops",
       "goalId": "goal_26a850e3-5eac-4150-a96f-0574cd483595",
@@ -936,14 +955,14 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "high",
-      "status": "ready",
+      "status": "review",
       "riskLevel": "medium",
       "approvalMode": "none",
-      "requiredThreadSandbox": null,
+      "requiredThreadSandbox": "danger-full-access",
       "requiresReview": true,
       "desiredRoleId": "role_app_worker",
       "assigneeExecutionSurfaceId": null,
-      "agentThreadId": null,
+      "agentThreadId": "thread_7426b9c8-4701-49ca-97e7-5313f017956e",
       "requiredPromptSkillNames": [],
       "requiredCapabilityNames": [],
       "requiredToolNames": [],
@@ -953,20 +972,20 @@
       ],
       "estimateHours": null,
       "targetDate": "2026-04-13",
-      "runCount": 0,
-      "latestRunId": null,
+      "runCount": 1,
+      "latestRunId": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:01:32.363Z",
-      "updatedAt": "2026-04-10T16:01:32.363Z"
+      "updatedAt": "2026-04-10T18:47:35.270Z"
     },
     {
       "id": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
       "title": "Build a now next later backlog view with priority reasons",
       "summary": "Create a backlog view for the AMS that makes now, next, and later explicit. Show why each item is ranked where it is, including the smallest useful rationale for urgency, leverage, risk, dependency order, or deferral.",
-      "successCriteria": "",
-      "readyCondition": "",
-      "expectedOutcome": "",
+      "successCriteria": "A backlog view is created for the ams that makes now, next, later explicit",
+      "readyCondition": "A backlog view is created for the ams that makes now, next, later explicit",
+      "expectedOutcome": "A backlog view is created for the ams that makes now, next, later explicit",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "area": "product",
       "goalId": "goal_26a850e3-5eac-4150-a96f-0574cd483595",
@@ -974,14 +993,14 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "high",
-      "status": "ready",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
-      "requiredThreadSandbox": null,
+      "requiredThreadSandbox": "danger-full-access",
       "requiresReview": true,
       "desiredRoleId": "role_app_worker",
       "assigneeExecutionSurfaceId": null,
-      "agentThreadId": null,
+      "agentThreadId": "thread_8c5fcebd-ddcc-425c-b31d-24815209f785",
       "requiredPromptSkillNames": [],
       "requiredCapabilityNames": [],
       "requiredToolNames": [],
@@ -991,12 +1010,12 @@
       ],
       "estimateHours": null,
       "targetDate": "2026-04-12",
-      "runCount": 0,
-      "latestRunId": null,
+      "runCount": 1,
+      "latestRunId": "run_b9d032b3-7cde-49db-b45e-6c1d76b3c476",
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:01:32.363Z",
-      "updatedAt": "2026-04-10T16:01:32.363Z"
+      "updatedAt": "2026-04-10T18:33:28.275Z"
     },
     {
       "id": "task_20bef169-80b9-4fae-a54c-5bfff66d379e",
@@ -6478,15 +6497,57 @@
   ],
   "runs": [
     {
+      "id": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
+      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
+      "executionSurfaceId": null,
+      "assumedRoleId": "role_app_worker",
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-10T18:36:34.849Z",
+      "updatedAt": "2026-04-10T18:47:35.270Z",
+      "startedAt": "2026-04-10T18:36:34.848Z",
+      "endedAt": "2026-04-10T18:47:35.270Z",
+      "threadId": null,
+      "agentThreadId": "thread_7426b9c8-4701-49ca-97e7-5313f017956e",
+      "promptDigest": "a8d56b3c0adca540",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-10T18:46:51.655Z",
+      "errorSummary": ""
+    },
+    {
+      "id": "run_b9d032b3-7cde-49db-b45e-6c1d76b3c476",
+      "taskId": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
+      "executionSurfaceId": null,
+      "assumedRoleId": "role_app_worker",
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-10T18:23:17.752Z",
+      "updatedAt": "2026-04-10T18:33:28.287Z",
+      "startedAt": "2026-04-10T18:23:17.752Z",
+      "endedAt": "2026-04-10T18:28:29.157Z",
+      "threadId": null,
+      "agentThreadId": "thread_8c5fcebd-ddcc-425c-b31d-24815209f785",
+      "promptDigest": "36fa38fb7cf88c1a",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-10T18:28:02.664Z",
+      "errorSummary": ""
+    },
+    {
       "id": "run_12ac33fe-a9f4-442e-91f9-d58ca32e1362",
       "taskId": "task_f62cf868-5d78-4501-b690-cf7af5d6438e",
       "executionSurfaceId": null,
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-10T16:38:21.234Z",
-      "updatedAt": "2026-04-10T17:10:09.747Z",
+      "updatedAt": "2026-04-10T18:11:43.967Z",
       "startedAt": "2026-04-10T16:38:21.233Z",
-      "endedAt": "2026-04-10T17:10:09.747Z",
+      "endedAt": "2026-04-10T18:11:43.967Z",
       "threadId": null,
       "agentThreadId": "thread_56b41379-2dce-4a67-b072-5e6df9746131",
       "promptDigest": "ec48a33db2ea4ec3",
@@ -6494,7 +6555,7 @@
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-10T17:09:48.717Z",
+      "lastHeartbeatAt": "2026-04-10T18:11:25.492Z",
       "errorSummary": ""
     },
     {
@@ -9595,6 +9656,30 @@
   ],
   "reviews": [
     {
+      "id": "review_a14337f1-7959-4867-bb33-cbe5969ef415",
+      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
+      "runId": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
+      "status": "open",
+      "createdAt": "2026-04-10T18:53:12.629Z",
+      "updatedAt": "2026-04-10T18:53:12.629Z",
+      "resolvedAt": null,
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Task entered the review queue."
+    },
+    {
+      "id": "review_52e44363-b523-4fde-b6fc-510bec5d9671",
+      "taskId": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
+      "runId": "run_b9d032b3-7cde-49db-b45e-6c1d76b3c476",
+      "status": "approved",
+      "createdAt": "2026-04-10T18:31:49.526Z",
+      "updatedAt": "2026-04-10T18:33:28.275Z",
+      "resolvedAt": "2026-04-10T18:33:28.275Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
       "id": "review_58da8044-5bf9-435c-afd3-1dc2c8ff96ac",
       "taskId": "task_f62cf868-5d78-4501-b690-cf7af5d6438e",
       "runId": "run_12ac33fe-a9f4-442e-91f9-d58ca32e1362",
@@ -11314,6 +11399,58 @@
   "planningSessions": [],
   "approvals": [],
   "decisions": [
+    {
+      "id": "decision_17f5a79b-7ea3-4365-bf5f-eae0c31705a7",
+      "taskId": "task_ae620901-ffb5-4327-962f-a75614eb9fef",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-10T18:59:30.156Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_e5d914bb-367b-4a88-bb03-bad3e95da4d9",
+      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome.",
+      "createdAt": "2026-04-10T18:36:24.568Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_d8fb4a71-9a53-488c-a0c8-beaa8350ffc6",
+      "taskId": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
+      "goalId": null,
+      "runId": "run_b9d032b3-7cde-49db-b45e-6c1d76b3c476",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-10T18:33:28.275Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_cc11b7d3-f06e-4d4a-b5f8-dabc68452a0d",
+      "taskId": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome; required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T18:23:15.767Z",
+      "decidedByExecutionSurfaceId": null
+    },
     {
       "id": "decision_14603f7c-193c-4f84-b2b8-a96989a1822f",
       "taskId": "task_ae620901-ffb5-4327-962f-a75614eb9fef",

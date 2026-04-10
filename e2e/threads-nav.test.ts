@@ -13,5 +13,7 @@ test('sidebar threads link opens the threads index', async ({ page }) => {
 	await page.locator('[data-scope="navigation"]').getByRole('link', { name: 'Threads' }).click();
 
 	await expect(page).toHaveURL(/\/app\/threads$/);
-	await expect(page.getByRole('heading', { name: 'Browse active and historical threads' })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Browse active and historical threads' })
+	).toBeVisible();
 });

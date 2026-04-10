@@ -643,6 +643,8 @@ describe('/app/tasks/+page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Open Completed work' }).click();
 
-		expect(document.querySelector('[data-testid="task-mobile-card-task_done_only"]')).not.toBeNull();
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_done_only"]')
+		).not.toBeNull();
 	});
 });

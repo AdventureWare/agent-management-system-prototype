@@ -8,6 +8,8 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
 		formatGoalStatusLabel,
+		formatPriorityLabel,
+		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		goalStatusToneClass,
 		taskStatusToneClass
@@ -57,6 +59,38 @@
 		}
 
 		return 'text-emerald-200';
+	}
+
+	function backlogBucketClass(bucketId: 'now' | 'next' | 'later') {
+		switch (bucketId) {
+			case 'now':
+				return 'border-rose-900/70 bg-rose-950/20';
+			case 'next':
+				return 'border-amber-900/70 bg-amber-950/20';
+			case 'later':
+			default:
+				return 'border-slate-800 bg-slate-950/40';
+		}
+	}
+
+	function backlogReasonClass(reason: string) {
+		if (reason.startsWith('Urgency:')) {
+			return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+		}
+
+		if (reason.startsWith('Leverage:')) {
+			return 'border-sky-900/70 bg-sky-950/40 text-sky-200';
+		}
+
+		if (reason.startsWith('Risk:')) {
+			return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+		}
+
+		if (reason.startsWith('Dependency order:')) {
+			return 'border-violet-900/70 bg-violet-950/40 text-violet-200';
+		}
+
+		return 'border-slate-700 bg-slate-950/70 text-slate-300';
 	}
 </script>
 
@@ -359,6 +393,96 @@
 					</div>
 				{/if}
 			</section>
+
+			<DetailSection
+				eyebrow="Backlog"
+				title="Now, next, later"
+				description="This backlog view makes the pull order explicit. Each item carries the smallest useful reason for why it belongs in the current focus set, the follow-on queue, or a deferred lane."
+				bodyClass="space-y-4"
+			>
+				<div class="grid gap-4 xl:grid-cols-3">
+					{#each data.backlogBuckets as bucket (bucket.id)}
+						<section class={`rounded-3xl border p-4 ${backlogBucketClass(bucket.id)}`}>
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<h3 class="text-xl font-semibold text-white">{bucket.label}</h3>
+									<p class="mt-1 text-sm text-slate-400">{bucket.description}</p>
+								</div>
+								<span
+									class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] text-slate-300"
+								>
+									{bucket.items.length}
+								</span>
+							</div>
+
+							{#if bucket.items.length === 0}
+								<p class="ui-empty-state mt-4">
+									No tasks currently fall into {bucket.label.toLowerCase()}.
+								</p>
+							{:else}
+								<div class="mt-4 space-y-3">
+									{#each bucket.items as task (task.id)}
+										<a
+											class="block rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition hover:border-sky-400/40"
+											href={resolve(`/app/tasks/${task.id}`)}
+										>
+											<div class="flex flex-wrap items-start justify-between gap-3">
+												<div class="min-w-0 space-y-2">
+													<div class="flex flex-wrap items-center gap-2">
+														<p class="ui-wrap-anywhere font-medium text-white">{task.title}</p>
+														<span
+															class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(task.status)}`}
+														>
+															{formatTaskStatusLabel(task.status)}
+														</span>
+													</div>
+													<p class="text-xs text-slate-400">
+														{task.goalName} · {task.projectName}
+													</p>
+												</div>
+												<div class="text-right text-xs text-slate-400">
+													<p>{task.assigneeName}</p>
+													<p class="mt-1">
+														{task.targetDate ? formatDate(task.targetDate) : 'Undated'}
+													</p>
+												</div>
+											</div>
+
+											<div class="mt-3 flex flex-wrap gap-2 text-[0.7rem]">
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-slate-300"
+												>
+													{formatPriorityLabel(task.priority)} priority
+												</span>
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-slate-300"
+												>
+													{formatTaskRiskLevelLabel(task.riskLevel)} risk
+												</span>
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-slate-300"
+												>
+													{task.estimateHours ?? 'No estimate'} hrs
+												</span>
+											</div>
+
+											<div class="mt-3 flex flex-wrap gap-2">
+												{#each task.priorityReasons as reason (reason)}
+													<span
+														class={`rounded-full border px-3 py-1 text-xs ${backlogReasonClass(reason)}`}
+													>
+														{reason}
+													</span>
+												{/each}
+											</div>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</section>
+					{/each}
+				</div>
+			</DetailSection>
 
 			<DetailSection
 				eyebrow="Task queues"

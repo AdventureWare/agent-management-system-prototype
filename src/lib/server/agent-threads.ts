@@ -143,7 +143,10 @@ function normalizeAgentThreadContactContextItems(items: unknown): AgentThreadCon
 }
 
 function getAgentThreadsStorageBackend() {
-	return process.env.APP_STORAGE_BACKEND?.trim() === 'json' ? 'json' : 'sqlite';
+	return (process.env.NODE_ENV === 'test' || (process.env.VITEST && !process.env.NODE_ENV)) &&
+		process.env.APP_STORAGE_BACKEND?.trim() === 'json'
+		? 'json'
+		: 'sqlite';
 }
 
 async function ensureAgentThreadsDb() {
@@ -437,8 +440,7 @@ async function updateAgentThreadsDb(
 
 			try {
 				await saveAgentThreadsDb(next, {
-					expectedRevision:
-						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+					expectedRevision: typeof snapshot.revision === 'number' ? snapshot.revision : undefined
 				});
 				return next;
 			} catch (error) {

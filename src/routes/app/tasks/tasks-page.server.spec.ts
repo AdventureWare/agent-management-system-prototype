@@ -767,7 +767,10 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Create and run from the task form');
 		form.set('instructions', 'Create the task and immediately start its work thread.');
-		form.set('successCriteria', 'A reviewer can confirm the task launched with the right contract.');
+		form.set(
+			'successCriteria',
+			'A reviewer can confirm the task launched with the right contract.'
+		);
 		form.set('readyCondition', 'The task brief and launch contract are filled in.');
 		form.set('expectedOutcome', 'A new worker thread starts with the stronger execution contract.');
 		form.set('submitMode', 'createAndRun');
@@ -971,7 +974,10 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Create and run with iCloud');
 		form.set('instructions', 'Use files from iCloud Drive.');
-		form.set('successCriteria', 'A reviewer can verify the writable roots passed through to launch.');
+		form.set(
+			'successCriteria',
+			'A reviewer can verify the writable roots passed through to launch.'
+		);
 		form.set('readyCondition', 'The project writable roots are configured.');
 		form.set('expectedOutcome', 'The launch uses the project writable roots.');
 		form.set('submitMode', 'createAndRun');

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
@@ -175,6 +175,10 @@ afterEach(() => {
 });
 
 describe('agent-threads memory-safe detail loading', () => {
+	beforeEach(() => {
+		vi.stubEnv('NODE_ENV', 'test');
+	});
+
 	it('prefers persisted run summaries over rereading raw logs', async () => {
 		const root = createTempDir();
 		const agentThreadId = 'thread_managed';
