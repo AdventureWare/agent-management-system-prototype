@@ -1,5 +1,9 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
+import {
+	bumpStoreRevision,
+	readStoreRevision
+} from '$lib/server/db/store-revisions';
 import type {
 	Approval,
 	ControlPlaneData,
@@ -28,6 +32,7 @@ const CONTROL_PLANE_COLLECTIONS = [
 	'planningSessions',
 	'decisions'
 ] as const satisfies Array<keyof ControlPlaneData>;
+const CONTROL_PLANE_STORE_NAME = 'control-plane';
 
 type ControlPlaneCollection = (typeof CONTROL_PLANE_COLLECTIONS)[number];
 
@@ -88,47 +93,64 @@ export function isControlPlaneSqliteEmpty() {
 }
 
 export function loadControlPlaneFromSqlite(): ControlPlaneData {
+	return loadControlPlaneSnapshotFromSqlite().data;
+}
+
+export function loadControlPlaneSnapshotFromSqlite(): {
+	data: ControlPlaneData;
+	revision: number;
+} {
 	migrateAppDb();
 
 	const db = openAppDb();
 
 	try {
-		const rows = db
-			.prepare<[], ControlPlaneRecordRow>(
-				`
-					select collection, id, position, payload
-					from control_plane_records
-					order by collection asc, position asc, id asc
-				`
-			)
-			.all();
-		const data = emptyControlPlaneData();
+		return db.transaction(() => {
+			const rows = db
+				.prepare<[], ControlPlaneRecordRow>(
+					`
+						select collection, id, position, payload
+						from control_plane_records
+						order by collection asc, position asc, id asc
+					`
+				)
+				.all();
+			const data = emptyControlPlaneData();
 
-		for (const row of rows) {
-			if (!isControlPlaneCollection(row.collection)) {
-				console.warn(
-					`[control-plane-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
-				);
-				continue;
+			for (const row of rows) {
+				if (!isControlPlaneCollection(row.collection)) {
+					console.warn(
+						`[control-plane-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
+					);
+					continue;
+				}
+
+				const collection = data[row.collection] as ControlPlaneRecordPayload[];
+				collection.push(JSON.parse(row.payload) as ControlPlaneRecordPayload);
 			}
 
-			const collection = data[row.collection] as ControlPlaneRecordPayload[];
-			collection.push(JSON.parse(row.payload) as ControlPlaneRecordPayload);
-		}
-
-		return data;
+			return {
+				data,
+				revision: readStoreRevision(db, CONTROL_PLANE_STORE_NAME)
+			};
+		})();
 	} finally {
 		db.close();
 	}
 }
 
-export function saveControlPlaneToSqlite(data: ControlPlaneData) {
+export function saveControlPlaneToSqlite(
+	data: ControlPlaneData,
+	options: { expectedRevision?: number } = {}
+) {
 	migrateAppDb();
 
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction((input: ControlPlaneData) => {
+		const replaceAllRecords = db.transaction(
+			(input: ControlPlaneData, expectedRevision?: number) => {
+				bumpStoreRevision(db, CONTROL_PLANE_STORE_NAME, expectedRevision);
 			db.exec('delete from control_plane_records');
 
 			const insertRecord = db.prepare(
@@ -145,9 +167,10 @@ export function saveControlPlaneToSqlite(data: ControlPlaneData) {
 					insertRecord.run(collection, record.id, position, JSON.stringify(record));
 				}
 			}
-		});
+			}
+		);
 
-		replaceAllRecords(data);
+		replaceAllRecords(data, options.expectedRevision);
 	} finally {
 		db.close();
 	}

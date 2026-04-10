@@ -138,6 +138,14 @@ describe('buildTaskLaunchContextSummary', () => {
 				defaultArtifactRoot: '/tmp/project/agent_output',
 				additionalWritableRoots: ['/tmp/project/cache']
 			},
+			contract: {
+				canLaunch: false,
+				canReviewAgainstContract: true,
+				missingLaunchFieldLabels: ['ready condition'],
+				missingReviewFieldLabels: [],
+				launchBlockerMessage: expect.stringContaining('ready condition'),
+				reviewGapMessage: null
+			},
 			promptInputs: {
 				includesSuccessCriteria: true,
 				includesReadyCondition: false,

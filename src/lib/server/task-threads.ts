@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
 import type { DelegationPacket } from '$lib/types/control-plane';
+import { buildTaskExecutionContractStatus } from '$lib/task-execution-contract';
 import type { TaskRolePromptContext } from './task-role-context';
 
 const TASK_THREAD_NAME_PREFIX = 'Task thread';
@@ -30,6 +31,14 @@ export function buildTaskThreadPrompt(input: {
 		>
 	>;
 }) {
+	const executionContract = buildTaskExecutionContractStatus({
+		successCriteria: input.successCriteria,
+		readyCondition: input.readyCondition,
+		expectedOutcome: input.expectedOutcome
+	});
+	const readyCondition = executionContract.readyCondition || 'None recorded.';
+	const expectedOutcome = executionContract.expectedOutcome || 'None recorded.';
+	const successCriteria = executionContract.successCriteria || 'None recorded.';
 	const contextLines = [
 		`Task: ${input.taskName}`,
 		`Project: ${input.projectName}`,
@@ -114,13 +123,21 @@ export function buildTaskThreadPrompt(input: {
 		'You are executing a queued task from the agent management system.',
 		'',
 		...contextLines,
-		...(input.successCriteria?.trim()
-			? ['', 'Success criteria:', input.successCriteria.trim()]
-			: []),
-		...(input.readyCondition?.trim() ? ['', 'Ready condition:', input.readyCondition.trim()] : []),
-		...(input.expectedOutcome?.trim()
-			? ['', 'Expected outcome:', input.expectedOutcome.trim()]
-			: []),
+		'',
+		'Execution contract:',
+		'Ready condition:',
+		readyCondition,
+		'',
+		'Expected outcome:',
+		expectedOutcome,
+		'',
+		'Success criteria:',
+		successCriteria,
+		'',
+		'Completion standard:',
+		'- Do not claim completion unless the expected outcome exists and the success criteria are met.',
+		'- If the ready condition is false or becomes false, stop and report the mismatch instead of pushing ahead.',
+		'- In the completion update, state what changed, which criteria were satisfied, and which gaps remain.',
 		...(input.delegationPacket
 			? [
 					'',

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
@@ -168,6 +168,179 @@ describe('control-plane sqlite backend', () => {
 		);
 	});
 
+	it('repairs dangling sqlite task references during load and persists clean follow-up updates', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: [
+				{
+					id: 'task_kept',
+					title: 'Kept task',
+					summary: 'Still valid',
+					projectId: '',
+					area: 'product',
+					goalId: '',
+					parentTaskId: null,
+					delegationPacket: null,
+					delegationAcceptance: null,
+					priority: 'medium',
+					status: 'review',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiredThreadSandbox: null,
+					requiresReview: true,
+					desiredRoleId: '',
+					assigneeExecutionSurfaceId: null,
+					agentThreadId: null,
+					requiredPromptSkillNames: [],
+					requiredCapabilityNames: [],
+					requiredToolNames: [],
+					blockedReason: '',
+					dependencyTaskIds: [],
+					estimateHours: null,
+					targetDate: null,
+					runCount: 1,
+					latestRunId: 'run_kept',
+					artifactPath: '',
+					attachments: [],
+					createdAt: '2026-04-01T00:00:00.000Z',
+					updatedAt: '2026-04-01T00:00:00.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_kept',
+					taskId: 'task_kept',
+					executionSurfaceId: null,
+					providerId: null,
+					status: 'completed',
+					createdAt: '2026-04-01T00:00:00.000Z',
+					updatedAt: '2026-04-01T00:05:00.000Z',
+					startedAt: '2026-04-01T00:00:00.000Z',
+					endedAt: '2026-04-01T00:05:00.000Z',
+					threadId: null,
+					agentThreadId: null,
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Completed work',
+					lastHeartbeatAt: null,
+					errorSummary: ''
+				}
+			],
+			reviews: [
+				{
+					id: 'review_kept',
+					taskId: 'task_kept',
+					runId: 'run_kept',
+					status: 'open',
+					createdAt: '2026-04-01T00:05:00.000Z',
+					updatedAt: '2026-04-01T00:05:00.000Z',
+					resolvedAt: null,
+					requestedByExecutionSurfaceId: null,
+					reviewerExecutionSurfaceId: null,
+					summary: 'Needs review'
+				}
+			]
+		}));
+
+		const dbPath = resolve(root, 'data', 'app.sqlite');
+		const db = new Database(dbPath);
+		db.prepare(
+			`
+				insert into control_plane_records (collection, id, position, payload)
+				values (?, ?, ?, ?)
+			`
+		).run(
+			'runs',
+			'run_orphan',
+			99,
+			JSON.stringify({
+				id: 'run_orphan',
+				taskId: 'task_missing',
+				executionSurfaceId: null,
+				providerId: null,
+				status: 'completed',
+				createdAt: '2026-04-01T00:10:00.000Z',
+				updatedAt: '2026-04-01T00:10:00.000Z',
+				startedAt: '2026-04-01T00:10:00.000Z',
+				endedAt: '2026-04-01T00:10:00.000Z',
+				threadId: null,
+				agentThreadId: null,
+				promptDigest: '',
+				artifactPaths: [],
+				summary: 'Orphaned run',
+				lastHeartbeatAt: null,
+				errorSummary: ''
+			})
+		);
+		db.prepare(
+			`
+				insert into control_plane_records (collection, id, position, payload)
+				values (?, ?, ?, ?)
+			`
+		).run(
+			'reviews',
+			'review_orphan',
+			99,
+			JSON.stringify({
+				id: 'review_orphan',
+				taskId: 'task_missing',
+				runId: 'run_orphan',
+				status: 'open',
+				createdAt: '2026-04-01T00:10:00.000Z',
+				updatedAt: '2026-04-01T00:10:00.000Z',
+				resolvedAt: null,
+				requestedByExecutionSurfaceId: null,
+				reviewerExecutionSurfaceId: null,
+				summary: 'Orphaned review'
+			})
+		);
+		db.close();
+
+		const loaded = await loadControlPlane();
+
+		expect(loaded.runs.map((run) => run.id)).toEqual(['run_kept']);
+		expect(loaded.reviews.map((review) => review.id)).toEqual(['review_kept']);
+
+		await updateControlPlane((data) => ({
+			...data,
+			roles: [
+				{
+					id: 'role_coordinator',
+					name: 'Coordinator',
+					area: 'shared',
+					description: 'Coordinates queued work'
+				}
+			]
+		}));
+
+		const reloaded = await loadControlPlane();
+
+		expect(reloaded.runs.map((run) => run.id)).toEqual(['run_kept']);
+		expect(reloaded.reviews.map((review) => review.id)).toEqual(['review_kept']);
+
+		const verifyDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+		const orphanRunRow = verifyDb
+			.prepare<[], { count: number }>(
+				"select count(*) as count from control_plane_records where collection = 'runs' and id = 'run_orphan'"
+			)
+			.get();
+		const orphanReviewRow = verifyDb
+			.prepare<[], { count: number }>(
+				"select count(*) as count from control_plane_records where collection = 'reviews' and id = 'review_orphan'"
+			)
+			.get();
+		verifyDb.close();
+
+		expect(orphanRunRow?.count).toBe(0);
+		expect(orphanReviewRow?.count).toBe(0);
+	});
+
 	it('serializes concurrent updates so they do not drop newer records', async () => {
 		const root = createTempDir();
 		process.chdir(root);
@@ -227,5 +400,69 @@ describe('control-plane sqlite backend', () => {
 
 		expect(loaded.roles.map((role) => role.id)).toEqual(['role_serialized']);
 		expect(loaded.projects.map((project) => project.id)).toEqual(['project_serialized']);
+	});
+
+	it('preserves task writes across independent module instances and refreshes the json mirror', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const firstModule = await importControlPlaneModule();
+		let releaseFirstUpdate!: () => void;
+		const firstUpdateReady = new Promise<void>((resolve) => {
+			releaseFirstUpdate = resolve;
+		});
+		let firstUpdateLoaded = false;
+
+		const createdTask = firstModule.createTask({
+			title: 'Recovered task',
+			summary: 'Should survive concurrent writes',
+			projectId: '',
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: ''
+		});
+
+		const firstUpdate = firstModule.updateControlPlane(async (data) => {
+			firstUpdateLoaded = true;
+			await firstUpdateReady;
+
+			return {
+				...data,
+				tasks: [createdTask, ...data.tasks]
+			};
+		});
+
+		while (!firstUpdateLoaded) {
+			await Promise.resolve();
+		}
+
+		const secondModule = await importControlPlaneModule();
+		await secondModule.updateControlPlane((data) => ({
+			...data,
+			roles: [
+				{
+					id: 'role_parallel',
+					name: 'Parallel writer',
+					area: 'shared',
+					description: 'Created by a separate module instance'
+				}
+			]
+		}));
+
+		releaseFirstUpdate();
+		await firstUpdate;
+
+		const loaded = await secondModule.loadControlPlane();
+		const jsonMirror = JSON.parse(readFileSync(resolve(root, 'data', 'control-plane.json'), 'utf8'));
+
+		expect(loaded.tasks.map((task) => task.id)).toContain(createdTask.id);
+		expect(loaded.roles.map((role) => role.id)).toContain('role_parallel');
+		expect(jsonMirror.tasks.map((task: { id: string }) => task.id)).toContain(createdTask.id);
+		expect(jsonMirror.roles.map((role: { id: string }) => role.id)).toContain('role_parallel');
 	});
 });

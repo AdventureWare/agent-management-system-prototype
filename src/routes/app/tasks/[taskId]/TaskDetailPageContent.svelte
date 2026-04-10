@@ -254,6 +254,7 @@
 
 	let taskHasActiveRun = $derived(Boolean(data.task.hasActiveRun));
 	let taskIsReadyToRun = $derived(data.task.status === 'ready');
+	let launchContractBlocked = $derived(!data.launchContext.contract.canLaunch);
 	let launchCoverageBlocked = $derived.by(() => {
 		if (!data.executionPreflight.hasDeclaredRequirements) {
 			return false;
@@ -269,7 +270,9 @@
 
 		return data.executionPreflight.eligibleExecutionSurfaceCount === 0;
 	});
-	let runTaskDisabled = $derived(!taskIsReadyToRun || taskHasActiveRun || launchCoverageBlocked);
+	let runTaskDisabled = $derived(
+		!taskIsReadyToRun || taskHasActiveRun || launchContractBlocked || launchCoverageBlocked
+	);
 	let runTaskButtonLabel = $derived(
 		taskHasActiveRun ? formatActiveRunStateLabel(data.task.activeRun?.status) : 'Run task'
 	);
@@ -280,6 +283,10 @@
 
 		if (!taskIsReadyToRun) {
 			return 'This task is not ready to run yet.';
+		}
+
+		if (launchContractBlocked) {
+			return 'This task needs a clearer execution contract before a new run can start.';
 		}
 
 		if (launchCoverageBlocked) {
@@ -304,6 +311,13 @@
 
 		if (!taskIsReadyToRun) {
 			return `Set the task status to Ready before running it. Current status: ${formatTaskStatusLabel(data.task.status)}.`;
+		}
+
+		if (launchContractBlocked) {
+			return (
+				data.launchContext.contract.launchBlockerMessage ??
+				'Add success criteria, a ready condition, and an expected outcome before running this task.'
+			);
 		}
 
 		if (launchCoverageBlocked) {

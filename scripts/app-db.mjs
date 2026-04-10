@@ -17,7 +17,7 @@ const STORES = [
 			'roles',
 			'projects',
 			'goals',
-			'workers',
+			'executionSurfaces',
 			'tasks',
 			'runs',
 			'reviews',
@@ -31,7 +31,7 @@ const STORES = [
 				roles: [],
 				projects: [],
 				goals: [],
-				workers: [],
+				executionSurfaces: [],
 				tasks: [],
 				runs: [],
 				reviews: [],
@@ -45,11 +45,12 @@ const STORES = [
 		name: 'agent-threads',
 		table: 'agent_thread_records',
 		jsonFile: 'agent-threads.json',
-		collections: ['threads', 'runs'],
+		collections: ['threads', 'runs', 'contacts'],
 		createDefault() {
 			return {
 				threads: [],
-				runs: []
+				runs: [],
+				contacts: []
 			};
 		}
 	},
@@ -57,12 +58,22 @@ const STORES = [
 		name: 'self-improvement',
 		table: 'self_improvement_entries',
 		jsonFile: 'self-improvement.json',
-		collections: ['records', 'signals', 'knowledgeItems'],
+		collections: [
+			'records',
+			'signals',
+			'knowledgeItems',
+			'capturedSuggestions',
+			'impressions',
+			'decisions'
+		],
 		createDefault() {
 			return {
 				records: [],
 				signals: [],
-				knowledgeItems: []
+				knowledgeItems: [],
+				capturedSuggestions: [],
+				impressions: [],
+				decisions: []
 			};
 		}
 	}

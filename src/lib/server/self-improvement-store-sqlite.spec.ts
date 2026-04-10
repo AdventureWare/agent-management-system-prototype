@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
@@ -127,5 +127,9 @@ describe('self-improvement sqlite backend', () => {
 			status: 'accepted',
 			decisionSummary: 'Accepted into the improvement backlog.'
 		});
+		expect(
+			JSON.parse(readFileSync(resolve(root, 'data', 'self-improvement.json'), 'utf8')).records[0]
+				.status
+		).toBe('accepted');
 	});
 });

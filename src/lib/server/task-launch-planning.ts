@@ -24,6 +24,10 @@ import {
 	buildTaskThreadPrompt,
 	buildPromptDigest
 } from '$lib/server/task-threads';
+import {
+	buildTaskExecutionContractStatus,
+	getTaskLaunchContractBlockerMessage
+} from '$lib/task-execution-contract';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import {
 	describeExecutionSurfaceTaskFit,
@@ -113,9 +117,15 @@ export async function buildTaskLaunchPlan(
 ): Promise<TaskLaunchPlan> {
 	const effectiveName = input.name || task.title;
 	const effectiveInstructions = input.instructions || task.summary;
-	const effectiveSuccessCriteria = input.successCriteria;
-	const effectiveReadyCondition = input.readyCondition;
-	const effectiveExpectedOutcome = input.expectedOutcome;
+	const effectiveSuccessCriteria = input.hasSuccessCriteria
+		? input.successCriteria
+		: (task.successCriteria ?? '');
+	const effectiveReadyCondition = input.hasReadyCondition
+		? input.readyCondition
+		: (task.readyCondition ?? '');
+	const effectiveExpectedOutcome = input.hasExpectedOutcome
+		? input.expectedOutcome
+		: (task.expectedOutcome ?? '');
 	const formDelegationPacket =
 		task.parentTaskId && input.hasDelegationPacketFields
 			? {
@@ -309,6 +319,17 @@ export async function buildTaskLaunchPlan(
 			409,
 			'This task is waiting on before-run approval before a work thread can start.'
 		);
+	}
+
+	const executionContract = buildTaskExecutionContractStatus({
+		successCriteria: effectiveSuccessCriteria,
+		readyCondition: effectiveReadyCondition,
+		expectedOutcome: effectiveExpectedOutcome
+	});
+	const launchContractBlocker = getTaskLaunchContractBlockerMessage(executionContract);
+
+	if (launchContractBlocker) {
+		throw new TaskLaunchPlanError(409, launchContractBlocker);
 	}
 
 	const taskKnowledge = await loadTaskRetrievedKnowledge(

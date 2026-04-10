@@ -4,11 +4,11 @@ This prototype is the start of a small remote-work control plane for Codex.
 
 Current scope:
 
-- server-backed task, run, worker, and thread data in `data/control-plane.json` and `data/agent-threads.json`
+- server-backed task, run, thread, and self-improvement data in `data/app.sqlite`, with JSON mirrors kept for fallback/export
 - a task-first operator UI under `/app/*`
 - background Codex thread launching, reuse, and follow-up prompts
 - run history, prompt digests, logs, artifacts, and last-message capture
-- supporting control-plane directories for projects, goals, planning windows, workers, roles, and providers
+- supporting control-plane directories for projects, goals, planning windows, execution surfaces, roles, and providers
 - self-improvement opportunity analysis from tasks, runs, reviews, and thread state
 - thread APIs under `/api/agents/threads/*` with session aliases kept for compatibility
 

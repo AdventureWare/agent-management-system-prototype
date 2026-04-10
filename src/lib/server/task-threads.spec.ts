@@ -65,6 +65,25 @@ describe('task thread naming', () => {
 		).toContain('Prefer installed skills for this task: frontend-sveltekit');
 	});
 
+	it('formats the execution contract in the launch prompt', () => {
+		const prompt = buildTaskThreadPrompt({
+			taskName: 'Tighten task contracts',
+			taskInstructions: 'Make the launch brief clearer and more operational.',
+			projectName: 'Agent Management System Prototype',
+			projectRootFolder: '/tmp/project',
+			defaultArtifactRoot: '/tmp/project/agent_output',
+			successCriteria: 'A reviewer can verify the launch contract in the UI and prompt.',
+			readyCondition: 'The task detail form and prompt builder are both updated.',
+			expectedOutcome: 'A stronger launch brief reaches the worker thread.'
+		});
+
+		expect(prompt).toContain('Execution contract:');
+		expect(prompt).toContain('Ready condition:');
+		expect(prompt).toContain('Expected outcome:');
+		expect(prompt).toContain('Success criteria:');
+		expect(prompt).toContain('Completion standard:');
+	});
+
 	it('includes preferred role context in the task prompt when present', () => {
 		const prompt = buildTaskThreadPrompt({
 			taskName: 'Use the writer role',

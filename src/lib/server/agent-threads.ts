@@ -13,8 +13,10 @@ import { listCodexStateThreadRows } from '$lib/server/codex-state-db';
 import {
 	isAgentThreadsSqliteEmpty,
 	loadAgentThreadsFromSqlite,
+	loadAgentThreadsSnapshotFromSqlite,
 	saveAgentThreadsToSqlite
 } from '$lib/server/db/agent-threads-store';
+import { StoreRevisionConflictError } from '$lib/server/db/store-revisions';
 import {
 	getCodexSkillExecutionIssue,
 	getWorkspaceExecutionIssue,
@@ -353,6 +355,11 @@ async function loadAgentThreadsDbFromJson() {
 	return parseAgentThreadsDb(await readFile(AGENT_THREADS_DB_FILE, 'utf8'));
 }
 
+async function writeAgentThreadsJsonMirror(data: AgentThreadsDb) {
+	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
+	await writeFile(AGENT_THREADS_DB_FILE, JSON.stringify(data, null, 2));
+}
+
 async function readAgentThreadsJsonIfPresent() {
 	if (!existsSync(AGENT_THREADS_DB_FILE)) {
 		return null;
@@ -374,32 +381,85 @@ async function ensureAgentThreadsSqliteSeeded() {
 	saveAgentThreadsToSqlite(seed);
 }
 
-export async function loadAgentThreadsDb(): Promise<AgentThreadsDb> {
+async function loadAgentThreadsSnapshot() {
 	if (getAgentThreadsStorageBackend() === 'sqlite') {
 		await ensureAgentThreadsSqliteSeeded();
-		return normalizeAgentThreadsDb(loadAgentThreadsFromSqlite());
+		const snapshot = loadAgentThreadsSnapshotFromSqlite();
+
+		return {
+			data: normalizeAgentThreadsDb(snapshot.data),
+			revision: snapshot.revision
+		};
 	}
 
-	return loadAgentThreadsDbFromJson();
+	return {
+		data: await loadAgentThreadsDbFromJson(),
+		revision: null
+	};
 }
 
-async function saveAgentThreadsDb(data: AgentThreadsDb) {
+export async function loadAgentThreadsDb(): Promise<AgentThreadsDb> {
+	return (await loadAgentThreadsSnapshot()).data;
+}
+
+async function saveAgentThreadsDb(
+	data: AgentThreadsDb,
+	options: { expectedRevision?: number } = {}
+) {
 	if (getAgentThreadsStorageBackend() === 'sqlite') {
-		saveAgentThreadsToSqlite(data);
+		saveAgentThreadsToSqlite(data, options);
+
+		try {
+			await writeAgentThreadsJsonMirror(data);
+		} catch (error) {
+			console.warn(
+				`[agent-threads] Saved sqlite state but could not refresh ${AGENT_THREADS_DB_FILE}: ${error instanceof Error ? error.message : String(error)}`
+			);
+		}
+
 		return;
 	}
 
-	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
-	await writeFile(AGENT_THREADS_DB_FILE, JSON.stringify(data, null, 2));
+	await writeAgentThreadsJsonMirror(data);
 }
+
+let agentThreadsUpdateQueue: Promise<void> = Promise.resolve();
 
 async function updateAgentThreadsDb(
 	updater: (data: AgentThreadsDb) => AgentThreadsDb | Promise<AgentThreadsDb>
 ) {
-	const current = await loadAgentThreadsDb();
-	const next = await updater(current);
-	await saveAgentThreadsDb(next);
-	return next;
+	const runUpdate = async () => {
+		const maxAttempts = 5;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+			const snapshot = await loadAgentThreadsSnapshot();
+			const next = await updater(snapshot.data);
+
+			try {
+				await saveAgentThreadsDb(next, {
+					expectedRevision:
+						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+				});
+				return next;
+			} catch (error) {
+				if (error instanceof StoreRevisionConflictError && attempt < maxAttempts - 1) {
+					continue;
+				}
+
+				throw error;
+			}
+		}
+
+		throw new Error('Could not save agent thread data after repeated concurrent update conflicts.');
+	};
+
+	const queuedUpdate = agentThreadsUpdateQueue.catch(() => undefined).then(runUpdate);
+	agentThreadsUpdateQueue = queuedUpdate.then(
+		() => undefined,
+		() => undefined
+	);
+
+	return await queuedUpdate;
 }
 
 function createAgentThreadId() {

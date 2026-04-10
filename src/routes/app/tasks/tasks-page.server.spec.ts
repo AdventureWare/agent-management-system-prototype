@@ -37,6 +37,9 @@ const createTaskMock = vi.hoisted(() =>
 		(input: {
 			title: string;
 			summary: string;
+			successCriteria?: string;
+			readyCondition?: string;
+			expectedOutcome?: string;
 			projectId: string;
 			goalId: string;
 			parentTaskId?: string | null;
@@ -65,6 +68,9 @@ const createTaskMock = vi.hoisted(() =>
 			id: `task_${input.title.toLowerCase().replace(/\s+/g, '_')}`,
 			title: input.title,
 			summary: input.summary,
+			successCriteria: input.successCriteria ?? '',
+			readyCondition: input.readyCondition ?? '',
+			expectedOutcome: input.expectedOutcome ?? '',
 			projectId: input.projectId,
 			area: 'product',
 			goalId: input.goalId,
@@ -761,6 +767,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Create and run from the task form');
 		form.set('instructions', 'Create the task and immediately start its work thread.');
+		form.set('successCriteria', 'A reviewer can confirm the task launched with the right contract.');
+		form.set('readyCondition', 'The task brief and launch contract are filled in.');
+		form.set('expectedOutcome', 'A new worker thread starts with the stronger execution contract.');
 		form.set('submitMode', 'createAndRun');
 
 		const result = await actions.createTask({
@@ -840,6 +849,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Launch with project sandbox');
 		form.set('instructions', 'Use the project sandbox preference.');
+		form.set('successCriteria', 'A reviewer can verify the chosen sandbox.');
+		form.set('readyCondition', 'The sandbox metadata is available for launch.');
+		form.set('expectedOutcome', 'A work thread starts with the project sandbox.');
 		form.set('submitMode', 'createAndRun');
 
 		await actions.createTask({
@@ -864,6 +876,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Launch with provider sandbox');
 		form.set('instructions', 'Use the provider default thread sandbox.');
+		form.set('successCriteria', 'A reviewer can verify the inherited provider sandbox.');
+		form.set('readyCondition', 'The provider sandbox default is configured.');
+		form.set('expectedOutcome', 'A work thread starts with the provider sandbox.');
 		form.set('submitMode', 'createAndRun');
 
 		await actions.createTask({
@@ -889,6 +904,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Launch with task sandbox');
 		form.set('instructions', 'Use the task sandbox preference.');
+		form.set('successCriteria', 'A reviewer can verify the task sandbox override.');
+		form.set('readyCondition', 'The task sandbox override is recorded before launch.');
+		form.set('expectedOutcome', 'A work thread starts with the task sandbox override.');
 		form.set('requiredThreadSandbox', 'workspace-write');
 		form.set('submitMode', 'createAndRun');
 
@@ -920,6 +938,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Create and run from the task form');
 		form.set('instructions', 'Create the task and immediately start its work thread.');
+		form.set('successCriteria', 'A reviewer can verify the launch attempt was correctly blocked.');
+		form.set('readyCondition', 'The launch contract is complete before sandbox validation runs.');
+		form.set('expectedOutcome', 'The action fails with the workspace execution issue.');
 		form.set('submitMode', 'createAndRun');
 
 		const result = await actions.createTask({
@@ -950,6 +971,9 @@ describe('tasks page server actions', () => {
 		form.set('projectId', 'project_ams');
 		form.set('name', 'Create and run with iCloud');
 		form.set('instructions', 'Use files from iCloud Drive.');
+		form.set('successCriteria', 'A reviewer can verify the writable roots passed through to launch.');
+		form.set('readyCondition', 'The project writable roots are configured.');
+		form.set('expectedOutcome', 'The launch uses the project writable roots.');
 		form.set('submitMode', 'createAndRun');
 
 		await actions.createTask({

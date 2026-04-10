@@ -1,5 +1,9 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
+import {
+	bumpStoreRevision,
+	readStoreRevision
+} from '$lib/server/db/store-revisions';
 import type {
 	AgentRun,
 	AgentThread,
@@ -10,6 +14,7 @@ import type {
 const AGENT_THREAD_COLLECTIONS = ['contacts', 'runs', 'threads'] as const satisfies Array<
 	keyof AgentThreadsDb
 >;
+const AGENT_THREADS_STORE_NAME = 'agent-threads';
 
 type AgentThreadCollection = (typeof AGENT_THREAD_COLLECTIONS)[number];
 type AgentThreadRecordPayload = AgentThread | AgentRun | AgentThreadContact;
@@ -49,47 +54,64 @@ export function isAgentThreadsSqliteEmpty() {
 }
 
 export function loadAgentThreadsFromSqlite(): AgentThreadsDb {
+	return loadAgentThreadsSnapshotFromSqlite().data;
+}
+
+export function loadAgentThreadsSnapshotFromSqlite(): {
+	data: AgentThreadsDb;
+	revision: number;
+} {
 	migrateAppDb();
 
 	const db = openAppDb();
 
 	try {
-		const rows = db
-			.prepare<[], AgentThreadRecordRow>(
-				`
-					select collection, id, position, payload
-					from agent_thread_records
-					order by collection asc, position asc, id asc
-				`
-			)
-			.all();
-		const data = emptyAgentThreadsDb();
+		return db.transaction(() => {
+			const rows = db
+				.prepare<[], AgentThreadRecordRow>(
+					`
+						select collection, id, position, payload
+						from agent_thread_records
+						order by collection asc, position asc, id asc
+					`
+				)
+				.all();
+			const data = emptyAgentThreadsDb();
 
-		for (const row of rows) {
-			if (!isAgentThreadCollection(row.collection)) {
-				console.warn(
-					`[agent-threads-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
-				);
-				continue;
+			for (const row of rows) {
+				if (!isAgentThreadCollection(row.collection)) {
+					console.warn(
+						`[agent-threads-store] Ignoring unknown sqlite collection "${row.collection}" for record "${row.id}".`
+					);
+					continue;
+				}
+
+				const collection = data[row.collection] as AgentThreadRecordPayload[];
+				collection.push(JSON.parse(row.payload) as AgentThreadRecordPayload);
 			}
 
-			const collection = data[row.collection] as AgentThreadRecordPayload[];
-			collection.push(JSON.parse(row.payload) as AgentThreadRecordPayload);
-		}
-
-		return data;
+			return {
+				data,
+				revision: readStoreRevision(db, AGENT_THREADS_STORE_NAME)
+			};
+		})();
 	} finally {
 		db.close();
 	}
 }
 
-export function saveAgentThreadsToSqlite(data: AgentThreadsDb) {
+export function saveAgentThreadsToSqlite(
+	data: AgentThreadsDb,
+	options: { expectedRevision?: number } = {}
+) {
 	migrateAppDb();
 
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction((input: AgentThreadsDb) => {
+		const replaceAllRecords = db.transaction(
+			(input: AgentThreadsDb, expectedRevision?: number) => {
+				bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
 			db.exec('delete from agent_thread_records');
 
 			const insertRecord = db.prepare(
@@ -106,9 +128,10 @@ export function saveAgentThreadsToSqlite(data: AgentThreadsDb) {
 					insertRecord.run(collection, record.id, position, JSON.stringify(record));
 				}
 			}
-		});
+			}
+		);
 
-		replaceAllRecords(data);
+		replaceAllRecords(data, options.expectedRevision);
 	} finally {
 		db.close();
 	}

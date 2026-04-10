@@ -120,6 +120,14 @@
 			totalInstalledSkillCount: number;
 			promptSkillNames: string[];
 		};
+		contract: {
+			canLaunch: boolean;
+			canReviewAgainstContract: boolean;
+			missingLaunchFieldLabels: string[];
+			missingReviewFieldLabels: string[];
+			launchBlockerMessage: string | null;
+			reviewGapMessage: string | null;
+		};
 		promptInputs: {
 			includesSuccessCriteria: boolean;
 			includesReadyCondition: boolean;
@@ -307,7 +315,7 @@
 			<h3 class="mt-2 text-xl font-semibold text-white">What a new thread will inherit</h3>
 			<p class="mt-2 max-w-2xl text-sm text-slate-400">
 				This mirrors the current launch plan so users can inspect the execution surface, provider,
-				sandbox, installed skills, and prompt inputs before starting work.
+				sandbox, installed skills, and execution contract before starting work.
 			</p>
 
 			<div class="mt-5 grid gap-4 xl:grid-cols-2">
@@ -346,6 +354,37 @@
 							? formatAgentSandboxLabel(launchContext.sandbox.providerDefault)
 							: 'None'}
 					</p>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Execution contract
+					</p>
+					<p class="mt-3 text-sm text-slate-300">
+						Launch status: {launchContext.contract.canLaunch ? 'Ready' : 'Needs contract details'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Review standard: {launchContext.contract.canReviewAgainstContract
+							? 'Explicit'
+							: 'Incomplete'}
+					</p>
+					{#if launchContext.contract.launchBlockerMessage}
+						<p class="mt-3 text-sm text-amber-100">
+							{launchContext.contract.launchBlockerMessage}
+						</p>
+					{:else}
+						<p class="mt-3 text-sm text-emerald-100">
+							New runs can start with an explicit ready condition, expected outcome, and success
+							criteria in the prompt.
+						</p>
+					{/if}
+					{#if launchContext.contract.reviewGapMessage}
+						<p class="mt-2 text-sm text-amber-100">{launchContext.contract.reviewGapMessage}</p>
+					{:else}
+						<p class="mt-2 text-sm text-slate-300">
+							Reviews can check the outcome against the recorded acceptance standard.
+						</p>
+					{/if}
 				</div>
 
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">

@@ -1,6 +1,11 @@
 import { resolveThreadSandbox, selectExecutionProvider } from '$lib/server/control-plane';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
+import {
+	buildTaskExecutionContractStatus,
+	getTaskLaunchContractBlockerMessage,
+	getTaskReviewContractGapMessage
+} from '$lib/task-execution-contract';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Project, Task, ExecutionSurface } from '$lib/types/control-plane';
 
@@ -40,6 +45,14 @@ export type TaskLaunchContextSummary = {
 		totalInstalledSkillCount: number;
 		promptSkillNames: string[];
 	};
+	contract: {
+		canLaunch: boolean;
+		canReviewAgainstContract: boolean;
+		missingLaunchFieldLabels: string[];
+		missingReviewFieldLabels: string[];
+		launchBlockerMessage: string | null;
+		reviewGapMessage: string | null;
+	};
 	promptInputs: {
 		includesSuccessCriteria: boolean;
 		includesReadyCondition: boolean;
@@ -69,6 +82,11 @@ export function buildTaskLaunchContextSummary(
 		? listInstalledCodexSkills(input.project.projectRootFolder)
 		: [];
 	const installedSkillNames = installedSkills.map((skill) => skill.id);
+	const executionContract = buildTaskExecutionContractStatus({
+		successCriteria: input.task.successCriteria,
+		readyCondition: input.task.readyCondition,
+		expectedOutcome: input.task.expectedOutcome
+	});
 	const { role, effectivePromptSkillNames: requiredPromptSkillNames } =
 		resolveTaskRolePromptContext({
 			roles: data.roles,
@@ -123,6 +141,14 @@ export function buildTaskLaunchContextSummary(
 			additionalWritableRoots: [...(input.project?.additionalWritableRoots ?? [])],
 			totalInstalledSkillCount: installedSkills.length,
 			promptSkillNames: installedSkills.slice(0, 12).map((skill) => skill.id)
+		},
+		contract: {
+			canLaunch: executionContract.canLaunch,
+			canReviewAgainstContract: executionContract.canReviewAgainstContract,
+			missingLaunchFieldLabels: [...executionContract.missingLaunchFieldLabels],
+			missingReviewFieldLabels: [...executionContract.missingReviewFieldLabels],
+			launchBlockerMessage: getTaskLaunchContractBlockerMessage(executionContract),
+			reviewGapMessage: getTaskReviewContractGapMessage(executionContract)
 		},
 		promptInputs: {
 			includesSuccessCriteria: Boolean(input.task.successCriteria?.trim()),

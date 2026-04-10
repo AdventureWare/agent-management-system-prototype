@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
@@ -148,6 +148,10 @@ describe('agent sessions sqlite backend', () => {
 
 		expect(db.threads[0]?.archivedAt).toBeTypeOf('string');
 		expect(JSON.parse(row?.payload ?? '{}').archivedAt).toBeTypeOf('string');
+		expect(
+			JSON.parse(readFileSync(resolve(root, 'data', 'agent-threads.json'), 'utf8')).threads[0]
+				.archivedAt
+		).toBeTypeOf('string');
 	});
 
 	it('bootstraps stored contact records into sqlite', async () => {

@@ -5,8 +5,10 @@ import { randomUUID } from 'node:crypto';
 import {
 	isControlPlaneSqliteEmpty,
 	loadControlPlaneFromSqlite,
+	loadControlPlaneSnapshotFromSqlite,
 	saveControlPlaneToSqlite
 } from '$lib/server/db/control-plane-store';
+import { StoreRevisionConflictError } from '$lib/server/db/store-revisions';
 import { normalizePathInput, normalizePathListInput } from '$lib/server/path-tools';
 import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-thread';
 import {
@@ -1101,6 +1103,72 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	return issues;
 }
 
+export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlaneData {
+	const projectIds = new Set(data.projects.map((project) => project.id));
+	const goalIds = new Set(data.goals.map((goal) => goal.id));
+	const tasks = data.tasks.map((task) => {
+		const nextGoalId = task.goalId && goalIds.has(task.goalId) ? task.goalId : '';
+		const nextParentTaskId =
+			task.parentTaskId && task.parentTaskId !== task.id ? task.parentTaskId : null;
+
+		return {
+			...task,
+			goalId: nextGoalId,
+			parentTaskId: nextParentTaskId
+		};
+	});
+	const taskIds = new Set(tasks.map((task) => task.id));
+	const repairedTasks = tasks.map((task) => ({
+		...task,
+		parentTaskId:
+			task.parentTaskId && taskIds.has(task.parentTaskId) ? task.parentTaskId : null,
+		dependencyTaskIds: task.dependencyTaskIds.filter(
+			(dependencyTaskId) => dependencyTaskId !== task.id && taskIds.has(dependencyTaskId)
+		)
+	}));
+	const runs = data.runs.filter((run) => taskIds.has(run.taskId));
+	const runIds = new Set(runs.map((run) => run.id));
+	const reviews = data.reviews.filter(
+		(review) => taskIds.has(review.taskId) && (!review.runId || runIds.has(review.runId))
+	);
+	const approvals = data.approvals.filter(
+		(approval) => taskIds.has(approval.taskId) && (!approval.runId || runIds.has(approval.runId))
+	);
+	const decisions = (data.decisions ?? [])
+		.filter((decision) => !decision.runId || runIds.has(decision.runId))
+		.map((decision) => ({
+			...decision,
+			taskId: decision.taskId && taskIds.has(decision.taskId) ? decision.taskId : null,
+			goalId: decision.goalId && goalIds.has(decision.goalId) ? decision.goalId : null
+		}));
+	const decisionIds = new Set(decisions.map((decision) => decision.id));
+	const planningSessions = (data.planningSessions ?? []).map((session) => ({
+		...session,
+		projectId: session.projectId && projectIds.has(session.projectId) ? session.projectId : null,
+		goalId: session.goalId && goalIds.has(session.goalId) ? session.goalId : null,
+		goalIds: session.goalIds.filter((goalId) => goalIds.has(goalId)),
+		taskIds: session.taskIds.filter((taskId) => taskIds.has(taskId)),
+		decisionIds: session.decisionIds.filter((decisionId) => decisionIds.has(decisionId))
+	}));
+	const goals = data.goals.map((goal) => ({
+		...goal,
+		parentGoalId: goal.parentGoalId && goalIds.has(goal.parentGoalId) ? goal.parentGoalId : null,
+		projectIds: (goal.projectIds ?? []).filter((projectId) => projectIds.has(projectId)),
+		taskIds: (goal.taskIds ?? []).filter((taskId) => taskIds.has(taskId))
+	}));
+
+	return {
+		...data,
+		goals,
+		tasks: repairedTasks,
+		runs,
+		reviews,
+		approvals,
+		decisions,
+		planningSessions
+	};
+}
+
 async function ensureDataFile() {
 	try {
 		await readFile(DATA_FILE, 'utf8');
@@ -1143,29 +1211,30 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 	const decisions = Array.isArray(parsed.decisions)
 		? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
 		: [];
+	const normalized = repairControlPlaneIntegrity({
+		providers,
+		roles: Array.isArray(parsed.roles)
+			? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
+			: [],
+		projects,
+		goals: Array.isArray(parsed.goals)
+			? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
+			: [],
+		executionSurfaces: rawExecutionSurfaces.map((surface) =>
+			normalizeExecutionSurface(surface as LegacyExecutionSurface)
+		),
+		tasks: Array.isArray(parsed.tasks)
+			? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
+			: [],
+		runs,
+		reviews,
+		planningSessions,
+		approvals,
+		decisions
+	});
 
 	return syncGovernanceQueues(
-		syncTaskExecutionState({
-			providers,
-			roles: Array.isArray(parsed.roles)
-				? parsed.roles.map((role) => normalizeRole(role as LegacyRole))
-				: [],
-			projects,
-			goals: Array.isArray(parsed.goals)
-				? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
-				: [],
-			executionSurfaces: rawExecutionSurfaces.map((surface) =>
-				normalizeExecutionSurface(surface as LegacyExecutionSurface)
-			),
-			tasks: Array.isArray(parsed.tasks)
-				? parsed.tasks.map((task) => normalizeTask(task as LegacyTask, projects, runs))
-				: [],
-			runs,
-			reviews,
-			planningSessions,
-			approvals,
-			decisions
-		})
+		syncTaskExecutionState(normalized)
 	);
 }
 
@@ -1180,6 +1249,11 @@ function parseControlPlaneData(raw: string) {
 async function loadControlPlaneFromJson() {
 	await ensureDataFile();
 	return parseControlPlaneData(await readFile(DATA_FILE, 'utf8'));
+}
+
+async function writeControlPlaneJsonMirror(data: ControlPlaneData) {
+	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
+	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
 async function readControlPlaneJsonIfPresent() {
@@ -1203,23 +1277,46 @@ async function ensureControlPlaneSqliteSeeded() {
 	saveControlPlaneToSqlite(seed);
 }
 
-export async function loadControlPlane(): Promise<ControlPlaneData> {
+async function loadControlPlaneSnapshot() {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
 		await ensureControlPlaneSqliteSeeded();
-		return normalizeControlPlaneData(loadControlPlaneFromSqlite());
+		const snapshot = loadControlPlaneSnapshotFromSqlite();
+
+		return {
+			data: normalizeControlPlaneData(snapshot.data),
+			revision: snapshot.revision
+		};
 	}
 
-	return await loadControlPlaneFromJson();
+	return {
+		data: await loadControlPlaneFromJson(),
+		revision: null
+	};
 }
 
-async function saveControlPlane(data: ControlPlaneData) {
+export async function loadControlPlane(): Promise<ControlPlaneData> {
+	return (await loadControlPlaneSnapshot()).data;
+}
+
+async function saveControlPlane(
+	data: ControlPlaneData,
+	options: { expectedRevision?: number } = {}
+) {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
-		saveControlPlaneToSqlite(data);
+		saveControlPlaneToSqlite(data, options);
+
+		try {
+			await writeControlPlaneJsonMirror(data);
+		} catch (error) {
+			console.warn(
+				`[control-plane] Saved sqlite state but could not refresh ${DATA_FILE}: ${error instanceof Error ? error.message : String(error)}`
+			);
+		}
+
 		return;
 	}
 
-	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
-	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+	await writeControlPlaneJsonMirror(data);
 }
 
 let controlPlaneUpdateQueue: Promise<void> = Promise.resolve();
@@ -1228,18 +1325,35 @@ export async function updateControlPlane(
 	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
 ) {
 	const runUpdate = async () => {
-		const current = await loadControlPlane();
-		const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
-		const integrityIssues = collectControlPlaneIntegrityIssues(next);
+		const maxAttempts = 5;
 
-		if (integrityIssues.length > 0) {
-			throw new Error(
-				`Refusing to save inconsistent control-plane data: ${integrityIssues.slice(0, 6).join(' ')}`
-			);
+		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+			const snapshot = await loadControlPlaneSnapshot();
+			const next = syncGovernanceQueues(syncTaskExecutionState(await updater(snapshot.data)));
+			const integrityIssues = collectControlPlaneIntegrityIssues(next);
+
+			if (integrityIssues.length > 0) {
+				throw new Error(
+					`Refusing to save inconsistent control-plane data: ${integrityIssues.slice(0, 6).join(' ')}`
+				);
+			}
+
+			try {
+				await saveControlPlane(next, {
+					expectedRevision:
+						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+				});
+				return next;
+			} catch (error) {
+				if (error instanceof StoreRevisionConflictError && attempt < maxAttempts - 1) {
+					continue;
+				}
+
+				throw error;
+			}
 		}
 
-		await saveControlPlane(next);
-		return next;
+		throw new Error('Could not save control-plane data after repeated concurrent update conflicts.');
 	};
 
 	const queuedUpdate = controlPlaneUpdateQueue.catch(() => undefined).then(runUpdate);

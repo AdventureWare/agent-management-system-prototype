@@ -13,6 +13,11 @@
 		appendExecutionRequirementName,
 		findUnknownExecutionRequirementNames
 	} from '$lib/execution-requirements';
+	import {
+		buildTaskExecutionContractStatus,
+		getTaskLaunchContractBlockerMessage,
+		getTaskReviewContractGapMessage
+	} from '$lib/task-execution-contract';
 	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import { collectTaskLinkedThreads, mergeTaskThreadState } from '$lib/client/task-thread-state';
 	import {
@@ -888,6 +893,19 @@
 			? parts.join(' · ')
 			: 'Defaults stay lightweight: medium priority, medium risk, no approval, review required.';
 	});
+	let createTaskExecutionContract = $derived(
+		buildTaskExecutionContractStatus({
+			successCriteria: createTaskSuccessCriteria,
+			readyCondition: createTaskReadyCondition,
+			expectedOutcome: createTaskExpectedOutcome
+		})
+	);
+	let createTaskLaunchContractBlocker = $derived(
+		getTaskLaunchContractBlockerMessage(createTaskExecutionContract)
+	);
+	let createTaskReviewContractGap = $derived(
+		getTaskReviewContractGapMessage(createTaskExecutionContract)
+	);
 
 	function shouldOpenCreateTaskAdvancedIntake(input: {
 		successCriteria?: string;
@@ -2496,6 +2514,24 @@
 										</label>
 									</div>
 
+									<div
+										class={`rounded-2xl border p-4 ${createTaskLaunchContractBlocker ? 'border-amber-900/50 bg-amber-950/15' : 'border-emerald-900/40 bg-emerald-950/15'}`}
+									>
+										<p
+											class={`text-xs font-semibold tracking-[0.16em] uppercase ${createTaskLaunchContractBlocker ? 'text-amber-300' : 'text-emerald-300'}`}
+										>
+											Execution contract
+										</p>
+										<p
+											class={`mt-2 text-sm ${createTaskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}
+										>
+											{createTaskLaunchContractBlocker || 'Create and run can start immediately once this contract is saved.'}
+										</p>
+										<p class="mt-2 text-sm text-slate-300">
+											{createTaskReviewContractGap || 'Reviewers will have an explicit outcome and acceptance standard for this task.'}
+										</p>
+									</div>
+
 									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
 										<label class="block">
 											<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
@@ -2971,6 +3007,7 @@
 							</button>
 							<button
 								class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
+								disabled={Boolean(createTaskLaunchContractBlocker)}
 								name="submitMode"
 								type="submit"
 								value="createAndRun"
@@ -2978,8 +3015,9 @@
 								Create and run
 							</button>
 							<p class="text-sm text-slate-400">
-								Choose a project, name the work clearly, then create a queued task or launch it
-								immediately.
+								{createTaskLaunchContractBlocker
+									? `${createTaskLaunchContractBlocker} Use Advanced intake to finish the launch contract.`
+									: 'Choose a project, name the work clearly, then create a queued task or launch it immediately.'}
 							</p>
 						</div>
 					</div>

@@ -25,6 +25,10 @@ import {
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
 import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
+import {
+	buildTaskExecutionContractStatus,
+	getTaskLaunchContractBlockerMessage
+} from '$lib/task-execution-contract';
 import { isValidTaskDate, readCreateTaskForm, readCreateTaskPrefill } from '$lib/server/task-form';
 import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatibility';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
@@ -364,6 +368,23 @@ export const actions: Actions = {
 				message: 'This task cannot launch a work thread until its project has a root folder.',
 				...failureContext
 			});
+		}
+
+		if (submitMode === 'createAndRun') {
+			const launchContractBlocker = getTaskLaunchContractBlockerMessage(
+				buildTaskExecutionContractStatus({
+					successCriteria,
+					readyCondition,
+					expectedOutcome
+				})
+			);
+
+			if (launchContractBlocker) {
+				return failTaskCreate(400, {
+					message: launchContractBlocker,
+					...failureContext
+				});
+			}
 		}
 
 		const invalidDependencyTaskIds = dependencyTaskIds.filter(

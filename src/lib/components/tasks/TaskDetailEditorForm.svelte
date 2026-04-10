@@ -23,6 +23,11 @@
 		type TaskRiskLevel,
 		type TaskStatus
 	} from '$lib/types/control-plane';
+	import {
+		buildTaskExecutionContractStatus,
+		getTaskLaunchContractBlockerMessage,
+		getTaskReviewContractGapMessage
+	} from '$lib/task-execution-contract';
 
 	type TaskDelegationPacket = {
 		objective?: string | null;
@@ -175,6 +180,9 @@
 	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
+	let successCriteriaInput = $state('');
+	let readyConditionInput = $state('');
+	let expectedOutcomeInput = $state('');
 	let initializedRequirementInputTaskKey = $state('');
 	let unknownPromptSkillNames = $derived(
 		findUnknownExecutionRequirementNames(
@@ -194,6 +202,15 @@
 			executionRequirementInventory.toolNames
 		)
 	);
+	let taskExecutionContract = $derived(
+		buildTaskExecutionContractStatus({
+			successCriteria: successCriteriaInput,
+			readyCondition: readyConditionInput,
+			expectedOutcome: expectedOutcomeInput
+		})
+	);
+	let taskLaunchContractBlocker = $derived(getTaskLaunchContractBlockerMessage(taskExecutionContract));
+	let taskReviewContractGap = $derived(getTaskReviewContractGapMessage(taskExecutionContract));
 
 	function assignmentSuggestionClass(eligible: boolean) {
 		return eligible
@@ -235,6 +252,9 @@
 		requiredCapabilityNamesInput = (task.requiredCapabilityNames ?? []).join(', ');
 		requiredToolNamesInput = (task.requiredToolNames ?? []).join(', ');
 		desiredRoleIdInput = task.desiredRoleId ?? '';
+		successCriteriaInput = task.successCriteria ?? '';
+		readyConditionInput = task.readyCondition ?? '';
+		expectedOutcomeInput = task.expectedOutcome ?? '';
 		initializedRequirementInputTaskKey = taskKey;
 	});
 </script>
@@ -275,9 +295,9 @@
 						<textarea
 							class="textarea min-h-28 text-white"
 							name="successCriteria"
+							bind:value={successCriteriaInput}
 							placeholder="Describe how a reviewer should judge this task as complete."
-							>{task.successCriteria ?? ''}</textarea
-						>
+						></textarea>
 					</label>
 
 					<label class="block">
@@ -285,9 +305,9 @@
 						<textarea
 							class="textarea min-h-28 text-white"
 							name="readyCondition"
+							bind:value={readyConditionInput}
 							placeholder="Describe what must already be true before this task should run."
-							>{task.readyCondition ?? ''}</textarea
-						>
+						></textarea>
 					</label>
 
 					<label class="block">
@@ -295,10 +315,26 @@
 						<textarea
 							class="textarea min-h-28 text-white"
 							name="expectedOutcome"
+							bind:value={expectedOutcomeInput}
 							placeholder="Describe the desired end state or deliverable."
-							>{task.expectedOutcome ?? ''}</textarea
-						>
+						></textarea>
 					</label>
+				</div>
+
+				<div
+					class={`rounded-2xl border p-4 ${taskLaunchContractBlocker ? 'border-amber-900/50 bg-amber-950/15' : 'border-emerald-900/40 bg-emerald-950/15'}`}
+				>
+					<p
+						class={`text-xs font-semibold tracking-[0.16em] uppercase ${taskLaunchContractBlocker ? 'text-amber-300' : 'text-emerald-300'}`}
+					>
+						Execution contract
+					</p>
+					<p class={`mt-2 text-sm ${taskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}>
+						{taskLaunchContractBlocker || 'This task can launch with an explicit ready condition, expected outcome, and acceptance standard.'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						{taskReviewContractGap || 'Reviews can validate this task against the recorded success criteria and expected outcome.'}
+					</p>
 				</div>
 
 				{#if task.parentTaskId || task.delegationPacket}

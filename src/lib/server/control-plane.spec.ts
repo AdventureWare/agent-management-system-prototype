@@ -12,6 +12,7 @@ import {
 	deleteTask,
 	getProjectScopeProjectIds,
 	projectMatchesPath,
+	repairControlPlaneIntegrity,
 	resolveThreadSandbox,
 	syncGovernanceQueues,
 	summarizeControlPlane,
@@ -439,6 +440,111 @@ describe('control-plane helpers', () => {
 				'Approval approval_pending references missing task task_review.'
 			])
 		);
+	});
+
+	it('repairs dangling task-linked records so integrity checks can pass again', () => {
+		const data = buildFixture();
+		data.projects = [
+			{
+				id: 'project_1',
+				name: 'Primary project',
+				summary: 'Project summary',
+				parentProjectId: null,
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: '',
+				additionalWritableRoots: [],
+				defaultThreadSandbox: null
+			}
+		];
+		data.goals = [
+			{
+				id: 'goal_1',
+				name: 'Primary goal',
+				area: 'product',
+				status: 'running',
+				summary: 'Primary goal summary',
+				artifactPath: '/tmp/project',
+				parentGoalId: 'goal_missing',
+				projectIds: ['project_1', 'project_missing'],
+				taskIds: ['task_done', 'task_review'],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			}
+		];
+		data.tasks = data.tasks.filter((task) => task.id !== 'task_review');
+		data.tasks[1] = {
+			...data.tasks[1]!,
+			goalId: 'goal_missing',
+			parentTaskId: 'task_review',
+			dependencyTaskIds: ['task_done', 'task_review']
+		};
+		data.reviews[0] = {
+			...data.reviews[0]!,
+			runId: 'run_missing'
+		};
+		data.approvals[0] = {
+			...data.approvals[0]!,
+			runId: 'run_missing'
+		};
+		data.decisions = [
+			{
+				id: 'decision_1',
+				taskId: 'task_review',
+				goalId: 'goal_missing',
+				runId: 'run_missing',
+				reviewId: null,
+				approvalId: null,
+				planningSessionId: 'planning_1',
+				decisionType: 'task_plan_updated',
+				summary: 'Decision for a deleted task',
+				createdAt: '2026-03-26T00:00:00.000Z',
+				decidedByExecutionSurfaceId: null
+			}
+		];
+		data.planningSessions = [
+			{
+				id: 'planning_1',
+				windowStart: '2026-03-01',
+				windowEnd: '2026-03-07',
+				projectId: 'project_missing',
+				goalId: 'goal_missing',
+				executionSurfaceId: null,
+				includeUnscheduled: true,
+				goalIds: ['goal_1', 'goal_missing'],
+				taskIds: ['task_done', 'task_review'],
+				decisionIds: ['decision_1'],
+				summary: 'Planning summary',
+				createdAt: '2026-03-01T00:00:00.000Z'
+			}
+		];
+
+		const repaired = repairControlPlaneIntegrity(data);
+
+		expect(collectControlPlaneIntegrityIssues(repaired)).toEqual([]);
+		expect(repaired.goals[0]).toMatchObject({
+			parentGoalId: null,
+			projectIds: ['project_1'],
+			taskIds: ['task_done']
+		});
+		expect(repaired.tasks[1]).toMatchObject({
+			goalId: '',
+			parentTaskId: null,
+			dependencyTaskIds: ['task_done']
+		});
+		expect(repaired.reviews).toEqual([]);
+		expect(repaired.approvals).toEqual([]);
+		expect(repaired.decisions).toEqual([]);
+		expect(repaired.planningSessions?.[0]).toMatchObject({
+			projectId: null,
+			goalId: null,
+			goalIds: ['goal_1'],
+			taskIds: ['task_done'],
+			decisionIds: []
+		});
 	});
 
 	it('deletes a project and removes explicit goal and planning links', () => {

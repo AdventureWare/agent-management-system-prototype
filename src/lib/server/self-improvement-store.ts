@@ -7,9 +7,11 @@ import { listAgentThreads } from '$lib/server/agent-threads';
 import {
 	isSelfImprovementSqliteEmpty,
 	loadSelfImprovementFromSqlite,
+	loadSelfImprovementSnapshotFromSqlite,
 	saveSelfImprovementToSqlite,
 	type SelfImprovementStoreDb
 } from '$lib/server/db/self-improvement-store-db';
+import { StoreRevisionConflictError } from '$lib/server/db/store-revisions';
 import { getGoalScopeProjectIds, getGoalScopeTaskIds } from '$lib/server/goal-relationships';
 import {
 	SELF_IMPROVEMENT_SUGGESTION_POLICY_VERSION,
@@ -146,6 +148,11 @@ async function loadSelfImprovementDbFromJson() {
 	return parseSelfImprovementDb(await readFile(DATA_FILE, 'utf8'));
 }
 
+async function writeSelfImprovementJsonMirror(data: SelfImprovementDb) {
+	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
+	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
 async function readSelfImprovementJsonIfPresent() {
 	if (!existsSync(DATA_FILE)) {
 		return null;
@@ -167,23 +174,87 @@ async function ensureSelfImprovementSqliteSeeded() {
 	saveSelfImprovementToSqlite(seed);
 }
 
-export async function loadSelfImprovementDb(): Promise<SelfImprovementDb> {
+async function loadPersistedSelfImprovementSnapshot() {
 	if (getSelfImprovementStorageBackend() === 'sqlite') {
 		await ensureSelfImprovementSqliteSeeded();
-		return normalizeSelfImprovementDb(loadSelfImprovementFromSqlite());
+		const snapshot = loadSelfImprovementSnapshotFromSqlite();
+
+		return {
+			data: normalizeSelfImprovementDb(snapshot.data),
+			revision: snapshot.revision
+		};
 	}
 
-	return loadSelfImprovementDbFromJson();
+	return {
+		data: await loadSelfImprovementDbFromJson(),
+		revision: null
+	};
 }
 
-async function saveSelfImprovementDb(data: SelfImprovementDb) {
+export async function loadSelfImprovementDb(): Promise<SelfImprovementDb> {
+	return (await loadPersistedSelfImprovementSnapshot()).data;
+}
+
+async function saveSelfImprovementDb(
+	data: SelfImprovementDb,
+	options: { expectedRevision?: number } = {}
+) {
 	if (getSelfImprovementStorageBackend() === 'sqlite') {
-		saveSelfImprovementToSqlite(data);
+		saveSelfImprovementToSqlite(data, options);
+
+		try {
+			await writeSelfImprovementJsonMirror(data);
+		} catch (error) {
+			console.warn(
+				`[self-improvement] Saved sqlite state but could not refresh ${DATA_FILE}: ${error instanceof Error ? error.message : String(error)}`
+			);
+		}
+
 		return;
 	}
 
-	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
-	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+	await writeSelfImprovementJsonMirror(data);
+}
+
+let selfImprovementUpdateQueue: Promise<void> = Promise.resolve();
+
+async function updateSelfImprovementDb(
+	updater: (data: SelfImprovementDb) => SelfImprovementDb | Promise<SelfImprovementDb>
+) {
+	const runUpdate = async () => {
+		const maxAttempts = 5;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+			const snapshot = await loadPersistedSelfImprovementSnapshot();
+			const next = await updater(snapshot.data);
+
+			try {
+				await saveSelfImprovementDb(next, {
+					expectedRevision:
+						typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+				});
+				return next;
+			} catch (error) {
+				if (error instanceof StoreRevisionConflictError && attempt < maxAttempts - 1) {
+					continue;
+				}
+
+				throw error;
+			}
+		}
+
+		throw new Error(
+			'Could not save self-improvement data after repeated concurrent update conflicts.'
+		);
+	};
+
+	const queuedUpdate = selfImprovementUpdateQueue.catch(() => undefined).then(runUpdate);
+	selfImprovementUpdateQueue = queuedUpdate.then(
+		() => undefined,
+		() => undefined
+	);
+
+	return await queuedUpdate;
 }
 
 function deriveCapturedSuggestionPriority(
@@ -342,50 +413,66 @@ export async function syncSelfImprovementAnalysis(
 	analysis: SelfImprovementAnalysis,
 	signals: SelfImprovementFeedbackSignal[]
 ): Promise<SelfImprovementSnapshot> {
-	const current = await loadSelfImprovementDb();
-	const recordMap = new Map(current.records.map((record) => [record.id, record]));
-	const nextRecords = [...current.records];
+	let savedDb: SelfImprovementDb | null = null;
 
-	for (const opportunity of analysis.opportunities) {
-		const existingRecord = recordMap.get(opportunity.id);
+	await updateSelfImprovementDb((current) => {
+		const recordMap = new Map(current.records.map((record) => [record.id, record]));
+		const nextRecords = [...current.records];
 
-		if (existingRecord) {
-			const nextRecord = {
-				...existingRecord,
-				lastSeenAt: analysis.generatedAt
-			};
-			recordMap.set(opportunity.id, nextRecord);
-			const index = nextRecords.findIndex((record) => record.id === opportunity.id);
-			nextRecords[index] = nextRecord;
-			continue;
+		for (const opportunity of analysis.opportunities) {
+			const existingRecord = recordMap.get(opportunity.id);
+
+			if (existingRecord) {
+				const nextRecord = {
+					...existingRecord,
+					lastSeenAt: analysis.generatedAt
+				};
+				recordMap.set(opportunity.id, nextRecord);
+				const index = nextRecords.findIndex((record) => record.id === opportunity.id);
+				nextRecords[index] = nextRecord;
+				continue;
+			}
+
+			const newRecord = createDefaultRecord(opportunity.id, analysis.generatedAt);
+			recordMap.set(opportunity.id, newRecord);
+			nextRecords.push(newRecord);
 		}
 
-		const newRecord = createDefaultRecord(opportunity.id, analysis.generatedAt);
-		recordMap.set(opportunity.id, newRecord);
-		nextRecords.push(newRecord);
+		const signalMap = new Map(current.signals.map((signal) => [signal.id, signal]));
+		const nextSignals = signals.map((signal) => {
+			const existingSignal = signalMap.get(signal.id);
+
+			return {
+				...signal,
+				firstSeenAt: existingSignal?.firstSeenAt ?? analysis.generatedAt,
+				lastSeenAt: analysis.generatedAt
+			};
+		});
+
+		savedDb = {
+			records: nextRecords,
+			signals: nextSignals,
+			knowledgeItems: current.knowledgeItems,
+			capturedSuggestions: current.capturedSuggestions,
+			impressions: current.impressions,
+			decisions: current.decisions
+		};
+
+		return savedDb;
+	});
+
+	if (!savedDb) {
+		throw new Error('Failed to persist self-improvement analysis.');
 	}
 
-	const signalMap = new Map(current.signals.map((signal) => [signal.id, signal]));
-	const nextSignals = signals.map((signal) => {
-		const existingSignal = signalMap.get(signal.id);
+	const persistedDb = savedDb as SelfImprovementDb;
 
-		return {
-			...signal,
-			firstSeenAt: existingSignal?.firstSeenAt ?? analysis.generatedAt,
-			lastSeenAt: analysis.generatedAt
-		};
-	});
-
-	await saveSelfImprovementDb({
-		records: nextRecords,
-		signals: nextSignals,
-		knowledgeItems: current.knowledgeItems,
-		capturedSuggestions: current.capturedSuggestions,
-		impressions: current.impressions,
-		decisions: current.decisions
-	});
-
-	return mergeSelfImprovementSnapshot(analysis, nextRecords, nextSignals, current.knowledgeItems);
+	return mergeSelfImprovementSnapshot(
+		analysis,
+		persistedDb.records,
+		persistedDb.signals,
+		persistedDb.knowledgeItems
+	);
 }
 
 export async function loadSelfImprovementSnapshot(input?: {
@@ -494,7 +581,6 @@ async function appendSelfImprovementSuggestionDecision(input: {
 	summary: string;
 	createdAt: string;
 }) {
-	const current = await loadSelfImprovementDb();
 	const decision: SelfImprovementSuggestionDecision = {
 		id: randomUUID(),
 		opportunityId: input.opportunityId,
@@ -506,14 +592,14 @@ async function appendSelfImprovementSuggestionDecision(input: {
 		createdAt: input.createdAt
 	};
 
-	await saveSelfImprovementDb({
+	await updateSelfImprovementDb((current) => ({
 		records: current.records,
 		signals: current.signals,
 		knowledgeItems: current.knowledgeItems,
 		capturedSuggestions: current.capturedSuggestions,
 		impressions: current.impressions,
 		decisions: [decision, ...current.decisions]
-	});
+	}));
 
 	return decision;
 }
@@ -531,7 +617,6 @@ async function appendSelfImprovementSuggestionImpression(input: {
 		return null;
 	}
 
-	const current = await loadSelfImprovementDb();
 	const createdAt = new Date().toISOString();
 	const impression: SelfImprovementSuggestionImpression = {
 		id: randomUUID(),
@@ -548,14 +633,14 @@ async function appendSelfImprovementSuggestionImpression(input: {
 		}))
 	};
 
-	await saveSelfImprovementDb({
+	await updateSelfImprovementDb((current) => ({
 		records: current.records,
 		signals: current.signals,
 		knowledgeItems: current.knowledgeItems,
 		capturedSuggestions: current.capturedSuggestions,
 		impressions: [impression, ...current.impressions],
 		decisions: current.decisions
-	});
+	}));
 
 	return impression;
 }
@@ -572,11 +657,7 @@ export async function setSelfImprovementOpportunityStatus(input: {
 	createdKnowledgeItemId?: string | null;
 	createdKnowledgeItemTitle?: string | null;
 }) {
-	const current = await loadSelfImprovementDb();
 	const now = new Date().toISOString();
-	const existingRecord =
-		current.records.find((record) => record.id === input.opportunityId) ??
-		createDefaultRecord(input.opportunityId, now);
 	const decisionType = input.decisionType ?? deriveDecisionTypeFromStatus(input.status);
 	const decisionSummary =
 		input.decisionSummary ??
@@ -585,43 +666,55 @@ export async function setSelfImprovementOpportunityStatus(input: {
 			decisionType,
 			reason: input.decisionReason ?? null
 		});
-	const nextRecord: SelfImprovementOpportunityRecord = {
-		...existingRecord,
-		status: input.status,
-		updatedAt: now,
-		acceptedAt:
-			input.status === 'accepted' ? (existingRecord.acceptedAt ?? now) : existingRecord.acceptedAt,
-		dismissedAt:
-			input.status === 'dismissed'
-				? (existingRecord.dismissedAt ?? now)
-				: existingRecord.dismissedAt,
-		decisionSummary,
-		createdTaskId:
-			input.createdTaskId === undefined ? existingRecord.createdTaskId : input.createdTaskId,
-		createdTaskTitle:
-			input.createdTaskTitle === undefined
-				? existingRecord.createdTaskTitle
-				: input.createdTaskTitle,
-		createdKnowledgeItemId:
-			input.createdKnowledgeItemId === undefined
-				? existingRecord.createdKnowledgeItemId
-				: input.createdKnowledgeItemId,
-		createdKnowledgeItemTitle:
-			input.createdKnowledgeItemTitle === undefined
-				? existingRecord.createdKnowledgeItemTitle
-				: input.createdKnowledgeItemTitle
-	};
-	const nextRecords = current.records.some((record) => record.id === input.opportunityId)
-		? current.records.map((record) => (record.id === input.opportunityId ? nextRecord : record))
-		: [...current.records, nextRecord];
+	let nextRecord: SelfImprovementOpportunityRecord | null = null;
 
-	await saveSelfImprovementDb({
-		records: nextRecords,
-		signals: current.signals,
-		knowledgeItems: current.knowledgeItems,
-		capturedSuggestions: current.capturedSuggestions,
-		impressions: current.impressions,
-		decisions: current.decisions
+	await updateSelfImprovementDb((current) => {
+		const existingRecord =
+			current.records.find((record) => record.id === input.opportunityId) ??
+			createDefaultRecord(input.opportunityId, now);
+		const updatedRecord: SelfImprovementOpportunityRecord = {
+			...existingRecord,
+			status: input.status,
+			updatedAt: now,
+			acceptedAt:
+				input.status === 'accepted'
+					? (existingRecord.acceptedAt ?? now)
+					: existingRecord.acceptedAt,
+			dismissedAt:
+				input.status === 'dismissed'
+					? (existingRecord.dismissedAt ?? now)
+					: existingRecord.dismissedAt,
+			decisionSummary,
+			createdTaskId:
+				input.createdTaskId === undefined ? existingRecord.createdTaskId : input.createdTaskId,
+			createdTaskTitle:
+				input.createdTaskTitle === undefined
+					? existingRecord.createdTaskTitle
+					: input.createdTaskTitle,
+			createdKnowledgeItemId:
+				input.createdKnowledgeItemId === undefined
+					? existingRecord.createdKnowledgeItemId
+					: input.createdKnowledgeItemId,
+			createdKnowledgeItemTitle:
+				input.createdKnowledgeItemTitle === undefined
+					? existingRecord.createdKnowledgeItemTitle
+					: input.createdKnowledgeItemTitle
+		};
+		nextRecord = updatedRecord;
+		const nextRecords = current.records.some((record) => record.id === input.opportunityId)
+			? current.records.map((record) =>
+					record.id === input.opportunityId ? updatedRecord : record
+				)
+			: [...current.records, updatedRecord];
+
+		return {
+			records: nextRecords,
+			signals: current.signals,
+			knowledgeItems: current.knowledgeItems,
+			capturedSuggestions: current.capturedSuggestions,
+			impressions: current.impressions,
+			decisions: current.decisions
+		};
 	});
 
 	await appendSelfImprovementSuggestionDecision({
@@ -645,7 +738,6 @@ export async function createCapturedSelfImprovementSuggestion(input: {
 	projectId?: string | null;
 	goalId?: string | null;
 }) {
-	const current = await loadSelfImprovementDb();
 	const now = new Date().toISOString();
 	const nextSuggestion: SelfImprovementCapturedSuggestion = {
 		id: randomUUID(),
@@ -659,14 +751,14 @@ export async function createCapturedSelfImprovementSuggestion(input: {
 		updatedAt: now
 	};
 
-	await saveSelfImprovementDb({
+	await updateSelfImprovementDb((current) => ({
 		records: current.records,
 		signals: current.signals,
 		knowledgeItems: current.knowledgeItems,
 		capturedSuggestions: [nextSuggestion, ...current.capturedSuggestions],
 		impressions: current.impressions,
 		decisions: current.decisions
-	});
+	}));
 
 	return nextSuggestion;
 }
@@ -998,14 +1090,14 @@ export async function createKnowledgeItemFromSelfImprovementOpportunity(
 		return null;
 	}
 
-	await saveSelfImprovementDb({
-		records: db.records,
-		signals: db.signals,
-		knowledgeItems: [knowledgeItem, ...db.knowledgeItems],
-		capturedSuggestions: db.capturedSuggestions,
-		impressions: db.impressions,
-		decisions: db.decisions
-	});
+	await updateSelfImprovementDb((current) => ({
+		records: current.records,
+		signals: current.signals,
+		knowledgeItems: [knowledgeItem, ...current.knowledgeItems],
+		capturedSuggestions: current.capturedSuggestions,
+		impressions: current.impressions,
+		decisions: current.decisions
+	}));
 
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,
@@ -1026,35 +1118,46 @@ export async function setSelfImprovementKnowledgeItemStatus(input: {
 	knowledgeItemId: string;
 	status: SelfImprovementKnowledgeStatus;
 }) {
-	const current = await loadSelfImprovementDb();
-	const existingItem =
-		current.knowledgeItems.find((item) => item.id === input.knowledgeItemId) ?? null;
-
-	if (!existingItem) {
-		return null;
-	}
-
 	const now = new Date().toISOString();
-	const nextItem: SelfImprovementKnowledgeItem = {
-		...existingItem,
-		status: input.status,
-		updatedAt: now,
-		publishedAt:
-			input.status === 'published' ? (existingItem.publishedAt ?? now) : existingItem.publishedAt,
-		archivedAt:
-			input.status === 'archived' ? now : input.status === 'draft' ? null : existingItem.archivedAt
-	};
-	const nextKnowledgeItems = current.knowledgeItems.map((item) =>
-		item.id === input.knowledgeItemId ? nextItem : item
-	);
+	let nextItem: SelfImprovementKnowledgeItem | null = null;
 
-	await saveSelfImprovementDb({
-		records: current.records,
-		signals: current.signals,
-		knowledgeItems: nextKnowledgeItems,
-		capturedSuggestions: current.capturedSuggestions,
-		impressions: current.impressions,
-		decisions: current.decisions
+	await updateSelfImprovementDb((current) => {
+		const existingItem =
+			current.knowledgeItems.find((item) => item.id === input.knowledgeItemId) ?? null;
+
+		if (!existingItem) {
+			nextItem = null;
+			return current;
+		}
+
+		const updatedItem: SelfImprovementKnowledgeItem = {
+			...existingItem,
+			status: input.status,
+			updatedAt: now,
+			publishedAt:
+				input.status === 'published'
+					? (existingItem.publishedAt ?? now)
+					: existingItem.publishedAt,
+			archivedAt:
+				input.status === 'archived'
+					? now
+					: input.status === 'draft'
+						? null
+						: existingItem.archivedAt
+		};
+		nextItem = updatedItem;
+		const nextKnowledgeItems = current.knowledgeItems.map((item) =>
+			item.id === input.knowledgeItemId ? updatedItem : item
+		);
+
+		return {
+			records: current.records,
+			signals: current.signals,
+			knowledgeItems: nextKnowledgeItems,
+			capturedSuggestions: current.capturedSuggestions,
+			impressions: current.impressions,
+			decisions: current.decisions
+		};
 	});
 
 	return nextItem;

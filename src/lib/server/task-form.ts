@@ -40,6 +40,9 @@ export type CreateTaskFormInput = {
 };
 
 export type TaskDetailFormInput = CreateTaskFormInput & {
+	hasSuccessCriteria: boolean;
+	hasReadyCondition: boolean;
+	hasExpectedOutcome: boolean;
 	hasDelegationPacketFields: boolean;
 	hasGoalId: boolean;
 	hasAssigneeExecutionSurfaceId: boolean;
@@ -182,6 +185,9 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 	return {
 		...readCreateTaskForm(form),
+		hasSuccessCriteria: form.has('successCriteria'),
+		hasReadyCondition: form.has('readyCondition'),
+		hasExpectedOutcome: form.has('expectedOutcome'),
 		hasDelegationPacketFields:
 			form.has('delegationObjective') ||
 			form.has('delegationInputContext') ||
