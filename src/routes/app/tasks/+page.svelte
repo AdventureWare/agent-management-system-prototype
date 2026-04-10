@@ -6,6 +6,7 @@
 	import TaskDetailPageContent from './[taskId]/TaskDetailPageContent.svelte';
 	import ThreadDetailPanel from '$lib/components/ThreadDetailPanel.svelte';
 	import { fetchJson } from '$lib/client/agent-data';
+	import { getHiddenTaskViewNotice } from '$lib/client/collection-visibility';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import {
@@ -584,6 +585,14 @@
 	let activeTasks = $derived(taskCollections.activeTasks);
 	let completedTasks = $derived(taskCollections.completedTasks);
 	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);
+	let hiddenTaskViewNotice = $derived(
+		getHiddenTaskViewNotice({
+			selectedTaskView,
+			visibleTaskCount: visibleTaskRows.length,
+			activeCount: activeTasks.length,
+			completedCount: completedTasks.length
+		})
+	);
 	let previewTask = $derived.by(
 		() =>
 			visibleTaskRows.find((task) => task.id === selectedPreviewTaskId) ??
@@ -2125,6 +2134,24 @@
 					role="tabpanel"
 					aria-labelledby={`task-list-tab-${selectedTaskView}`}
 				>
+					{#if hiddenTaskViewNotice}
+						<div class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+							<p class="text-sm text-amber-100">
+								{hiddenTaskViewNotice.description}
+								{` ${hiddenTaskViewNotice.count} matching task${hiddenTaskViewNotice.count === 1 ? ' is' : 's are'} available in ${hiddenTaskViewNotice.label}.`}
+							</p>
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-amber-800/70 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-amber-100 uppercase transition hover:border-amber-700 hover:text-white"
+								type="button"
+								onclick={() => {
+									selectedTaskView = hiddenTaskViewNotice.targetView;
+								}}
+							>
+								Open {hiddenTaskViewNotice.label}
+							</button>
+						</div>
+					{/if}
+
 					{@render taskTable(
 						selectedTaskView === 'completed' ? 'Completed work' : 'Active queue',
 						selectedTaskView === 'completed'

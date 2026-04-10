@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	collectControlPlaneIntegrityIssues,
 	createApproval,
 	createProvider,
 	createProject,
@@ -393,6 +394,51 @@ describe('control-plane helpers', () => {
 			goalIds: ['goal_parent', 'goal_child']
 		});
 		expect(next.decisions?.[0]?.goalId).toBeNull();
+	});
+
+	it('reports dangling task and goal references', () => {
+		const data = buildFixture();
+		data.goals = [
+			{
+				id: 'goal_1',
+				name: 'Primary goal',
+				area: 'product',
+				status: 'running',
+				summary: 'Primary goal summary',
+				artifactPath: '/tmp/project',
+				parentGoalId: null,
+				projectIds: ['project_1'],
+				taskIds: ['task_done', 'task_review'],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			},
+			{
+				id: 'goal_orphan_child',
+				name: 'Orphan child',
+				area: 'product',
+				status: 'ready',
+				summary: 'Child goal with a missing parent',
+				artifactPath: '/tmp/project/orphan',
+				parentGoalId: 'goal_missing',
+				projectIds: [],
+				taskIds: [],
+				targetDate: null,
+				planningPriority: 0,
+				confidence: 'medium'
+			}
+		];
+		data.tasks = data.tasks.filter((task) => task.id !== 'task_review');
+
+		expect(collectControlPlaneIntegrityIssues(data)).toEqual(
+			expect.arrayContaining([
+				'Goal goal_1 references missing task task_review.',
+				'Goal goal_orphan_child references missing parent goal goal_missing.',
+				'Task task_waiting references missing goal goal_2.',
+				'Review review_open references missing task task_review.',
+				'Approval approval_pending references missing task task_review.'
+			])
+		);
 	});
 
 	it('deletes a project and removes explicit goal and planning links', () => {

@@ -13,3 +13,4 @@
 - [Product Spec](./product-spec.md): product definition, domain model, state machines, and phased implementation plan for evolving the prototype from a remote Codex control plane into a work orchestration system.
 - [Self-Improvement System](./self-improvement-system.md): architecture and phased plan for turning operational signals into learning loops, knowledge capture, and skill refinement.
 - [Self-Improvement Suggestion Engine Direction](./self-improvement-suggestion-engine.md): research-backed plan for ranking, feedback capture, evaluation, and gradual learning for the prototype's suggestion systems.
+- [Usage and Cost Reporting MVP Slice](./usage-cost-reporting-mvp-2026-04-09.md): smallest recommended runtime capture, rough cost derivation, and first reporting rollups for making routing decisions with AI usage visibility.

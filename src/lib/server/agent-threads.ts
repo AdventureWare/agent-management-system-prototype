@@ -2862,11 +2862,23 @@ async function reconcileTaskStateFromSessionDetails(
 		};
 	}
 
-	await updateControlPlane(() => nextControlPlane);
-	const taskContext = buildTaskContextFromControlPlane(nextControlPlane);
+	const persistedControlPlane = await updateControlPlane((current) => {
+		let next = current;
+
+		for (const detail of details) {
+			const reconciled = reconcileControlPlaneThreadState(next, detail);
+
+			if (reconciled !== next) {
+				next = reconciled;
+			}
+		}
+
+		return next;
+	});
+	const taskContext = buildTaskContextFromControlPlane(persistedControlPlane);
 
 	return {
-		controlPlane: nextControlPlane,
+		controlPlane: persistedControlPlane,
 		details: details.map((detail) => ({
 			...detail,
 			relatedTasks: buildRelatedTaskLinks(detail.id, taskContext)
@@ -3522,7 +3534,9 @@ export async function sendAgentThreadMessage(
 	);
 
 	if (reconciledControlPlane !== controlPlane) {
-		await updateControlPlane(() => reconciledControlPlane);
+		await updateControlPlane((current) =>
+			reconcileControlPlaneThreadMessage(current, agentThreadId, now)
+		);
 	}
 	launchRunner(run.configPath);
 
@@ -3671,6 +3685,8 @@ export async function recoverAgentThread(agentThreadId: string) {
 		throw new Error('Thread does not have an active run to recover.');
 	}
 
+	const latestRun = detail.latestRun;
+
 	const now = new Date().toISOString();
 	const pid = detail.latestRun.state?.pid ?? null;
 	let signal: string | null = null;
@@ -3703,8 +3719,8 @@ export async function recoverAgentThread(agentThreadId: string) {
 		JSON.stringify(
 			{
 				state: nextState,
-				lastMessage: detail.latestRun.lastMessage,
-				logTail: detail.latestRun.logTail.slice(-12),
+				lastMessage: latestRun.lastMessage,
+				logTail: latestRun.logTail.slice(-12),
 				activityAt: now
 			},
 			null,
@@ -3720,18 +3736,30 @@ export async function recoverAgentThread(agentThreadId: string) {
 		latestRunStatus: status,
 		lastActivityAt: now,
 		latestRun: {
-			...detail.latestRun,
+			...latestRun,
 			state: nextState
 		}
 	});
 
 	if (reconciledControlPlane !== controlPlane) {
-		await updateControlPlane(() => reconciledControlPlane);
+		await updateControlPlane((current) =>
+			reconcileControlPlaneThreadState(current, {
+				id: detail.id,
+				hasActiveRun: false,
+				canResume: Boolean(detail.threadId),
+				latestRunStatus: status,
+				lastActivityAt: now,
+				latestRun: {
+					...latestRun,
+					state: nextState
+				}
+			})
+		);
 	}
 
 	return {
 		agentThreadId,
-		runId: detail.latestRun.id,
+		runId: latestRun.id,
 		status,
 		signal,
 		recoveredAt: now

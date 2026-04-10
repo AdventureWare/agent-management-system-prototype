@@ -167,4 +167,65 @@ describe('control-plane sqlite backend', () => {
 			expect.stringContaining('Ignoring unknown sqlite collection "legacyRecords"')
 		);
 	});
+
+	it('serializes concurrent updates so they do not drop newer records', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+		let releaseFirstUpdate!: () => void;
+		const firstUpdateReady = new Promise<void>((resolve) => {
+			releaseFirstUpdate = resolve;
+		});
+		let firstUpdateLoaded = false;
+
+		const firstUpdate = updateControlPlane(async (data) => {
+			firstUpdateLoaded = true;
+			await firstUpdateReady;
+
+			return {
+				...data,
+				roles: [
+					{
+						id: 'role_serialized',
+						name: 'Serialized role',
+						area: 'shared',
+						description: 'Created by the first update'
+					}
+				]
+			};
+		});
+
+		while (!firstUpdateLoaded) {
+			await Promise.resolve();
+		}
+
+		const secondUpdate = updateControlPlane((data) => ({
+			...data,
+			projects: [
+				{
+					id: 'project_serialized',
+					name: 'Serialized project',
+					summary: 'Created by the second update',
+					parentProjectId: null,
+					projectRootFolder: '/tmp/project_serialized',
+					defaultArtifactRoot: '/tmp/project_serialized/artifacts',
+					defaultRepoPath: '/tmp/project_serialized',
+					defaultRepoUrl: '',
+					defaultBranch: '',
+					additionalWritableRoots: [],
+					defaultThreadSandbox: null
+				}
+			]
+		}));
+
+		releaseFirstUpdate();
+		await Promise.all([firstUpdate, secondUpdate]);
+
+		const loaded = await loadControlPlane();
+
+		expect(loaded.roles.map((role) => role.id)).toEqual(['role_serialized']);
+		expect(loaded.projects.map((project) => project.id)).toEqual(['project_serialized']);
+	});
 });

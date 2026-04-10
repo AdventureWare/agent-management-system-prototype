@@ -96,4 +96,26 @@ describe('agentThreadStore', () => {
 		agentThreadStore.patchArchiveState(['thread-2'], false);
 		expect(getStoredAgentThread('thread-2')?.archivedAt).toBeNull();
 	});
+
+	it('deduplicates repeated thread ids when seeding batches', () => {
+		agentThreadStore.seedThreads(
+			[
+				createThread({ id: 'thread-1', threadSummary: 'First copy.' }),
+				createThread({ id: 'thread-1', threadSummary: 'Second copy.' }),
+				createThread({ id: 'thread-2' })
+			],
+			{ replace: true }
+		);
+
+		expect(getAgentThreadStoreState().orderedIds).toEqual(['thread-1', 'thread-2']);
+		expect(getStoredAgentThread('thread-1')?.threadSummary).toBe('Second copy.');
+
+		agentThreadStore.seedThreads([
+			createThread({ id: 'thread-3' }),
+			createThread({ id: 'thread-3', threadSummary: 'Third copy duplicate.' })
+		]);
+
+		expect(getAgentThreadStoreState().orderedIds).toEqual(['thread-1', 'thread-2', 'thread-3']);
+		expect(getStoredAgentThread('thread-3')?.threadSummary).toBe('Third copy duplicate.');
+	});
 });

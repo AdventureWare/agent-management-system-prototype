@@ -16,11 +16,14 @@ import {
 	createDecision,
 	createRun,
 	createReview,
+	createTask,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	updateControlPlane
 } from '$lib/server/control-plane';
+import { extractThreadTaskReference } from '$lib/server/thread-task-references';
+import { extractThreadTaskRecoveryDraft } from '$lib/server/thread-task-recovery';
 import { buildPromptDigest } from '$lib/server/task-threads';
 import type { Approval, ControlPlaneData, Review, Run, Task } from '$lib/types/control-plane';
 
@@ -51,10 +54,10 @@ type ThreadFocusTask = {
 	id: string;
 	title: string;
 	projectId: string | null;
-	status: Task['status'];
+	status: Task['status'] | null;
 	summary: string;
 	isPrimary: boolean;
-	source: 'resolved' | 'linked';
+	source: 'resolved' | 'linked' | 'orphaned';
 };
 
 type ThreadResponseContextArtifact = {
@@ -146,20 +149,34 @@ function buildThreadFocusTask(input: {
 		input.thread.relatedTasks.find((task) => task.isPrimary) ??
 		(input.thread.relatedTasks.length === 1 ? input.thread.relatedTasks[0] : null);
 
-	if (!primaryTask) {
+	if (primaryTask) {
+		const linkedTask = input.data.tasks.find((task) => task.id === primaryTask.id) ?? null;
+
+		return {
+			id: primaryTask.id,
+			title: linkedTask?.title ?? primaryTask.title,
+			projectId: linkedTask?.projectId ?? null,
+			status: linkedTask?.status ?? (primaryTask.status as Task['status']),
+			summary: linkedTask?.summary ?? '',
+			isPrimary: primaryTask.isPrimary,
+			source: 'linked'
+		};
+	}
+
+	const missingTaskReference = extractThreadTaskReference(input.thread.name);
+
+	if (!missingTaskReference) {
 		return null;
 	}
 
-	const linkedTask = input.data.tasks.find((task) => task.id === primaryTask.id) ?? null;
-
 	return {
-		id: primaryTask.id,
-		title: linkedTask?.title ?? primaryTask.title,
-		projectId: linkedTask?.projectId ?? null,
-		status: linkedTask?.status ?? (primaryTask.status as Task['status']),
-		summary: linkedTask?.summary ?? '',
-		isPrimary: primaryTask.isPrimary,
-		source: 'linked'
+		id: missingTaskReference.taskId,
+		title: missingTaskReference.taskTitle,
+		projectId: null,
+		status: null,
+		summary: `Task record ${missingTaskReference.taskId} is missing from the current control-plane store.${missingTaskReference.projectName ? ` The thread name still associates it with ${missingTaskReference.projectName}.` : ''}`,
+		isPrimary: true,
+		source: 'orphaned'
 	};
 }
 
@@ -303,6 +320,38 @@ function getTasksToCarryForward(data: ControlPlaneData, threadId: string) {
 	}
 
 	return [resolvedTask];
+}
+
+function getLatestTaskRun(data: ControlPlaneData, taskId: string) {
+	return (
+		[...data.runs]
+			.filter((run) => run.taskId === taskId)
+			.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null
+	);
+}
+
+function resolveRecoveredTaskStatus(data: ControlPlaneData, taskId: string): Task['status'] {
+	if (getOpenReviewForTask(data, taskId)) {
+		return 'review';
+	}
+
+	const latestRun = getLatestTaskRun(data, taskId);
+
+	if (!latestRun) {
+		return 'ready';
+	}
+
+	switch (latestRun.status) {
+		case 'failed':
+		case 'blocked':
+		case 'canceled':
+			return 'blocked';
+		case 'completed':
+		case 'awaiting_approval':
+			return 'review';
+		default:
+			return 'in_progress';
+	}
 }
 
 function reopenTasksForThreadRetry(input: {
@@ -493,6 +542,123 @@ export const actions: Actions = {
 			ok: true,
 			successAction: 'updateThreadSandbox',
 			threadId: params.threadId
+		};
+	},
+
+	restoreMissingTask: async ({ params }) => {
+		const [thread, current] = await Promise.all([
+			getAgentThread(params.threadId),
+			loadControlPlane()
+		]);
+
+		if (!thread) {
+			return fail(404, { message: 'Thread not found.' });
+		}
+
+		const taskReference = extractThreadTaskReference(thread.name);
+
+		if (!taskReference) {
+			return fail(409, {
+				message: 'This thread does not include a recoverable managed task reference.'
+			});
+		}
+
+		const existingTask = current.tasks.find((task) => task.id === taskReference.taskId) ?? null;
+
+		if (existingTask) {
+			return {
+				ok: true,
+				successAction: 'restoreMissingTask',
+				taskId: existingTask.id
+			};
+		}
+
+		const recoveryDraft = extractThreadTaskRecoveryDraft({
+			threadName: thread.name,
+			prompts: thread.runs.filter((run) => run.mode === 'start').map((run) => run.prompt)
+		});
+
+		if (!recoveryDraft) {
+			return fail(409, {
+				message: 'Could not recover task details from this thread.'
+			});
+		}
+
+		const matchedProject =
+			(recoveryDraft.projectRootFolder
+				? current.projects.find(
+						(project) => project.projectRootFolder === recoveryDraft.projectRootFolder
+					) ?? null
+				: null) ??
+			(thread.cwd
+				? current.projects.find((project) => project.projectRootFolder === thread.cwd) ?? null
+				: null) ??
+			(recoveryDraft.projectName
+				? current.projects.find((project) => project.name === recoveryDraft.projectName) ?? null
+				: null);
+
+		if (!matchedProject) {
+			return fail(409, {
+				message:
+					'Could not match this orphaned thread to a current project, so the task could not be restored safely.'
+			});
+		}
+
+		const latestRun = getLatestTaskRun(current, recoveryDraft.taskId);
+		const taskReviews = current.reviews.filter((review) => review.taskId === recoveryDraft.taskId);
+		const taskApprovals = current.approvals.filter(
+			(approval) => approval.taskId === recoveryDraft.taskId
+		);
+		const earliestTaskTimestamp = [
+			thread.createdAt,
+			...current.runs.filter((run) => run.taskId === recoveryDraft.taskId).map((run) => run.createdAt)
+		]
+			.filter(Boolean)
+			.sort()[0];
+		const restoredTask = createTask({
+			id: recoveryDraft.taskId,
+			title: recoveryDraft.title,
+			summary:
+				recoveryDraft.summary ||
+				`Recovered from thread ${params.threadId} because the original task record was missing.`,
+			projectId: matchedProject.id,
+			area: 'product',
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: taskApprovals[0]?.mode ?? 'none',
+			requiresReview: taskReviews.length > 0,
+			desiredRoleId: latestRun?.assumedRoleId ?? '',
+			assigneeExecutionSurfaceId: latestRun?.executionSurfaceId ?? null,
+			agentThreadId: params.threadId,
+			status: resolveRecoveredTaskStatus(current, recoveryDraft.taskId),
+			artifactPath:
+				recoveryDraft.artifactRoot ||
+				matchedProject.defaultArtifactRoot ||
+				matchedProject.projectRootFolder ||
+				'',
+			createdAt: earliestTaskTimestamp ?? thread.createdAt,
+			updatedAt: latestRun?.updatedAt ?? thread.updatedAt
+		});
+
+		await updateControlPlane((data) => ({
+			...data,
+			tasks: [restoredTask, ...data.tasks],
+			decisions: [
+				createDecision({
+					taskId: restoredTask.id,
+					runId: latestRun?.id ?? null,
+					decisionType: 'task_plan_updated',
+					summary: `Restored missing task ${restoredTask.id} from orphaned thread ${params.threadId}.`
+				}),
+				...(data.decisions ?? [])
+			]
+		}));
+
+		return {
+			ok: true,
+			successAction: 'restoreMissingTask',
+			taskId: restoredTask.id
 		};
 	},
 

@@ -40,9 +40,32 @@ function mergeThreadRecord(
 }
 
 function orderedThreads(state: AgentThreadStoreState) {
+	const seenIds = new Set<string>();
+
 	return state.orderedIds
+		.filter((threadId) => {
+			if (seenIds.has(threadId)) {
+				return false;
+			}
+
+			seenIds.add(threadId);
+			return true;
+		})
 		.map((threadId) => state.byId[threadId])
 		.filter((thread): thread is AgentThreadDetail => Boolean(thread));
+}
+
+function dedupeThreadIds(threadIds: string[]) {
+	const seenIds = new Set<string>();
+
+	return threadIds.filter((threadId) => {
+		if (seenIds.has(threadId)) {
+			return false;
+		}
+
+		seenIds.add(threadId);
+		return true;
+	});
 }
 
 function orderThreadIds(
@@ -53,11 +76,18 @@ function orderThreadIds(
 	const nextIds = threads.map((thread) => thread.id);
 
 	if (options.replace) {
-		return nextIds;
+		return dedupeThreadIds(nextIds);
 	}
 
 	const seenIds = new Set(currentIds);
-	const appendedIds = nextIds.filter((threadId) => !seenIds.has(threadId));
+	const appendedIds = nextIds.filter((threadId) => {
+		if (seenIds.has(threadId)) {
+			return false;
+		}
+
+		seenIds.add(threadId);
+		return true;
+	});
 
 	return [...currentIds, ...appendedIds];
 }

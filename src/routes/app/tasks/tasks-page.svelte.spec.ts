@@ -626,4 +626,23 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(document.querySelector('[data-testid="task-mobile-card-task_done"]')).not.toBeNull();
 		expect(document.querySelector('[data-testid="task-mobile-card-task_active"]')).toBeNull();
 	});
+
+	it('surfaces a switch when matching tasks are hidden in the other queue tab', async () => {
+		renderPage([
+			createTask({
+				id: 'task_done_only',
+				title: 'Only completed match',
+				status: 'done'
+			})
+		]);
+
+		expect(document.body.textContent).toContain(
+			'Matching tasks are currently in the completed queue. 1 matching task is available in Completed work.'
+		);
+		expect(document.querySelector('[data-testid="task-mobile-card-task_done_only"]')).toBeNull();
+
+		await page.getByRole('button', { name: 'Open Completed work' }).click();
+
+		expect(document.querySelector('[data-testid="task-mobile-card-task_done_only"]')).not.toBeNull();
+	});
 });

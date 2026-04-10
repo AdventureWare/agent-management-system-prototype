@@ -1029,6 +1029,78 @@ export function syncGovernanceQueues(data: ControlPlaneData): ControlPlaneData {
 	};
 }
 
+export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
+	const goalIds = new Set(data.goals.map((goal) => goal.id));
+	const taskIds = new Set(data.tasks.map((task) => task.id));
+	const issues: string[] = [];
+
+	for (const goal of data.goals) {
+		if (goal.parentGoalId && !goalIds.has(goal.parentGoalId)) {
+			issues.push(`Goal ${goal.id} references missing parent goal ${goal.parentGoalId}.`);
+		}
+
+		for (const taskId of goal.taskIds ?? []) {
+			if (!taskIds.has(taskId)) {
+				issues.push(`Goal ${goal.id} references missing task ${taskId}.`);
+			}
+		}
+	}
+
+	for (const task of data.tasks) {
+		if (task.goalId && !goalIds.has(task.goalId)) {
+			issues.push(`Task ${task.id} references missing goal ${task.goalId}.`);
+		}
+	}
+
+	for (const run of data.runs) {
+		if (!taskIds.has(run.taskId)) {
+			issues.push(`Run ${run.id} references missing task ${run.taskId}.`);
+		}
+	}
+
+	for (const review of data.reviews) {
+		if (!taskIds.has(review.taskId)) {
+			issues.push(`Review ${review.id} references missing task ${review.taskId}.`);
+		}
+	}
+
+	for (const approval of data.approvals) {
+		if (!taskIds.has(approval.taskId)) {
+			issues.push(`Approval ${approval.id} references missing task ${approval.taskId}.`);
+		}
+	}
+
+	for (const decision of data.decisions ?? []) {
+		if (decision.taskId && !taskIds.has(decision.taskId)) {
+			issues.push(`Decision ${decision.id} references missing task ${decision.taskId}.`);
+		}
+
+		if (decision.goalId && !goalIds.has(decision.goalId)) {
+			issues.push(`Decision ${decision.id} references missing goal ${decision.goalId}.`);
+		}
+	}
+
+	for (const session of data.planningSessions ?? []) {
+		if (session.goalId && !goalIds.has(session.goalId)) {
+			issues.push(`Planning session ${session.id} references missing goal ${session.goalId}.`);
+		}
+
+		for (const goalId of session.goalIds ?? []) {
+			if (!goalIds.has(goalId)) {
+				issues.push(`Planning session ${session.id} references missing goal ${goalId}.`);
+			}
+		}
+
+		for (const taskId of session.taskIds ?? []) {
+			if (!taskIds.has(taskId)) {
+				issues.push(`Planning session ${session.id} references missing task ${taskId}.`);
+			}
+		}
+	}
+
+	return issues;
+}
+
 async function ensureDataFile() {
 	try {
 		await readFile(DATA_FILE, 'utf8');
@@ -1150,13 +1222,33 @@ async function saveControlPlane(data: ControlPlaneData) {
 	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
+let controlPlaneUpdateQueue: Promise<void> = Promise.resolve();
+
 export async function updateControlPlane(
 	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
 ) {
-	const current = await loadControlPlane();
-	const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
-	await saveControlPlane(next);
-	return next;
+	const runUpdate = async () => {
+		const current = await loadControlPlane();
+		const next = syncGovernanceQueues(syncTaskExecutionState(await updater(current)));
+		const integrityIssues = collectControlPlaneIntegrityIssues(next);
+
+		if (integrityIssues.length > 0) {
+			throw new Error(
+				`Refusing to save inconsistent control-plane data: ${integrityIssues.slice(0, 6).join(' ')}`
+			);
+		}
+
+		await saveControlPlane(next);
+		return next;
+	};
+
+	const queuedUpdate = controlPlaneUpdateQueue.catch(() => undefined).then(runUpdate);
+	controlPlaneUpdateQueue = queuedUpdate.then(
+		() => undefined,
+		() => undefined
+	);
+
+	return await queuedUpdate;
 }
 
 export function formatRelativeTime(iso: string) {
@@ -1654,6 +1746,7 @@ export function deleteProject(data: ControlPlaneData, projectId: string): Contro
 }
 
 export function createTask(input: {
+	id?: string;
 	title: string;
 	summary: string;
 	successCriteria?: string;
@@ -1683,12 +1776,14 @@ export function createTask(input: {
 	agentThreadId?: string | null;
 	status?: TaskStatus;
 	attachments?: TaskAttachment[];
+	createdAt?: string;
+	updatedAt?: string;
 }): Task {
 	const now = new Date().toISOString();
 	const area = input.area ?? 'product';
 
 	return {
-		id: createTaskId(),
+		id: input.id ?? createTaskId(),
 		title: input.title,
 		summary: input.summary,
 		successCriteria: input.successCriteria ?? '',
@@ -1720,8 +1815,8 @@ export function createTask(input: {
 		latestRunId: null,
 		artifactPath: input.artifactPath,
 		attachments: input.attachments ?? [],
-		createdAt: now,
-		updatedAt: now
+		createdAt: input.createdAt ?? now,
+		updatedAt: input.updatedAt ?? input.createdAt ?? now
 	};
 }
 

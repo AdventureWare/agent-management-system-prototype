@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { getHiddenCollapsedRowCount } from '$lib/client/collection-visibility';
 	import { clearFormDraft, readFormDraft } from '$lib/client/form-drafts';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -22,6 +23,11 @@
 		isExpanded: boolean;
 		isDirectMatch: boolean;
 		isContextRow: boolean;
+	};
+	type GoalDirectoryState = {
+		rows: GoalDirectoryRow[];
+		matchingRowCount: number;
+		hiddenCollapsedRowCount: number;
 	};
 
 	let query = $state('');
@@ -91,7 +97,7 @@
 	let totalGoalCount = $derived(data.goals.length);
 	let rootGoalCount = $derived(data.goals.filter((goal) => !goal.parentGoalId).length);
 	let activeGoalCount = $derived(data.goals.filter((goal) => goal.status !== 'done').length);
-	let visibleGoalRows = $derived.by<GoalDirectoryRow[]>(() => {
+	let goalDirectoryState = $derived.by<GoalDirectoryState>(() => {
 		const goalById: Record<string, GoalDirectoryGoal> = {};
 
 		for (const goal of data.goals) {
@@ -164,8 +170,20 @@
 			visit(rootGoal, 0);
 		}
 
-		return rows;
+		const matchingRowCount = Object.keys(includedGoalIds).length;
+
+		return {
+			rows,
+			matchingRowCount,
+			hiddenCollapsedRowCount: getHiddenCollapsedRowCount({
+				matchingRowCount,
+				visibleRowCount: rows.length
+			})
+		};
 	});
+	let visibleGoalRows = $derived(goalDirectoryState.rows);
+	let matchingGoalRowCount = $derived(goalDirectoryState.matchingRowCount);
+	let hiddenCollapsedGoalRowCount = $derived(goalDirectoryState.hiddenCollapsedRowCount);
 
 	function toggleGoalExpansion(goalId: string) {
 		if (collapsedGoalIds.includes(goalId)) {
@@ -279,6 +297,7 @@
 					<input
 						bind:value={query}
 						class="input text-white placeholder:text-slate-500"
+						data-persist-off
 						id="goal-search"
 						placeholder="Search goals…"
 					/>
@@ -286,7 +305,7 @@
 
 				<label class="block">
 					<span class="sr-only">Filter goals by status</span>
-					<select bind:value={selectedStatus} class="select text-white">
+					<select bind:value={selectedStatus} class="select text-white" data-persist-off>
 						<option value="all">All statuses</option>
 						{#each data.statusOptions as status (status)}
 							<option value={status}>{formatGoalStatusLabel(status)}</option>
@@ -300,10 +319,29 @@
 	<DataTableSection
 		title="Goal hierarchy"
 		description="Browse the goal tree with parent context, linked work, and workspace cues in one place."
-		summary={`${visibleGoalRows.length} matching row${visibleGoalRows.length === 1 ? '' : 's'}`}
+		summary={`${matchingGoalRowCount} matching row${matchingGoalRowCount === 1 ? '' : 's'}`}
 		empty={visibleGoalRows.length === 0}
 		emptyMessage="No goals match the current search or status filter."
 	>
+		{#if hiddenCollapsedGoalRowCount > 0}
+			<div class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+				<p class="text-sm text-amber-100">
+					{hiddenCollapsedGoalRowCount} matching goal{hiddenCollapsedGoalRowCount === 1
+						? ' is'
+						: 's are'} currently hidden inside collapsed branches.
+				</p>
+				<button
+					class="inline-flex items-center justify-center rounded-full border border-amber-800/70 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-amber-100 uppercase transition hover:border-amber-700 hover:text-white"
+					type="button"
+					onclick={() => {
+						collapsedGoalIds = [];
+					}}
+				>
+					Expand all
+				</button>
+			</div>
+		{/if}
+
 		<table class="min-w-full divide-y divide-slate-800 text-left">
 			<thead class="bg-slate-900/70">
 				<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">

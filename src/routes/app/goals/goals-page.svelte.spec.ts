@@ -164,4 +164,23 @@ describe('/app/goals/+page.svelte', () => {
 		expect(summaryInput?.value).toContain('This goal improves the goal-writing flow');
 		expect(successSignalInput?.value).toContain('Most new goals include a concrete outcome');
 	});
+
+	it('shows a recovery hint when matching goals are hidden in collapsed branches', async () => {
+		renderPage();
+
+		await page
+			.getByRole('button', {
+				name: /Collapse subgoals for Grow Kwipoo into a repeatable business/i
+			})
+			.click();
+
+		expect(document.body.textContent).not.toContain('Validate creator partnerships');
+		expect(document.body.textContent).toContain(
+			'1 matching goal is currently hidden inside collapsed branches.'
+		);
+
+		await page.getByRole('button', { name: 'Expand all' }).click();
+
+		expect(document.body.textContent).toContain('Validate creator partnerships');
+	});
 });

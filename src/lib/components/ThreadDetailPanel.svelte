@@ -70,10 +70,10 @@
 		id: string;
 		title: string;
 		projectId: string | null;
-		status: string;
+		status: string | null;
 		summary: string;
 		isPrimary: boolean;
-		source: 'resolved' | 'linked';
+		source: 'resolved' | 'linked' | 'orphaned';
 	};
 
 	type ResponseContextArtifact = {
@@ -456,6 +456,11 @@
 			source: 'linked'
 		};
 	});
+	let restoreMissingTaskSuccess = $derived(
+		form?.ok &&
+			form?.successAction === 'restoreMissingTask' &&
+			form?.taskId === (focusTask?.id ?? form?.taskId)
+	);
 	let availableContactContextItems = $derived.by<ContactContextItemOption[]>(() => {
 		const items: ContactContextItemOption[] = [];
 
@@ -464,9 +469,11 @@
 				id: `focus-task:${focusTask.id}`,
 				kind: 'task',
 				label: focusTask.title,
-				detail: focusTask.summary || `Current task (${focusTask.status}).`,
+				detail:
+					focusTask.summary ||
+					(focusTask.status ? `Current task (${focusTask.status}).` : 'Current task reference.'),
 				path: null,
-				href: resolve(`/app/tasks/${focusTask.id}`),
+				href: focusTask.source === 'orphaned' ? null : resolve(`/app/tasks/${focusTask.id}`),
 				defaultSelected: true
 			});
 		}
@@ -1488,6 +1495,10 @@
 			return 'This thread response is tied to the current task.';
 		}
 
+		if (task.source === 'orphaned') {
+			return 'This thread still points at a task record that is missing from the current control-plane store.';
+		}
+
 		if (task.isPrimary) {
 			return 'Primary task linked to this thread.';
 		}
@@ -1619,11 +1630,19 @@
 				{/if}
 			</div>
 			<div class="flex min-w-0 flex-wrap items-center gap-2">
-				<span
-					class="inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-slate-300 uppercase"
-				>
-					{formatTaskStatusLabel(task.status)}
-				</span>
+				{#if task.status}
+					<span
+						class="inline-flex max-w-full items-center justify-center rounded-full border border-slate-700 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-slate-300 uppercase"
+					>
+						{formatTaskStatusLabel(task.status)}
+					</span>
+				{:else}
+					<span
+						class="inline-flex max-w-full items-center justify-center rounded-full border border-rose-800/70 bg-rose-950/40 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-rose-200 uppercase"
+					>
+						Missing task record
+					</span>
+				{/if}
 				{#if task.isPrimary}
 					<span
 						class="inline-flex max-w-full items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-center text-[11px] leading-none whitespace-normal text-amber-200 uppercase"
@@ -1636,12 +1655,23 @@
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
 			<p class="ui-wrap-anywhere text-xs text-slate-400">{focusTaskDescription(task)}</p>
-			<a
-				class="ui-wrap-anywhere text-sm font-medium text-amber-200 transition hover:text-amber-100"
-				href={resolve(`/app/tasks/${task.id}`)}
-			>
-				Open task detail
-			</a>
+			{#if task.source === 'orphaned'}
+				<div class="flex flex-wrap items-center justify-end gap-3">
+					<span class="ui-wrap-anywhere text-xs text-rose-200">Task ID {task.id}</span>
+					{#if !readOnly}
+						<form method="POST" action="?/restoreMissingTask">
+							<AppButton type="submit" size="sm" variant="warning">Restore task</AppButton>
+						</form>
+					{/if}
+				</div>
+			{:else}
+				<a
+					class="ui-wrap-anywhere text-sm font-medium text-amber-200 transition hover:text-amber-100"
+					href={resolve(`/app/tasks/${task.id}`)}
+				>
+					Open task detail
+				</a>
+			{/if}
 		</div>
 	</div>
 {/snippet}
@@ -1778,6 +1808,13 @@
 							{task.isPrimary ? ' · primary' : ''}
 						</a>
 					{/each}
+				</div>
+			{:else if focusTask?.source === 'orphaned'}
+				<div class="mt-3 rounded-lg border border-rose-900/60 bg-rose-950/25 p-3">
+					<p class="ui-wrap-anywhere text-sm text-rose-100">
+						This thread still references task <code>{focusTask.id}</code>, but that task record is
+						missing from the current control-plane data.
+					</p>
 				</div>
 			{:else}
 				<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
@@ -1946,6 +1983,22 @@
 							href={resolve(`/app/threads/${form.threadId}`)}
 						>
 							Open new thread
+						</a>
+					{/if}
+				</p>
+			{/if}
+
+			{#if restoreMissingTaskSuccess}
+				<p
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+				>
+					Missing task restored from this thread.
+					{#if form?.taskId}
+						<a
+							class="ui-wrap-anywhere ml-2 font-medium text-emerald-100 underline decoration-emerald-300/60 underline-offset-2"
+							href={resolve(`/app/tasks/${form.taskId}`)}
+						>
+							Open restored task
 						</a>
 					{/if}
 				</p>
