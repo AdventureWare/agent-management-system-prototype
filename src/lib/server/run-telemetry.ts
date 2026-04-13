@@ -46,15 +46,15 @@ function normalizeNonNegativeNumber(value: unknown) {
 	return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-function normalizeManagedRunTelemetry(candidate: Record<string, unknown>): ManagedRunTelemetrySnapshot {
+function normalizeManagedRunTelemetry(
+	candidate: Record<string, unknown>
+): ManagedRunTelemetrySnapshot {
 	const inputTokens = normalizeNonNegativeNumber(candidate.inputTokens);
 	const cachedInputTokens = normalizeNonNegativeNumber(candidate.cachedInputTokens);
 	const outputTokens = normalizeNonNegativeNumber(candidate.outputTokens);
 	const uncachedInputTokens =
 		normalizeNonNegativeNumber(candidate.uncachedInputTokens) ??
-		(inputTokens !== null
-			? Math.max(inputTokens - (cachedInputTokens ?? 0), 0)
-			: null);
+		(inputTokens !== null ? Math.max(inputTokens - (cachedInputTokens ?? 0), 0) : null);
 
 	return {
 		modelUsed: normalizeOptionalText(candidate.modelUsed),
@@ -186,8 +186,9 @@ function findProviderModelPricing(provider: Provider | null, modelUsed: string |
 	const normalizedModel = modelUsed.trim().toLowerCase();
 
 	return (
-		provider.modelPricing?.find((pricing) => pricing.model.trim().toLowerCase() === normalizedModel) ??
-		null
+		provider.modelPricing?.find(
+			(pricing) => pricing.model.trim().toLowerCase() === normalizedModel
+		) ?? null
 	);
 }
 
@@ -272,9 +273,10 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 				snapshot.modelUsed?.trim() ||
 				provider?.defaultModel?.trim() ||
 				null;
-			const usageSource = snapshot.usageSource === 'provider_reported'
-				? snapshot.usageSource
-				: (run.usageSource ?? 'missing');
+			const usageSource =
+				snapshot.usageSource === 'provider_reported'
+					? snapshot.usageSource
+					: (run.usageSource ?? 'missing');
 			const inputTokens =
 				snapshot.inputTokens !== null ? snapshot.inputTokens : (run.inputTokens ?? null);
 			const cachedInputTokens =

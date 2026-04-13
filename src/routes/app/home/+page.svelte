@@ -241,7 +241,11 @@
 		}
 	}
 
-	function rollupDetail(item: { runCount: number; totalTokens: number; attentionRunCount: number }) {
+	function rollupDetail(item: {
+		runCount: number;
+		totalTokens: number;
+		attentionRunCount: number;
+	}) {
 		return `${item.runCount} runs · ${formatTokenCount(item.totalTokens)} tokens · ${item.attentionRunCount} attention`;
 	}
 
@@ -525,12 +529,7 @@
 		</div>
 
 		<div class="mt-4 grid gap-4 xl:grid-cols-2">
-			{#each [
-				{ title: 'By provider', items: dashboard.runUsageCost.rollups.byProvider },
-				{ title: 'By actor', items: dashboard.runUsageCost.rollups.byActor },
-				{ title: 'By project', items: dashboard.runUsageCost.rollups.byProject },
-				{ title: 'By goal', items: dashboard.runUsageCost.rollups.byGoal }
-			] as section (section.title)}
+			{#each [{ title: 'By provider', items: dashboard.runUsageCost.rollups.byProvider }, { title: 'By actor', items: dashboard.runUsageCost.rollups.byActor }, { title: 'By project', items: dashboard.runUsageCost.rollups.byProject }, { title: 'By goal', items: dashboard.runUsageCost.rollups.byGoal }] as section (section.title)}
 				<article class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
 						{section.title}
@@ -563,7 +562,9 @@
 				</p>
 				<div class="mt-3 space-y-3">
 					{#each dashboard.runUsageCost.highCostRuns as run (run.runId)}
-						<div class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+						<div
+							class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+						>
 							<div class="min-w-0">
 								<p class="ui-wrap-anywhere text-sm font-medium text-white">{run.taskTitle}</p>
 								<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
@@ -572,7 +573,10 @@
 							</div>
 							<div class="flex items-center gap-3">
 								<p class="text-sm font-medium text-sky-200">{formatUsd(run.estimatedCostUsd)}</p>
-								<a class="text-sm text-sky-300 hover:text-white" href={resolve(`/app/runs/${run.runId}`)}>
+								<a
+									class="text-sm text-sky-300 hover:text-white"
+									href={resolve(`/app/runs/${run.runId}`)}
+								>
 									Open run
 								</a>
 							</div>

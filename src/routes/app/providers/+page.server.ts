@@ -143,8 +143,7 @@ export const actions: Actions = {
 			provider = readProviderForm(await request.formData());
 		} catch (error) {
 			return fail(400, {
-				message:
-					error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
+				message: error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
 			});
 		}
 
@@ -172,8 +171,7 @@ export const actions: Actions = {
 			providerUpdates = readProviderForm(form);
 		} catch (error) {
 			return fail(400, {
-				message:
-					error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
+				message: error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
 			});
 		}
 

@@ -22,8 +22,8 @@ export const load: PageServerLoad = async () => {
 	);
 	const providerIdsWithRuns = new Set(
 		data.runs
-		.map((run) => run.providerId)
-		.filter((providerId): providerId is string => Boolean(providerId))
+			.map((run) => run.providerId)
+			.filter((providerId): providerId is string => Boolean(providerId))
 	);
 	const modelsWithRuns = new Set(
 		data.runs

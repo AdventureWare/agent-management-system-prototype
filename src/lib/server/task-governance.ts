@@ -3,7 +3,7 @@ import {
 	createDecision,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane,
+	loadControlPlane
 } from '$lib/server/control-plane';
 import { mutateTaskCollections } from '$lib/server/control-plane-repository';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
@@ -454,8 +454,7 @@ export async function approveTaskApproval(taskId: string, sourceLabel: string) {
 				throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
 			}
 
-			const shouldCloseTask =
-				approvalFromData.mode === 'before_complete' && !openReviewFromData;
+			const shouldCloseTask = approvalFromData.mode === 'before_complete' && !openReviewFromData;
 
 			return {
 				data: {

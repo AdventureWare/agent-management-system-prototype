@@ -482,10 +482,7 @@ export async function launchTaskFromPlan(
 		codexThreadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
-		const sendResult = await sendAgentThreadMessage(
-			plan.compatibleLatestRunThread.id,
-			plan.prompt
-		);
+		const sendResult = await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, plan.prompt);
 		agentThreadId = plan.compatibleLatestRunThread.id;
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleLatestRunThread.threadId;

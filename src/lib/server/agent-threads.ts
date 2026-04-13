@@ -50,10 +50,7 @@ import {
 	type AgentTimelineStep,
 	type AgentThreadsDb
 } from '$lib/types/agent-thread';
-import {
-	loadControlPlane,
-	updateControlPlaneCollections
-} from '$lib/server/control-plane';
+import { loadControlPlane, updateControlPlaneCollections } from '$lib/server/control-plane';
 import type { Area, ControlPlaneData, RunStatus, TaskStatus } from '$lib/types/control-plane';
 
 const AGENT_THREADS_DB_FILE = resolve(process.cwd(), 'data', 'agent-threads.json');

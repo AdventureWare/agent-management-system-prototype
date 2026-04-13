@@ -80,7 +80,10 @@ vi.mock('$lib/server/control-plane-repository', () => ({
 	mutateTaskCollections: mutateTaskCollections.mockImplementation(
 		async (input: {
 			taskId: string;
-			mutate: (task: any, data: ControlPlaneData) => {
+			mutate: (
+				task: any,
+				data: ControlPlaneData
+			) => {
 				data: ControlPlaneData;
 				changedCollections: Iterable<string>;
 			};
@@ -92,7 +95,9 @@ vi.mock('$lib/server/control-plane-repository', () => ({
 				return null;
 			}
 
-			controlPlaneState.saved = syncTaskExecutionStateLike(input.mutate(existingTask, current).data);
+			controlPlaneState.saved = syncTaskExecutionStateLike(
+				input.mutate(existingTask, current).data
+			);
 			controlPlaneState.current = controlPlaneState.saved;
 			return controlPlaneState.current.tasks.find((task) => task.id === input.taskId) ?? null;
 		}

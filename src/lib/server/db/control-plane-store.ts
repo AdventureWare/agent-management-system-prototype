@@ -183,7 +183,11 @@ export function saveControlPlaneCollectionsToSqlite(
 		}
 
 		const replaceSelectedCollections = db.transaction(
-			(input: ControlPlaneData, nextCollections: ControlPlaneCollection[], expectedRevision?: number) => {
+			(
+				input: ControlPlaneData,
+				nextCollections: ControlPlaneCollection[],
+				expectedRevision?: number
+			) => {
 				persistControlPlaneCollections(db, input, nextCollections, { expectedRevision });
 			}
 		);

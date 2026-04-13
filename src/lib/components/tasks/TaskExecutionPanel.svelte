@@ -243,8 +243,9 @@
 			.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
 	);
 	let lastPricedRun = $derived(
-		relatedRuns.find((run) => run.estimatedCostUsd !== null && run.estimatedCostUsd !== undefined) ??
-			null
+		relatedRuns.find(
+			(run) => run.estimatedCostUsd !== null && run.estimatedCostUsd !== undefined
+		) ?? null
 	);
 
 	function taskAction(actionName: string) {
@@ -303,8 +304,8 @@
 			{#if attentionSpendUsd > 0}
 				<div class="mt-4 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-4">
 					<p class="text-sm font-medium text-amber-100">
-						This task has already burned {formatUsd(attentionSpendUsd)} on attention runs. Check
-						coverage gaps, model choice, or provider routing before retrying the same route.
+						This task has already burned {formatUsd(attentionSpendUsd)} on attention runs. Check coverage
+						gaps, model choice, or provider routing before retrying the same route.
 					</p>
 				</div>
 			{/if}

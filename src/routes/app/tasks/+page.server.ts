@@ -955,10 +955,7 @@ export const actions: Actions = {
 				agentThreadId,
 				delegationAcceptance: null,
 				artifactPath:
-					candidate.artifactPath ||
-					project.defaultArtifactRoot ||
-					project.projectRootFolder ||
-					'',
+					candidate.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
 				status: 'in_progress',
 				updatedAt: new Date().toISOString()
 			}),

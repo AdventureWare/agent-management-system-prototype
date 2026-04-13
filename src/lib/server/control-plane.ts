@@ -442,9 +442,7 @@ function isRunUsageSource(value: unknown): value is RunUsageSource {
 
 function isRunCostSource(value: unknown): value is RunCostSource {
 	return (
-		value === 'configured_model_pricing' ||
-		value === 'missing_pricing' ||
-		value === 'missing_usage'
+		value === 'configured_model_pricing' || value === 'missing_pricing' || value === 'missing_usage'
 	);
 }
 

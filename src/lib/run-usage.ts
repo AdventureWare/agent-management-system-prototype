@@ -12,7 +12,12 @@ export function getRunTotalTokens(run: RunUsageLike) {
 }
 
 export function getRunCacheRatio(run: RunUsageLike) {
-	if (!run.inputTokens || run.inputTokens <= 0 || !run.cachedInputTokens || run.cachedInputTokens <= 0) {
+	if (
+		!run.inputTokens ||
+		run.inputTokens <= 0 ||
+		!run.cachedInputTokens ||
+		run.cachedInputTokens <= 0
+	) {
 		return null;
 	}
 
@@ -64,9 +69,7 @@ export function formatRunTokenSummary(run: RunUsageLike) {
 		run.outputTokens !== null && run.outputTokens !== undefined
 			? `${formatTokenCount(run.outputTokens)} out`
 			: '',
-		run.cachedInputTokens
-			? `${formatTokenCount(run.cachedInputTokens)} cached`
-			: ''
+		run.cachedInputTokens ? `${formatTokenCount(run.cachedInputTokens)} cached` : ''
 	].filter(Boolean);
 
 	return parts.length > 0 ? parts.join(' · ') : 'Usage unavailable';

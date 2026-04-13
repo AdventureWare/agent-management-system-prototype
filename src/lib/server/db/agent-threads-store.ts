@@ -107,23 +107,21 @@ export function saveAgentThreadsToSqlite(
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction(
-			(input: AgentThreadsDb, expectedRevision?: number) => {
-				bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
+		const replaceAllRecords = db.transaction((input: AgentThreadsDb, expectedRevision?: number) => {
+			bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
 
-				for (const collection of AGENT_THREAD_COLLECTIONS) {
-					const records = input[collection] ?? [];
-					syncSqliteCollectionRecords(db, {
-						tableName: 'agent_thread_records',
-						collection,
-						records: records.map((record) => ({
-							id: record.id,
-							payload: JSON.stringify(record)
-						}))
-					});
-				}
+			for (const collection of AGENT_THREAD_COLLECTIONS) {
+				const records = input[collection] ?? [];
+				syncSqliteCollectionRecords(db, {
+					tableName: 'agent_thread_records',
+					collection,
+					records: records.map((record) => ({
+						id: record.id,
+						payload: JSON.stringify(record)
+					}))
+				});
 			}
-		);
+		});
 
 		replaceAllRecords(data, options.expectedRevision);
 	} finally {

@@ -20,7 +20,9 @@ const TASK_DELETE_COLLECTIONS = [
 function uniqueCollections(
 	collections: Array<ControlPlaneCollection | null | undefined>
 ): ControlPlaneCollection[] {
-	return [...new Set(collections.filter((value): value is ControlPlaneCollection => Boolean(value)))];
+	return [
+		...new Set(collections.filter((value): value is ControlPlaneCollection => Boolean(value)))
+	];
 }
 
 function prependRecords<T>(records: readonly T[] | undefined, existing: readonly T[]) {
@@ -73,13 +75,14 @@ function deleteTasksFromData(data: ControlPlaneData, deletedTaskIds: readonly st
 		goals: data.goals.map((goal) => {
 			const nextTaskIds = (goal.taskIds ?? []).filter((taskId) => !deletedTaskIdSet.has(taskId));
 
-			return nextTaskIds.length === (goal.taskIds ?? []).length ? goal : { ...goal, taskIds: nextTaskIds };
+			return nextTaskIds.length === (goal.taskIds ?? []).length
+				? goal
+				: { ...goal, taskIds: nextTaskIds };
 		}),
 		runs: data.runs.filter((run) => !deletedTaskIdSet.has(run.taskId)),
 		reviews: data.reviews.filter(
 			(review) =>
-				!deletedTaskIdSet.has(review.taskId) &&
-				!(review.runId && relatedRunIds.has(review.runId))
+				!deletedTaskIdSet.has(review.taskId) && !(review.runId && relatedRunIds.has(review.runId))
 		),
 		approvals: data.approvals.filter(
 			(approval) =>

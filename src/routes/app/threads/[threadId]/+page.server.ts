@@ -22,10 +22,7 @@ import {
 	loadControlPlane,
 	updateControlPlaneCollections
 } from '$lib/server/control-plane';
-import {
-	createTaskRecord,
-	mutateTaskCollections
-} from '$lib/server/control-plane-repository';
+import { createTaskRecord, mutateTaskCollections } from '$lib/server/control-plane-repository';
 import { extractThreadTaskReference } from '$lib/server/thread-task-references';
 import { extractThreadTaskRecoveryDraft } from '$lib/server/thread-task-recovery';
 import { buildPromptDigest } from '$lib/server/task-threads';
@@ -900,8 +897,7 @@ export const actions: Actions = {
 											status: 'approved' as const,
 											updatedAt: now,
 											resolvedAt: now,
-											summary:
-												'Approved from the thread detail page while completing the task.'
+											summary: 'Approved from the thread detail page while completing the task.'
 										}
 									: review
 							);
@@ -913,8 +909,7 @@ export const actions: Actions = {
 										runId: taskFromData.latestRunId,
 										status: 'approved',
 										resolvedAt: now,
-										summary:
-											'Approved from the thread detail page while completing the task.'
+										summary: 'Approved from the thread detail page while completing the task.'
 									})
 								);
 							}
@@ -929,8 +924,7 @@ export const actions: Actions = {
 											status: 'approved' as const,
 											updatedAt: now,
 											resolvedAt: now,
-											summary:
-												'Approved from the thread detail page while completing the task.'
+											summary: 'Approved from the thread detail page while completing the task.'
 										}
 									: approval
 							);
@@ -947,8 +941,7 @@ export const actions: Actions = {
 										mode: 'before_complete',
 										status: 'approved',
 										resolvedAt: now,
-										summary:
-											'Approved from the thread detail page while completing the task.'
+										summary: 'Approved from the thread detail page while completing the task.'
 									})
 								);
 							}
