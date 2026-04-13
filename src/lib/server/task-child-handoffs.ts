@@ -1,4 +1,5 @@
-import { createDecision, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import { createDecision, loadControlPlane } from '$lib/server/control-plane';
+import { updateTaskRecord } from '$lib/server/control-plane-repository';
 
 export class TaskChildHandoffActionError extends Error {
 	constructor(
@@ -51,30 +52,29 @@ export async function acceptTaskChildHandoff(parentTaskId: string, form: FormDat
 		form.get('summary')?.toString().trim() ||
 		`Accepted child handoff into parent task "${parentTask.title}".`;
 
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === childTask.id
-				? {
-						...candidate,
-						delegationAcceptance: {
-							summary,
-							acceptedAt: now
-						},
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
+	const updatedChildTask = await updateTaskRecord({
+		taskId: childTask.id,
+		update: (candidate) => ({
+			...candidate,
+			delegationAcceptance: {
+				summary,
+				acceptedAt: now
+			},
+			updatedAt: now
+		}),
+		prependDecisions: [
 			createDecision({
 				taskId: childTask.id,
 				decisionType: 'delegation_handoff_accepted',
 				summary,
 				createdAt: now
-			}),
-			...(data.decisions ?? [])
+			})
 		]
-	}));
+	});
+
+	if (!updatedChildTask) {
+		throw new TaskChildHandoffActionError(404, 'Delegated child task not found.');
+	}
 
 	return {
 		ok: true,
@@ -107,29 +107,28 @@ export async function requestTaskChildHandoffChanges(parentTaskId: string, form:
 		form.get('summary')?.toString().trim() ||
 		'Parent task requested follow-up before accepting this child handoff.';
 
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === childTask.id
-				? {
-						...candidate,
-						status: 'blocked',
-						blockedReason,
-						delegationAcceptance: null,
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
+	const updatedChildTask = await updateTaskRecord({
+		taskId: childTask.id,
+		update: (candidate) => ({
+			...candidate,
+			status: 'blocked',
+			blockedReason,
+			delegationAcceptance: null,
+			updatedAt: now
+		}),
+		prependDecisions: [
 			createDecision({
 				taskId: childTask.id,
 				decisionType: 'delegation_handoff_changes_requested',
 				summary: blockedReason,
 				createdAt: now
-			}),
-			...(data.decisions ?? [])
+			})
 		]
-	}));
+	});
+
+	if (!updatedChildTask) {
+		throw new TaskChildHandoffActionError(404, 'Delegated child task not found.');
+	}
 
 	return {
 		ok: true,

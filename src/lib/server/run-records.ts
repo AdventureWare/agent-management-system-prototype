@@ -1,6 +1,7 @@
 import { formatActivityAge } from '$lib/session-activity';
 import type { AgentThreadDetail } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Run } from '$lib/types/control-plane';
+import { getRunCacheRatio, getRunTotalTokens } from '$lib/run-usage';
 import { formatRelativeTime } from '$lib/server/control-plane';
 
 export type RunRecord = Run & {
@@ -19,6 +20,8 @@ export type RunRecord = Run & {
 	updatedAtLabel: string;
 	heartbeatAgeLabel: string;
 	isHeartbeatStale: boolean;
+	totalTokens: number;
+	cacheRatio: number | null;
 };
 
 export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDetail[]): RunRecord[] {
@@ -60,6 +63,8 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 				createdAtLabel: formatRelativeTime(run.createdAt),
 				updatedAtLabel: formatRelativeTime(run.updatedAt),
 				heartbeatAgeLabel: formatActivityAge(run.lastHeartbeatAt),
+				totalTokens: getRunTotalTokens(run),
+				cacheRatio: getRunCacheRatio(run),
 				isHeartbeatStale:
 					heartbeatAgeMs !== null &&
 					heartbeatAgeMs > staleHeartbeatCutoffMs &&

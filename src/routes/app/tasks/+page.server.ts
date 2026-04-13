@@ -4,14 +4,17 @@ import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
 	createTask,
-	deleteTask as removeTaskFromControlPlane,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
 	resolveThreadSandbox,
-	selectExecutionProvider,
-	updateControlPlane
+	selectExecutionProvider
 } from '$lib/server/control-plane';
+import {
+	createTaskRecord,
+	deleteTaskRecords,
+	updateTaskRecord
+} from '$lib/server/control-plane-repository';
 import {
 	cancelAgentThread,
 	getAgentThread,
@@ -39,11 +42,7 @@ import { buildTaskGoalOptions } from '$lib/server/task-goal-options';
 import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
-import {
-	applyGoalRelationships,
-	getGoalLinkedProjectIds,
-	getGoalLinkedTaskIds
-} from '$lib/server/goal-relationships';
+import { describeExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
 import {
 	approveTaskApproval,
 	approveTaskReview,
@@ -156,31 +155,6 @@ function failTaskCreate(
 
 function getDefaultDraftRole(data: ControlPlaneData): Role | null {
 	return data.roles.find((role) => role.id === 'role_coordinator') ?? data.roles[0] ?? null;
-}
-
-function prependCreatedTask(data: ControlPlaneData, task: Task, goalId: string) {
-	const nextData = {
-		...data,
-		tasks: [task, ...data.tasks]
-	};
-
-	if (!goalId) {
-		return nextData;
-	}
-
-	const goal = nextData.goals.find((candidate) => candidate.id === goalId);
-
-	if (!goal) {
-		return nextData;
-	}
-
-	return applyGoalRelationships({
-		data: nextData,
-		goalId: goal.id,
-		parentGoalId: goal.parentGoalId ?? null,
-		projectIds: getGoalLinkedProjectIds(nextData, goal),
-		taskIds: getGoalLinkedTaskIds(nextData, goal)
-	});
 }
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -462,8 +436,29 @@ export const actions: Actions = {
 				: [];
 		const createdTask = attachments.length > 0 ? { ...baseTask, attachments } : baseTask;
 
+		if (assignedExecutionSurface) {
+			const fit = describeExecutionSurfaceTaskFit(
+				{
+					...current,
+					tasks: [createdTask, ...current.tasks]
+				},
+				assignedExecutionSurface,
+				createdTask
+			);
+
+			if (!fit.withinAssignmentLimit) {
+				return failTaskCreate(409, {
+					message: `${assignedExecutionSurface.name} is already at its task capacity.`,
+					...failureContext
+				});
+			}
+		}
+
 		if (submitMode !== 'createAndRun') {
-			await updateControlPlane((data) => prependCreatedTask(data, createdTask, nextGoalId));
+			await createTaskRecord({
+				task: createdTask,
+				goalId: nextGoalId
+			});
 
 			return {
 				ok: true,
@@ -542,10 +537,12 @@ export const actions: Actions = {
 			executionSurfaceId: assignedExecutionSurface?.id ?? null,
 			assumedRoleId: createdTask.desiredRoleId || null,
 			providerId,
+			agentThreadRunId: session.runId,
 			status: 'running',
 			startedAt: now,
 			threadId: null,
 			agentThreadId: session.agentThreadId,
+			modelUsed: provider?.defaultModel?.trim() || null,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -555,19 +552,15 @@ export const actions: Actions = {
 			lastHeartbeatAt: now
 		});
 
-		await updateControlPlane((data) => {
-			const nextTask: Task = {
+		await createTaskRecord({
+			task: {
 				...createdTask,
 				agentThreadId: session.agentThreadId,
 				status: 'in_progress',
 				updatedAt: now
-			};
-			const nextData = prependCreatedTask(data, nextTask, nextGoalId);
-
-			return {
-				...nextData,
-				runs: [run, ...data.runs]
-			};
+			},
+			goalId: nextGoalId,
+			prependRuns: [run]
 		});
 
 		return {
@@ -673,13 +666,16 @@ export const actions: Actions = {
 			return fail(400, { message: 'Target date must use YYYY-MM-DD format.' });
 		}
 
-		let taskUpdated = false;
-
 		const current = await loadControlPlane();
+		const task = current.tasks.find((candidate) => candidate.id === taskId);
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 		const assignedExecutionSurface = assigneeExecutionSurfaceId
 			? current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId)
 			: null;
+
+		if (!task) {
+			return fail(404, { message: 'Task not found.' });
+		}
 
 		if (!project) {
 			return fail(400, { message: 'Project not found.' });
@@ -689,35 +685,54 @@ export const actions: Actions = {
 			return fail(400, { message: 'Execution surface not found.' });
 		}
 
-		await updateControlPlane((data) => {
-			return {
-				...data,
-				tasks: data.tasks.map((task) => {
-					if (task.id !== taskId) {
-						return task;
-					}
-
-					taskUpdated = true;
-
-					return {
-						...task,
-						title: name,
-						summary: instructions,
-						projectId: project.id,
-						status,
-						requiredThreadSandbox,
-						assigneeExecutionSurfaceId: assignedExecutionSurface?.id ?? null,
-						targetDate: targetDate || null,
-						delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
-						artifactPath:
-							task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
-						updatedAt: new Date().toISOString()
-					};
-				})
+		if (assignedExecutionSurface) {
+			const candidateTask = {
+				...task,
+				title: name,
+				summary: instructions,
+				projectId: project.id,
+				status,
+				requiredThreadSandbox,
+				assigneeExecutionSurfaceId: assignedExecutionSurface.id,
+				targetDate: targetDate || null
 			};
+			const fit = describeExecutionSurfaceTaskFit(
+				{
+					...current,
+					tasks: current.tasks.map((candidate) =>
+						candidate.id === taskId ? candidateTask : candidate
+					)
+				},
+				assignedExecutionSurface,
+				candidateTask
+			);
+
+			if (!fit.withinAssignmentLimit) {
+				return fail(409, {
+					message: `${assignedExecutionSurface.name} is already at its task capacity.`
+				});
+			}
+		}
+
+		const updatedTask = await updateTaskRecord({
+			taskId,
+			update: (task) => ({
+				...task,
+				title: name,
+				summary: instructions,
+				projectId: project.id,
+				status,
+				requiredThreadSandbox,
+				assigneeExecutionSurfaceId: assignedExecutionSurface?.id ?? null,
+				targetDate: targetDate || null,
+				delegationAcceptance: task.parentTaskId ? null : (task.delegationAcceptance ?? null),
+				artifactPath:
+					task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
+				updatedAt: new Date().toISOString()
+			})
 		});
 
-		if (!taskUpdated) {
+		if (!updatedTask) {
 			return fail(404, { message: 'Task not found.' });
 		}
 
@@ -827,6 +842,7 @@ export const actions: Actions = {
 		const compatibleAssignedThread = threadContext.assignedThread;
 		const compatibleLatestRunThread = threadContext.latestRunThread;
 		let agentThreadId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
+		let agentThreadRunId: string | null = null;
 		let codexThreadId!: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
@@ -850,7 +866,8 @@ export const actions: Actions = {
 
 		if (compatibleAssignedThread?.canResume) {
 			try {
-				await sendAgentThreadMessage(compatibleAssignedThread.id, prompt);
+				const sendResult = await sendAgentThreadMessage(compatibleAssignedThread.id, prompt);
+				agentThreadRunId = sendResult.runId;
 			} catch (error) {
 				return fail(400, {
 					message: getActionErrorMessage(error, 'Could not queue work in the linked thread.')
@@ -862,7 +879,8 @@ export const actions: Actions = {
 			reusedThreadMode = 'assigned';
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			try {
-				await sendAgentThreadMessage(compatibleLatestRunThread.id, prompt);
+				const sendResult = await sendAgentThreadMessage(compatibleLatestRunThread.id, prompt);
+				agentThreadRunId = sendResult.runId;
 			} catch (error) {
 				return fail(400, {
 					message: getActionErrorMessage(error, 'Could not queue work in the latest thread.')
@@ -895,6 +913,7 @@ export const actions: Actions = {
 			}
 
 			agentThreadId = session.agentThreadId;
+			agentThreadRunId = session.runId;
 			codexThreadId = null;
 		}
 
@@ -904,10 +923,12 @@ export const actions: Actions = {
 			executionSurfaceId: effectiveExecutionSurface?.id ?? null,
 			assumedRoleId: task.desiredRoleId || null,
 			providerId,
+			agentThreadRunId,
 			status: 'running',
 			startedAt: new Date().toISOString(),
 			threadId: codexThreadId,
 			agentThreadId,
+			modelUsed: provider?.defaultModel?.trim() || null,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -922,31 +943,31 @@ export const actions: Actions = {
 			lastHeartbeatAt: new Date().toISOString()
 		});
 
-		await updateControlPlane((data) => ({
-			...data,
-			runs: [run, ...data.runs],
-			tasks: data.tasks.map((candidate) =>
-				candidate.id === taskId
-					? {
-							...candidate,
-							title: effectiveName,
-							summary: effectiveInstructions,
-							projectId: project.id,
-							assigneeExecutionSurfaceId:
-								assignedExecutionSurface?.id ?? candidate.assigneeExecutionSurfaceId,
-							agentThreadId,
-							delegationAcceptance: null,
-							artifactPath:
-								candidate.artifactPath ||
-								project.defaultArtifactRoot ||
-								project.projectRootFolder ||
-								'',
-							status: 'in_progress',
-							updatedAt: new Date().toISOString()
-						}
-					: candidate
-			)
-		}));
+		const launchedTask = await updateTaskRecord({
+			taskId,
+			update: (candidate) => ({
+				...candidate,
+				title: effectiveName,
+				summary: effectiveInstructions,
+				projectId: project.id,
+				assigneeExecutionSurfaceId:
+					assignedExecutionSurface?.id ?? candidate.assigneeExecutionSurfaceId,
+				agentThreadId,
+				delegationAcceptance: null,
+				artifactPath:
+					candidate.artifactPath ||
+					project.defaultArtifactRoot ||
+					project.projectRootFolder ||
+					'',
+				status: 'in_progress',
+				updatedAt: new Date().toISOString()
+			}),
+			prependRuns: [run]
+		});
+
+		if (!launchedTask) {
+			return fail(404, { message: 'Task not found.' });
+		}
 
 		return {
 			ok: true,
@@ -1045,12 +1066,7 @@ export const actions: Actions = {
 		];
 
 		await Promise.all(relatedThreadIds.map((threadId) => cancelAgentThread(threadId)));
-		await updateControlPlane((data) =>
-			deletableTaskIds.reduce(
-				(currentData, taskId) => removeTaskFromControlPlane(currentData, taskId),
-				data
-			)
-		);
+		await deleteTaskRecords(deletableTaskIds);
 
 		return {
 			ok: true,

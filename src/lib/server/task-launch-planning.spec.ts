@@ -208,4 +208,49 @@ describe('buildTaskLaunchPlan', () => {
 		expect(error).toMatchObject({ status: 409 });
 		expect(String(error)).toMatch(/does not cover/);
 	});
+
+	it('blocks launch when the chosen execution surface is already at task capacity', async () => {
+		const { current, task } = buildFixture();
+		current.executionSurfaces[0] = {
+			...current.executionSurfaces[0]!,
+			capacity: 1
+		};
+		current.tasks.push({
+			...task,
+			id: 'task_existing',
+			title: 'Existing queued task',
+			status: 'ready',
+			assigneeExecutionSurfaceId: 'worker_builder'
+		});
+
+		const error = await buildTaskLaunchPlan(current, task, buildTaskDetailInput()).catch(
+			(caughtError) => caughtError
+		);
+
+		expect(error).toBeInstanceOf(TaskLaunchPlanError);
+		expect(error).toMatchObject({ status: 409 });
+		expect(String(error)).toMatch(/task capacity/);
+	});
+
+	it('allows launch when the current task already occupies the worker task slot', async () => {
+		const { current, task } = buildFixture({
+			assigneeExecutionSurfaceId: 'worker_builder'
+		});
+		current.executionSurfaces[0] = {
+			...current.executionSurfaces[0]!,
+			capacity: 1
+		};
+		current.tasks = current.tasks.map((candidate) =>
+			candidate.id === task.id
+				? {
+						...candidate,
+						assigneeExecutionSurfaceId: 'worker_builder'
+					}
+				: candidate
+		);
+
+		const plan = await buildTaskLaunchPlan(current, current.tasks[0]!, buildTaskDetailInput());
+
+		expect(plan.effectiveExecutionSurface?.id).toBe('worker_builder');
+	});
 });

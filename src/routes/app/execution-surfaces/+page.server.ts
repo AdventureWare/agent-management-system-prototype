@@ -10,7 +10,7 @@ import {
 	loadControlPlane,
 	parseExecutionSurfaceLocation,
 	parseExecutionSurfaceStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'starting', 'running']);
@@ -139,23 +139,26 @@ export const actions: Actions = {
 			});
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			executionSurfaces: [
-				createExecutionSurface({
-					name,
-					providerId,
-					supportedRoleIds,
-					location,
-					status,
-					note,
-					capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 1,
-					tags,
-					skills,
-					maxConcurrentRuns
-				}),
-				...data.executionSurfaces
-			]
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				executionSurfaces: [
+					createExecutionSurface({
+						name,
+						providerId,
+						supportedRoleIds,
+						location,
+						status,
+						note,
+						capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 1,
+						tags,
+						skills,
+						maxConcurrentRuns
+					}),
+					...data.executionSurfaces
+				]
+			},
+			changedCollections: ['executionSurfaces']
 		}));
 
 		return { ok: true, successAction: 'createExecutionSurface' };
@@ -170,13 +173,16 @@ export const actions: Actions = {
 			return fail(400, { message: 'Execution surface ID is required.' });
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			executionSurfaces: data.executionSurfaces.map((executionSurface) =>
-				executionSurface.id === executionSurfaceId
-					? { ...executionSurface, status, lastSeenAt: new Date().toISOString() }
-					: executionSurface
-			)
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				executionSurfaces: data.executionSurfaces.map((executionSurface) =>
+					executionSurface.id === executionSurfaceId
+						? { ...executionSurface, status, lastSeenAt: new Date().toISOString() }
+						: executionSurface
+				)
+			},
+			changedCollections: ['executionSurfaces']
 		}));
 
 		return { ok: true };

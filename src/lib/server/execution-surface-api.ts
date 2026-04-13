@@ -20,16 +20,36 @@ import type {
 } from '$lib/types/control-plane';
 
 export type PublicExecutionSurface = Omit<ExecutionSurface, 'authTokenHash'>;
+export type ExecutionSurfaceWorkloadState = 'idle' | 'available' | 'saturated' | 'offline';
+export type ExecutionSurfaceWorkload = {
+	assignmentLimit: number;
+	assignedOpenTaskCount: number;
+	availableAssignmentCapacity: number;
+	canTakeAdditionalAssignment: boolean;
+	concurrencyLimit: number;
+	activeRunCount: number;
+	availableRunCapacity: number;
+	canTakeAdditionalRun: boolean;
+	workloadState: ExecutionSurfaceWorkloadState;
+};
 export type ExecutionSurfaceTaskFit = {
 	executionSurfaceId: string;
 	executionSurfaceName: string;
 	roleId: string;
 	providerId: string;
 	status: ExecutionSurfaceStatus;
+	workloadState: ExecutionSurfaceWorkloadState;
 	eligible: boolean;
+	matchingRequirements: boolean;
 	exactRoleMatch: boolean;
+	assignmentLimit: number;
 	assignedOpenTaskCount: number;
+	projectedAssignedOpenTaskCount: number;
+	availableAssignmentCapacity: number;
+	withinAssignmentLimit: boolean;
+	concurrencyLimit: number;
 	activeRunCount: number;
+	projectedActiveRunCount: number;
 	availableRunCapacity: number;
 	withinConcurrencyLimit: boolean;
 	missingCapabilityNames: string[];
@@ -133,6 +153,10 @@ function getExecutionSurfaceAssignedOpenTaskCount(
 	).length;
 }
 
+function getExecutionSurfaceEffectiveAssignmentLimit(executionSurface: ExecutionSurface) {
+	return Math.max(1, executionSurface.capacity);
+}
+
 function getExecutionSurfaceEffectiveConcurrencyLimit(executionSurface: ExecutionSurface) {
 	const configuredLimit =
 		typeof executionSurface.maxConcurrentRuns === 'number' &&
@@ -154,16 +178,85 @@ function getExecutionSurfaceActiveRunCount(
 	).length;
 }
 
-function getExecutionSurfaceStatusRank(status: ExecutionSurfaceStatus) {
-	switch (status) {
+function hasTaskActiveRunOnExecutionSurface(
+	data: ControlPlaneData,
+	executionSurfaceId: string,
+	taskId: string
+) {
+	return data.runs.some(
+		(run) =>
+			run.executionSurfaceId === executionSurfaceId &&
+			run.taskId === taskId &&
+			(run.status === 'queued' || run.status === 'starting' || run.status === 'running')
+	);
+}
+
+function getExecutionSurfaceWorkloadState(input: {
+	status: ExecutionSurfaceStatus;
+	assignedOpenTaskCount: number;
+	activeRunCount: number;
+	canTakeAdditionalAssignment: boolean;
+	canTakeAdditionalRun: boolean;
+}): ExecutionSurfaceWorkloadState {
+	if (input.status === 'offline') {
+		return 'offline';
+	}
+
+	if (!input.canTakeAdditionalAssignment || !input.canTakeAdditionalRun) {
+		return 'saturated';
+	}
+
+	if (input.status === 'idle' && input.assignedOpenTaskCount === 0 && input.activeRunCount === 0) {
+		return 'idle';
+	}
+
+	return 'available';
+}
+
+function getExecutionSurfaceWorkloadStateRank(state: ExecutionSurfaceWorkloadState) {
+	switch (state) {
 		case 'idle':
 			return 0;
-		case 'busy':
+		case 'available':
 			return 1;
+		case 'saturated':
+			return 2;
 		case 'offline':
 		default:
-			return 2;
+			return 3;
 	}
+}
+
+export function describeExecutionSurfaceWorkload(
+	data: ControlPlaneData,
+	executionSurface: ExecutionSurface
+): ExecutionSurfaceWorkload {
+	const assignmentLimit = getExecutionSurfaceEffectiveAssignmentLimit(executionSurface);
+	const assignedOpenTaskCount = getExecutionSurfaceAssignedOpenTaskCount(data, executionSurface);
+	const concurrencyLimit = getExecutionSurfaceEffectiveConcurrencyLimit(executionSurface);
+	const activeRunCount = getExecutionSurfaceActiveRunCount(data, executionSurface);
+	const availableAssignmentCapacity = Math.max(0, assignmentLimit - assignedOpenTaskCount);
+	const availableRunCapacity = Math.max(0, concurrencyLimit - activeRunCount);
+	const canTakeAdditionalAssignment = assignedOpenTaskCount < assignmentLimit;
+	const canTakeAdditionalRun = activeRunCount < concurrencyLimit;
+
+	return {
+		assignmentLimit,
+		assignedOpenTaskCount,
+		availableAssignmentCapacity,
+		canTakeAdditionalAssignment,
+		concurrencyLimit,
+		activeRunCount,
+		availableRunCapacity,
+		canTakeAdditionalRun,
+		workloadState: getExecutionSurfaceWorkloadState({
+			status: executionSurface.status,
+			assignedOpenTaskCount,
+			activeRunCount,
+			canTakeAdditionalAssignment,
+			canTakeAdditionalRun
+		})
+	};
 }
 
 export function describeExecutionSurfaceTaskFit(
@@ -179,15 +272,29 @@ export function describeExecutionSurfaceTaskFit(
 		supportedRoleIds.includes(task.desiredRoleId);
 	const capabilityKeys = getExecutionSurfaceCapabilityKeys(data, executionSurface);
 	const toolKeys = getExecutionSurfaceToolKeys(data, executionSurface);
-	const activeRunCount = getExecutionSurfaceActiveRunCount(data, executionSurface);
-	const concurrencyLimit = getExecutionSurfaceEffectiveConcurrencyLimit(executionSurface);
-	const withinConcurrencyLimit = activeRunCount < concurrencyLimit;
+	const workload = describeExecutionSurfaceWorkload(data, executionSurface);
 	const missingCapabilityNames = (task.requiredCapabilityNames ?? []).filter(
 		(name) => !capabilityKeys.has(normalizeExecutionRequirementName(name))
 	);
 	const missingToolNames = (task.requiredToolNames ?? []).filter(
 		(name) => !toolKeys.has(normalizeExecutionRequirementName(name))
 	);
+	const matchingRequirements =
+		roleEligible && missingCapabilityNames.length === 0 && missingToolNames.length === 0;
+	const isCurrentlyAssignedOpenTask =
+		task.assigneeExecutionSurfaceId === executionSurface.id && task.status !== 'done';
+	const isCurrentlyActiveTask = hasTaskActiveRunOnExecutionSurface(
+		data,
+		executionSurface.id,
+		task.id
+	);
+	const projectedAssignedOpenTaskCount =
+		workload.assignedOpenTaskCount +
+		(isCurrentlyAssignedOpenTask || task.status === 'done' ? 0 : 1);
+	const withinAssignmentLimit = projectedAssignedOpenTaskCount <= workload.assignmentLimit;
+	const projectedActiveRunCount =
+		workload.activeRunCount + (isCurrentlyActiveTask || task.status === 'done' ? 0 : 1);
+	const withinConcurrencyLimit = projectedActiveRunCount <= workload.concurrencyLimit;
 
 	return {
 		executionSurfaceId: executionSurface.id,
@@ -195,15 +302,23 @@ export function describeExecutionSurfaceTaskFit(
 		roleId: supportedRoleIds[0] ?? '',
 		providerId: executionSurface.providerId,
 		status: executionSurface.status,
+		workloadState: workload.workloadState,
 		eligible:
-			roleEligible &&
-			withinConcurrencyLimit &&
-			missingCapabilityNames.length === 0 &&
-			missingToolNames.length === 0,
+			matchingRequirements &&
+			executionSurface.status !== 'offline' &&
+			withinAssignmentLimit &&
+			withinConcurrencyLimit,
+		matchingRequirements,
 		exactRoleMatch: hasDesiredRole && supportedRoleIds.includes(task.desiredRoleId),
-		assignedOpenTaskCount: getExecutionSurfaceAssignedOpenTaskCount(data, executionSurface),
-		activeRunCount,
-		availableRunCapacity: Math.max(0, concurrencyLimit - activeRunCount),
+		assignmentLimit: workload.assignmentLimit,
+		assignedOpenTaskCount: workload.assignedOpenTaskCount,
+		projectedAssignedOpenTaskCount,
+		availableAssignmentCapacity: workload.availableAssignmentCapacity,
+		withinAssignmentLimit,
+		concurrencyLimit: workload.concurrencyLimit,
+		activeRunCount: workload.activeRunCount,
+		projectedActiveRunCount,
+		availableRunCapacity: workload.availableRunCapacity,
 		withinConcurrencyLimit,
 		missingCapabilityNames,
 		missingToolNames
@@ -231,11 +346,21 @@ export function getExecutionSurfaceAssignmentSuggestions(data: ControlPlaneData,
 			}
 
 			if (
-				getExecutionSurfaceStatusRank(left.status) !== getExecutionSurfaceStatusRank(right.status)
+				getExecutionSurfaceWorkloadStateRank(left.workloadState) !==
+				getExecutionSurfaceWorkloadStateRank(right.workloadState)
 			) {
 				return (
-					getExecutionSurfaceStatusRank(left.status) - getExecutionSurfaceStatusRank(right.status)
+					getExecutionSurfaceWorkloadStateRank(left.workloadState) -
+					getExecutionSurfaceWorkloadStateRank(right.workloadState)
 				);
+			}
+
+			if (left.availableAssignmentCapacity !== right.availableAssignmentCapacity) {
+				return right.availableAssignmentCapacity - left.availableAssignmentCapacity;
+			}
+
+			if (left.availableRunCapacity !== right.availableRunCapacity) {
+				return right.availableRunCapacity - left.availableRunCapacity;
 			}
 
 			if (left.assignedOpenTaskCount !== right.assignedOpenTaskCount) {
@@ -352,6 +477,10 @@ export function claimTaskForExecutionSurface(
 	}
 
 	const fit = describeExecutionSurfaceTaskFit(data, executionSurface, task);
+
+	if (!fit.withinAssignmentLimit) {
+		throw error(409, 'ExecutionSurface is already at its task capacity.');
+	}
 
 	if (!fit.withinConcurrencyLimit) {
 		throw error(409, 'ExecutionSurface is already at its concurrency limit.');

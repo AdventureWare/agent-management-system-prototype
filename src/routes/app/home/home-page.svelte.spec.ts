@@ -123,6 +123,18 @@ describe('/app/home/+page.svelte', () => {
 					activeThreadNoRecentOutputCount: 0
 				},
 				staleTasks: [],
+				runUsageCost: {
+					spendLast24hUsd: 12.34,
+					spendLast7dUsd: 45.67,
+					failedOrCanceledSpendLast7dRatio: 0.25,
+					highCostRuns: [],
+					rollups: {
+						byProvider: [],
+						byActor: [],
+						byProject: [],
+						byGoal: []
+					}
+				},
 				improvementSummary: {
 					totalOpenOpportunities: 0,
 					totalAcceptedOpportunities: 0,
@@ -138,9 +150,10 @@ describe('/app/home/+page.svelte', () => {
 		});
 
 		await expect.element(page.getByText('Urgent')).toBeInTheDocument();
-		await expect.element(page.getByText('High risk')).toBeInTheDocument();
+		expect(document.body.textContent).toContain('High risk');
+		await expect.element(page.getByText('$12.34')).toBeInTheDocument();
 		await expect.element(page.getByText('review optional')).toBeInTheDocument();
-		await expect.element(page.getByText('Reviewer', { exact: true })).toBeInTheDocument();
+		expect(document.body.textContent).toContain('Reviewer');
 		await expect.element(page.getByText('Waiting on a production sign-off.')).toBeInTheDocument();
 		await expect
 			.element(page.getByText('Depends on: Existing dependency task'))

@@ -6,7 +6,7 @@ import {
 	createPlanningSession,
 	formatRelativeTime,
 	loadControlPlane,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import { PLANNING_CONFIDENCE_OPTIONS } from '$lib/types/control-plane';
 
@@ -148,32 +148,35 @@ export const actions: Actions = {
 		});
 		let goalUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			goals: data.goals.map((goal) => {
-				if (goal.id !== goalId) {
-					return goal;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				goals: data.goals.map((goal) => {
+					if (goal.id !== goalId) {
+						return goal;
+					}
 
-				goalUpdated = true;
-				return {
-					...goal,
-					targetDate: nextTargetDate,
-					planningPriority: nextPlanningPriority,
-					confidence: nextConfidence
-				};
-			}),
-			decisions: decisionSummary
-				? [
-						createDecision({
-							goalId,
-							decisionType: 'goal_plan_updated',
-							summary: decisionSummary,
-							createdAt: now
-						}),
-						...(data.decisions ?? [])
-					]
-				: (data.decisions ?? [])
+					goalUpdated = true;
+					return {
+						...goal,
+						targetDate: nextTargetDate,
+						planningPriority: nextPlanningPriority,
+						confidence: nextConfidence
+					};
+				}),
+				decisions: decisionSummary
+					? [
+							createDecision({
+								goalId,
+								decisionType: 'goal_plan_updated',
+								summary: decisionSummary,
+								createdAt: now
+							}),
+							...(data.decisions ?? [])
+						]
+					: (data.decisions ?? [])
+			},
+			changedCollections: decisionSummary ? ['goals', 'decisions'] : ['goals']
 		}));
 
 		if (!goalUpdated) {
@@ -241,9 +244,12 @@ export const actions: Actions = {
 			createdAt
 		});
 
-		await updateControlPlane((data) => ({
-			...data,
-			planningSessions: [session, ...(data.planningSessions ?? [])]
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				planningSessions: [session, ...(data.planningSessions ?? [])]
+			},
+			changedCollections: ['planningSessions']
 		}));
 
 		return {

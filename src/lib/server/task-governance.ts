@@ -4,8 +4,8 @@ import {
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
-	updateControlPlane
 } from '$lib/server/control-plane';
+import { mutateTaskCollections } from '$lib/server/control-plane-repository';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
 import type { Run, Task } from '$lib/types/control-plane';
 import type { TaskStaleSignalKey, TaskWorkItem } from '$lib/types/task-work-item';
@@ -272,58 +272,80 @@ export async function loadGovernanceInboxData(): Promise<GovernanceInboxData> {
 export async function approveTaskReview(taskId: string, sourceLabel: string) {
 	const current = await loadControlPlane();
 	const openReview = getOpenReviewForTask(current, taskId);
-	const task = current.tasks.find((candidate) => candidate.id === taskId);
 
-	if (!openReview || !task) {
+	if (!openReview || !current.tasks.some((candidate) => candidate.id === taskId)) {
 		throw new TaskGovernanceActionError(404, 'No open review found for this task.');
 	}
 
-	const pendingApproval = getPendingApprovalForTask(current, taskId);
-	const shouldCloseTask = !pendingApproval;
 	const now = new Date().toISOString();
 
-	await updateControlPlane((data) => ({
-		...data,
-		reviews: data.reviews.map((review) =>
-			review.id === openReview.id
-				? {
-						...review,
-						status: 'approved',
-						updatedAt: now,
-						resolvedAt: now,
-						summary: `Review approved from the ${sourceLabel}.`
-					}
-				: review
-		),
-		runs: shouldCloseTask
-			? data.runs.map(
-					updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after review approval.')
-				)
-			: data.runs,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						status: shouldCloseTask ? 'done' : candidate.status,
-						blockedReason: '',
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
-			createDecision({
-				taskId,
-				runId: task.latestRunId,
-				reviewId: openReview.id,
-				decisionType: 'review_approved',
-				summary: shouldCloseTask
-					? 'Approved the open review and closed the task.'
-					: 'Approved the open review.',
-				createdAt: now
-			}),
-			...(data.decisions ?? [])
-		]
-	}));
+	const updatedTask = await mutateTaskCollections({
+		taskId,
+		mutate: (taskFromData, data) => {
+			const reviewFromData = getOpenReviewForTask(data, taskId);
+			const pendingApprovalFromData = getPendingApprovalForTask(data, taskId);
+
+			if (!reviewFromData) {
+				throw new TaskGovernanceActionError(404, 'No open review found for this task.');
+			}
+
+			const shouldCloseTask = !pendingApprovalFromData;
+
+			return {
+				data: {
+					...data,
+					reviews: data.reviews.map((review) =>
+						review.id === reviewFromData.id
+							? {
+									...review,
+									status: 'approved',
+									updatedAt: now,
+									resolvedAt: now,
+									summary: `Review approved from the ${sourceLabel}.`
+								}
+							: review
+					),
+					runs: shouldCloseTask
+						? data.runs.map(
+								updateLatestRunForTask(
+									taskFromData.latestRunId,
+									'done',
+									'Task closed after review approval.'
+								)
+							)
+						: data.runs,
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === taskId
+							? {
+									...candidate,
+									status: shouldCloseTask ? 'done' : candidate.status,
+									blockedReason: '',
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId,
+							runId: taskFromData.latestRunId,
+							reviewId: reviewFromData.id,
+							decisionType: 'review_approved',
+							summary: shouldCloseTask
+								? 'Approved the open review and closed the task.'
+								: 'Approved the open review.',
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['reviews', 'runs', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask) {
+		throw new TaskGovernanceActionError(404, 'No open review found for this task.');
+	}
 
 	return {
 		ok: true,
@@ -335,53 +357,75 @@ export async function approveTaskReview(taskId: string, sourceLabel: string) {
 export async function requestTaskReviewChanges(taskId: string, sourceLabel: string) {
 	const current = await loadControlPlane();
 	const openReview = getOpenReviewForTask(current, taskId);
-	const task = current.tasks.find((candidate) => candidate.id === taskId);
 
-	if (!openReview || !task) {
+	if (!openReview || !current.tasks.some((candidate) => candidate.id === taskId)) {
 		throw new TaskGovernanceActionError(404, 'No open review found for this task.');
 	}
 
 	const now = new Date().toISOString();
 	const blockedReason = 'Changes requested during review.';
 
-	await updateControlPlane((data) => ({
-		...data,
-		reviews: data.reviews.map((review) =>
-			review.id === openReview.id
-				? {
-						...review,
-						status: 'changes_requested',
-						updatedAt: now,
-						resolvedAt: now,
-						summary: `${blockedReason} Sent from the ${sourceLabel}.`
-					}
-				: review
-		),
-		runs: data.runs.map(
-			updateLatestRunForTask(task.latestRunId, 'blocked', blockedReason, blockedReason)
-		),
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						status: 'blocked',
-						blockedReason,
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
-			createDecision({
-				taskId,
-				runId: task.latestRunId,
-				reviewId: openReview.id,
-				decisionType: 'review_changes_requested',
-				summary: blockedReason,
-				createdAt: now
-			}),
-			...(data.decisions ?? [])
-		]
-	}));
+	const updatedTask = await mutateTaskCollections({
+		taskId,
+		mutate: (taskFromData, data) => {
+			const reviewFromData = getOpenReviewForTask(data, taskId);
+
+			if (!reviewFromData) {
+				throw new TaskGovernanceActionError(404, 'No open review found for this task.');
+			}
+
+			return {
+				data: {
+					...data,
+					reviews: data.reviews.map((review) =>
+						review.id === reviewFromData.id
+							? {
+									...review,
+									status: 'changes_requested',
+									updatedAt: now,
+									resolvedAt: now,
+									summary: `${blockedReason} Sent from the ${sourceLabel}.`
+								}
+							: review
+					),
+					runs: data.runs.map(
+						updateLatestRunForTask(
+							taskFromData.latestRunId,
+							'blocked',
+							blockedReason,
+							blockedReason
+						)
+					),
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === taskId
+							? {
+									...candidate,
+									status: 'blocked',
+									blockedReason,
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId,
+							runId: taskFromData.latestRunId,
+							reviewId: reviewFromData.id,
+							decisionType: 'review_changes_requested',
+							summary: blockedReason,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['reviews', 'runs', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask) {
+		throw new TaskGovernanceActionError(404, 'No open review found for this task.');
+	}
 
 	return {
 		ok: true,
@@ -393,58 +437,81 @@ export async function requestTaskReviewChanges(taskId: string, sourceLabel: stri
 export async function approveTaskApproval(taskId: string, sourceLabel: string) {
 	const current = await loadControlPlane();
 	const pendingApproval = getPendingApprovalForTask(current, taskId);
-	const task = current.tasks.find((candidate) => candidate.id === taskId);
 
-	if (!pendingApproval || !task) {
+	if (!pendingApproval || !current.tasks.some((candidate) => candidate.id === taskId)) {
 		throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
 	}
 
 	const now = new Date().toISOString();
-	const openReview = getOpenReviewForTask(current, taskId);
-	const shouldCloseTask = pendingApproval.mode === 'before_complete' && !openReview;
 
-	await updateControlPlane((data) => ({
-		...data,
-		approvals: data.approvals.map((approval) =>
-			approval.id === pendingApproval.id
-				? {
-						...approval,
-						status: 'approved',
-						updatedAt: now,
-						resolvedAt: now,
-						summary: `Approved ${approval.mode} gate from the ${sourceLabel}.`
-					}
-				: approval
-		),
-		runs: shouldCloseTask
-			? data.runs.map(
-					updateLatestRunForTask(task.latestRunId, 'done', 'Task closed after approval.')
-				)
-			: data.runs,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						status: shouldCloseTask ? 'done' : candidate.status,
-						blockedReason: '',
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
-			createDecision({
-				taskId,
-				runId: task.latestRunId,
-				approvalId: pendingApproval.id,
-				decisionType: 'approval_approved',
-				summary: shouldCloseTask
-					? `Approved the ${pendingApproval.mode} gate and closed the task.`
-					: `Approved the ${pendingApproval.mode} gate.`,
-				createdAt: now
-			}),
-			...(data.decisions ?? [])
-		]
-	}));
+	const updatedTask = await mutateTaskCollections({
+		taskId,
+		mutate: (taskFromData, data) => {
+			const approvalFromData = getPendingApprovalForTask(data, taskId);
+			const openReviewFromData = getOpenReviewForTask(data, taskId);
+
+			if (!approvalFromData) {
+				throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
+			}
+
+			const shouldCloseTask =
+				approvalFromData.mode === 'before_complete' && !openReviewFromData;
+
+			return {
+				data: {
+					...data,
+					approvals: data.approvals.map((approval) =>
+						approval.id === approvalFromData.id
+							? {
+									...approval,
+									status: 'approved',
+									updatedAt: now,
+									resolvedAt: now,
+									summary: `Approved ${approval.mode} gate from the ${sourceLabel}.`
+								}
+							: approval
+					),
+					runs: shouldCloseTask
+						? data.runs.map(
+								updateLatestRunForTask(
+									taskFromData.latestRunId,
+									'done',
+									'Task closed after approval.'
+								)
+							)
+						: data.runs,
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === taskId
+							? {
+									...candidate,
+									status: shouldCloseTask ? 'done' : candidate.status,
+									blockedReason: '',
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId,
+							runId: taskFromData.latestRunId,
+							approvalId: approvalFromData.id,
+							decisionType: 'approval_approved',
+							summary: shouldCloseTask
+								? `Approved the ${approvalFromData.mode} gate and closed the task.`
+								: `Approved the ${approvalFromData.mode} gate.`,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['approvals', 'runs', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask) {
+		throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
+	}
 
 	return {
 		ok: true,
@@ -456,53 +523,75 @@ export async function approveTaskApproval(taskId: string, sourceLabel: string) {
 export async function rejectTaskApproval(taskId: string) {
 	const current = await loadControlPlane();
 	const pendingApproval = getPendingApprovalForTask(current, taskId);
-	const task = current.tasks.find((candidate) => candidate.id === taskId);
 
-	if (!pendingApproval || !task) {
+	if (!pendingApproval || !current.tasks.some((candidate) => candidate.id === taskId)) {
 		throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
 	}
 
 	const now = new Date().toISOString();
 	const blockedReason = `${pendingApproval.mode} approval rejected.`;
 
-	await updateControlPlane((data) => ({
-		...data,
-		approvals: data.approvals.map((approval) =>
-			approval.id === pendingApproval.id
-				? {
-						...approval,
-						status: 'rejected',
-						updatedAt: now,
-						resolvedAt: now,
-						summary: blockedReason
-					}
-				: approval
-		),
-		runs: data.runs.map(
-			updateLatestRunForTask(task.latestRunId, 'blocked', blockedReason, blockedReason)
-		),
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						status: 'blocked',
-						blockedReason,
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
-			createDecision({
-				taskId,
-				runId: task.latestRunId,
-				approvalId: pendingApproval.id,
-				decisionType: 'approval_rejected',
-				summary: blockedReason,
-				createdAt: now
-			}),
-			...(data.decisions ?? [])
-		]
-	}));
+	const updatedTask = await mutateTaskCollections({
+		taskId,
+		mutate: (taskFromData, data) => {
+			const approvalFromData = getPendingApprovalForTask(data, taskId);
+
+			if (!approvalFromData) {
+				throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
+			}
+
+			return {
+				data: {
+					...data,
+					approvals: data.approvals.map((approval) =>
+						approval.id === approvalFromData.id
+							? {
+									...approval,
+									status: 'rejected',
+									updatedAt: now,
+									resolvedAt: now,
+									summary: blockedReason
+								}
+							: approval
+					),
+					runs: data.runs.map(
+						updateLatestRunForTask(
+							taskFromData.latestRunId,
+							'blocked',
+							blockedReason,
+							blockedReason
+						)
+					),
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === taskId
+							? {
+									...candidate,
+									status: 'blocked',
+									blockedReason,
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId,
+							runId: taskFromData.latestRunId,
+							approvalId: approvalFromData.id,
+							decisionType: 'approval_rejected',
+							summary: blockedReason,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['approvals', 'runs', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask) {
+		throw new TaskGovernanceActionError(404, 'No pending approval found for this task.');
+	}
 
 	return {
 		ok: true,

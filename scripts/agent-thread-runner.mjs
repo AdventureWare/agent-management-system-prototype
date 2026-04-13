@@ -21,6 +21,38 @@ function parseThreadId(line) {
 	}
 }
 
+function parseTurnUsage(line) {
+	try {
+		const parsed = JSON.parse(line);
+
+		if (parsed.type !== 'turn.completed' || !parsed.usage || typeof parsed.usage !== 'object') {
+			return null;
+		}
+
+		const inputTokens =
+			typeof parsed.usage.input_tokens === 'number' ? parsed.usage.input_tokens : null;
+		const cachedInputTokens =
+			typeof parsed.usage.cached_input_tokens === 'number'
+				? parsed.usage.cached_input_tokens
+				: null;
+		const outputTokens =
+			typeof parsed.usage.output_tokens === 'number' ? parsed.usage.output_tokens : null;
+
+		return {
+			inputTokens,
+			cachedInputTokens,
+			outputTokens,
+			uncachedInputTokens:
+				typeof inputTokens === 'number'
+					? Math.max(inputTokens - (cachedInputTokens ?? 0), 0)
+					: null,
+			usageCapturedAt: new Date().toISOString()
+		};
+	} catch {
+		return null;
+	}
+}
+
 async function writeState(statePath, patch) {
 	let current = {
 		status: 'queued',
@@ -76,7 +108,9 @@ let currentSummary = {
 	state: currentState,
 	lastMessage: null,
 	logTail: [],
-	activityAt: currentState.startedAt ?? new Date().toISOString()
+	activityAt: currentState.startedAt ?? new Date().toISOString(),
+	modelUsed: config.model ?? null,
+	usage: null
 };
 await writeSummary(config.summaryPath, currentSummary);
 
@@ -126,13 +160,15 @@ function consumeBuffer(buffer, chunk) {
 		logStream.write(line + '\n');
 
 		const threadId = parseThreadId(line);
+		const turnUsage = parseTurnUsage(line);
 		const activityAt = new Date().toISOString();
 		const nextLogTail = [...currentSummary.logTail, line].slice(-SUMMARY_LOG_LINE_LIMIT);
 
 		currentSummary = {
 			...currentSummary,
 			logTail: nextLogTail,
-			activityAt
+			activityAt,
+			...(turnUsage ? { usage: turnUsage } : {})
 		};
 
 		if (threadId) {

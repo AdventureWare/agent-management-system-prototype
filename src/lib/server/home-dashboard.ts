@@ -1,6 +1,7 @@
 import { listAgentThreads, summarizeAgentThreads } from '$lib/server/agent-threads';
-import { loadControlPlane, summarizeControlPlane } from '$lib/server/control-plane';
+import { summarizeControlPlane } from '$lib/server/control-plane';
 import { loadSelfImprovementSnapshot } from '$lib/server/self-improvement-store';
+import { buildRunUsageCostSummary, loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
 import {
 	buildTaskWorkItems,
 	selectStaleTaskWorkItems,
@@ -9,7 +10,7 @@ import {
 import type { HomeDashboardData } from '$lib/types/home-dashboard';
 
 export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
-	const controlPlanePromise = loadControlPlane();
+	const controlPlanePromise = loadControlPlaneWithRunTelemetry();
 	const [controlPlane, threads] = await Promise.all([
 		controlPlanePromise,
 		listAgentThreads({ controlPlane: controlPlanePromise, includeCategorization: false })
@@ -39,6 +40,7 @@ export async function loadHomeDashboardData(): Promise<HomeDashboardData> {
 		threads,
 		threadSummary: summarizeAgentThreads(threads),
 		controlSummary: summarizeControlPlane(controlPlane),
+		runUsageCost: buildRunUsageCostSummary(controlPlane),
 		taskAttention,
 		staleTaskSummary: summarizeTaskFreshness(taskWorkItems),
 		staleTasks: selectStaleTaskWorkItems(dashboardTasks),

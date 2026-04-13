@@ -14,6 +14,8 @@
 
 	let { data, form } = $props();
 	const CREATE_PROVIDER_DRAFT_KEY = 'ams:create-provider';
+	const providerPricingPlaceholder =
+		'[{"model":"gpt-5.4","inputUsdPer1M":1.25,"cachedInputUsdPer1M":0.125,"outputUsdPer1M":10,"pricingVersion":"2026-04-10","updatedAt":"2026-04-10T00:00:00.000Z"}]';
 
 	let createProviderDraftReady = $state(false);
 	let providerName = $state('');
@@ -28,6 +30,7 @@
 	let providerBaseUrl = $state('');
 	let providerEnvVars = $state('');
 	let providerCapabilities = $state('');
+	let providerModelPricing = $state('');
 	let providerNotes = $state('');
 	let providerEnabled = $state(true);
 	let query = $state('');
@@ -128,6 +131,7 @@
 			baseUrl: string;
 			envVars: string;
 			capabilities: string;
+			modelPricing: string;
 			notes: string;
 			enabled: boolean;
 		}>(CREATE_PROVIDER_DRAFT_KEY);
@@ -146,6 +150,7 @@
 			providerBaseUrl = savedDraft.baseUrl ?? '';
 			providerEnvVars = savedDraft.envVars ?? '';
 			providerCapabilities = savedDraft.capabilities ?? '';
+			providerModelPricing = savedDraft.modelPricing ?? '';
 			providerNotes = savedDraft.notes ?? '';
 			providerEnabled = savedDraft.enabled ?? true;
 			isCreateModalOpen = true;
@@ -179,6 +184,7 @@
 			baseUrl: providerBaseUrl,
 			envVars: providerEnvVars,
 			capabilities: providerCapabilities,
+			modelPricing: providerModelPricing,
 			notes: providerNotes,
 			enabled: providerEnabled === true ? undefined : providerEnabled
 		});
@@ -481,6 +487,20 @@
 						/>
 					</label>
 				</div>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Model pricing JSON</span>
+					<textarea
+						bind:value={providerModelPricing}
+						class="textarea min-h-32 font-mono text-sm text-white placeholder:text-slate-500"
+						name="modelPricing"
+						placeholder={providerPricingPlaceholder}
+					></textarea>
+					<p class="mt-2 text-xs text-slate-500">
+						Optional rough pricing map keyed by model. Costs stay unavailable until a run has both
+						usage and a matching model price.
+					</p>
+				</label>
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>

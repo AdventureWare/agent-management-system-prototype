@@ -11,7 +11,7 @@ import {
 	goalLinksProject,
 	loadControlPlane,
 	wouldCreateProjectCycle,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 function readProjectThreadSandbox(value: FormDataEntryValue | null) {
@@ -119,23 +119,26 @@ export const actions: Actions = {
 			}
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			projects: [
-				createProject({
-					name,
-					summary,
-					parentProjectId: parentProjectId || null,
-					projectRootFolder,
-					defaultArtifactRoot,
-					defaultRepoPath,
-					defaultRepoUrl,
-					defaultBranch,
-					additionalWritableRoots,
-					defaultThreadSandbox
-				}),
-				...data.projects
-			]
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				projects: [
+					createProject({
+						name,
+						summary,
+						parentProjectId: parentProjectId || null,
+						projectRootFolder,
+						defaultArtifactRoot,
+						defaultRepoPath,
+						defaultRepoUrl,
+						defaultBranch,
+						additionalWritableRoots,
+						defaultThreadSandbox
+					}),
+					...data.projects
+				]
+			},
+			changedCollections: ['projects']
 		}));
 
 		return { ok: true, successAction: 'createProject' };
@@ -168,20 +171,23 @@ export const actions: Actions = {
 
 		let projectUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			projects: data.projects.map((project) => {
-				if (project.id !== projectId) {
-					return project;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				projects: data.projects.map((project) => {
+					if (project.id !== projectId) {
+						return project;
+					}
 
-				projectUpdated = true;
-				return {
-					...project,
-					...projectUpdates,
-					parentProjectId: projectUpdates.parentProjectId || null
-				};
-			})
+					projectUpdated = true;
+					return {
+						...project,
+						...projectUpdates,
+						parentProjectId: projectUpdates.parentProjectId || null
+					};
+				})
+			},
+			changedCollections: ['projects']
 		}));
 
 		if (!projectUpdated) {

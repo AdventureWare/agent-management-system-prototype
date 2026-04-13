@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import { formatRunModelLabel, formatRunTokenSummary, formatUsd } from '$lib/run-usage';
 	import { getTaskThreadReviewHref } from '$lib/task-thread-context';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import {
@@ -85,6 +86,12 @@
 		providerName: string;
 		agentThreadId: string | null;
 		threadId: string | null;
+		modelUsed?: string | null;
+		estimatedCostUsd?: number | null;
+		costSource?: string;
+		inputTokens?: number | null;
+		cachedInputTokens?: number | null;
+		outputTokens?: number | null;
 	};
 
 	type LaunchContextView = {
@@ -227,6 +234,19 @@
 		return value ? yesLabel : noLabel;
 	}
 
+	let taskSpendUsd = $derived(
+		relatedRuns.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
+	);
+	let attentionSpendUsd = $derived(
+		relatedRuns
+			.filter((run) => ['failed', 'blocked', 'canceled'].includes(run.status))
+			.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
+	);
+	let lastPricedRun = $derived(
+		relatedRuns.find((run) => run.estimatedCostUsd !== null && run.estimatedCostUsd !== undefined) ??
+			null
+	);
+
 	function taskAction(actionName: string) {
 		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
 	}
@@ -241,6 +261,55 @@
 		tone="sky"
 		bodyClass="divide-y divide-slate-800/90 p-0"
 	>
+		<div class="px-6 py-6">
+			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Cost signals</p>
+			<h3 class="mt-2 text-xl font-semibold text-white">What this task has spent so far</h3>
+			<p class="mt-2 max-w-2xl text-sm text-slate-400">
+				These are rough estimates derived from provider-reported usage and configured model pricing.
+			</p>
+
+			<div class="mt-5 grid gap-4 md:grid-cols-3">
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Task-to-date spend
+					</p>
+					<p class="mt-3 text-2xl font-semibold text-white">{formatUsd(taskSpendUsd)}</p>
+					<p class="mt-2 text-sm text-slate-400">{relatedRuns.length} runs recorded</p>
+				</div>
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Last priced run
+					</p>
+					<p class="mt-3 text-2xl font-semibold text-white">
+						{formatUsd(lastPricedRun?.estimatedCostUsd ?? null)}
+					</p>
+					<p class="mt-2 text-sm text-slate-400">
+						{lastPricedRun
+							? `${formatRunModelLabel(lastPricedRun)} · ${lastPricedRun.updatedAtLabel}`
+							: 'No priced run yet'}
+					</p>
+				</div>
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Attention spend
+					</p>
+					<p class="mt-3 text-2xl font-semibold text-white">{formatUsd(attentionSpendUsd)}</p>
+					<p class="mt-2 text-sm text-slate-400">
+						Failed, blocked, or canceled run cost tied to this task.
+					</p>
+				</div>
+			</div>
+
+			{#if attentionSpendUsd > 0}
+				<div class="mt-4 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-4">
+					<p class="text-sm font-medium text-amber-100">
+						This task has already burned {formatUsd(attentionSpendUsd)} on attention runs. Check
+						coverage gaps, model choice, or provider routing before retrying the same route.
+					</p>
+				</div>
+			{/if}
+		</div>
+
 		<div class="px-6 py-6">
 			<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
 				Launch preflight
@@ -933,6 +1002,29 @@
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Provider</p>
 									<p class="mt-2 text-sm text-white">{run.providerName}</p>
 								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Model and usage
+									</p>
+									<p class="mt-2 text-sm text-white">{formatRunModelLabel(run)}</p>
+									<p class="mt-1 text-xs text-slate-500">{formatRunTokenSummary(run)}</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Estimated cost
+									</p>
+									<p class="mt-2 text-sm text-white">{formatUsd(run.estimatedCostUsd ?? null)}</p>
+									<p class="mt-1 text-xs text-slate-500">
+										{run.costSource === 'configured_model_pricing'
+											? 'Usage and pricing captured'
+											: run.costSource === 'missing_pricing'
+												? 'Usage captured, pricing missing'
+												: 'Usage unavailable'}
+									</p>
+								</div>
+							</div>
+
+							<div class="mt-3 grid gap-3 sm:grid-cols-1">
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 										Thread record

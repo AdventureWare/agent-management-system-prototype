@@ -1,4 +1,5 @@
-import { createDecision, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import { createDecision, loadControlPlane } from '$lib/server/control-plane';
+import { updateTaskRecord } from '$lib/server/control-plane-repository';
 import { getAgentThread } from '$lib/server/agent-threads';
 import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
 
@@ -42,18 +43,18 @@ export async function attachTaskFile(taskId: string, form: FormData) {
 	});
 	const now = new Date().toISOString();
 
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						attachments: [nextAttachment, ...candidate.attachments],
-						updatedAt: now
-					}
-				: candidate
-		)
-	}));
+	const updatedTaskAfterAttach = await updateTaskRecord({
+		taskId,
+		update: (candidate) => ({
+			...candidate,
+			attachments: [nextAttachment, ...candidate.attachments],
+			updatedAt: now
+		})
+	});
+
+	if (!updatedTaskAfterAttach) {
+		throw new TaskDetailMutationActionError(404, 'Task not found.');
+	}
 
 	return {
 		ok: true,
@@ -82,20 +83,18 @@ export async function removeTaskAttachment(taskId: string, form: FormData) {
 
 	const now = new Date().toISOString();
 
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						attachments: candidate.attachments.filter(
-							(attachment) => attachment.id !== attachmentId
-						),
-						updatedAt: now
-					}
-				: candidate
-		)
-	}));
+	const updatedTaskAfterRemoval = await updateTaskRecord({
+		taskId,
+		update: (candidate) => ({
+			...candidate,
+			attachments: candidate.attachments.filter((attachment) => attachment.id !== attachmentId),
+			updatedAt: now
+		})
+	});
+
+	if (!updatedTaskAfterRemoval) {
+		throw new TaskDetailMutationActionError(404, 'Task not found.');
+	}
 
 	return {
 		ok: true,
@@ -137,27 +136,26 @@ export async function updateTaskThreadAssignment(taskId: string, form: FormData)
 		? `Updated task thread assignment to ${nextAgentThreadId}.`
 		: 'Cleared the task thread assignment.';
 
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						agentThreadId: nextAgentThreadId,
-						updatedAt: now
-					}
-				: candidate
-		),
-		decisions: [
+	const updatedTaskThread = await updateTaskRecord({
+		taskId,
+		update: (candidate) => ({
+			...candidate,
+			agentThreadId: nextAgentThreadId,
+			updatedAt: now
+		}),
+		prependDecisions: [
 			createDecision({
 				taskId,
 				decisionType: 'task_thread_updated',
 				summary: decisionSummary,
 				createdAt: now
-			}),
-			...(data.decisions ?? [])
+			})
 		]
-	}));
+	});
+
+	if (!updatedTaskThread) {
+		throw new TaskDetailMutationActionError(404, 'Task not found.');
+	}
 
 	return {
 		ok: true,

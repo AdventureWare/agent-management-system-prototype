@@ -12,7 +12,7 @@ import {
 	parseProviderAuthMode,
 	parseProviderKind,
 	parseProviderSetupStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 
@@ -24,6 +24,67 @@ function parseListField(value: FormDataEntryValue | null) {
 			.map((item) => item.trim())
 			.filter(Boolean) ?? []
 	);
+}
+
+function parseModelPricingField(value: FormDataEntryValue | null) {
+	const raw = value?.toString().trim() ?? '';
+
+	if (!raw) {
+		return [];
+	}
+
+	let parsed: unknown;
+
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		throw new Error('Model pricing must be valid JSON.');
+	}
+
+	if (!Array.isArray(parsed)) {
+		throw new Error('Model pricing must be a JSON array.');
+	}
+
+	return parsed.flatMap((candidate) => {
+		if (!candidate || typeof candidate !== 'object') {
+			return [];
+		}
+
+		const row = candidate as Record<string, unknown>;
+		const model = row.model?.toString().trim() ?? '';
+		const pricingVersion = row.pricingVersion?.toString().trim() ?? '';
+		const updatedAt = row.updatedAt?.toString().trim() ?? '';
+		const inputUsdPer1M = Number(row.inputUsdPer1M);
+		const cachedInputUsdPer1M = Number(row.cachedInputUsdPer1M);
+		const outputUsdPer1M = Number(row.outputUsdPer1M);
+
+		if (
+			!model ||
+			!pricingVersion ||
+			!updatedAt ||
+			!Number.isFinite(inputUsdPer1M) ||
+			!Number.isFinite(cachedInputUsdPer1M) ||
+			!Number.isFinite(outputUsdPer1M) ||
+			inputUsdPer1M < 0 ||
+			cachedInputUsdPer1M < 0 ||
+			outputUsdPer1M < 0
+		) {
+			throw new Error(
+				'Each model pricing row needs model, inputUsdPer1M, cachedInputUsdPer1M, outputUsdPer1M, pricingVersion, and updatedAt.'
+			);
+		}
+
+		return [
+			{
+				model,
+				inputUsdPer1M,
+				cachedInputUsdPer1M,
+				outputUsdPer1M,
+				pricingVersion,
+				updatedAt
+			}
+		];
+	});
 }
 
 function readProviderForm(form: FormData) {
@@ -40,6 +101,7 @@ function readProviderForm(form: FormData) {
 		launcher: form.get('launcher')?.toString().trim() ?? '',
 		envVars: parseListField(form.get('envVars')),
 		capabilities: parseListField(form.get('capabilities')),
+		modelPricing: parseModelPricingField(form.get('modelPricing')),
 		defaultThreadSandbox: parseAgentSandbox(
 			form.get('defaultThreadSandbox')?.toString(),
 			'workspace-write'
@@ -75,15 +137,27 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	createProvider: async ({ request }) => {
-		const provider = readProviderForm(await request.formData());
+		let provider;
+
+		try {
+			provider = readProviderForm(await request.formData());
+		} catch (error) {
+			return fail(400, {
+				message:
+					error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
+			});
+		}
 
 		if (!provider.name || !provider.service) {
 			return fail(400, { message: 'Provider name and service are required.' });
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			providers: [createProvider(provider), ...data.providers]
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				providers: [createProvider(provider), ...data.providers]
+			},
+			changedCollections: ['providers']
 		}));
 
 		return { ok: true, successAction: 'createProvider' };
@@ -92,7 +166,16 @@ export const actions: Actions = {
 	updateProvider: async ({ request }) => {
 		const form = await request.formData();
 		const providerId = form.get('providerId')?.toString().trim() ?? '';
-		const providerUpdates = readProviderForm(form);
+		let providerUpdates;
+
+		try {
+			providerUpdates = readProviderForm(form);
+		} catch (error) {
+			return fail(400, {
+				message:
+					error instanceof Error ? error.message : 'Provider pricing could not be parsed.'
+			});
+		}
 
 		if (!providerId) {
 			return fail(400, { message: 'Provider ID is required.' });
@@ -104,19 +187,22 @@ export const actions: Actions = {
 
 		let providerUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			providers: data.providers.map((provider) => {
-				if (provider.id !== providerId) {
-					return provider;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				providers: data.providers.map((provider) => {
+					if (provider.id !== providerId) {
+						return provider;
+					}
 
-				providerUpdated = true;
-				return {
-					...provider,
-					...providerUpdates
-				};
-			})
+					providerUpdated = true;
+					return {
+						...provider,
+						...providerUpdates
+					};
+				})
+			},
+			changedCollections: ['providers']
 		}));
 
 		if (!providerUpdated) {

@@ -110,7 +110,11 @@
 		roleName: string;
 		providerName: string;
 		status: string;
+		workloadState: 'idle' | 'available' | 'saturated' | 'offline';
+		assignmentLimit: number;
 		assignedOpenTaskCount: number;
+		availableAssignmentCapacity: number;
+		withinAssignmentLimit: boolean;
 		activeRunCount: number;
 		withinConcurrencyLimit: boolean;
 		availableRunCapacity: number;
@@ -546,13 +550,19 @@
 									</p>
 								</div>
 								<p class="text-xs text-slate-500">
-									{suggestion.assignedOpenTaskCount} open task(s) · {suggestion.activeRunCount}
-									active run(s)
+									{suggestion.assignedOpenTaskCount}/{suggestion.assignmentLimit} task slot(s) ·
+									{suggestion.activeRunCount} active run(s) · {suggestion.workloadState}
 								</p>
 							</div>
 
-							{#if !suggestion.withinConcurrencyLimit || suggestion.missingCapabilityNames.length > 0 || suggestion.missingToolNames.length > 0}
+							{#if !suggestion.withinAssignmentLimit || !suggestion.withinConcurrencyLimit || suggestion.missingCapabilityNames.length > 0 || suggestion.missingToolNames.length > 0}
 								<div class="mt-3 space-y-2 text-xs text-slate-300">
+									{#if !suggestion.withinAssignmentLimit}
+										<p>
+											At task capacity: {suggestion.assignedOpenTaskCount} open task(s),
+											{suggestion.availableAssignmentCapacity} slot(s) open.
+										</p>
+									{/if}
 									{#if !suggestion.withinConcurrencyLimit}
 										<p>
 											At concurrency limit: {suggestion.activeRunCount} active run(s),

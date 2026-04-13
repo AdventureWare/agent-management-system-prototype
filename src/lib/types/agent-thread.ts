@@ -147,6 +147,14 @@ export type AgentRunState = {
 	codexThreadId: string | null;
 };
 
+export type AgentRunUsage = {
+	inputTokens: number | null;
+	cachedInputTokens: number | null;
+	outputTokens: number | null;
+	uncachedInputTokens: number | null;
+	usageCapturedAt: string | null;
+};
+
 export type AgentThreadsDb = {
 	threads: AgentThread[];
 	runs: AgentRun[];
@@ -158,6 +166,8 @@ export type AgentRunDetail = AgentRun & {
 	lastMessage: string | null;
 	logTail: string[];
 	activityAt: string | null;
+	modelUsed?: string | null;
+	usage?: AgentRunUsage | null;
 };
 
 export type AgentTimelineStep = {

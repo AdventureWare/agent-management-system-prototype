@@ -6,7 +6,7 @@ import {
 	createRole,
 	getExecutionSurfaces,
 	loadControlPlane,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 function parseListField(value: FormDataEntryValue | null) {
@@ -105,23 +105,26 @@ export const actions: Actions = {
 			});
 		}
 
-		await updateControlPlane((data) => ({
-			...data,
-			roles: [
-				createRole({
-					name: values.name,
-					area: values.area,
-					description: values.description,
-					skillIds: values.skillIds,
-					toolIds: values.toolIds,
-					mcpIds: values.mcpIds,
-					systemPrompt: values.systemPrompt,
-					qualityChecklist: values.qualityChecklist,
-					approvalPolicy: values.approvalPolicy,
-					escalationPolicy: values.escalationPolicy
-				}),
-				...data.roles
-			]
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				roles: [
+					createRole({
+						name: values.name,
+						area: values.area,
+						description: values.description,
+						skillIds: values.skillIds,
+						toolIds: values.toolIds,
+						mcpIds: values.mcpIds,
+						systemPrompt: values.systemPrompt,
+						qualityChecklist: values.qualityChecklist,
+						approvalPolicy: values.approvalPolicy,
+						escalationPolicy: values.escalationPolicy
+					}),
+					...data.roles
+				]
+			},
+			changedCollections: ['roles']
 		}));
 
 		return {
@@ -162,30 +165,33 @@ export const actions: Actions = {
 
 		let roleUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			roles: data.roles.map((role) => {
-				if (role.id !== values.roleId) {
-					return role;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				roles: data.roles.map((role) => {
+					if (role.id !== values.roleId) {
+						return role;
+					}
 
-				roleUpdated = true;
+					roleUpdated = true;
 
-				return {
-					...role,
-					name: values.name,
-					area: values.area,
-					description: values.description,
-					skillIds: values.skillIds.length > 0 ? values.skillIds : undefined,
-					toolIds: values.toolIds.length > 0 ? values.toolIds : undefined,
-					mcpIds: values.mcpIds.length > 0 ? values.mcpIds : undefined,
-					systemPrompt: values.systemPrompt || undefined,
-					qualityChecklist:
-						values.qualityChecklist.length > 0 ? values.qualityChecklist : undefined,
-					approvalPolicy: values.approvalPolicy || undefined,
-					escalationPolicy: values.escalationPolicy || undefined
-				};
-			})
+					return {
+						...role,
+						name: values.name,
+						area: values.area,
+						description: values.description,
+						skillIds: values.skillIds.length > 0 ? values.skillIds : undefined,
+						toolIds: values.toolIds.length > 0 ? values.toolIds : undefined,
+						mcpIds: values.mcpIds.length > 0 ? values.mcpIds : undefined,
+						systemPrompt: values.systemPrompt || undefined,
+						qualityChecklist:
+							values.qualityChecklist.length > 0 ? values.qualityChecklist : undefined,
+						approvalPolicy: values.approvalPolicy || undefined,
+						escalationPolicy: values.escalationPolicy || undefined
+					};
+				})
+			},
+			changedCollections: ['roles']
 		}));
 
 		if (!roleUpdated) {

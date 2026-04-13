@@ -2,10 +2,10 @@ import {
 	createRun,
 	getPendingApprovalForTask,
 	resolveThreadSandbox,
-	selectExecutionProvider,
-	updateControlPlane
+	selectExecutionProvider
 } from '$lib/server/control-plane';
 import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
+import { updateTaskRecord } from '$lib/server/control-plane-repository';
 import {
 	getAgentThread,
 	sendAgentThreadMessage,
@@ -264,6 +264,33 @@ export async function buildTaskLaunchPlan(
 		(normalizedRequiredCapabilityNames.length > 0 || normalizedRequiredToolNames.length > 0) &&
 		!effectiveExecutionSurface
 	) {
+		const matchingSuggestions = assignmentSuggestions.filter(
+			(suggestion) => suggestion.matchingRequirements
+		);
+
+		if (matchingSuggestions.length > 0) {
+			const blockers: string[] = [];
+
+			if (matchingSuggestions.some((suggestion) => !suggestion.withinAssignmentLimit)) {
+				blockers.push('task capacity');
+			}
+
+			if (matchingSuggestions.some((suggestion) => !suggestion.withinConcurrencyLimit)) {
+				blockers.push('concurrency limit');
+			}
+
+			if (matchingSuggestions.some((suggestion) => suggestion.status === 'offline')) {
+				blockers.push('offline availability');
+			}
+
+			const blockerSummary = blockers.length > 0 ? ` (${[...new Set(blockers)].join(', ')})` : '';
+
+			throw new TaskLaunchPlanError(
+				409,
+				`No matching execution surface can take this task right now${blockerSummary}.`
+			);
+		}
+
 		throw new TaskLaunchPlanError(
 			409,
 			'No current execution surface covers this task’s declared capability and tool requirements.'
@@ -279,6 +306,13 @@ export async function buildTaskLaunchPlan(
 					: { ...taskForRouting, assigneeExecutionSurfaceId: effectiveExecutionSurface.id }
 			)
 		: null;
+
+	if (effectiveExecutionSurfaceFit && !effectiveExecutionSurfaceFit.withinAssignmentLimit) {
+		throw new TaskLaunchPlanError(
+			409,
+			`${effectiveExecutionSurfaceFit.executionSurfaceName} is already at its task capacity.`
+		);
+	}
 
 	if (effectiveExecutionSurfaceFit && !effectiveExecutionSurfaceFit.withinConcurrencyLimit) {
 		throw new TaskLaunchPlanError(
@@ -437,17 +471,23 @@ export async function launchTaskFromPlan(
 ): Promise<{ threadId: string | null }> {
 	let agentThreadId =
 		plan.compatibleAssignedThread?.id ?? plan.compatibleLatestRunThread?.id ?? null;
+	let agentThreadRunId: string | null = null;
 	let codexThreadId!: string | null;
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 	if (plan.compatibleAssignedThread?.canResume) {
-		await sendAgentThreadMessage(plan.compatibleAssignedThread.id, plan.prompt);
+		const sendResult = await sendAgentThreadMessage(plan.compatibleAssignedThread.id, plan.prompt);
 		agentThreadId = plan.compatibleAssignedThread.id;
+		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
-		await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, plan.prompt);
+		const sendResult = await sendAgentThreadMessage(
+			plan.compatibleLatestRunThread.id,
+			plan.prompt
+		);
 		agentThreadId = plan.compatibleLatestRunThread.id;
+		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleLatestRunThread.threadId;
 		reusedThreadMode = 'latest';
 	} else {
@@ -470,6 +510,7 @@ export async function launchTaskFromPlan(
 		});
 
 		agentThreadId = session.agentThreadId;
+		agentThreadRunId = session.runId;
 		codexThreadId = null;
 	}
 
@@ -480,10 +521,12 @@ export async function launchTaskFromPlan(
 		executionSurfaceId: plan.effectiveExecutionSurface?.id ?? null,
 		assumedRoleId: plan.effectiveDesiredRoleId || null,
 		providerId,
+		agentThreadRunId,
 		status: 'running',
 		startedAt: now,
 		threadId: codexThreadId,
 		agentThreadId,
+		modelUsed: plan.provider?.defaultModel?.trim() || null,
 		promptDigest: buildPromptDigest(plan.prompt),
 		artifactPaths:
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder
@@ -498,46 +541,46 @@ export async function launchTaskFromPlan(
 		lastHeartbeatAt: now
 	});
 
-	await updateControlPlane((data) => ({
-		...data,
-		runs: [run, ...data.runs],
-		tasks: data.tasks.map((candidate) =>
-			candidate.id === taskId
-				? {
-						...candidate,
-						title: plan.effectiveName,
-						summary: plan.effectiveInstructions,
-						successCriteria: plan.effectiveSuccessCriteria,
-						readyCondition: plan.effectiveReadyCondition,
-						expectedOutcome: plan.effectiveExpectedOutcome,
-						projectId: plan.project.id,
-						goalId: plan.effectiveGoalId,
-						assigneeExecutionSurfaceId:
-							plan.effectiveExecutionSurface?.id ?? candidate.assigneeExecutionSurfaceId,
-						priority: plan.effectivePriority,
-						riskLevel: plan.effectiveRiskLevel,
-						approvalMode: plan.effectiveApprovalMode,
-						requiredThreadSandbox: plan.effectiveRequiredThreadSandbox,
-						requiresReview: plan.effectiveRequiresReview,
-						desiredRoleId: plan.effectiveDesiredRoleId,
-						requiredCapabilityNames: plan.effectiveRequiredCapabilityNames,
-						requiredToolNames: plan.effectiveRequiredToolNames,
-						blockedReason: '',
-						dependencyTaskIds: plan.effectiveDependencyTaskIds,
-						targetDate: plan.effectiveTargetDate,
-						agentThreadId,
-						delegationAcceptance: null,
-						artifactPath:
-							candidate.artifactPath ||
-							plan.project.defaultArtifactRoot ||
-							plan.project.projectRootFolder ||
-							'',
-						status: 'in_progress',
-						updatedAt: now
-					}
-				: candidate
-		)
-	}));
+	const launchedTask = await updateTaskRecord({
+		taskId,
+		update: (candidate) => ({
+			...candidate,
+			title: plan.effectiveName,
+			summary: plan.effectiveInstructions,
+			successCriteria: plan.effectiveSuccessCriteria,
+			readyCondition: plan.effectiveReadyCondition,
+			expectedOutcome: plan.effectiveExpectedOutcome,
+			projectId: plan.project.id,
+			goalId: plan.effectiveGoalId,
+			assigneeExecutionSurfaceId:
+				plan.effectiveExecutionSurface?.id ?? candidate.assigneeExecutionSurfaceId,
+			priority: plan.effectivePriority,
+			riskLevel: plan.effectiveRiskLevel,
+			approvalMode: plan.effectiveApprovalMode,
+			requiredThreadSandbox: plan.effectiveRequiredThreadSandbox,
+			requiresReview: plan.effectiveRequiresReview,
+			desiredRoleId: plan.effectiveDesiredRoleId,
+			requiredCapabilityNames: plan.effectiveRequiredCapabilityNames,
+			requiredToolNames: plan.effectiveRequiredToolNames,
+			blockedReason: '',
+			dependencyTaskIds: plan.effectiveDependencyTaskIds,
+			targetDate: plan.effectiveTargetDate,
+			agentThreadId,
+			delegationAcceptance: null,
+			artifactPath:
+				candidate.artifactPath ||
+				plan.project.defaultArtifactRoot ||
+				plan.project.projectRootFolder ||
+				'',
+			status: 'in_progress',
+			updatedAt: now
+		}),
+		prependRuns: [run]
+	});
+
+	if (!launchedTask) {
+		throw new TaskLaunchPlanError(404, 'Task not found.');
+	}
 
 	return {
 		threadId: agentThreadId

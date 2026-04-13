@@ -24,15 +24,18 @@ const createDecision = vi.hoisted(() =>
 	)
 );
 const loadControlPlane = vi.hoisted(() => vi.fn());
-const updateControlPlane = vi.hoisted(() => vi.fn());
+const updateTaskRecord = vi.hoisted(() => vi.fn());
 const getAgentThread = vi.hoisted(() => vi.fn());
 const persistTaskAttachments = vi.hoisted(() => vi.fn());
 const getTaskAttachmentRoot = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/control-plane', () => ({
 	createDecision,
-	loadControlPlane,
-	updateControlPlane
+	loadControlPlane
+}));
+
+vi.mock('$lib/server/control-plane-repository', () => ({
+	updateTaskRecord
 }));
 
 vi.mock('$lib/server/agent-threads', () => ({
@@ -120,11 +123,30 @@ describe('task-detail-mutation-actions', () => {
 		createDecision.mockClear();
 		loadControlPlane.mockReset();
 		loadControlPlane.mockImplementation(async () => current);
-		updateControlPlane.mockReset();
-		updateControlPlane.mockImplementation(
-			async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-				current = updater(current);
-				return current;
+		updateTaskRecord.mockReset();
+		updateTaskRecord.mockImplementation(
+			async (input: {
+				taskId: string;
+				update: (task: Task, data: ControlPlaneData) => Task;
+				prependDecisions?: Array<{ id: string; taskId: string | null; decisionType: string }>;
+			}) => {
+				const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+				if (!existingTask) {
+					return null;
+				}
+
+				const nextTask = input.update(existingTask, current);
+				current = {
+					...current,
+					tasks: current.tasks.map((task) => (task.id === input.taskId ? nextTask : task)),
+					decisions: [
+						...(input.prependDecisions ?? []),
+						...(current.decisions ?? [])
+					] as ControlPlaneData['decisions']
+				};
+
+				return nextTask;
 			}
 		);
 		getAgentThread.mockReset();
@@ -235,7 +257,7 @@ describe('task-detail-mutation-actions', () => {
 			taskId: 'task_1'
 		});
 		expect(getAgentThread).not.toHaveBeenCalled();
-		expect(updateControlPlane).not.toHaveBeenCalled();
+		expect(updateTaskRecord).not.toHaveBeenCalled();
 		expect(createDecision).not.toHaveBeenCalled();
 		expect(current.tasks[0]?.agentThreadId).toBe('thread_existing');
 	});
@@ -257,7 +279,7 @@ describe('task-detail-mutation-actions', () => {
 			taskId: 'task_1'
 		});
 		expect(getAgentThread).not.toHaveBeenCalled();
-		expect(updateControlPlane).not.toHaveBeenCalled();
+		expect(updateTaskRecord).not.toHaveBeenCalled();
 		expect(createDecision).not.toHaveBeenCalled();
 		expect(current.tasks[0]?.agentThreadId).toBeNull();
 	});

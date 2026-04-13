@@ -72,6 +72,8 @@ export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
+export type RunUsageSource = 'provider_reported' | 'missing';
+export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
 
 export type StatusTone = 'neutral' | 'ready' | 'progress' | 'decision' | 'success' | 'attention';
 
@@ -336,6 +338,16 @@ export type Provider = {
 	capabilities: string[];
 	defaultThreadSandbox: AgentSandbox;
 	notes: string;
+	modelPricing?: ProviderModelPricing[];
+};
+
+export type ProviderModelPricing = {
+	model: string;
+	inputUsdPer1M: number;
+	cachedInputUsdPer1M: number;
+	outputUsdPer1M: number;
+	pricingVersion: string;
+	updatedAt: string;
 };
 
 export type Role = {
@@ -458,6 +470,7 @@ export type Run = {
 	executionSurfaceId: string | null;
 	assumedRoleId?: string | null;
 	providerId: string | null;
+	agentThreadRunId?: string | null;
 	status: RunStatus;
 	createdAt: string;
 	updatedAt: string;
@@ -470,6 +483,16 @@ export type Run = {
 	summary: string;
 	lastHeartbeatAt: string | null;
 	errorSummary: string;
+	modelUsed?: string | null;
+	usageSource?: RunUsageSource;
+	inputTokens?: number | null;
+	cachedInputTokens?: number | null;
+	outputTokens?: number | null;
+	uncachedInputTokens?: number | null;
+	usageCapturedAt?: string | null;
+	estimatedCostUsd?: number | null;
+	costSource?: RunCostSource;
+	pricingVersion?: string | null;
 };
 
 export type Review = {

@@ -38,6 +38,38 @@ export type DashboardTaskAttentionItem = TaskWorkItem & {
 	goalName: string;
 };
 
+export type RunSpendRollupItem = {
+	key: string;
+	label: string;
+	runCount: number;
+	totalCostUsd: number;
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	attentionRunCount: number;
+};
+
+export type RunUsageCostSummary = {
+	spendLast24hUsd: number;
+	spendLast7dUsd: number;
+	failedOrCanceledSpendLast7dRatio: number | null;
+	highCostRuns: Array<{
+		runId: string;
+		taskId: string;
+		taskTitle: string;
+		providerName: string;
+		modelUsed: string | null;
+		status: string;
+		estimatedCostUsd: number;
+	}>;
+	rollups: {
+		byProvider: RunSpendRollupItem[];
+		byActor: RunSpendRollupItem[];
+		byProject: RunSpendRollupItem[];
+		byGoal: RunSpendRollupItem[];
+	};
+};
+
 export type HomeDashboardData = {
 	threads: AgentThreadDetail[];
 	threadSummary: AgentThreadSummary;
@@ -45,6 +77,7 @@ export type HomeDashboardData = {
 	taskAttention: DashboardTaskAttentionItem[];
 	staleTaskSummary: TaskFreshnessSummary;
 	staleTasks: DashboardTaskAttentionItem[];
+	runUsageCost: RunUsageCostSummary;
 	improvementSummary: SelfImprovementSnapshotSummary;
 	improvementOpportunities: TrackedSelfImprovementOpportunity[];
 };

@@ -212,30 +212,43 @@ describe('planning helpers', () => {
 		expect(snapshot.scheduledTasks).toEqual([
 			expect.objectContaining({
 				id: 'task_1',
+				matchingExecutionSurfaceCount: 1,
 				requiredCapabilityNames: ['svelte'],
 				requiredToolNames: ['codex'],
 				eligibleExecutionSurfaceCount: 1,
+				idleExecutionSurfaceCount: 0,
+				saturatedExecutionSurfaceCount: 0,
 				suggestedExecutionSurfaceNames: ['Local builder'],
-				assignedExecutionSurfaceEligible: true
+				assignedExecutionSurfaceMatchesRequirements: true,
+				assignedExecutionSurfaceWorkloadState: 'available'
 			})
 		]);
 		expect(snapshot.unscheduledTasks).toEqual([
 			expect.objectContaining({
 				id: 'task_2',
+				matchingExecutionSurfaceCount: 1,
 				requiredCapabilityNames: ['planning'],
 				requiredToolNames: [],
 				eligibleExecutionSurfaceCount: 1,
+				idleExecutionSurfaceCount: 1,
+				saturatedExecutionSurfaceCount: 0,
 				suggestedExecutionSurfaceNames: ['Cloud coordinator'],
-				assignedExecutionSurfaceEligible: null
+				assignedExecutionSurfaceMatchesRequirements: null,
+				assignedExecutionSurfaceWorkloadState: null
 			})
 		]);
 		expect(
 			snapshot.executionSurfaceLoads.find((executionSurface) => executionSurface.id === 'worker_1')
 		).toEqual(
 			expect.objectContaining({
+				workloadState: 'available',
 				plannedHours: 12,
 				capacityHours: 18,
-				remainingHours: 6
+				remainingHours: 6,
+				assignedOpenTaskCount: 1,
+				availableAssignmentCapacity: 1,
+				activeRunCount: 0,
+				availableRunCapacity: 2
 			})
 		);
 	});

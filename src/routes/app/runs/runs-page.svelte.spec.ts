@@ -11,6 +11,7 @@ describe('/app/runs/+page.svelte', () => {
 				tasks: [{ id: 'task_1', title: 'Make runs first class' }],
 				executionSurfaces: [{ id: 'worker_1', name: 'Coordinator' }],
 				providers: [{ id: 'provider_1', name: 'Local Codex' }],
+				models: ['gpt-5.4'],
 				runs: [
 					{
 						id: 'run_1',
@@ -31,10 +32,10 @@ describe('/app/runs/+page.svelte', () => {
 						agentThreadId: 'session_1',
 						threadName: 'Task thread',
 						threadState: 'working',
-						sessionArchivedAt: null,
+						threadArchivedAt: null,
 						threadSummary: 'Working through the task.',
-						sessionCanResume: true,
-						sessionHasActiveRun: true,
+						threadCanResume: true,
+						threadHasActiveRun: true,
 						promptDigest: 'digest: add runs index and detail',
 						artifactPaths: ['/tmp/project/agent_output/run_1'],
 						summary: 'Rendering the runs index.',
@@ -42,6 +43,18 @@ describe('/app/runs/+page.svelte', () => {
 						heartbeatAgeLabel: '30s ago',
 						isHeartbeatStale: false,
 						errorSummary: '',
+						modelUsed: 'gpt-5.4',
+						usageSource: 'provider_reported',
+						inputTokens: 120000,
+						cachedInputTokens: 90000,
+						outputTokens: 4500,
+						uncachedInputTokens: 30000,
+						usageCapturedAt: '2026-03-30T12:05:00.000Z',
+						estimatedCostUsd: 0.34,
+						costSource: 'configured_model_pricing',
+						pricingVersion: '2026-04-10',
+						totalTokens: 124500,
+						cacheRatio: 0.75,
 						createdAtLabel: '5m ago',
 						updatedAtLabel: 'just now'
 					}
@@ -52,7 +65,9 @@ describe('/app/runs/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Inspect execution outcomes');
 		expect(document.body.textContent).toContain('digest: add runs index and detail');
 		expect(document.body.textContent).toContain('Task thread');
-		expect(document.body.textContent).toContain('Heartbeat 30s ago');
+		expect(document.body.textContent).toContain('gpt-5.4');
+		expect(document.body.textContent).toContain('$0.34');
+		expect(document.body.textContent).toContain('30s ago');
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1');
 	});
 });

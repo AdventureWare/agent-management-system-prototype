@@ -24,12 +24,15 @@ const createDecision = vi.hoisted(() =>
 	)
 );
 const loadControlPlane = vi.hoisted(() => vi.fn());
-const updateControlPlane = vi.hoisted(() => vi.fn());
+const updateTaskRecord = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/control-plane', () => ({
 	createDecision,
-	loadControlPlane,
-	updateControlPlane
+	loadControlPlane
+}));
+
+vi.mock('$lib/server/control-plane-repository', () => ({
+	updateTaskRecord
 }));
 
 import {
@@ -107,11 +110,30 @@ describe('task-child-handoffs', () => {
 		createDecision.mockClear();
 		loadControlPlane.mockReset();
 		loadControlPlane.mockImplementation(async () => current);
-		updateControlPlane.mockReset();
-		updateControlPlane.mockImplementation(
-			async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-				current = updater(current);
-				return current;
+		updateTaskRecord.mockReset();
+		updateTaskRecord.mockImplementation(
+			async (input: {
+				taskId: string;
+				update: (task: Task, data: ControlPlaneData) => Task;
+				prependDecisions?: Array<Record<string, unknown>>;
+			}) => {
+				const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+				if (!existingTask) {
+					return null;
+				}
+
+				const nextTask = input.update(existingTask, current);
+				current = {
+					...current,
+					tasks: current.tasks.map((task) => (task.id === input.taskId ? nextTask : task)),
+					decisions: [
+						...(input.prependDecisions ?? []),
+						...(current.decisions ?? [])
+					] as ControlPlaneData['decisions']
+				};
+
+				return nextTask;
 			}
 		);
 	});

@@ -70,6 +70,11 @@
 			value={data.recentRuns.length}
 			detail="Most recent runs routed through this provider."
 		/>
+		<MetricCard
+			label="Priced models"
+			value={data.provider.modelPricing?.length ?? 0}
+			detail="Models with configured rough list pricing."
+		/>
 	</div>
 
 	{#if form?.message}
@@ -198,6 +203,17 @@
 				</div>
 
 				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Model pricing JSON</span>
+					<textarea class="textarea min-h-36 font-mono text-sm text-white" name="modelPricing"
+						>{JSON.stringify(data.provider.modelPricing ?? [], null, 2)}</textarea
+					>
+					<p class="mt-2 text-xs text-slate-500">
+						Store rough per-model pricing here so runs can derive estimated spend from provider
+						usage.
+					</p>
+				</label>
+
+				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Notes</span>
 					<textarea class="textarea min-h-28 text-white" name="notes"
 						>{data.provider.notes}</textarea
@@ -242,6 +258,12 @@
 					label="Capabilities"
 					value={data.provider.capabilities.length > 0
 						? data.provider.capabilities.join(', ')
+						: 'None listed'}
+				/>
+				<DetailFactCard
+					label="Priced models"
+					value={data.provider.modelPricing?.length
+						? data.provider.modelPricing.map((pricing) => pricing.model).join(', ')
 						: 'None listed'}
 				/>
 				<DetailFactCard label="Default thread sandbox" value={data.provider.defaultThreadSandbox} />

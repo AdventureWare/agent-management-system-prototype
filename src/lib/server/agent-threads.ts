@@ -50,7 +50,10 @@ import {
 	type AgentTimelineStep,
 	type AgentThreadsDb
 } from '$lib/types/agent-thread';
-import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import {
+	loadControlPlane,
+	updateControlPlaneCollections
+} from '$lib/server/control-plane';
 import type { Area, ControlPlaneData, RunStatus, TaskStatus } from '$lib/types/control-plane';
 
 const AGENT_THREADS_DB_FILE = resolve(process.cwd(), 'data', 'agent-threads.json');
@@ -2924,7 +2927,7 @@ async function reconcileTaskStateFromSessionDetails(
 		};
 	}
 
-	const persistedControlPlane = await updateControlPlane((current) => {
+	const persistedControlPlane = await updateControlPlaneCollections((current) => {
 		let next = current;
 
 		for (const detail of details) {
@@ -2935,7 +2938,10 @@ async function reconcileTaskStateFromSessionDetails(
 			}
 		}
 
-		return next;
+		return {
+			data: next,
+			changedCollections: ['tasks', 'runs']
+		};
 	});
 	const taskContext = buildTaskContextFromControlPlane(persistedControlPlane);
 
@@ -3596,9 +3602,10 @@ export async function sendAgentThreadMessage(
 	);
 
 	if (reconciledControlPlane !== controlPlane) {
-		await updateControlPlane((current) =>
-			reconcileControlPlaneThreadMessage(current, agentThreadId, now)
-		);
+		await updateControlPlaneCollections((current) => ({
+			data: reconcileControlPlaneThreadMessage(current, agentThreadId, now),
+			changedCollections: ['tasks', 'runs', 'reviews', 'approvals']
+		}));
 	}
 	launchRunner(run.configPath);
 
@@ -3804,8 +3811,8 @@ export async function recoverAgentThread(agentThreadId: string) {
 	});
 
 	if (reconciledControlPlane !== controlPlane) {
-		await updateControlPlane((current) =>
-			reconcileControlPlaneThreadState(current, {
+		await updateControlPlaneCollections((current) => ({
+			data: reconcileControlPlaneThreadState(current, {
 				id: detail.id,
 				hasActiveRun: false,
 				canResume: Boolean(detail.threadId),
@@ -3815,8 +3822,9 @@ export async function recoverAgentThread(agentThreadId: string) {
 					...latestRun,
 					state: nextState
 				}
-			})
-		);
+			}),
+			changedCollections: ['tasks', 'runs']
+		}));
 	}
 
 	return {

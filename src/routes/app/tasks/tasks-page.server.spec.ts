@@ -226,6 +226,70 @@ vi.mock('$lib/server/control-plane', () => ({
 	})
 }));
 
+vi.mock('$lib/server/control-plane-repository', () => ({
+	createTaskRecord: vi.fn(
+		async (input: {
+			task: Record<string, unknown>;
+			goalId?: string | null;
+			prependRuns?: Array<Record<string, unknown>>;
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const goalId = input.goalId?.trim() ?? '';
+			const nextTasks = [input.task as never, ...current.tasks];
+			const nextGoals = goalId
+				? current.goals.map((goal) =>
+						goal.id === goalId
+							? {
+									...goal,
+									taskIds: [...(goal.taskIds ?? []), String((input.task as { id: string }).id)]
+								}
+							: goal
+					)
+				: current.goals;
+			controlPlaneState.saved = syncTaskExecutionStateLike({
+				...current,
+				goals: nextGoals,
+				tasks: nextTasks,
+				runs: [...(input.prependRuns ?? []), ...current.runs] as ControlPlaneData['runs']
+			});
+			controlPlaneState.current = controlPlaneState.saved;
+		}
+	),
+	updateTaskRecord: vi.fn(
+		async (input: {
+			taskId: string;
+			update: (task: any, data: ControlPlaneData) => any;
+			prependRuns?: Array<Record<string, unknown>>;
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+			if (!existingTask) {
+				return null;
+			}
+
+			const nextTask = input.update(existingTask, current);
+			controlPlaneState.saved = syncTaskExecutionStateLike({
+				...current,
+				tasks: current.tasks.map((task) => (task.id === input.taskId ? nextTask : task)),
+				runs: [...(input.prependRuns ?? []), ...current.runs] as ControlPlaneData['runs']
+			});
+			controlPlaneState.current = controlPlaneState.saved;
+			return nextTask;
+		}
+	),
+	deleteTaskRecords: vi.fn(async (taskIds: string[]) => {
+		const current = controlPlaneState.current as ControlPlaneData;
+		controlPlaneState.saved = syncTaskExecutionStateLike({
+			...current,
+			tasks: current.tasks.filter((task) => !taskIds.includes(task.id)),
+			runs: current.runs.filter((run) => !taskIds.includes(run.taskId))
+		});
+		controlPlaneState.current = controlPlaneState.saved;
+		return taskIds;
+	})
+}));
+
 vi.mock('node:fs/promises', () => ({
 	mkdir,
 	writeFile

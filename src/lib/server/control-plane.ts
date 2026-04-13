@@ -3,9 +3,11 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
+	type ControlPlaneCollection,
 	isControlPlaneSqliteEmpty,
 	loadControlPlaneFromSqlite,
 	loadControlPlaneSnapshotFromSqlite,
+	saveControlPlaneCollectionsToSqlite,
 	saveControlPlaneToSqlite
 } from '$lib/server/db/control-plane-store';
 import { StoreRevisionConflictError } from '$lib/server/db/store-revisions';
@@ -41,6 +43,7 @@ import {
 	type PlanningConfidence,
 	type PlanningSession,
 	type Provider,
+	type ProviderModelPricing,
 	type ProviderAuthMode,
 	type ProviderKind,
 	type ProviderSetupStatus,
@@ -50,7 +53,9 @@ import {
 	type Review,
 	type ReviewStatus,
 	type Run,
+	type RunCostSource,
 	type RunStatus,
+	type RunUsageSource,
 	type TaskApprovalMode,
 	type TaskRiskLevel,
 	type Task,
@@ -167,6 +172,7 @@ type LegacyProvider = Partial<Provider> & {
 	capabilities?: unknown;
 	defaultThreadSandbox?: unknown;
 	notes?: unknown;
+	modelPricing?: unknown;
 };
 
 type LegacyExecutionSurface = Partial<ExecutionSurface> & {
@@ -252,6 +258,17 @@ function normalizeRole(role: LegacyRole): Role {
 
 type LegacyRun = Partial<Run> & {
 	artifactPaths?: unknown;
+	agentThreadRunId?: unknown;
+	modelUsed?: unknown;
+	usageSource?: unknown;
+	inputTokens?: unknown;
+	cachedInputTokens?: unknown;
+	outputTokens?: unknown;
+	uncachedInputTokens?: unknown;
+	usageCapturedAt?: unknown;
+	estimatedCostUsd?: unknown;
+	costSource?: unknown;
+	pricingVersion?: unknown;
 };
 
 type LegacyReview = Partial<Review>;
@@ -406,6 +423,73 @@ function normalizePositiveNumber(value: unknown) {
 	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function normalizeNonNegativeNumber(value: unknown) {
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function normalizeOptionalText(value: unknown) {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const normalized = value.trim();
+	return normalized ? normalized : null;
+}
+
+function isRunUsageSource(value: unknown): value is RunUsageSource {
+	return value === 'provider_reported' || value === 'missing';
+}
+
+function isRunCostSource(value: unknown): value is RunCostSource {
+	return (
+		value === 'configured_model_pricing' ||
+		value === 'missing_pricing' ||
+		value === 'missing_usage'
+	);
+}
+
+function normalizeProviderModelPricing(value: unknown): ProviderModelPricing[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value.flatMap((candidate) => {
+		if (!candidate || typeof candidate !== 'object') {
+			return [];
+		}
+
+		const row = candidate as Record<string, unknown>;
+		const model = normalizeOptionalText(row.model);
+		const inputUsdPer1M = normalizeNonNegativeNumber(row.inputUsdPer1M);
+		const cachedInputUsdPer1M = normalizeNonNegativeNumber(row.cachedInputUsdPer1M);
+		const outputUsdPer1M = normalizeNonNegativeNumber(row.outputUsdPer1M);
+		const pricingVersion = normalizeOptionalText(row.pricingVersion);
+		const updatedAt = normalizeOptionalText(row.updatedAt);
+
+		if (
+			!model ||
+			inputUsdPer1M === null ||
+			cachedInputUsdPer1M === null ||
+			outputUsdPer1M === null ||
+			!pricingVersion ||
+			!updatedAt
+		) {
+			return [];
+		}
+
+		return [
+			{
+				model,
+				inputUsdPer1M,
+				cachedInputUsdPer1M,
+				outputUsdPer1M,
+				pricingVersion,
+				updatedAt
+			} satisfies ProviderModelPricing
+		];
+	});
+}
+
 function normalizeProvider(provider: LegacyProvider): Provider {
 	const providerKindValue = typeof provider.kind === 'string' ? provider.kind : '';
 	const kind: ProviderKind = isProviderKind(providerKindValue) ? providerKindValue : 'cloud';
@@ -444,7 +528,8 @@ function normalizeProvider(provider: LegacyProvider): Provider {
 		envVars: normalizeProviderList(provider.envVars),
 		capabilities: normalizeProviderList(provider.capabilities),
 		defaultThreadSandbox: normalizeAgentSandbox(provider.defaultThreadSandbox, 'workspace-write'),
-		notes: typeof provider.notes === 'string' ? provider.notes : ''
+		notes: typeof provider.notes === 'string' ? provider.notes : '',
+		modelPricing: normalizeProviderModelPricing(provider.modelPricing)
 	};
 }
 
@@ -644,6 +729,11 @@ function normalizeRun(run: LegacyRun): Run {
 				}
 			: {}),
 		providerId: typeof run.providerId === 'string' && run.providerId.trim() ? run.providerId : null,
+		...(typeof run.agentThreadRunId === 'string'
+			? {
+					agentThreadRunId: run.agentThreadRunId.trim() ? run.agentThreadRunId : null
+				}
+			: {}),
 		status: isRunStatus(statusValue) ? statusValue : 'queued',
 		createdAt: typeof run.createdAt === 'string' ? run.createdAt : now,
 		updatedAt: typeof run.updatedAt === 'string' ? run.updatedAt : now,
@@ -658,7 +748,21 @@ function normalizeRun(run: LegacyRun): Run {
 			: [],
 		summary: typeof run.summary === 'string' ? run.summary : '',
 		lastHeartbeatAt: typeof run.lastHeartbeatAt === 'string' ? run.lastHeartbeatAt : null,
-		errorSummary: typeof run.errorSummary === 'string' ? run.errorSummary : ''
+		errorSummary: typeof run.errorSummary === 'string' ? run.errorSummary : '',
+		...(typeof run.modelUsed === 'string'
+			? {
+					modelUsed: run.modelUsed.trim() ? run.modelUsed : null
+				}
+			: {}),
+		usageSource: isRunUsageSource(run.usageSource) ? run.usageSource : 'missing',
+		inputTokens: normalizeNonNegativeNumber(run.inputTokens),
+		cachedInputTokens: normalizeNonNegativeNumber(run.cachedInputTokens),
+		outputTokens: normalizeNonNegativeNumber(run.outputTokens),
+		uncachedInputTokens: normalizeNonNegativeNumber(run.uncachedInputTokens),
+		usageCapturedAt: typeof run.usageCapturedAt === 'string' ? run.usageCapturedAt : null,
+		estimatedCostUsd: normalizeNonNegativeNumber(run.estimatedCostUsd),
+		costSource: isRunCostSource(run.costSource) ? run.costSource : 'missing_usage',
+		pricingVersion: typeof run.pricingVersion === 'string' ? run.pricingVersion : null
 	};
 }
 
@@ -1300,10 +1404,17 @@ export async function loadControlPlane(): Promise<ControlPlaneData> {
 
 async function saveControlPlane(
 	data: ControlPlaneData,
-	options: { expectedRevision?: number } = {}
+	options: {
+		expectedRevision?: number;
+		changedCollections?: Iterable<ControlPlaneCollection>;
+	} = {}
 ) {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
-		saveControlPlaneToSqlite(data, options);
+		if (options.changedCollections) {
+			saveControlPlaneCollectionsToSqlite(data, options.changedCollections, options);
+		} else {
+			saveControlPlaneToSqlite(data, options);
+		}
 
 		try {
 			await writeControlPlaneJsonMirror(data);
@@ -1321,15 +1432,24 @@ async function saveControlPlane(
 
 let controlPlaneUpdateQueue: Promise<void> = Promise.resolve();
 
-export async function updateControlPlane(
-	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
+type ControlPlaneUpdatePlan = {
+	data: ControlPlaneData;
+	changedCollections?: Iterable<ControlPlaneCollection>;
+};
+
+async function runQueuedControlPlaneUpdate(
+	updater: (data: ControlPlaneData) => ControlPlaneUpdatePlan | Promise<ControlPlaneUpdatePlan>
 ) {
 	const runUpdate = async () => {
 		const maxAttempts = 5;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
 			const snapshot = await loadControlPlaneSnapshot();
-			const next = syncGovernanceQueues(syncTaskExecutionState(await updater(snapshot.data)));
+			const plan = await updater(snapshot.data);
+			const next = syncGovernanceQueues(syncTaskExecutionState(plan.data));
+			const changedCollections = plan.changedCollections
+				? [...new Set(plan.changedCollections)]
+				: undefined;
 			const integrityIssues = collectControlPlaneIntegrityIssues(next);
 
 			if (integrityIssues.length > 0) {
@@ -1339,8 +1459,13 @@ export async function updateControlPlane(
 			}
 
 			try {
+				if (changedCollections && changedCollections.length === 0) {
+					return next;
+				}
+
 				await saveControlPlane(next, {
-					expectedRevision: typeof snapshot.revision === 'number' ? snapshot.revision : undefined
+					expectedRevision: typeof snapshot.revision === 'number' ? snapshot.revision : undefined,
+					changedCollections
 				});
 				return next;
 			} catch (error) {
@@ -1364,6 +1489,20 @@ export async function updateControlPlane(
 	);
 
 	return await queuedUpdate;
+}
+
+export async function updateControlPlane(
+	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
+) {
+	return runQueuedControlPlaneUpdate(async (data) => ({
+		data: await updater(data)
+	}));
+}
+
+export async function updateControlPlaneCollections(
+	updater: (data: ControlPlaneData) => ControlPlaneUpdatePlan | Promise<ControlPlaneUpdatePlan>
+) {
+	return runQueuedControlPlaneUpdate(updater);
 }
 
 export function formatRelativeTime(iso: string) {
@@ -1557,6 +1696,7 @@ export function createProvider(input: {
 	capabilities?: string[];
 	defaultThreadSandbox?: AgentSandbox;
 	notes?: string;
+	modelPricing?: ProviderModelPricing[];
 }): Provider {
 	return {
 		id: createProviderId(),
@@ -1573,7 +1713,8 @@ export function createProvider(input: {
 		envVars: input.envVars ?? [],
 		capabilities: input.capabilities ?? [],
 		defaultThreadSandbox: input.defaultThreadSandbox ?? 'workspace-write',
-		notes: input.notes ?? ''
+		notes: input.notes ?? '',
+		modelPricing: input.modelPricing ?? []
 	};
 }
 
@@ -1940,6 +2081,7 @@ export function createRun(input: {
 	executionSurfaceId?: string | null;
 	assumedRoleId?: string | null;
 	providerId?: string | null;
+	agentThreadRunId?: string | null;
 	status?: RunStatus;
 	startedAt?: string | null;
 	endedAt?: string | null;
@@ -1950,6 +2092,16 @@ export function createRun(input: {
 	summary?: string;
 	lastHeartbeatAt?: string | null;
 	errorSummary?: string;
+	modelUsed?: string | null;
+	usageSource?: RunUsageSource;
+	inputTokens?: number | null;
+	cachedInputTokens?: number | null;
+	outputTokens?: number | null;
+	uncachedInputTokens?: number | null;
+	usageCapturedAt?: string | null;
+	estimatedCostUsd?: number | null;
+	costSource?: RunCostSource;
+	pricingVersion?: string | null;
 }): Run {
 	const now = new Date().toISOString();
 
@@ -1959,6 +2111,9 @@ export function createRun(input: {
 		executionSurfaceId: input.executionSurfaceId ?? null,
 		...(input.assumedRoleId !== undefined ? { assumedRoleId: input.assumedRoleId ?? null } : {}),
 		providerId: input.providerId ?? null,
+		...(input.agentThreadRunId !== undefined
+			? { agentThreadRunId: input.agentThreadRunId ?? null }
+			: {}),
 		status: input.status ?? 'queued',
 		createdAt: now,
 		updatedAt: now,
@@ -1970,7 +2125,17 @@ export function createRun(input: {
 		artifactPaths: input.artifactPaths ?? [],
 		summary: input.summary ?? '',
 		lastHeartbeatAt: input.lastHeartbeatAt ?? null,
-		errorSummary: input.errorSummary ?? ''
+		errorSummary: input.errorSummary ?? '',
+		modelUsed: input.modelUsed ?? null,
+		usageSource: input.usageSource ?? 'missing',
+		inputTokens: input.inputTokens ?? null,
+		cachedInputTokens: input.cachedInputTokens ?? null,
+		outputTokens: input.outputTokens ?? null,
+		uncachedInputTokens: input.uncachedInputTokens ?? null,
+		usageCapturedAt: input.usageCapturedAt ?? null,
+		estimatedCostUsd: input.estimatedCostUsd ?? null,
+		costSource: input.costSource ?? 'missing_usage',
+		pricingVersion: input.pricingVersion ?? null
 	};
 }
 

@@ -15,6 +15,7 @@
 	} from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
+	import { formatRunModelLabel, formatTokenCount, formatUsd, formatPercent } from '$lib/run-usage';
 	import type { AgentThreadDetail } from '$lib/types/agent-thread';
 	import {
 		formatPriorityLabel,
@@ -238,6 +239,10 @@
 			default:
 				return '';
 		}
+	}
+
+	function rollupDetail(item: { runCount: number; totalTokens: number; attentionRunCount: number }) {
+		return `${item.runCount} runs · ${formatTokenCount(item.totalTokens)} tokens · ${item.attentionRunCount} attention`;
 	}
 
 	$effect(() => {
@@ -476,6 +481,106 @@
 				</dd>
 			</div>
 		</dl>
+	</section>
+
+	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">
+					Usage and rough cost
+				</p>
+				<p class="mt-2 text-sm text-slate-400">
+					Provider-reported usage with configured list pricing so routing tradeoffs can consider
+					rough spend.
+				</p>
+			</div>
+			<a class="text-sm text-sky-300 hover:text-white" href={resolve('/app/runs')}>Open runs</a>
+		</div>
+
+		<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Spend 24h</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{formatUsd(dashboard.runUsageCost.spendLast24hUsd)}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Spend 7d</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{formatUsd(dashboard.runUsageCost.spendLast7dUsd)}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Failed spend 7d</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{formatPercent(dashboard.runUsageCost.failedOrCanceledSpendLast7dRatio)}
+				</dd>
+			</div>
+			<div class="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+				<dt class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">High-cost runs</dt>
+				<dd class="mt-2 text-2xl font-semibold text-white">
+					{dashboard.runUsageCost.highCostRuns.length}
+				</dd>
+			</div>
+		</div>
+
+		<div class="mt-4 grid gap-4 xl:grid-cols-2">
+			{#each [
+				{ title: 'By provider', items: dashboard.runUsageCost.rollups.byProvider },
+				{ title: 'By actor', items: dashboard.runUsageCost.rollups.byActor },
+				{ title: 'By project', items: dashboard.runUsageCost.rollups.byProject },
+				{ title: 'By goal', items: dashboard.runUsageCost.rollups.byGoal }
+			] as section (section.title)}
+				<article class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						{section.title}
+					</p>
+					{#if section.items.length === 0}
+						<p class="mt-3 text-sm text-slate-500">No priced runs yet.</p>
+					{:else}
+						<div class="mt-3 space-y-3">
+							{#each section.items as item (item.key)}
+								<div class="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-3">
+									<div class="flex items-start justify-between gap-3">
+										<p class="ui-wrap-anywhere text-sm font-medium text-white">{item.label}</p>
+										<p class="text-sm font-medium text-sky-200">
+											{formatUsd(item.totalCostUsd)}
+										</p>
+									</div>
+									<p class="mt-1 text-xs text-slate-500">{rollupDetail(item)}</p>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</article>
+			{/each}
+		</div>
+
+		{#if dashboard.runUsageCost.highCostRuns.length > 0}
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					Highest recent cost
+				</p>
+				<div class="mt-3 space-y-3">
+					{#each dashboard.runUsageCost.highCostRuns as run (run.runId)}
+						<div class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+							<div class="min-w-0">
+								<p class="ui-wrap-anywhere text-sm font-medium text-white">{run.taskTitle}</p>
+								<p class="ui-wrap-anywhere mt-1 text-xs text-slate-500">
+									{run.providerName} · {formatRunModelLabel(run)} · {run.status}
+								</p>
+							</div>
+							<div class="flex items-center gap-3">
+								<p class="text-sm font-medium text-sky-200">{formatUsd(run.estimatedCostUsd)}</p>
+								<a class="text-sm text-sky-300 hover:text-white" href={resolve(`/app/runs/${run.runId}`)}>
+									Open run
+								</a>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 	</section>
 
 	<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">

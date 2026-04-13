@@ -507,4 +507,110 @@ describe('control-plane sqlite backend', () => {
 		expect(jsonMirror.tasks.map((task: { id: string }) => task.id)).toContain(createdTask.id);
 		expect(jsonMirror.roles.map((role: { id: string }) => role.id)).toContain('role_parallel');
 	});
+
+	it('removes goal and governance references when deleting a goal-linked task through the repository', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const repositoryModule = await import('./control-plane-repository');
+		const taskToDelete = controlPlaneModule.createTask({
+			id: 'task_delete',
+			title: 'Delete me',
+			summary: 'Remove this task and its references',
+			projectId: '',
+			goalId: 'goal_1',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'before_complete',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: ''
+		});
+		const taskToKeep = controlPlaneModule.createTask({
+			id: 'task_keep',
+			title: 'Keep me',
+			summary: 'This task should remain',
+			projectId: '',
+			goalId: 'goal_1',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: false,
+			desiredRoleId: '',
+			artifactPath: ''
+		});
+		const runToDelete = controlPlaneModule.createRun({
+			taskId: taskToDelete.id,
+			status: 'completed',
+			startedAt: '2026-04-01T00:00:00.000Z',
+			endedAt: '2026-04-01T00:05:00.000Z',
+			summary: 'Finished deleted task'
+		});
+		const reviewToDelete = controlPlaneModule.createReview({
+			taskId: taskToDelete.id,
+			runId: runToDelete.id,
+			status: 'approved',
+			resolvedAt: '2026-04-01T00:06:00.000Z',
+			summary: 'Approved deleted task'
+		});
+		const approvalToDelete = controlPlaneModule.createApproval({
+			taskId: taskToDelete.id,
+			runId: runToDelete.id,
+			mode: 'before_complete',
+			status: 'approved',
+			resolvedAt: '2026-04-01T00:06:00.000Z',
+			summary: 'Approved deleted task'
+		});
+		const decisionToDelete = controlPlaneModule.createDecision({
+			taskId: taskToDelete.id,
+			runId: runToDelete.id,
+			decisionType: 'task_completed',
+			summary: 'Completed deleted task'
+		});
+		const planningSession = controlPlaneModule.createPlanningSession({
+			windowStart: '2026-04-01T00:00:00.000Z',
+			windowEnd: '2026-04-01T01:00:00.000Z',
+			includeUnscheduled: true,
+			taskIds: [taskToDelete.id, taskToKeep.id],
+			decisionIds: [decisionToDelete.id],
+			summary: 'Planning session with deleted task'
+		});
+
+		await controlPlaneModule.updateControlPlane((data) => ({
+			...data,
+			goals: [
+				{
+					id: 'goal_1',
+					name: 'Goal',
+					area: 'product',
+					status: 'ready',
+					summary: 'Goal summary',
+					artifactPath: '',
+					projectIds: [],
+					taskIds: [taskToDelete.id, taskToKeep.id]
+				}
+			],
+			tasks: [taskToDelete, taskToKeep],
+			runs: [runToDelete],
+			reviews: [reviewToDelete],
+			approvals: [approvalToDelete],
+			decisions: [decisionToDelete],
+			planningSessions: [planningSession]
+		}));
+
+		await repositoryModule.deleteTaskRecords([taskToDelete.id]);
+
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(loaded.tasks.map((task) => task.id)).toEqual([taskToKeep.id]);
+		expect(loaded.goals[0]?.taskIds).toEqual([taskToKeep.id]);
+		expect(loaded.runs).toEqual([]);
+		expect(loaded.reviews).toEqual([]);
+		expect(loaded.approvals).toEqual([]);
+		expect(loaded.decisions).toEqual([]);
+		expect((loaded.planningSessions ?? [])[0]?.taskIds).toEqual([taskToKeep.id]);
+		expect((loaded.planningSessions ?? [])[0]?.decisionIds).toEqual([]);
+	});
 });

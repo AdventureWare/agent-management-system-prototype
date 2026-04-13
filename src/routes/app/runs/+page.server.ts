@@ -1,11 +1,11 @@
 import type { PageServerLoad } from './$types';
 import { listAgentThreads } from '$lib/server/agent-threads';
-import { loadControlPlane } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
+import { loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
 import { RUN_STATUS_OPTIONS } from '$lib/types/control-plane';
 
 export const load: PageServerLoad = async () => {
-	const controlPlanePromise = loadControlPlane();
+	const controlPlanePromise = loadControlPlaneWithRunTelemetry();
 	const [data, threads] = await Promise.all([
 		controlPlanePromise,
 		listAgentThreads({
@@ -22,8 +22,13 @@ export const load: PageServerLoad = async () => {
 	);
 	const providerIdsWithRuns = new Set(
 		data.runs
-			.map((run) => run.providerId)
-			.filter((providerId): providerId is string => Boolean(providerId))
+		.map((run) => run.providerId)
+		.filter((providerId): providerId is string => Boolean(providerId))
+	);
+	const modelsWithRuns = new Set(
+		data.runs
+			.map((run) => run.modelUsed?.trim() ?? '')
+			.filter((model): model is string => model.length > 0)
 	);
 
 	return {
@@ -40,6 +45,7 @@ export const load: PageServerLoad = async () => {
 		providers: [...data.providers]
 			.filter((provider) => providerIdsWithRuns.has(provider.id))
 			.map((provider) => ({ id: provider.id, name: provider.name }))
-			.sort((left, right) => left.name.localeCompare(right.name))
+			.sort((left, right) => left.name.localeCompare(right.name)),
+		models: [...modelsWithRuns].sort((left, right) => left.localeCompare(right))
 	};
 };

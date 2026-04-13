@@ -17,6 +17,7 @@ import {
 	loadControlPlane,
 	taskHasUnmetDependencies,
 	wouldCreateProjectCycle,
+	updateControlPlaneCollections,
 	updateControlPlane
 } from '$lib/server/control-plane';
 
@@ -165,20 +166,23 @@ export const actions: Actions = {
 
 		let projectUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			projects: data.projects.map((project) => {
-				if (project.id !== params.projectId) {
-					return project;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				projects: data.projects.map((project) => {
+					if (project.id !== params.projectId) {
+						return project;
+					}
 
-				projectUpdated = true;
-				return {
-					...project,
-					...projectUpdates,
-					parentProjectId: projectUpdates.parentProjectId || null
-				};
-			})
+					projectUpdated = true;
+					return {
+						...project,
+						...projectUpdates,
+						parentProjectId: projectUpdates.parentProjectId || null
+					};
+				})
+			},
+			changedCollections: ['projects']
 		}));
 
 		if (!projectUpdated) {

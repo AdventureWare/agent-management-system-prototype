@@ -20,8 +20,12 @@ import {
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
 	loadControlPlane,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
+import {
+	createTaskRecord,
+	mutateTaskCollections
+} from '$lib/server/control-plane-repository';
 import { extractThreadTaskReference } from '$lib/server/thread-task-references';
 import { extractThreadTaskRecoveryDraft } from '$lib/server/thread-task-recovery';
 import { buildPromptDigest } from '$lib/server/task-threads';
@@ -358,6 +362,7 @@ function reopenTasksForThreadRetry(input: {
 	data: ControlPlaneData;
 	sourceThreadId: string;
 	targetThreadId: string;
+	targetAgentThreadRunId?: string | null;
 	threadId: string | null;
 	prompt: string;
 	tasks: Task[];
@@ -378,10 +383,12 @@ function reopenTasksForThreadRetry(input: {
 			executionSurfaceId: latestRun?.executionSurfaceId ?? null,
 			assumedRoleId: latestRun?.assumedRoleId ?? task.desiredRoleId,
 			providerId: latestRun?.providerId ?? null,
+			agentThreadRunId: input.targetAgentThreadRunId ?? null,
 			status: 'running',
 			startedAt: now,
 			threadId: input.threadId,
 			agentThreadId: input.targetThreadId,
+			modelUsed: latestRun?.modelUsed ?? null,
 			promptDigest: buildPromptDigest(input.prompt),
 			artifactPaths: latestRun?.artifactPaths.length
 				? latestRun.artifactPaths
@@ -643,19 +650,17 @@ export const actions: Actions = {
 			updatedAt: latestRun?.updatedAt ?? thread.updatedAt
 		});
 
-		await updateControlPlane((data) => ({
-			...data,
-			tasks: [restoredTask, ...data.tasks],
-			decisions: [
+		await createTaskRecord({
+			task: restoredTask,
+			prependDecisions: [
 				createDecision({
 					taskId: restoredTask.id,
 					runId: latestRun?.id ?? null,
 					decisionType: 'task_plan_updated',
 					summary: `Restored missing task ${restoredTask.id} from orphaned thread ${params.threadId}.`
-				}),
-				...(data.decisions ?? [])
+				})
 			]
-		}));
+		});
 
 		return {
 			ok: true,
@@ -707,8 +712,10 @@ export const actions: Actions = {
 			});
 		}
 
+		let sendResult;
+
 		try {
-			await sendAgentThreadMessage(params.threadId, prompt);
+			sendResult = await sendAgentThreadMessage(params.threadId, prompt);
 		} catch (err) {
 			return fail(400, {
 				message:
@@ -722,19 +729,21 @@ export const actions: Actions = {
 		const tasksToCarryForward = getTasksToCarryForward(current, params.threadId);
 
 		if (tasksToCarryForward.length > 0) {
-			await updateControlPlane((data) =>
-				reopenTasksForThreadRetry({
+			await updateControlPlaneCollections((data) => ({
+				data: reopenTasksForThreadRetry({
 					data,
 					sourceThreadId: params.threadId,
 					targetThreadId: params.threadId,
+					targetAgentThreadRunId: sendResult.runId,
 					threadId: refreshed.threadId,
 					prompt,
 					tasks: getTasksToCarryForward(data, params.threadId),
 					runSummary: 'Recovered the work thread and re-queued the latest request.',
 					decisionSummary: (task) =>
 						`Recovered thread ${params.threadId} from the thread detail page and re-queued the latest request for ${task.title}.`
-				})
-			);
+				}),
+				changedCollections: ['tasks', 'runs', 'reviews', 'approvals', 'decisions']
+			}));
 		}
 
 		return {
@@ -805,19 +814,21 @@ export const actions: Actions = {
 		const tasksToCarryForward = getTasksToCarryForward(current, params.threadId);
 
 		if (tasksToCarryForward.length > 0) {
-			await updateControlPlane((data) =>
-				reopenTasksForThreadRetry({
+			await updateControlPlaneCollections((data) => ({
+				data: reopenTasksForThreadRetry({
 					data,
 					sourceThreadId: params.threadId,
 					targetThreadId: nextThread.agentThreadId,
+					targetAgentThreadRunId: nextThread.runId,
 					threadId: null,
 					prompt,
 					tasks: getTasksToCarryForward(data, params.threadId),
 					runSummary: 'Moved the latest request into a new work thread.',
 					decisionSummary: (task) =>
 						`Moved the latest request from thread ${params.threadId} to fresh thread ${nextThread.agentThreadId} from the thread detail page for ${task.title}.`
-				})
-			);
+				}),
+				changedCollections: ['tasks', 'runs', 'reviews', 'approvals', 'decisions']
+			}));
 		}
 
 		return {
@@ -861,108 +872,125 @@ export const actions: Actions = {
 			return fail(409, { message: 'No saved thread response is available to approve yet.' });
 		}
 
-		const openReview = getOpenReviewForTask(current, task.id);
-		const pendingApproval = getPendingApprovalForTask(current, task.id);
 		const now = new Date().toISOString();
-		const hasCurrentRunReview = current.reviews.some(
-			(review) => review.taskId === task.id && review.runId === task.latestRunId
-		);
-		const hasCurrentRunCompletionApproval = current.approvals.some(
-			(approval) =>
-				approval.taskId === task.id &&
-				approval.mode === 'before_complete' &&
-				approval.runId === task.latestRunId
-		);
 
-		await updateControlPlane((data) => ({
-			...data,
-			reviews: (() => {
-				const nextReviews = data.reviews.map((review) =>
-					review.id === openReview?.id
-						? {
-								...review,
-								status: 'approved' as const,
-								updatedAt: now,
-								resolvedAt: now,
-								summary: 'Approved from the thread detail page while completing the task.'
-							}
-						: review
+		const completedTask = await mutateTaskCollections({
+			taskId: task.id,
+			mutate: (taskFromData, data) => {
+				const openReviewFromData = getOpenReviewForTask(data, taskFromData.id);
+				const pendingApprovalFromData = getPendingApprovalForTask(data, taskFromData.id);
+				const hasCurrentRunReview = data.reviews.some(
+					(review) => review.taskId === taskFromData.id && review.runId === taskFromData.latestRunId
+				);
+				const hasCurrentRunCompletionApproval = data.approvals.some(
+					(approval) =>
+						approval.taskId === taskFromData.id &&
+						approval.mode === 'before_complete' &&
+						approval.runId === taskFromData.latestRunId
 				);
 
-				if (!openReview && task.requiresReview && !hasCurrentRunReview) {
-					nextReviews.unshift(
-						createReview({
-							taskId: task.id,
-							runId: task.latestRunId,
-							status: 'approved',
-							resolvedAt: now,
-							summary: 'Approved from the thread detail page while completing the task.'
-						})
-					);
-				}
+				return {
+					data: {
+						...data,
+						reviews: (() => {
+							const nextReviews = data.reviews.map((review) =>
+								review.id === openReviewFromData?.id
+									? {
+											...review,
+											status: 'approved' as const,
+											updatedAt: now,
+											resolvedAt: now,
+											summary:
+												'Approved from the thread detail page while completing the task.'
+										}
+									: review
+							);
 
-				return nextReviews;
-			})(),
-			approvals: (() => {
-				const nextApprovals = data.approvals.map((approval) =>
-					approval.id === pendingApproval?.id
-						? {
-								...approval,
-								status: 'approved' as const,
-								updatedAt: now,
-								resolvedAt: now,
-								summary: 'Approved from the thread detail page while completing the task.'
+							if (!openReviewFromData && taskFromData.requiresReview && !hasCurrentRunReview) {
+								nextReviews.unshift(
+									createReview({
+										taskId: taskFromData.id,
+										runId: taskFromData.latestRunId,
+										status: 'approved',
+										resolvedAt: now,
+										summary:
+											'Approved from the thread detail page while completing the task.'
+									})
+								);
 							}
-						: approval
-				);
 
-				if (
-					!pendingApproval &&
-					task.approvalMode === 'before_complete' &&
-					!hasCurrentRunCompletionApproval
-				) {
-					nextApprovals.unshift(
-						createApproval({
-							taskId: task.id,
-							runId: task.latestRunId,
-							mode: 'before_complete',
-							status: 'approved',
-							resolvedAt: now,
-							summary: 'Approved from the thread detail page while completing the task.'
-						})
-					);
-				}
+							return nextReviews;
+						})(),
+						approvals: (() => {
+							const nextApprovals = data.approvals.map((approval) =>
+								approval.id === pendingApprovalFromData?.id
+									? {
+											...approval,
+											status: 'approved' as const,
+											updatedAt: now,
+											resolvedAt: now,
+											summary:
+												'Approved from the thread detail page while completing the task.'
+										}
+									: approval
+							);
 
-				return nextApprovals;
-			})(),
-			runs: data.runs.map(
-				updateLatestRunForTask(
-					task.latestRunId,
-					'Task approved and completed from the thread detail page.'
-				)
-			),
-			tasks: data.tasks.map((candidate) =>
-				candidate.id === task.id
-					? {
-							...candidate,
-							status: 'done',
-							blockedReason: '',
-							updatedAt: now
-						}
-					: candidate
-			),
-			decisions: [
-				createDecision({
-					taskId: task.id,
-					runId: task.latestRunId,
-					decisionType: 'task_completed',
-					summary:
-						'Approved the thread response and completed the task from the thread detail page.',
-					createdAt: now
-				}),
-				...(data.decisions ?? [])
-			]
-		}));
+							if (
+								!pendingApprovalFromData &&
+								taskFromData.approvalMode === 'before_complete' &&
+								!hasCurrentRunCompletionApproval
+							) {
+								nextApprovals.unshift(
+									createApproval({
+										taskId: taskFromData.id,
+										runId: taskFromData.latestRunId,
+										mode: 'before_complete',
+										status: 'approved',
+										resolvedAt: now,
+										summary:
+											'Approved from the thread detail page while completing the task.'
+									})
+								);
+							}
+
+							return nextApprovals;
+						})(),
+						runs: data.runs.map(
+							updateLatestRunForTask(
+								taskFromData.latestRunId,
+								'Task approved and completed from the thread detail page.'
+							)
+						),
+						tasks: data.tasks.map((candidate) =>
+							candidate.id === taskFromData.id
+								? {
+										...candidate,
+										status: 'done',
+										blockedReason: '',
+										updatedAt: now
+									}
+								: candidate
+						),
+						decisions: [
+							createDecision({
+								taskId: taskFromData.id,
+								runId: taskFromData.latestRunId,
+								decisionType: 'task_completed',
+								summary:
+									'Approved the thread response and completed the task from the thread detail page.',
+								createdAt: now
+							}),
+							...(data.decisions ?? [])
+						]
+					},
+					changedCollections: ['reviews', 'approvals', 'runs', 'tasks', 'decisions']
+				};
+			}
+		});
+
+		if (!completedTask) {
+			return fail(404, { message: 'No task response is linked to this thread.' });
+		}
 
 		return {
 			ok: true,

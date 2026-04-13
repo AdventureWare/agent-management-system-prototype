@@ -92,6 +92,95 @@
 
 		return 'border-slate-700 bg-slate-950/70 text-slate-300';
 	}
+
+	function workloadStateLabel(state: 'idle' | 'available' | 'saturated' | 'offline') {
+		switch (state) {
+			case 'idle':
+				return 'Idle';
+			case 'available':
+				return 'Available';
+			case 'saturated':
+				return 'Saturated';
+			case 'offline':
+			default:
+				return 'Offline';
+		}
+	}
+
+	function workloadStateClass(state: 'idle' | 'available' | 'saturated' | 'offline') {
+		switch (state) {
+			case 'idle':
+				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
+			case 'available':
+				return 'border-sky-900/70 bg-sky-950/40 text-sky-200';
+			case 'saturated':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			case 'offline':
+			default:
+				return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+		}
+	}
+
+	function buildExecutionSurfaceAvailabilitySummary(task: {
+		matchingExecutionSurfaceCount: number;
+		eligibleExecutionSurfaceCount: number;
+		idleExecutionSurfaceCount: number;
+		saturatedExecutionSurfaceCount: number;
+		offlineExecutionSurfaceCount: number;
+		suggestedExecutionSurfaceNames: string[];
+		saturatedExecutionSurfaceNames: string[];
+		offlineExecutionSurfaceNames: string[];
+	}) {
+		if (task.eligibleExecutionSurfaceCount > 0) {
+			const summary = [
+				`${task.eligibleExecutionSurfaceCount} execution surface(s) can take work now`,
+				task.idleExecutionSurfaceCount > 0 ? `${task.idleExecutionSurfaceCount} idle` : 'none idle'
+			];
+
+			if (task.suggestedExecutionSurfaceNames.length > 0) {
+				summary.push(task.suggestedExecutionSurfaceNames.join(', '));
+			}
+
+			return {
+				tone: 'ready' as const,
+				text: summary.join(' · ')
+			};
+		}
+
+		if (task.matchingExecutionSurfaceCount > 0) {
+			const blockers: string[] = [];
+
+			if (task.saturatedExecutionSurfaceCount > 0) {
+				blockers.push(
+					`${task.saturatedExecutionSurfaceCount} saturated${
+						task.saturatedExecutionSurfaceNames.length > 0
+							? `: ${task.saturatedExecutionSurfaceNames.join(', ')}`
+							: ''
+					}`
+				);
+			}
+
+			if (task.offlineExecutionSurfaceCount > 0) {
+				blockers.push(
+					`${task.offlineExecutionSurfaceCount} offline${
+						task.offlineExecutionSurfaceNames.length > 0
+							? `: ${task.offlineExecutionSurfaceNames.join(', ')}`
+							: ''
+					}`
+				);
+			}
+
+			return {
+				tone: 'warning' as const,
+				text: `No matching execution surfaces can take work now. ${blockers.join(' · ')}`
+			};
+		}
+
+		return {
+			tone: 'danger' as const,
+			text: 'No execution surfaces currently match this task’s recorded routing requirements.'
+		};
+	}
 </script>
 
 <AppPage width="full">
@@ -536,6 +625,7 @@
 							{:else}
 								<div class="space-y-3">
 									{#each data.scheduledTasks as task (task.id)}
+										{@const availabilitySummary = buildExecutionSurfaceAvailabilitySummary(task)}
 										<a
 											class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
 											href={resolve(`/app/tasks/${task.id}`)}
@@ -571,22 +661,23 @@
 															{/each}
 														</div>
 													{/if}
-													{#if task.eligibleExecutionSurfaceCount > 0}
-														<p class="text-xs text-slate-400">
-															{task.eligibleExecutionSurfaceCount} matching execution surface(s)
-															{#if task.suggestedExecutionSurfaceNames.length > 0}
-																: {task.suggestedExecutionSurfaceNames.join(', ')}
-															{/if}
-														</p>
-													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
-														<p class="text-xs text-rose-300">
-															No execution surfaces currently match this task’s recorded
-															requirements.
-														</p>
-													{/if}
-													{#if task.assignedExecutionSurfaceEligible === false}
+													<p
+														class={`text-xs ${availabilitySummary.tone === 'ready' ? 'text-slate-400' : availabilitySummary.tone === 'warning' ? 'text-amber-300' : 'text-rose-300'}`}
+													>
+														{availabilitySummary.text}
+													</p>
+													{#if task.assignedExecutionSurfaceMatchesRequirements === false}
 														<p class="text-xs text-amber-300">
-															The current assignee does not match the recorded requirements.
+															The current assignee does not match the recorded routing requirements.
+														</p>
+													{:else if task.assignedExecutionSurfaceWorkloadState === 'saturated'}
+														<p class="text-xs text-amber-300">
+															The current assignee is saturated and cannot take more queued work
+															right now.
+														</p>
+													{:else if task.assignedExecutionSurfaceWorkloadState === 'offline'}
+														<p class="text-xs text-rose-300">
+															The current assignee is offline right now.
 														</p>
 													{/if}
 													{#if task.blockedReason}
@@ -623,6 +714,7 @@
 							{:else}
 								<div class="space-y-3">
 									{#each data.unscheduledTasks as task (task.id)}
+										{@const availabilitySummary = buildExecutionSurfaceAvailabilitySummary(task)}
 										<a
 											class="block rounded-2xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-sky-400/40"
 											href={resolve(`/app/tasks/${task.id}`)}
@@ -663,22 +755,23 @@
 															{/each}
 														</div>
 													{/if}
-													{#if task.eligibleExecutionSurfaceCount > 0}
-														<p class="text-xs text-slate-400">
-															{task.eligibleExecutionSurfaceCount} matching execution surface(s)
-															{#if task.suggestedExecutionSurfaceNames.length > 0}
-																: {task.suggestedExecutionSurfaceNames.join(', ')}
-															{/if}
-														</p>
-													{:else if task.requiredCapabilityNames.length > 0 || task.requiredToolNames.length > 0}
-														<p class="text-xs text-rose-300">
-															No execution surfaces currently match this task’s recorded
-															requirements.
-														</p>
-													{/if}
-													{#if task.assignedExecutionSurfaceEligible === false}
+													<p
+														class={`text-xs ${availabilitySummary.tone === 'ready' ? 'text-slate-400' : availabilitySummary.tone === 'warning' ? 'text-amber-300' : 'text-rose-300'}`}
+													>
+														{availabilitySummary.text}
+													</p>
+													{#if task.assignedExecutionSurfaceMatchesRequirements === false}
 														<p class="text-xs text-amber-300">
-															The current assignee does not match the recorded requirements.
+															The current assignee does not match the recorded routing requirements.
+														</p>
+													{:else if task.assignedExecutionSurfaceWorkloadState === 'saturated'}
+														<p class="text-xs text-amber-300">
+															The current assignee is saturated and cannot take more queued work
+															right now.
+														</p>
+													{:else if task.assignedExecutionSurfaceWorkloadState === 'offline'}
+														<p class="text-xs text-rose-300">
+															The current assignee is offline right now.
 														</p>
 													{/if}
 													{#if task.blockedReason}
@@ -759,7 +852,14 @@
 						<article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="ui-wrap-anywhere font-medium text-white">{executionSurface.name}</p>
+									<div class="flex flex-wrap items-center gap-2">
+										<p class="ui-wrap-anywhere font-medium text-white">{executionSurface.name}</p>
+										<span
+											class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workloadStateClass(executionSurface.workloadState)}`}
+										>
+											{workloadStateLabel(executionSurface.workloadState)}
+										</span>
+									</div>
 									<p class="mt-1 text-xs text-slate-500">{executionSurface.status}</p>
 								</div>
 								<p
@@ -788,6 +888,28 @@
 										class={`mt-2 text-lg font-semibold ${executionSurfaceLoadClass(executionSurface.remainingHours)}`}
 									>
 										{executionSurface.remainingHours}
+									</p>
+								</div>
+							</div>
+
+							<div class="mt-4 grid gap-3 sm:grid-cols-3">
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Open tasks</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{executionSurface.assignedOpenTaskCount}/{executionSurface.assignmentLimit}
+									</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Active runs</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{executionSurface.activeRunCount}/{executionSurface.concurrencyLimit}
+									</p>
+								</div>
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Open slots</p>
+									<p class="mt-2 text-lg font-semibold text-white">
+										{executionSurface.availableAssignmentCapacity} task · {executionSurface.availableRunCapacity}
+										run
 									</p>
 								</div>
 							</div>

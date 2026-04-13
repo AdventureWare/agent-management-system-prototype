@@ -2,11 +2,12 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
-import { getExecutionSurfaces, loadControlPlane } from '$lib/server/control-plane';
+import { getExecutionSurfaces } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
+import { loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const controlPlanePromise = loadControlPlane();
+	const controlPlanePromise = loadControlPlaneWithRunTelemetry();
 	const [data, threads] = await Promise.all([
 		controlPlanePromise,
 		listAgentThreads({

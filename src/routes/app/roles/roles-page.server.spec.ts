@@ -42,11 +42,13 @@ vi.mock('$lib/server/control-plane', () => ({
 		(data: ControlPlaneData) => data.executionSurfaces ?? data.executionSurfaces
 	),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
-	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
-		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
-	})
+	updateControlPlaneCollections: vi.fn(
+		async (updater: (data: ControlPlaneData) => { data: ControlPlaneData }) => {
+			controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData).data;
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.saved;
+		}
+	)
 }));
 
 import { actions, load } from './+page.server';

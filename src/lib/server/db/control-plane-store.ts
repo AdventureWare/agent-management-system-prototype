@@ -1,6 +1,8 @@
+import type Database from 'better-sqlite3';
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
 import { bumpStoreRevision, readStoreRevision } from '$lib/server/db/store-revisions';
+import { syncSqliteCollectionRecords } from '$lib/server/db/sqlite-collection-sync';
 import type {
 	Approval,
 	ControlPlaneData,
@@ -31,7 +33,7 @@ const CONTROL_PLANE_COLLECTIONS = [
 ] as const satisfies Array<keyof ControlPlaneData>;
 const CONTROL_PLANE_STORE_NAME = 'control-plane';
 
-type ControlPlaneCollection = (typeof CONTROL_PLANE_COLLECTIONS)[number];
+export type ControlPlaneCollection = (typeof CONTROL_PLANE_COLLECTIONS)[number];
 
 type ControlPlaneRecordPayload =
 	| Provider
@@ -136,8 +138,37 @@ export function loadControlPlaneSnapshotFromSqlite(): {
 	}
 }
 
+function persistControlPlaneCollections(
+	db: Database.Database,
+	data: ControlPlaneData,
+	collections: readonly ControlPlaneCollection[],
+	options: { expectedRevision?: number } = {}
+) {
+	bumpStoreRevision(db, CONTROL_PLANE_STORE_NAME, options.expectedRevision);
+
+	for (const collection of collections) {
+		const records = data[collection] ?? [];
+		syncSqliteCollectionRecords(db, {
+			tableName: 'control_plane_records',
+			collection,
+			records: records.map((record) => ({
+				id: record.id,
+				payload: JSON.stringify(record)
+			}))
+		});
+	}
+}
+
 export function saveControlPlaneToSqlite(
 	data: ControlPlaneData,
+	options: { expectedRevision?: number } = {}
+) {
+	saveControlPlaneCollectionsToSqlite(data, CONTROL_PLANE_COLLECTIONS, options);
+}
+
+export function saveControlPlaneCollectionsToSqlite(
+	data: ControlPlaneData,
+	collections: Iterable<ControlPlaneCollection>,
 	options: { expectedRevision?: number } = {}
 ) {
 	migrateAppDb();
@@ -145,29 +176,19 @@ export function saveControlPlaneToSqlite(
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction(
-			(input: ControlPlaneData, expectedRevision?: number) => {
-				bumpStoreRevision(db, CONTROL_PLANE_STORE_NAME, expectedRevision);
-				db.exec('delete from control_plane_records');
+		const collectionList = [...new Set(collections)];
 
-				const insertRecord = db.prepare(
-					`
-					insert into control_plane_records (collection, id, position, payload)
-					values (?, ?, ?, ?)
-				`
-				);
+		if (collectionList.length === 0) {
+			return;
+		}
 
-				for (const collection of CONTROL_PLANE_COLLECTIONS) {
-					const records = input[collection] ?? [];
-
-					for (const [position, record] of records.entries()) {
-						insertRecord.run(collection, record.id, position, JSON.stringify(record));
-					}
-				}
+		const replaceSelectedCollections = db.transaction(
+			(input: ControlPlaneData, nextCollections: ControlPlaneCollection[], expectedRevision?: number) => {
+				persistControlPlaneCollections(db, input, nextCollections, { expectedRevision });
 			}
 		);
 
-		replaceAllRecords(data, options.expectedRevision);
+		replaceSelectedCollections(data, collectionList, options.expectedRevision);
 	} finally {
 		db.close();
 	}

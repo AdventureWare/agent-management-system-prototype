@@ -17,7 +17,7 @@ import {
 	loadControlPlane,
 	parseProviderSetupStatus,
 	parseExecutionSurfaceStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import {
 	PROVIDER_SETUP_STATUS_OPTIONS,
@@ -167,21 +167,24 @@ export const actions: Actions = {
 
 		let providerUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			providers: data.providers.map((provider) => {
-				if (provider.id !== providerId) {
-					return provider;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				providers: data.providers.map((provider) => {
+					if (provider.id !== providerId) {
+						return provider;
+					}
 
-				providerUpdated = true;
+					providerUpdated = true;
 
-				return {
-					...provider,
-					enabled,
-					setupStatus
-				};
-			})
+					return {
+						...provider,
+						enabled,
+						setupStatus
+					};
+				})
+			},
+			changedCollections: ['providers']
 		}));
 
 		if (!providerUpdated) {
@@ -206,20 +209,23 @@ export const actions: Actions = {
 
 		let executionSurfaceUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			executionSurfaces: data.executionSurfaces.map((executionSurface) => {
-				if (executionSurface.id !== executionSurfaceId) {
-					return executionSurface;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				executionSurfaces: data.executionSurfaces.map((executionSurface) => {
+					if (executionSurface.id !== executionSurfaceId) {
+						return executionSurface;
+					}
 
-				executionSurfaceUpdated = true;
+					executionSurfaceUpdated = true;
 
-				return {
-					...executionSurface,
-					status
-				};
-			})
+					return {
+						...executionSurface,
+						status
+					};
+				})
+			},
+			changedCollections: ['executionSurfaces']
 		}));
 
 		if (!executionSurfaceUpdated) {

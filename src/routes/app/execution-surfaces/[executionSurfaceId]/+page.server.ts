@@ -11,7 +11,7 @@ import {
 	loadControlPlane,
 	parseExecutionSurfaceLocation,
 	parseExecutionSurfaceStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 
@@ -157,26 +157,29 @@ export const actions: Actions = {
 
 		let executionSurfaceUpdated = false;
 
-		await updateControlPlane((data) => ({
-			...data,
-			executionSurfaces: data.executionSurfaces.map((executionSurface) => {
-				if (executionSurface.id !== params.executionSurfaceId) {
-					return executionSurface;
-				}
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				executionSurfaces: data.executionSurfaces.map((executionSurface) => {
+					if (executionSurface.id !== params.executionSurfaceId) {
+						return executionSurface;
+					}
 
-				executionSurfaceUpdated = true;
+					executionSurfaceUpdated = true;
 
-				return {
-					...executionSurface,
-					...executionSurfaceUpdates,
-					capacity:
-						Number.isFinite(executionSurfaceUpdates.capacity) &&
-						executionSurfaceUpdates.capacity > 0
-							? executionSurfaceUpdates.capacity
-							: 1,
-					lastSeenAt: new Date().toISOString()
-				};
-			})
+					return {
+						...executionSurface,
+						...executionSurfaceUpdates,
+						capacity:
+							Number.isFinite(executionSurfaceUpdates.capacity) &&
+							executionSurfaceUpdates.capacity > 0
+								? executionSurfaceUpdates.capacity
+								: 1,
+						lastSeenAt: new Date().toISOString()
+					};
+				})
+			},
+			changedCollections: ['executionSurfaces']
 		}));
 
 		if (!executionSurfaceUpdated) {

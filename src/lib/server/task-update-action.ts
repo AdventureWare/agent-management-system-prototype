@@ -1,12 +1,9 @@
 import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
-import {
-	createDecision,
-	loadControlPlane,
-	parseTaskStatus,
-	updateControlPlane
-} from '$lib/server/control-plane';
+import { createDecision, loadControlPlane, parseTaskStatus } from '$lib/server/control-plane';
+import { updateTaskRecord } from '$lib/server/control-plane-repository';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
+import { describeExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
 import { isValidTaskDate, readTaskDetailForm } from '$lib/server/task-form';
 import { resolveTaskPlanUpdate } from '$lib/server/task-plan-updates';
 
@@ -161,63 +158,82 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		goal,
 		assignedExecutionSurface
 	});
+
+	if (nextAssignedExecutionSurface) {
+		const candidateTask = {
+			...existingTask,
+			projectId: project.id,
+			status: nextStatus,
+			assigneeExecutionSurfaceId: nextAssignedExecutionSurface.id,
+			desiredRoleId: nextDesiredRoleId,
+			requiredCapabilityNames: nextRequiredCapabilityNames,
+			requiredToolNames: nextRequiredToolNames
+		};
+		const fit = describeExecutionSurfaceTaskFit(
+			{
+				...current,
+				tasks: current.tasks.map((candidate) =>
+					candidate.id === taskId ? candidateTask : candidate
+				)
+			},
+			nextAssignedExecutionSurface,
+			candidateTask
+		);
+
+		if (!fit.withinAssignmentLimit) {
+			throw new TaskUpdateActionError(
+				409,
+				`${nextAssignedExecutionSurface.name} is already at its task capacity.`
+			);
+		}
+	}
+
 	const now = new Date().toISOString();
-	let taskUpdated = false;
-
-	await updateControlPlane((data) => ({
-		...data,
-		tasks: data.tasks.map((task) => {
-			if (task.id !== taskId) {
-				return task;
-			}
-
-			taskUpdated = true;
-
-			return {
-				...task,
-				title: nextTitle,
-				summary: nextInstructions,
-				successCriteria: nextSuccessCriteria,
-				readyCondition: nextReadyCondition,
-				expectedOutcome: nextExpectedOutcome,
-				delegationPacket: nextDelegationPacket,
-				projectId: project.id,
-				goalId: nextGoalId,
-				status: nextStatus,
-				assigneeExecutionSurfaceId: nextAssignedExecutionSurface?.id ?? null,
-				priority: nextPriority,
-				riskLevel: nextRiskLevel,
-				approvalMode: nextApprovalMode,
-				requiredThreadSandbox: nextRequiredThreadSandbox,
-				requiresReview: nextRequiresReview,
-				desiredRoleId: nextDesiredRoleId,
-				requiredPromptSkillNames: nextRequiredPromptSkillNames,
-				requiredCapabilityNames: nextRequiredCapabilityNames,
-				requiredToolNames: nextRequiredToolNames,
-				blockedReason: nextBlockedReason,
-				dependencyTaskIds: nextDependencyTaskIds,
-				targetDate: nextTargetDate,
-				delegationAcceptance:
-					task.parentTaskId && decisionSummary ? null : (task.delegationAcceptance ?? null),
-				artifactPath:
-					task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
-				updatedAt: now
-			};
+	const updatedTask = await updateTaskRecord({
+		taskId,
+		update: (task) => ({
+			...task,
+			title: nextTitle,
+			summary: nextInstructions,
+			successCriteria: nextSuccessCriteria,
+			readyCondition: nextReadyCondition,
+			expectedOutcome: nextExpectedOutcome,
+			delegationPacket: nextDelegationPacket,
+			projectId: project.id,
+			goalId: nextGoalId,
+			status: nextStatus,
+			assigneeExecutionSurfaceId: nextAssignedExecutionSurface?.id ?? null,
+			priority: nextPriority,
+			riskLevel: nextRiskLevel,
+			approvalMode: nextApprovalMode,
+			requiredThreadSandbox: nextRequiredThreadSandbox,
+			requiresReview: nextRequiresReview,
+			desiredRoleId: nextDesiredRoleId,
+			requiredPromptSkillNames: nextRequiredPromptSkillNames,
+			requiredCapabilityNames: nextRequiredCapabilityNames,
+			requiredToolNames: nextRequiredToolNames,
+			blockedReason: nextBlockedReason,
+			dependencyTaskIds: nextDependencyTaskIds,
+			targetDate: nextTargetDate,
+			delegationAcceptance:
+				task.parentTaskId && decisionSummary ? null : (task.delegationAcceptance ?? null),
+			artifactPath:
+				task.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
+			updatedAt: now
 		}),
-		decisions: decisionSummary
+		prependDecisions: decisionSummary
 			? [
 					createDecision({
 						taskId,
 						decisionType: 'task_plan_updated',
 						summary: decisionSummary,
 						createdAt: now
-					}),
-					...(data.decisions ?? [])
+					})
 				]
-			: (data.decisions ?? [])
-	}));
+			: undefined
+	});
 
-	if (!taskUpdated) {
+	if (!updatedTask) {
 		throw new TaskUpdateActionError(404, 'Task not found.');
 	}
 

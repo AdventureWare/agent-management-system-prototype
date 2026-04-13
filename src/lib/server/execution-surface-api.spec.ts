@@ -313,8 +313,8 @@ describe('execution-surface-api helpers', () => {
 		expect(fit.missingCapabilityNames).toEqual(['citations']);
 		expect(fit.missingToolNames).toEqual(['codex']);
 		expect(suggestions.slice(0, 2).map((candidate) => candidate.executionSurfaceId)).toEqual([
-			'worker_one',
-			'worker_two'
+			'worker_two',
+			'worker_one'
 		]);
 		expect(suggestions[2]).toEqual(
 			expect.objectContaining({
@@ -324,6 +324,31 @@ describe('execution-surface-api helpers', () => {
 				missingToolNames: ['codex']
 			})
 		);
+	});
+
+	it('treats task capacity as a workload guardrail for new assignments', () => {
+		const { data, worker } = buildFixture();
+		data.executionSurfaces[0] = {
+			...worker,
+			capacity: 1
+		};
+
+		const fit = describeExecutionSurfaceTaskFit(data, data.executionSurfaces[0]!, data.tasks[0]!);
+		const view = getExecutionSurfaceTaskView(data, data.executionSurfaces[0]!);
+
+		expect(fit.withinAssignmentLimit).toBe(false);
+		expect(fit.workloadState).toBe('saturated');
+		expect(view.available).toHaveLength(0);
+
+		try {
+			claimTaskForExecutionSurface(data, data.executionSurfaces[0]!, 'task_ready_match');
+			throw new Error('Expected claimTaskForExecutionSurface to reject the claim.');
+		} catch (thrown) {
+			expect(thrown).toMatchObject({
+				status: 409,
+				body: { message: 'ExecutionSurface is already at its task capacity.' }
+			});
+		}
 	});
 
 	it('does not expose ready tasks with unmet dependencies', () => {

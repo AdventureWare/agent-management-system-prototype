@@ -15,7 +15,8 @@
       "envVars": [],
       "capabilities": [],
       "defaultThreadSandbox": "workspace-write",
-      "notes": ""
+      "notes": "",
+      "modelPricing": []
     },
     {
       "id": "provider_cloud_codex",
@@ -32,7 +33,8 @@
       "envVars": [],
       "capabilities": [],
       "defaultThreadSandbox": "workspace-write",
-      "notes": ""
+      "notes": "",
+      "modelPricing": []
     },
     {
       "id": "provider_web_research",
@@ -49,7 +51,8 @@
       "envVars": [],
       "capabilities": [],
       "defaultThreadSandbox": "workspace-write",
-      "notes": ""
+      "notes": "",
+      "modelPricing": []
     }
   ],
   "roles": [
@@ -453,10 +456,16 @@
       "successSignal": "My Grandma and I consistently use Kwipoo",
       "parentGoalId": "goal_d6d74659-eb0f-4060-8343-ee8d3f577117",
       "projectIds": [
-        "project_e133e364-2a20-4a99-98a9-6d414e0e9098"
+        "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
+        "project_0c1ad65b-9538-40f7-84b9-4108336470f5",
+        "project_28ceb721-f391-4ca2-a0e5-56c84bfbc71e",
+        "project_ac8530fd-dd43-4dd5-a5f0-b44e035f6f17",
+        "project_dd367528-853b-4b02-b4dc-db7c8ba9c481"
       ],
       "taskIds": [
-        "task_ae620901-ffb5-4327-962f-a75614eb9fef"
+        "task_ae620901-ffb5-4327-962f-a75614eb9fef",
+        "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+        "task_4f57e545-5eed-43f9-b284-1c1cf0cba14c"
       ],
       "targetDate": "2026-05-08",
       "planningPriority": 0,
@@ -695,7 +704,8 @@
         "task_65fa306c-7071-4547-93b0-18d868978308",
         "task_b7d3a67c-9882-43b6-8256-e60257707442",
         "task_93917865-7484-4a95-bb3a-0710d9f2661f",
-        "task_8515a8aa-4cf1-44a3-8a11-55edbaa991d1"
+        "task_8515a8aa-4cf1-44a3-8a11-55edbaa991d1",
+        "task_63c0c1a6-6a69-4045-bc90-911f567d4a7c"
       ],
       "targetDate": "2026-04-10",
       "planningPriority": 0,
@@ -757,6 +767,150 @@
   ],
   "executionSurfaces": [],
   "tasks": [
+    {
+      "id": "task_63c0c1a6-6a69-4045-bc90-911f567d4a7c",
+      "title": "Workflows",
+      "summary": "You are reviewing and extending an existing system that already includes tasks and roles. The missing layer is workflows.\r\n\r\nYour job is to review the current system and propose the smallest useful workflow model that fits the existing architecture without unnecessary abstraction or enterprise-style overengineering.\r\n\r\nContext:\r\n\r\n* We already have tasks.\r\n* We already have roles.\r\n* We do not yet have workflows as a first-class concept.\r\n* The goal is to add a workflow layer that coordinates tasks across time, dependencies, roles, and execution paths.\r\n* The system should support both repeatable processes and messy/adaptive work.\r\n* Do not replace tasks or roles. Workflows should sit above or around them.\r\n\r\nDesign intent:\r\n\r\n* A task is a unit of work.\r\n* A role is a capability profile suited for certain tasks.\r\n* A workflow is a structure that links tasks together into a process.\r\n* Workflows should make it easier to represent sequencing, dependencies, parallel work, routing, and overall process state.\r\n* The system must remain flexible enough for exploratory work, not just rigid predefined pipelines.\r\n\r\nWhat I want from you:\r\n\r\n1. Review the current implementation of tasks and roles.\r\n2. Identify any existing fields, patterns, or assumptions that already act like implicit workflows.\r\n3. Propose a minimal workflow model that integrates with the current system.\r\n4. Explain the tradeoffs of your design.\r\n5. Show how the model would work using at least 3 concrete examples:\r\n\r\n   * a simple linear workflow\r\n   * a workflow with parallel tasks\r\n   * a workflow with adaptive branching or uncertainty\r\n6. Recommend a phased implementation plan, starting with the smallest useful version.\r\n7. Highlight anything in the current schema or code that should be reused, changed, or avoided.\r\n\r\nConstraints:\r\n\r\n* Prefer simple, explicit models over highly abstract orchestration frameworks.\r\n* Do not introduce a complex workflow engine unless clearly justified.\r\n* Do not build a universal DSL.\r\n* Avoid premature automation.\r\n* Preserve human override and manual adjustment.\r\n* Assume the system may later involve AI agents, but do not design around speculative future complexity.\r\n* Optimize for clarity, maintainability, and real usefulness in a small-team environment.\r\n\r\nQuestions to answer:\r\n\r\n* What is the minimal workflow entity or set of entities we need?\r\n* Should workflows contain tasks directly, or should there be workflow-task instances?\r\n* How should dependencies be represented?\r\n* How should parallelizable work be modeled?\r\n* How should branching or follow-up task creation work in the early version?\r\n* What lifecycle states should a workflow have?\r\n* How should workflows interact with roles and assignment?\r\n* What should remain manual in v1?\r\n\r\nOutput format:\r\n\r\n* First: summary of current system findings\r\n* Second: proposed conceptual model\r\n* Third: recommended schema / type changes\r\n* Fourth: concrete examples\r\n* Fifth: phased implementation plan\r\n* Sixth: risks / overengineering traps to avoid\r\n\r\nImportant:\r\nDo not drift into vague theory. Ground everything in the existing system and show practical implementation detail.",
+      "successCriteria": "Instructions have been fulfilled",
+      "readyCondition": "Instructions have been fulfilled",
+      "expectedOutcome": "Instructions have been fulfilled",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "area": "product",
+      "goalId": "goal_26a850e3-5eac-4150-a96f-0574cd483595",
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": "danger-full-access",
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_6e8bdab6-50ac-4c53-b397-3fa686e43fd1",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-14",
+      "runCount": 1,
+      "latestRunId": "run_da84f826-910c-480b-86ba-d59f3fb774a3",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-10T21:53:32.825Z",
+      "updatedAt": "2026-04-10T21:59:57.670Z"
+    },
+    {
+      "id": "task_4f57e545-5eed-43f9-b284-1c1cf0cba14c",
+      "title": "Implement spots within spots",
+      "summary": "## Objective\r\nImplement support for nested spots: a spot can be created within another spot.\r\n\r\nExample:\r\n- `Home` contains `Main bedroom`\r\n- `Main bedroom` contains `Closet`\r\n\r\nApply the same capability to things and any other entity/object that can have a spot.\r\n\r\n## Important Constraints\r\n- Be careful with nesting complexity. This feature can get messy if the hierarchy is not handled cleanly.\r\n- Treat full directory/path/tree display as a risk area. Deeply nested spots can create very long paths in the UI.\r\n- Do not guess missing product rules. If limits, validation, or UX behavior for deep nesting are not already defined, keep that uncertainty explicit and document the assumption you used.\r\n\r\n## Expected Deliverable\r\n- A working implementation of spots within spots.\r\n- The same nested-spot behavior applied anywhere else that can currently have a spot.\r\n- Any necessary updates to affected creation, assignment, browsing, or display flows that depend on spot hierarchy.\r\n- A short implementation summary that calls out assumptions, edge cases, and any remaining risks around deep nesting or long path display.\r\n\r\n## Review Posture\r\nReview the work for:\r\n- Correct parent/child spot relationships\r\n- Regressions in existing spot behavior\r\n- Edge cases introduced by nesting\r\n- UI readability/usability when showing nested paths or trees, especially at deeper levels",
+      "successCriteria": "The instructions have been fulfilled",
+      "readyCondition": "The instructions have been fulfilled",
+      "expectedOutcome": "The instructions have been fulfilled",
+      "projectId": "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
+      "area": "product",
+      "goalId": "goal_9d2f54c4-9a20-4bd4-b023-c8198a6c52a7",
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": "danger-full-access",
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_58dd55b1-7f42-4618-88a8-0b65e4d12257",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-13",
+      "runCount": 1,
+      "latestRunId": "run_8fa0cda3-31e8-4e52-893d-3e826c425676",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
+      "attachments": [],
+      "createdAt": "2026-04-10T20:33:29.647Z",
+      "updatedAt": "2026-04-10T20:52:55.451Z"
+    },
+    {
+      "id": "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+      "title": "Improve efficiency of moving things in Kwipoo",
+      "summary": "# Objective\r\nIdentify possible enhancements that would make moving items in the Kwipoo app easier, more delightful, and better at keeping item locations and inventory accurate and up to date.\r\n\r\nThe underlying goal is that my Grandma and I consistently use Kwipoo.\r\n\r\n# Scope\r\nFocus on the workflow for moving things around in the app.\r\n\r\nInclude the example already identified:\r\n- Consider whether recently viewed or recently used places, spots, things, or similar entities should be ranked higher in lists and search during move flows.\r\n\r\nAlso research other potential enhancements beyond that example.\r\n\r\n# What To Produce\r\nProvide a concise set of researched enhancement ideas for this area of the product.\r\n\r\nFor each idea, include:\r\n- What the enhancement is.\r\n- Why it could improve ease of use, delight, or location/inventory accuracy.\r\n- Any important assumptions, open questions, or uncertainties.\r\n\r\nIf you compare or prioritize ideas, keep the basis for that judgment explicit rather than implied.\r\n\r\n# Constraints\r\n- Preserve the current intent: this is an exploration and improvement task, not a mandate to implement anything.\r\n- Do not guess missing product requirements, technical constraints, files, or implementation details.\r\n- Keep uncertainties explicit where information is missing.\r\n- Stay centered on the moving-things experience in Kwipoo and its impact on consistent real-world use.\r\n\r\n# Review Posture\r\nApproach this as product and UX research for execution planning:\r\n- Look for improvements that reduce friction in move flows.\r\n- Favor ideas that could help users keep locations and inventory accurate without extra effort.\r\n- Treat the \"recently viewed/used ranked higher\" example as one candidate, not the only answer.\r\n- Surface tradeoffs or questions when the best direction is unclear.",
+      "successCriteria": "The instructions have been fulfilled",
+      "readyCondition": "The instructions have been fulfilled",
+      "expectedOutcome": "The instructions have been fulfilled",
+      "projectId": "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
+      "area": "product",
+      "goalId": "goal_9d2f54c4-9a20-4bd4-b023-c8198a6c52a7",
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": "danger-full-access",
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_759901eb-4bd5-4428-a064-59dfdc06d84d",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-10",
+      "runCount": 1,
+      "latestRunId": "run_8c378563-0625-443c-85b7-98866e8128eb",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
+      "attachments": [],
+      "createdAt": "2026-04-10T19:59:08.768Z",
+      "updatedAt": "2026-04-10T20:05:44.487Z"
+    },
+    {
+      "id": "task_1d73364e-548f-41b7-ae62-cdad42466a44",
+      "title": "Ability to give other users/people things, places, sets.",
+      "summary": "## Objective\r\nAssess how Kwipoo could support users giving or transferring `things`, `places`, and `sets` to other users/people, and produce a practical implementation plan.\r\n\r\nThis work is for planning and review, not automatic implementation. The underlying user goal is that my Grandma and I can consistently use Kwipoo, especially when real-life ownership changes should be reflected in the app.\r\n\r\n## Product intent to preserve\r\n- `Things` are the clearest case: if I give someone an item/thing in real life, I want the app to reflect that exchange of ownership.\r\n- `Places` may be transferred less often, but this capability could still be useful.\r\n- `Sets` may also be transferred less often, but should be evaluated as part of the same problem.\r\n- The first version should stay simple.\r\n- A more advanced future version might include transaction/transfer/exchange records, but that future scope should stay explicit and not be assumed for the initial plan.\r\n\r\n## What to do\r\n1. Review the current codebase and product structure to understand how `things`, `places`, `sets`, users/people, and ownership currently work.\r\n2. Analyze whether these three entity types should share one transfer model or require different handling.\r\n3. Identify the smallest useful first version that supports ownership transfer without over-designing the feature.\r\n4. Note likely follow-on enhancements only if they are directly relevant to the design, such as transaction/transfer/exchange history.\r\n\r\n## Expected deliverable\r\nReturn a concise planning note in markdown that includes:\r\n- A brief summary of the current state as it relates to ownership and transfer.\r\n- Key product and technical considerations for enabling transfers between users/people.\r\n- A recommended v1 approach for `things`, `places`, and `sets`, including where they should behave the same or differently.\r\n- A phased implementation plan.\r\n- Open questions, uncertainties, and assumptions that need validation.\r\n- Main risks or edge cases that could affect adoption or correctness.\r\n\r\n## Constraints\r\n- Preserve the existing intent exactly: support giving/transferring `things`, and evaluate comparable support for `places` and `sets`.\r\n- Do not invent product scope, files, flows, or business rules that are not supported by the codebase or task context.\r\n- If important information is missing, state that explicitly instead of guessing.\r\n- Favor a simple initial solution over a fully featured transfer ledger.\r\n\r\n## Review posture\r\nApproach this as a product and engineering analysis task. Prioritize clarity, minimal viable scope, and future extensibility without prematurely committing to advanced transfer-record functionality.",
+      "successCriteria": "Instructions are fulfilled",
+      "readyCondition": "Instructions are fulfilled",
+      "expectedOutcome": "Instructions are fulfilled",
+      "projectId": "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
+      "area": "product",
+      "goalId": "",
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "review",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": "danger-full-access",
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_21cbee14-e7f1-4279-9c90-320385c87d7e",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": "2026-04-14",
+      "runCount": 1,
+      "latestRunId": "run_bbb70262-8fcf-47a5-9a50-d80530224b90",
+      "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
+      "attachments": [],
+      "createdAt": "2026-04-10T19:44:50.547Z",
+      "updatedAt": "2026-04-10T20:21:57.483Z"
+    },
     {
       "id": "task_ae620901-ffb5-4327-962f-a75614eb9fef",
       "title": "Improve UI and UX of managing permissions and sharing of data/objects",
@@ -827,7 +981,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:35:30.974Z",
-      "updatedAt": "2026-04-10T18:11:43.967Z"
+      "updatedAt": "2026-04-13T13:38:01.199Z"
     },
     {
       "id": "task_bb0e6498-6137-4bfb-a9b2-fd75ee7c24ad",
@@ -863,15 +1017,15 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-04-09T17:38:28.991Z",
-      "updatedAt": "2026-04-10T18:54:21.326Z"
+      "updatedAt": "2026-04-10T19:49:28.835Z"
     },
     {
       "id": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
       "title": "Capture run usage and rough cost rollups",
       "summary": "Implement the minimum viable usage and cost layer for AMS runs. Capture the smallest useful usage fields at run time, derive rough cost estimates, and expose basic rollups by provider, actor, project, and goal so routing tradeoffs can consider spend.",
-      "successCriteria": "",
-      "readyCondition": "",
-      "expectedOutcome": "",
+      "successCriteria": "The instructions have been fulfilled.",
+      "readyCondition": "The instructions have been fulfilled.",
+      "expectedOutcome": "The instructions have been fulfilled.",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "area": "ops",
       "goalId": "goal_26a850e3-5eac-4150-a96f-0574cd483595",
@@ -879,14 +1033,14 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "medium",
-      "status": "ready",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
-      "requiredThreadSandbox": null,
+      "requiredThreadSandbox": "danger-full-access",
       "requiresReview": true,
       "desiredRoleId": "role_app_worker",
       "assigneeExecutionSurfaceId": null,
-      "agentThreadId": null,
+      "agentThreadId": "thread_8fe02145-1cd4-4465-9ad2-1a031c3893d0",
       "requiredPromptSkillNames": [],
       "requiredCapabilityNames": [],
       "requiredToolNames": [],
@@ -896,20 +1050,20 @@
       ],
       "estimateHours": null,
       "targetDate": "2026-04-15",
-      "runCount": 0,
-      "latestRunId": null,
+      "runCount": 1,
+      "latestRunId": "run_65e99e95-1192-44b2-bfb3-b39db696612d",
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:01:32.363Z",
-      "updatedAt": "2026-04-10T16:01:32.363Z"
+      "updatedAt": "2026-04-10T20:04:10.725Z"
     },
     {
       "id": "task_ea0d7a37-c4ad-4521-9fec-cbbe567dbff5",
       "title": "Enforce actor workload guardrails in dispatch and planning",
       "summary": "Make dispatch and planning respect actor workload limits more explicitly. Use existing capacity and concurrency metadata to reduce overload, expose idle versus saturated actors, and prevent the queue from assigning work as if capacity were infinite.",
-      "successCriteria": "",
-      "readyCondition": "",
-      "expectedOutcome": "",
+      "successCriteria": "The instructions have been fulfilled satisfactory",
+      "readyCondition": "The instructions have been fulfilled satisfactory",
+      "expectedOutcome": "The instructions have been fulfilled satisfactory",
       "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
       "area": "ops",
       "goalId": "goal_26a850e3-5eac-4150-a96f-0574cd483595",
@@ -917,14 +1071,14 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "medium",
-      "status": "ready",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
-      "requiredThreadSandbox": null,
+      "requiredThreadSandbox": "danger-full-access",
       "requiresReview": true,
       "desiredRoleId": "role_app_worker",
       "assigneeExecutionSurfaceId": null,
-      "agentThreadId": null,
+      "agentThreadId": "thread_4a7ec7f9-0517-45d1-89a5-7f8f99698464",
       "requiredPromptSkillNames": [],
       "requiredCapabilityNames": [],
       "requiredToolNames": [],
@@ -934,12 +1088,12 @@
       ],
       "estimateHours": null,
       "targetDate": "2026-04-14",
-      "runCount": 0,
-      "latestRunId": null,
+      "runCount": 1,
+      "latestRunId": "run_d9d11524-5ff3-454d-b8fa-28d246760466",
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:01:32.363Z",
-      "updatedAt": "2026-04-10T16:01:32.363Z"
+      "updatedAt": "2026-04-10T19:31:45.496Z"
     },
     {
       "id": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
@@ -955,7 +1109,7 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "high",
-      "status": "review",
+      "status": "done",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiredThreadSandbox": "danger-full-access",
@@ -977,7 +1131,7 @@
       "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
       "attachments": [],
       "createdAt": "2026-04-10T16:01:32.363Z",
-      "updatedAt": "2026-04-10T18:47:35.270Z"
+      "updatedAt": "2026-04-10T19:07:18.991Z"
     },
     {
       "id": "task_72c4ab68-b9ea-476e-8f20-9018755a20c1",
@@ -6497,6 +6651,186 @@
   ],
   "runs": [
     {
+      "id": "run_da84f826-910c-480b-86ba-d59f3fb774a3",
+      "taskId": "task_63c0c1a6-6a69-4045-bc90-911f567d4a7c",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_8b2e0c1b-93d8-48e9-b9ba-d3a320a35855",
+      "status": "completed",
+      "createdAt": "2026-04-10T21:54:59.299Z",
+      "updatedAt": "2026-04-10T21:59:57.670Z",
+      "startedAt": "2026-04-10T21:54:59.298Z",
+      "endedAt": "2026-04-10T21:59:57.670Z",
+      "threadId": null,
+      "agentThreadId": "thread_6e8bdab6-50ac-4c53-b397-3fa686e43fd1",
+      "promptDigest": "df912a63198b386d",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-10T21:57:52.571Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 1654577,
+      "cachedInputTokens": 1540224,
+      "outputTokens": 14704,
+      "uncachedInputTokens": 114353,
+      "usageCapturedAt": "2026-04-10T21:59:57.257Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_8fa0cda3-31e8-4e52-893d-3e826c425676",
+      "taskId": "task_4f57e545-5eed-43f9-b284-1c1cf0cba14c",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_a97e78a4-36d6-4463-ac2d-89d388a6119d",
+      "status": "completed",
+      "createdAt": "2026-04-10T20:33:47.276Z",
+      "updatedAt": "2026-04-10T20:52:55.451Z",
+      "startedAt": "2026-04-10T20:33:47.276Z",
+      "endedAt": "2026-04-10T20:52:55.451Z",
+      "threadId": null,
+      "agentThreadId": "thread_58dd55b1-7f42-4618-88a8-0b65e4d12257",
+      "promptDigest": "7af1dbe5d2ff7be1",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-10T20:36:42.604Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 8674682,
+      "cachedInputTokens": 8533248,
+      "outputTokens": 49415,
+      "uncachedInputTokens": 141434,
+      "usageCapturedAt": "2026-04-10T20:52:55.149Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_8c378563-0625-443c-85b7-98866e8128eb",
+      "taskId": "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_1a3cb98a-fd7c-41c8-8b67-843481ecca24",
+      "status": "completed",
+      "createdAt": "2026-04-10T19:59:37.113Z",
+      "updatedAt": "2026-04-10T20:05:44.487Z",
+      "startedAt": "2026-04-10T19:59:37.113Z",
+      "endedAt": "2026-04-10T20:05:44.487Z",
+      "threadId": null,
+      "agentThreadId": "thread_759901eb-4bd5-4428-a064-59dfdc06d84d",
+      "promptDigest": "bcf3a928b22fb2cb",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-10T20:04:38.187Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 1536986,
+      "cachedInputTokens": 1391104,
+      "outputTokens": 13646,
+      "uncachedInputTokens": 145882,
+      "usageCapturedAt": "2026-04-10T20:05:43.942Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_bbb70262-8fcf-47a5-9a50-d80530224b90",
+      "taskId": "task_1d73364e-548f-41b7-ae62-cdad42466a44",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_a8a5b974-42f8-443d-8ac8-de8eb7a5bc38",
+      "status": "completed",
+      "createdAt": "2026-04-10T19:44:50.649Z",
+      "updatedAt": "2026-04-10T20:21:57.483Z",
+      "startedAt": "2026-04-10T19:44:50.649Z",
+      "endedAt": "2026-04-10T20:21:57.483Z",
+      "threadId": null,
+      "agentThreadId": "thread_21cbee14-e7f1-4279-9c90-320385c87d7e",
+      "promptDigest": "a4eff464adb578e2",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments"
+      ],
+      "summary": "Task run finished and is ready for review.",
+      "lastHeartbeatAt": "2026-04-10T20:19:42.026Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 3365794,
+      "cachedInputTokens": 3146752,
+      "outputTokens": 18358,
+      "uncachedInputTokens": 219042,
+      "usageCapturedAt": "2026-04-10T19:51:47.821Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_65e99e95-1192-44b2-bfb3-b39db696612d",
+      "taskId": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
+      "executionSurfaceId": null,
+      "assumedRoleId": "role_app_worker",
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-10T19:32:41.764Z",
+      "updatedAt": "2026-04-10T20:04:10.737Z",
+      "startedAt": "2026-04-10T19:32:41.764Z",
+      "endedAt": "2026-04-10T19:57:44.084Z",
+      "threadId": null,
+      "agentThreadId": "thread_8fe02145-1cd4-4465-9ad2-1a031c3893d0",
+      "promptDigest": "e47e8d9ca9450fbb",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-10T19:57:13.778Z",
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_d9d11524-5ff3-454d-b8fa-28d246760466",
+      "taskId": "task_ea0d7a37-c4ad-4521-9fec-cbbe567dbff5",
+      "executionSurfaceId": null,
+      "assumedRoleId": "role_app_worker",
+      "providerId": "provider_local_codex",
+      "status": "completed",
+      "createdAt": "2026-04-10T19:18:27.775Z",
+      "updatedAt": "2026-04-10T19:31:45.508Z",
+      "startedAt": "2026-04-10T19:18:27.775Z",
+      "endedAt": "2026-04-10T19:29:20.903Z",
+      "threadId": null,
+      "agentThreadId": "thread_4a7ec7f9-0517-45d1-89a5-7f8f99698464",
+      "promptDigest": "64221b24349cddb3",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-10T19:28:26.825Z",
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
+    },
+    {
       "id": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
       "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
       "executionSurfaceId": null,
@@ -6504,7 +6838,7 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-10T18:36:34.849Z",
-      "updatedAt": "2026-04-10T18:47:35.270Z",
+      "updatedAt": "2026-04-10T19:07:19.002Z",
       "startedAt": "2026-04-10T18:36:34.848Z",
       "endedAt": "2026-04-10T18:47:35.270Z",
       "threadId": null,
@@ -6513,9 +6847,18 @@
       "artifactPaths": [
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
-      "summary": "Task run finished and is ready for review.",
+      "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-10T18:46:51.655Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_b9d032b3-7cde-49db-b45e-6c1d76b3c476",
@@ -6536,7 +6879,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-10T18:28:02.664Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_12ac33fe-a9f4-442e-91f9-d58ca32e1362",
@@ -6545,9 +6897,9 @@
       "providerId": "provider_local_codex",
       "status": "completed",
       "createdAt": "2026-04-10T16:38:21.234Z",
-      "updatedAt": "2026-04-10T18:11:43.967Z",
+      "updatedAt": "2026-04-13T13:38:01.199Z",
       "startedAt": "2026-04-10T16:38:21.233Z",
-      "endedAt": "2026-04-10T18:11:43.967Z",
+      "endedAt": "2026-04-13T13:38:01.199Z",
       "threadId": null,
       "agentThreadId": "thread_56b41379-2dce-4a67-b072-5e6df9746131",
       "promptDigest": "ec48a33db2ea4ec3",
@@ -6555,8 +6907,17 @@
         "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-10T18:11:25.492Z",
-      "errorSummary": ""
+      "lastHeartbeatAt": "2026-04-13T13:37:33.403Z",
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_9cae6da0-9fcf-40cb-a9f2-e6555f9d07fd",
@@ -6577,7 +6938,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-10T16:38:32.615Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_fe9a8b09-c350-455c-9cfc-25f3a6ca03ed",
@@ -6598,7 +6968,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T18:02:58.879Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_91d3a924-ea52-411a-9240-99966bca17b2",
@@ -6618,7 +6997,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T22:56:01.585Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_24273fe2-d86a-48e5-919c-935442de2d11",
@@ -6638,7 +7026,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T16:48:51.862Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_6fefc728-0468-4bb4-ac49-88c416d04619",
@@ -6659,7 +7056,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T17:07:38.704Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_10530830-66a2-4390-9402-0091ed9988ac",
@@ -6679,7 +7085,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T17:35:26.076Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a145f28f-241a-4224-9bce-5f3082143394",
@@ -6699,7 +7114,16 @@
       ],
       "summary": "Linked work thread is actively running.",
       "lastHeartbeatAt": "2026-04-10T15:58:43.298Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4bca17ee-04f7-419d-86e6-463ee7584064",
@@ -6719,7 +7143,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T16:40:52.426Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_3c003584-3b32-4d6e-b213-73dab10f4360",
@@ -6739,7 +7172,16 @@
       ],
       "summary": "Task blocked after the linked work thread was canceled.",
       "lastHeartbeatAt": "2026-04-09T16:11:37.225Z",
-      "errorSummary": "The linked work thread was canceled."
+      "errorSummary": "The linked work thread was canceled.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_92a0bf69-abcd-45ac-8256-b951c921b819",
@@ -6760,7 +7202,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T16:23:45.681Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_2778cb81-8727-4ad9-850f-8f0219ce0dd3",
@@ -6780,7 +7231,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T15:57:11.586Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_088c287b-070d-434b-9212-45c368b4653a",
@@ -6801,7 +7261,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T15:44:24.525Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4394bf51-a896-4e76-a779-c885d5624abc",
@@ -6821,7 +7290,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T15:31:23.974Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0d6480b8-9029-47e9-bfb9-ce622113a67f",
@@ -6841,7 +7319,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T15:20:33.843Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_34069103-343b-4f5a-a4c9-2b10af81eee7",
@@ -6862,7 +7349,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T15:07:21.799Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5a6d9b2f-b90f-4bc4-ace3-1838509f5c09",
@@ -6882,7 +7378,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T14:42:12.096Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_10138751-ccd4-452e-a4d4-a05f402361b9",
@@ -6902,7 +7407,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T16:01:04.350Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_862453a6-b920-4181-882d-165b389c6213",
@@ -6923,7 +7437,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T13:26:55.816Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_e96a9559-aec9-4657-824b-25ee90d7c660",
@@ -6944,7 +7467,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T13:06:45.526Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_952153ff-d7d0-43ce-96dd-dbc862d40b03",
@@ -6965,7 +7497,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T12:41:03.599Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_181bc45e-a03f-4bf4-8b44-051c4648a19d",
@@ -6986,7 +7527,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T02:21:55.021Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_b035d453-4f8a-4f80-95b4-33be9e41d51b",
@@ -7007,7 +7557,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T01:34:09.151Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ec3aac3d-a401-4656-ae48-4d1cb88a47a7",
@@ -7028,7 +7587,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T01:23:01.266Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_26885eb6-2c7e-4438-9249-92e2d7bf8a2f",
@@ -7048,7 +7616,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T13:04:37.387Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4dd413f9-e23f-4012-b674-5775b1d63f1c",
@@ -7069,7 +7646,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-09T01:05:21.991Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_c8b9f883-30f8-4bf8-b629-10219e89a2ac",
@@ -7089,7 +7675,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T01:02:18.297Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_91bcf36d-f15c-4106-875a-84bb5db770c1",
@@ -7109,7 +7704,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T18:08:07.202Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d3179250-6c97-46f5-b0dd-bc0d8fb2ab93",
@@ -7129,7 +7733,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T22:52:54.041Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8d15362d-dccc-4ef0-b6fb-2f6eed0bc8bb",
@@ -7149,7 +7762,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T22:13:04.210Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8c52ac09-79e5-4214-aadc-5451bd3a62cc",
@@ -7169,7 +7791,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T22:14:07.023Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_2ea63432-a610-48cc-a90e-3652b41e7d30",
@@ -7189,7 +7820,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T21:10:36.460Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5863b588-5895-48f1-b127-be5ce9c1ea1f",
@@ -7209,7 +7849,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T21:10:36.455Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ea39b47b-dce8-4fc3-8f0c-9cc9512c5560",
@@ -7229,7 +7878,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T20:52:05.086Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_6c3cd115-319c-4acf-ad64-639caeb73b49",
@@ -7249,7 +7907,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T20:41:28.766Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_3dff6bb5-d468-4d0a-b474-1e6f260a1828",
@@ -7270,7 +7937,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T14:14:06.110Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a09b2cdc-849b-4ae2-a2ef-460f2b9aebba",
@@ -7291,7 +7967,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T16:21:43.172Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0d639f39-53b1-40fe-94d5-779b2487b76b",
@@ -7311,7 +7996,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T15:34:33.433Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_916c3e8b-d0ba-4b21-9ed0-cf31ba01d757",
@@ -7331,7 +8025,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T22:31:30.420Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_945b4075-5426-4703-8410-4188a42df271",
@@ -7351,7 +8054,16 @@
       ],
       "summary": "Linked work thread is actively running.",
       "lastHeartbeatAt": "2026-04-08T15:16:10.787Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4b90deb9-70f5-4846-b2d0-6aac3620ddcb",
@@ -7371,7 +8083,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-09T14:59:44.073Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5b050d35-bb69-4ad4-97ff-2d9ccb6bad1a",
@@ -7391,7 +8112,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T16:23:24.215Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_287d7e20-4e9c-47f6-b2d7-f77a37bd8e6d",
@@ -7411,7 +8141,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T20:43:27.220Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_1fa576a2-cc7f-49f3-a458-ffe696ff8dd4",
@@ -7431,7 +8170,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T14:48:16.956Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_b4f687bf-dd09-40e9-8ea2-cf061d9b2c5f",
@@ -7451,7 +8199,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T14:24:15.332Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4fe6a11f-2db4-4bec-8543-d15fbf5c228b",
@@ -7471,7 +8228,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T21:04:21.015Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d5f60e2b-7ec9-46ae-99ab-8d0499215012",
@@ -7491,7 +8257,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T13:47:37.819Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d8ef42bd-a740-4ded-9280-b69374fc7950",
@@ -7511,7 +8286,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T13:35:27.132Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_311e99e2-c833-48ed-9a4b-af7d5f7ce103",
@@ -7531,7 +8315,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T23:29:05.293Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_416fac76-037b-4a76-9230-370d0ca7a4b3",
@@ -7551,7 +8344,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T20:34:49.920Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_9a3ff96f-bfbb-4743-b1da-8ced8c46578c",
@@ -7571,7 +8373,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T13:34:58.245Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_80335de1-a614-4617-8c56-ee22de0dbd61",
@@ -7591,7 +8402,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T23:27:46.651Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_3589b9f7-face-4237-a4da-94846a08e919",
@@ -7611,7 +8431,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T14:44:40.212Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_3e223ce2-bcfe-41df-90fe-910dd08c1765",
@@ -7631,7 +8460,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T18:05:33.052Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_c316ad14-0990-49b4-8f66-02ed54c3f637",
@@ -7651,7 +8489,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T17:58:51.264Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_02afb231-d146-449b-8934-85fdd2962c62",
@@ -7671,7 +8518,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T13:39:19.906Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_04dd6841-3021-4b3c-9861-d9a17fa37534",
@@ -7691,7 +8547,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-08T15:24:48.410Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_445cf7be-0529-4acc-96f8-97aa7f1af1db",
@@ -7711,7 +8576,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-07T13:45:31.272Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_fc4b1fb2-d847-47c6-912a-ace3ba3c0f84",
@@ -7731,7 +8605,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-07T13:18:57.584Z",
-      "errorSummary": "The linked work thread exited with code -1."
+      "errorSummary": "The linked work thread exited with code -1.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_864e8b73-6de8-435e-a71c-1dcdbc8f94de",
@@ -7751,7 +8634,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-07T13:21:51.515Z",
-      "errorSummary": "The linked work thread exited with code -1."
+      "errorSummary": "The linked work thread exited with code -1.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f0f58643-44dc-44f8-ba92-33f6997bb85e",
@@ -7771,7 +8663,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-07T13:21:01.113Z",
-      "errorSummary": "The linked work thread exited with code -1."
+      "errorSummary": "The linked work thread exited with code -1.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_61f07044-a260-47ca-88c2-7a43584175bb",
@@ -7791,7 +8692,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T01:38:31.132Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5a502836-d6bc-4777-a372-d8d37b929ae9",
@@ -7811,7 +8721,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T00:42:29.921Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_91a27ff1-051a-434a-9185-bbaae5479c1a",
@@ -7831,7 +8750,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T01:44:45.027Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d4be6342-03b1-4db7-9a72-87c28f637245",
@@ -7851,7 +8779,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T20:12:14.215Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4b3e0a1a-0c38-4a22-acb0-166f1a8a4c0c",
@@ -7871,7 +8808,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-06T20:02:22.476Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0019aa5e-04e5-48b9-a00b-db1ad2e3dc7d",
@@ -7891,7 +8837,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-06T19:32:11.348Z",
-      "errorSummary": "Error: Operation not permitted (os error 1)"
+      "errorSummary": "Error: Operation not permitted (os error 1)",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8bb9683f-b48b-42e1-abaa-cb6aba0d025d",
@@ -7911,7 +8866,16 @@
       ],
       "summary": "Task closed after review approval.",
       "lastHeartbeatAt": "2026-04-06T19:14:02.253Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5890005e-3372-416d-b8c2-09a0333fe7a4",
@@ -7931,7 +8895,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T02:01:26.678Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_596cb015-c2c6-450f-a366-61b8b5cb2873",
@@ -7951,7 +8924,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T15:07:27.976Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5fefe6db-c9f0-4b4c-8fbf-1924ccbc56e1",
@@ -7971,7 +8953,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T23:05:37.217Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ad2aa3cc-746e-44f2-9f4d-da87d929f926",
@@ -7991,7 +8982,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T23:00:43.539Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_2a233650-693c-4751-acf8-799125138bce",
@@ -8011,7 +9011,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T22:51:10.949Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d3c2c9bd-e51c-4c76-be98-6db66b1da1a2",
@@ -8031,7 +9040,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T22:49:14.451Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0e44c294-ffda-4a60-bd6b-d9a197f3044f",
@@ -8051,7 +9069,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T21:22:39.240Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_eb0eb409-96a1-4d08-8f3c-a89fd527f428",
@@ -8071,7 +9098,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T21:53:05.415Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_e5e88f23-e08f-4619-8062-41005740c58f",
@@ -8091,7 +9127,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T23:39:23.572Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_e1f65a3f-78da-423d-bb61-a4a8f599dbf4",
@@ -8111,7 +9156,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-05T20:50:54.154Z",
-      "errorSummary": "{\"type\":\"turn.failed\",\"error\":{\"message\":\"stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)\"}}"
+      "errorSummary": "{\"type\":\"turn.failed\",\"error\":{\"message\":\"stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)\"}}",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0c284444-e514-443e-aa3d-cb9bb1ee2a2e",
@@ -8131,7 +9185,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-06T15:38:41.153Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_abe9b695-0a3b-4a86-ac78-9d15ad580cb3",
@@ -8151,7 +9214,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T18:59:32.725Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_99f56220-de99-4fc7-a2bc-462102d68ca3",
@@ -8171,7 +9243,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T19:22:50.001Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_7a0848da-e0b4-4ae9-8360-de4f3e5029a6",
@@ -8191,7 +9272,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T18:39:53.858Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_b5b4ced4-f079-42ea-b965-0479ac634db7",
@@ -8211,7 +9301,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-05T17:51:56.790Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f234d99e-ada7-4f83-b9e4-82c6f34d434b",
@@ -8231,7 +9330,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-03T15:29:24.826Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4e788c03-c4df-48bb-89bf-e203391b1682",
@@ -8251,7 +9359,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-07T14:00:37.318Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_62039ada-1048-4340-9d1c-a92869c1119d",
@@ -8271,7 +9388,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-03T14:30:11.767Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_0096e903-eabd-4e73-a19e-1ceb44418086",
@@ -8291,7 +9417,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-03T14:30:11.333Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_2a0b5c74-d405-48d2-9856-a9aa96d7eaec",
@@ -8311,7 +9446,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-03T13:54:14.290Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8a5bf9d2-84e7-465c-8f9f-177896ca87dc",
@@ -8331,7 +9475,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-06T16:07:21.155Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8402d8ae-f9d0-49fe-95fd-70e2216f3eef",
@@ -8351,7 +9504,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T13:27:05.233Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_eee629b8-2251-428a-9521-bd076a92595a",
@@ -8371,7 +9533,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T13:15:42.969Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_db8dca05-3ad7-4d1d-8c56-8eedb4ca0ee6",
@@ -8391,7 +9562,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-03T16:00:33.117Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8bca017f-1a87-4565-b994-94ae29e75ea8",
@@ -8411,7 +9591,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T13:34:44.117Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_9ea0d9e6-8935-4e82-8392-b0a08f397a05",
@@ -8431,7 +9620,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-02T13:03:17.728Z",
-      "errorSummary": "{\"type\":\"turn.failed\",\"error\":{\"message\":\"Selected model is at capacity. Please try a different model.\"}}"
+      "errorSummary": "{\"type\":\"turn.failed\",\"error\":{\"message\":\"Selected model is at capacity. Please try a different model.\"}}",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f43ac9a8-af77-45c3-869d-19f1039d2bb6",
@@ -8451,7 +9649,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T02:57:14.214Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_734df2f8-cab0-49f3-8b14-1d9154cbe7e4",
@@ -8471,7 +9678,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T00:30:16.371Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_7c5d3e28-bcc3-45cb-9394-9fee5cd3a526",
@@ -8491,7 +9707,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T02:04:29.558Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d1480b61-ed7d-480c-9e3f-1e0a555173fd",
@@ -8511,7 +9736,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T01:52:58.605Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_4e5fa551-d0ce-4f14-953c-89c55053167a",
@@ -8531,7 +9765,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T20:52:47.905Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_85babf7b-75c1-4aa8-80ca-3bf06e9907f4",
@@ -8551,7 +9794,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T02:24:02.417Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_cea74bd7-ee5c-4e0b-8f5c-761fe2617695",
@@ -8571,7 +9823,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T20:35:45.096Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_eb3df87e-82fd-4e29-91bf-55cc4f37516c",
@@ -8591,7 +9852,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T20:57:55.600Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_48bbae6a-89a1-40df-b8c6-32621369b43e",
@@ -8611,7 +9881,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T20:13:10.877Z",
-      "errorSummary": "Codex never advanced past startup because the managed run was stuck waiting for stdin input. Restart the manager and retry the task."
+      "errorSummary": "Codex never advanced past startup because the managed run was stuck waiting for stdin input. Restart the manager and retry the task.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_44b17868-7644-453c-9911-13dd7da3035c",
@@ -8631,7 +9910,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T20:02:00.780Z",
-      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_7b006e2d-4c9a-4056-bf98-681531b726e1",
@@ -8651,7 +9939,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T19:39:13.508Z",
-      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_65b84715-fe3b-4cf6-b8f3-a9b0d7bee12c",
@@ -8671,7 +9968,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T16:14:15.669Z",
-      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ed684899-9a03-46c3-812b-62da32ebfd76",
@@ -8691,7 +9997,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T16:08:05.372Z",
-      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task."
+      "errorSummary": "Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f94f9e60-23d9-419a-9358-8cedc55f4061",
@@ -8711,7 +10026,16 @@
       ],
       "summary": "Task blocked after the linked work thread was canceled.",
       "lastHeartbeatAt": "2026-04-01T14:37:54.653Z",
-      "errorSummary": "The linked work thread was canceled."
+      "errorSummary": "The linked work thread was canceled.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_892878d7-adbc-4279-be8b-00692ad7bace",
@@ -8731,7 +10055,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T13:29:55.782Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_1147e1bb-37e1-445d-91a2-3864b2bf0e73",
@@ -8751,7 +10084,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T13:22:16.704Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_138f8a4e-4e2e-4880-9e31-b3a9a38f3efe",
@@ -8771,7 +10113,16 @@
       ],
       "summary": "Task blocked after the linked work thread failed.",
       "lastHeartbeatAt": "2026-04-01T12:04:34.868Z",
-      "errorSummary": "The linked work thread failed."
+      "errorSummary": "The linked work thread failed.",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_25d225e0-7e72-4c58-b046-cc7e31db7537",
@@ -8791,7 +10142,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T03:12:36.392Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a3bc55eb-a471-4c86-bfeb-3514d6748131",
@@ -8811,7 +10171,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T12:34:19.892Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_1f74eafb-cd9a-4d59-a7b5-6aa78c186d67",
@@ -8831,7 +10200,16 @@
       ],
       "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-01T12:20:50.801Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_48599da1-19ee-4542-8130-38812ddb4407",
@@ -8851,7 +10229,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-01T00:02:42.587Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_39ab8c62-58aa-4baf-8f11-a1ec1eaeb9b8",
@@ -8871,7 +10258,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T02:23:22.191Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_89373e74-d6de-4cb7-9f83-377cba14bf0d",
@@ -8891,7 +10287,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T23:18:49.500Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_6024f9bb-6788-41a5-9306-6916d2e14e9f",
@@ -8911,7 +10316,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T20:45:32.156Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_36722be5-e891-49fd-8c2d-1f68c4d26cff",
@@ -8931,7 +10345,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T20:25:44.670Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ab7e1dd1-4531-4ada-a3db-e2a774cd1305",
@@ -8951,7 +10374,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T18:18:56.300Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_2073add3-df87-495e-85e5-e0fd33d953f3",
@@ -8971,7 +10403,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T15:12:59.086Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_3d1107ae-002d-471c-8ab8-edce632e9191",
@@ -8991,7 +10432,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T14:46:14.554Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_32380588-89f4-434a-8859-adcd1195eaa0",
@@ -9011,7 +10461,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-04-02T02:39:01.686Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_11730772-82ac-4106-9f11-b4a23118477d",
@@ -9031,7 +10490,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T14:16:06.344Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_beca6e6f-a1d1-4f85-a213-a7f458501686",
@@ -9051,7 +10519,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T14:12:01.276Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_631760e2-8b43-4846-9793-f150ae0c8fcc",
@@ -9071,7 +10548,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T14:07:42.146Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_ac6bfede-6010-4bc4-8642-9e612acd98b1",
@@ -9091,7 +10577,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T14:54:13.542Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_69d0c97a-bdb9-4eae-bee8-afd7a87c68a8",
@@ -9111,7 +10606,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:49:13.573Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f73bb9d6-2481-4886-b1be-265401a406f8",
@@ -9131,7 +10635,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:35:11.093Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_37145502-cb2d-4234-b924-ccfa66c928de",
@@ -9151,7 +10664,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:30:08.914Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_20da1df1-6774-44ca-8e62-cd75b0eff9d3",
@@ -9171,7 +10693,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:24:54.268Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_9cd736a2-bce4-41cd-b25b-3e545d050eef",
@@ -9191,7 +10722,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:23:46.887Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_41fb278d-5d04-447b-9108-8cbf98314e7d",
@@ -9211,7 +10751,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:14:09.708Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_75877f08-6662-46d7-b151-877b9d9856df",
@@ -9231,7 +10780,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:11:43.484Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f1f13fed-d799-431e-8f6e-df9ed414c11c",
@@ -9251,7 +10809,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:11:16.382Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_d8e69f1d-2052-4bd2-8e83-acd83b3923e6",
@@ -9271,7 +10838,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T13:07:18.581Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a4962a9a-d374-4b21-b627-5dfb5b0a14d1",
@@ -9291,7 +10867,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T12:42:57.721Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5ea3cf1c-dd8f-494a-8f4d-8ff172832c2d",
@@ -9311,7 +10896,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T12:40:24.804Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_c3ab690c-83a6-400e-92c4-df37251af034",
@@ -9331,7 +10925,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T11:24:30.204Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8bbf3fdb-5d69-499f-a0c5-d41439af29b8",
@@ -9351,7 +10954,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T02:02:56.557Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_67a08b86-5980-4c23-a450-728359ce3352",
@@ -9371,7 +10983,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T01:51:01.675Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_b6980698-999a-43a5-ad5c-e4505078bb7d",
@@ -9391,7 +11012,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T01:45:51.864Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_5008a254-87ab-4939-a158-6428d618f950",
@@ -9411,7 +11041,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T01:23:35.988Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_9df4dbed-b52b-42f0-9697-9efff6de0848",
@@ -9431,7 +11070,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T15:23:34.277Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_20df8cb7-71b2-4043-b547-2207e7c191c5",
@@ -9451,7 +11099,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T00:56:18.894Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_08c4ea17-07c8-4e9e-9e63-59f98eaa5bcf",
@@ -9471,7 +11128,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-31T00:38:31.209Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_f1355cfb-1aeb-489d-b926-51a00b00148c",
@@ -9491,7 +11157,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T23:47:39.999Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_393b1065-0ec0-4789-82a5-f9228ac55f5d",
@@ -9511,7 +11186,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T23:39:48.037Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a71a9695-94c2-4ec7-aa0f-492db5f13bd6",
@@ -9531,7 +11215,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T23:29:44.593Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_15708ea3-751c-4d98-8aa5-71d224074b40",
@@ -9551,7 +11244,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T23:15:29.198Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_8649338e-9500-483e-8f15-387e74152fca",
@@ -9571,7 +11273,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T22:36:30.983Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_03eeb030-d5b6-4e6b-b4fd-64596a6a39b4",
@@ -9591,7 +11302,16 @@
       ],
       "summary": "Started a new work thread from the task detail page.",
       "lastHeartbeatAt": "2026-03-30T22:19:37.443Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_a570b38b-12d6-46ff-9df1-ebddb6690206",
@@ -9611,7 +11331,16 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T22:16:24.615Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_957a2729-e60a-4849-a87c-d3c283fdd952",
@@ -9631,7 +11360,16 @@
       ],
       "summary": "Started a new work thread from the task detail page.",
       "lastHeartbeatAt": "2026-03-30T22:02:04.026Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     },
     {
       "id": "run_c03dd297-aac0-4e2b-97a7-25963483ef0b",
@@ -9651,21 +11389,102 @@
       ],
       "summary": "Task approved and completed from the thread detail page.",
       "lastHeartbeatAt": "2026-03-30T21:50:18.066Z",
-      "errorSummary": ""
+      "errorSummary": "",
+      "usageSource": "missing",
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "uncachedInputTokens": null,
+      "usageCapturedAt": null,
+      "estimatedCostUsd": null,
+      "costSource": "missing_usage",
+      "pricingVersion": null
     }
   ],
   "reviews": [
     {
-      "id": "review_a14337f1-7959-4867-bb33-cbe5969ef415",
-      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
-      "runId": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
+      "id": "review_79c76165-4cd3-4575-b6b0-4b3dd8b889ce",
+      "taskId": "task_63c0c1a6-6a69-4045-bc90-911f567d4a7c",
+      "runId": "run_da84f826-910c-480b-86ba-d59f3fb774a3",
       "status": "open",
-      "createdAt": "2026-04-10T18:53:12.629Z",
-      "updatedAt": "2026-04-10T18:53:12.629Z",
+      "createdAt": "2026-04-13T13:20:40.190Z",
+      "updatedAt": "2026-04-13T13:20:40.190Z",
       "resolvedAt": null,
       "requestedByExecutionSurfaceId": null,
       "reviewerExecutionSurfaceId": null,
       "summary": "Task entered the review queue."
+    },
+    {
+      "id": "review_8148aaa8-9261-4b33-96a3-fd32a1e191f8",
+      "taskId": "task_4f57e545-5eed-43f9-b284-1c1cf0cba14c",
+      "runId": "run_8fa0cda3-31e8-4e52-893d-3e826c425676",
+      "status": "open",
+      "createdAt": "2026-04-10T21:31:17.102Z",
+      "updatedAt": "2026-04-10T21:31:17.102Z",
+      "resolvedAt": null,
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Task entered the review queue."
+    },
+    {
+      "id": "review_a1a353be-fc50-42b9-8c5f-b7dcd173bcd3",
+      "taskId": "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+      "runId": "run_8c378563-0625-443c-85b7-98866e8128eb",
+      "status": "open",
+      "createdAt": "2026-04-10T20:07:14.816Z",
+      "updatedAt": "2026-04-10T20:07:14.816Z",
+      "resolvedAt": null,
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Task entered the review queue."
+    },
+    {
+      "id": "review_69e92456-dc99-4b54-b2a8-853e9361745e",
+      "taskId": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
+      "runId": "run_65e99e95-1192-44b2-bfb3-b39db696612d",
+      "status": "approved",
+      "createdAt": "2026-04-10T19:58:11.511Z",
+      "updatedAt": "2026-04-10T20:04:10.725Z",
+      "resolvedAt": "2026-04-10T20:04:10.725Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_ac70d883-e574-4268-abb0-fb1de177cdb1",
+      "taskId": "task_1d73364e-548f-41b7-ae62-cdad42466a44",
+      "runId": "run_bbb70262-8fcf-47a5-9a50-d80530224b90",
+      "status": "dismissed",
+      "createdAt": "2026-04-10T19:51:50.253Z",
+      "updatedAt": "2026-04-10T20:01:28.920Z",
+      "resolvedAt": "2026-04-10T20:01:28.920Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_31b8f817-d2f4-4d66-841f-ec26eaa08928",
+      "taskId": "task_ea0d7a37-c4ad-4521-9fec-cbbe567dbff5",
+      "runId": "run_d9d11524-5ff3-454d-b8fa-28d246760466",
+      "status": "approved",
+      "createdAt": "2026-04-10T19:30:53.475Z",
+      "updatedAt": "2026-04-10T19:31:45.496Z",
+      "resolvedAt": "2026-04-10T19:31:45.496Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_a14337f1-7959-4867-bb33-cbe5969ef415",
+      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
+      "runId": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
+      "status": "approved",
+      "createdAt": "2026-04-10T18:53:12.629Z",
+      "updatedAt": "2026-04-10T19:07:18.991Z",
+      "resolvedAt": "2026-04-10T19:07:18.991Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Approved from the thread detail page while completing the task."
     },
     {
       "id": "review_52e44363-b523-4fde-b6fc-510bec5d9671",
@@ -11399,6 +13218,123 @@
   "planningSessions": [],
   "approvals": [],
   "decisions": [
+    {
+      "id": "decision_8be42400-f837-487c-87be-6c7736c5af25",
+      "taskId": "task_63c0c1a6-6a69-4045-bc90-911f567d4a7c",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome; required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T21:54:38.659Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_56cd0d53-716b-47b0-8257-7e00056b183d",
+      "taskId": "task_4f57e545-5eed-43f9-b284-1c1cf0cba14c",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome; required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T20:33:45.709Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_8cc3d040-09b3-440b-b4ae-4e19debf4ed5",
+      "taskId": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
+      "goalId": null,
+      "runId": "run_65e99e95-1192-44b2-bfb3-b39db696612d",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-10T20:04:10.725Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_bc2ab62b-94ba-459b-a542-c5b263623933",
+      "taskId": "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T19:59:33.165Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_8bbbf641-6d1a-4ec3-8231-86d4747ad923",
+      "taskId": "task_b4a9093a-0d72-4741-9b1e-138a07830621",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome.",
+      "createdAt": "2026-04-10T19:59:21.934Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_f36e9079-91b8-4f02-871a-9a43679d5953",
+      "taskId": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome; required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T19:32:37.121Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_8d40b184-1adb-4214-b837-e9955a5b3be6",
+      "taskId": "task_ea0d7a37-c4ad-4521-9fec-cbbe567dbff5",
+      "goalId": null,
+      "runId": "run_d9d11524-5ff3-454d-b8fa-28d246760466",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-10T19:31:45.496Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_d639cde8-7b79-4aff-920c-483f50811bae",
+      "taskId": "task_ea0d7a37-c4ad-4521-9fec-cbbe567dbff5",
+      "goalId": null,
+      "runId": null,
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Updated task plan: updated success criteria; updated ready condition; updated expected outcome; required the Danger Full Access sandbox.",
+      "createdAt": "2026-04-10T19:18:26.052Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_8141b847-db71-4b22-be7d-f1356ae7297e",
+      "taskId": "task_bd4c6d14-a2a3-4846-8637-a084e978b4ad",
+      "goalId": null,
+      "runId": "run_7b7a46ff-9b46-4022-874a-86f2a9a34125",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-10T19:07:18.991Z",
+      "decidedByExecutionSurfaceId": null
+    },
     {
       "id": "decision_17f5a79b-7ea3-4365-bf5f-eae0c31705a7",
       "taskId": "task_ae620901-ffb5-4327-962f-a75614eb9fef",

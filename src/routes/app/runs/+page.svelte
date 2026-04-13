@@ -3,6 +3,13 @@
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import {
+		formatRunModelLabel,
+		formatRunTokenSummary,
+		formatTokenCount,
+		formatUsd,
+		formatPercent
+	} from '$lib/run-usage';
 	import { formatRunStatusLabel, runStatusToneClass } from '$lib/types/control-plane';
 
 	let { data } = $props();
@@ -20,6 +27,8 @@
 	let selectedTaskId = $state('all');
 	let selectedExecutionSurfaceId = $state('all');
 	let selectedProviderId = $state('all');
+	let selectedModel = $state('all');
+	let selectedCostState = $state('all');
 	let selectedTime = $state<(typeof timeOptions)[number]['value']>('all');
 
 	function timeWindowMs(value: (typeof timeOptions)[number]['value']) {
@@ -102,6 +111,18 @@
 				return false;
 			}
 
+			if (selectedModel !== 'all' && (run.modelUsed ?? '') !== selectedModel) {
+				return false;
+			}
+
+			if (selectedCostState === 'present' && run.estimatedCostUsd === null) {
+				return false;
+			}
+
+			if (selectedCostState === 'missing' && run.estimatedCostUsd !== null) {
+				return false;
+			}
+
 			if (cutoffMs !== null && now - Date.parse(run.updatedAt) > cutoffMs) {
 				return false;
 			}
@@ -119,6 +140,22 @@
 		filteredRuns.filter((run) => ['blocked', 'failed', 'canceled'].includes(run.status)).length
 	);
 	let completedRunCount = $derived(filteredRuns.filter((run) => run.status === 'completed').length);
+	let visibleSpendUsd = $derived(
+		filteredRuns.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
+	);
+	let visibleTotalTokens = $derived(
+		filteredRuns.reduce((total, run) => total + run.totalTokens, 0)
+	);
+	let completedRunSpendUsd = $derived(
+		filteredRuns
+			.filter((run) => run.status === 'completed')
+			.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
+	);
+	let attentionRunSpendUsd = $derived(
+		filteredRuns
+			.filter((run) => ['blocked', 'failed', 'canceled'].includes(run.status))
+			.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
+	);
 </script>
 
 <AppPage width="full">
@@ -130,24 +167,24 @@
 
 	<div class="grid gap-4 md:grid-cols-4">
 		<MetricCard
-			label="Visible runs"
-			value={filteredRuns.length}
-			detail="Filtered execution records in scope."
+			label="Visible spend"
+			value={formatUsd(visibleSpendUsd)}
+			detail={`${filteredRuns.length} filtered execution records in scope.`}
 		/>
 		<MetricCard
-			label="Active"
-			value={activeRunCount}
-			detail="Queued, starting, running, or awaiting approval."
+			label="Visible tokens"
+			value={formatTokenCount(visibleTotalTokens)}
+			detail="Input plus output tokens for the filtered runs."
 		/>
 		<MetricCard
-			label="Attention"
-			value={attentionRunCount}
-			detail="Blocked, failed, or canceled outcomes."
+			label="Completed cost"
+			value={formatUsd(completedRunSpendUsd)}
+			detail={`${completedRunCount} completed runs in the current view.`}
 		/>
 		<MetricCard
-			label="Completed"
-			value={completedRunCount}
-			detail="Runs with a finished happy-path result."
+			label="Attention cost"
+			value={formatUsd(attentionRunSpendUsd)}
+			detail={`${attentionRunCount} blocked, failed, or canceled runs in view.`}
 		/>
 	</div>
 
@@ -156,7 +193,8 @@
 			<div>
 				<h2 class="text-xl font-semibold text-white">Filters</h2>
 				<p class="mt-1 text-sm text-slate-400">
-					Narrow by status, task, execution surface, provider, and recent activity window.
+					Narrow by status, task, execution surface, provider, model, cost coverage, and recent
+					activity window.
 				</p>
 			</div>
 			<div class="w-full xl:max-w-sm">
@@ -170,7 +208,7 @@
 			</div>
 		</div>
 
-		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
 			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 				<select bind:value={selectedStatus} class="select text-white">
@@ -212,6 +250,25 @@
 			</label>
 
 			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Model</span>
+				<select bind:value={selectedModel} class="select text-white">
+					<option value="all">All models</option>
+					{#each data.models as model (model)}
+						<option value={model}>{model}</option>
+					{/each}
+				</select>
+			</label>
+
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Cost</span>
+				<select bind:value={selectedCostState} class="select text-white">
+					<option value="all">All cost states</option>
+					<option value="present">Cost present</option>
+					<option value="missing">Cost missing</option>
+				</select>
+			</label>
+
+			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Time</span>
 				<select bind:value={selectedTime} class="select text-white">
 					{#each timeOptions as option (option.value)}
@@ -227,7 +284,8 @@
 			<div>
 				<h2 class="text-xl font-semibold text-white">Execution ledger</h2>
 				<p class="mt-1 text-sm text-slate-400">
-					Prompt digests, thread references, heartbeats, errors, and artifacts stay visible here.
+					Model choice, provider-reported usage, rough cost, heartbeats, errors, and artifacts stay
+					visible here.
 				</p>
 			</div>
 			<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
@@ -243,13 +301,15 @@
 			</p>
 		{:else}
 			<div class="mt-4 overflow-x-auto">
-				<table class="min-w-[1480px] divide-y divide-slate-800 text-left">
+				<table class="min-w-[1760px] divide-y divide-slate-800 text-left">
 					<thead class="text-xs tracking-[0.16em] text-slate-500 uppercase">
 						<tr>
 							<th class="px-3 py-3 font-medium">Run</th>
 							<th class="px-3 py-3 font-medium">Task</th>
 							<th class="px-3 py-3 font-medium">Execution surface</th>
 							<th class="px-3 py-3 font-medium">Provider</th>
+							<th class="px-3 py-3 font-medium">Model + usage</th>
+							<th class="px-3 py-3 font-medium">Estimated cost</th>
 							<th class="px-3 py-3 font-medium">Prompt + thread</th>
 							<th class="px-3 py-3 font-medium">Heartbeat + errors</th>
 							<th class="px-3 py-3 font-medium">Artifacts</th>
@@ -290,6 +350,27 @@
 								</td>
 								<td class="px-3 py-3 text-sm text-slate-300">{run.executionSurfaceName}</td>
 								<td class="px-3 py-3 text-sm text-slate-300">{run.providerName}</td>
+								<td class="px-3 py-3">
+									<div class="min-w-[14rem] space-y-2 text-sm text-slate-300">
+										<p>{formatRunModelLabel(run)}</p>
+										<p class="text-xs text-slate-500">{formatRunTokenSummary(run)}</p>
+										<p class="text-xs text-slate-500">
+											Cache ratio {formatPercent(run.cacheRatio)}
+										</p>
+									</div>
+								</td>
+								<td class="px-3 py-3">
+									<div class="min-w-[10rem] space-y-2 text-sm text-slate-300">
+										<p>{formatUsd(run.estimatedCostUsd)}</p>
+										<p class="text-xs text-slate-500">
+											{run.costSource === 'configured_model_pricing'
+												? `Pricing ${run.pricingVersion ?? 'configured'}`
+												: run.costSource === 'missing_pricing'
+													? 'Usage captured, pricing missing'
+													: 'Usage unavailable'}
+										</p>
+									</div>
+								</td>
 								<td class="px-3 py-3">
 									<div class="min-w-[18rem] space-y-2 text-sm text-slate-300">
 										<p>{compactText(run.promptDigest || 'No prompt digest')}</p>

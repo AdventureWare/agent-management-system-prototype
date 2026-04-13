@@ -1,8 +1,5 @@
-import {
-	deleteTask as removeTaskFromControlPlane,
-	loadControlPlane,
-	updateControlPlane
-} from '$lib/server/control-plane';
+import { loadControlPlane } from '$lib/server/control-plane';
+import { deleteTaskRecords } from '$lib/server/control-plane-repository';
 import { cancelAgentThread } from '$lib/server/agent-threads';
 
 export class TaskDeleteActionError extends Error {
@@ -33,5 +30,5 @@ export async function deleteTaskWithRelatedThreads(taskId: string) {
 	];
 
 	await Promise.all(relatedThreadIds.map((threadId) => cancelAgentThread(threadId)));
-	await updateControlPlane((data) => removeTaskFromControlPlane(data, taskId));
+	await deleteTaskRecords([taskId]);
 }

@@ -1,5 +1,9 @@
 import type { ControlPlaneData, Goal, Task, ExecutionSurface } from '$lib/types/control-plane';
-import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-surface-api';
+import {
+	describeExecutionSurfaceWorkload,
+	getExecutionSurfaceAssignmentSuggestions,
+	type ExecutionSurfaceWorkloadState
+} from '$lib/server/execution-surface-api';
 import { getProjectChildProjects, getProjectScopeProjectIds } from '$lib/server/control-plane';
 
 const FALLBACK_CAPACITY_HOURS_PER_SLOT = 20;
@@ -45,9 +49,17 @@ type PlanningTaskSummary = {
 	blockedReason: string;
 	requiredCapabilityNames: string[];
 	requiredToolNames: string[];
+	matchingExecutionSurfaceCount: number;
 	eligibleExecutionSurfaceCount: number;
+	idleExecutionSurfaceCount: number;
+	saturatedExecutionSurfaceCount: number;
+	offlineExecutionSurfaceCount: number;
 	suggestedExecutionSurfaceNames: string[];
-	assignedExecutionSurfaceEligible: boolean | null;
+	saturatedExecutionSurfaceNames: string[];
+	offlineExecutionSurfaceNames: string[];
+	assignedExecutionSurfaceMatchesRequirements: boolean | null;
+	assignedExecutionSurfaceCanTakeAdditionalAssignment: boolean | null;
+	assignedExecutionSurfaceWorkloadState: ExecutionSurfaceWorkloadState | null;
 };
 
 type PlanningBacklogBucketId = 'now' | 'next' | 'later';
@@ -135,8 +147,20 @@ function mapPlanningTaskSummary(
 	executionSurfaceMap: ReadonlyMap<string, ExecutionSurface>
 ): PlanningTaskSummary {
 	const executionSurfaceSuggestions = getExecutionSurfaceAssignmentSuggestions(data, task);
+	const matchingSuggestions = executionSurfaceSuggestions.filter(
+		(suggestion) => suggestion.matchingRequirements
+	);
 	const eligibleSuggestions = executionSurfaceSuggestions.filter(
 		(suggestion) => suggestion.eligible
+	);
+	const saturatedSuggestions = matchingSuggestions.filter(
+		(suggestion) => suggestion.workloadState === 'saturated'
+	);
+	const offlineSuggestions = matchingSuggestions.filter(
+		(suggestion) => suggestion.workloadState === 'offline'
+	);
+	const idleSuggestions = eligibleSuggestions.filter(
+		(suggestion) => suggestion.workloadState === 'idle'
 	);
 	const assignedExecutionSurfaceSuggestion = task.assigneeExecutionSurfaceId
 		? (executionSurfaceSuggestions.find(
@@ -162,12 +186,28 @@ function mapPlanningTaskSummary(
 		blockedReason: task.blockedReason,
 		requiredCapabilityNames: task.requiredCapabilityNames ?? [],
 		requiredToolNames: task.requiredToolNames ?? [],
+		matchingExecutionSurfaceCount: matchingSuggestions.length,
 		eligibleExecutionSurfaceCount: eligibleSuggestions.length,
+		idleExecutionSurfaceCount: idleSuggestions.length,
+		saturatedExecutionSurfaceCount: saturatedSuggestions.length,
+		offlineExecutionSurfaceCount: offlineSuggestions.length,
 		suggestedExecutionSurfaceNames: eligibleSuggestions
 			.slice(0, 3)
 			.map((suggestion) => suggestion.executionSurfaceName),
-		assignedExecutionSurfaceEligible: assignedExecutionSurfaceSuggestion
-			? assignedExecutionSurfaceSuggestion.eligible
+		saturatedExecutionSurfaceNames: saturatedSuggestions
+			.slice(0, 3)
+			.map((suggestion) => suggestion.executionSurfaceName),
+		offlineExecutionSurfaceNames: offlineSuggestions
+			.slice(0, 3)
+			.map((suggestion) => suggestion.executionSurfaceName),
+		assignedExecutionSurfaceMatchesRequirements: assignedExecutionSurfaceSuggestion
+			? assignedExecutionSurfaceSuggestion.matchingRequirements
+			: null,
+		assignedExecutionSurfaceCanTakeAdditionalAssignment: assignedExecutionSurfaceSuggestion
+			? assignedExecutionSurfaceSuggestion.availableAssignmentCapacity > 0
+			: null,
+		assignedExecutionSurfaceWorkloadState: assignedExecutionSurfaceSuggestion
+			? assignedExecutionSurfaceSuggestion.workloadState
 			: null
 	};
 }
@@ -536,6 +576,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 	];
 	const executionSurfaceLoads = data.executionSurfaces
 		.map((executionSurface) => {
+			const workload = describeExecutionSurfaceWorkload(data, executionSurface);
 			const plannedHours = scheduledOpenTasks.reduce((total, task) => {
 				if (task.assigneeExecutionSurfaceId !== executionSurface.id) {
 					return total;
@@ -549,10 +590,17 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				id: executionSurface.id,
 				name: executionSurface.name,
 				status: executionSurface.status,
+				workloadState: workload.workloadState,
 				capacityHours,
 				plannedHours,
 				remainingHours: capacityHours - plannedHours,
-				overAllocated: plannedHours > capacityHours
+				overAllocated: plannedHours > capacityHours,
+				assignmentLimit: workload.assignmentLimit,
+				assignedOpenTaskCount: workload.assignedOpenTaskCount,
+				availableAssignmentCapacity: workload.availableAssignmentCapacity,
+				concurrencyLimit: workload.concurrencyLimit,
+				activeRunCount: workload.activeRunCount,
+				availableRunCapacity: workload.availableRunCapacity
 			};
 		})
 		.sort((left, right) => left.name.localeCompare(right.name));

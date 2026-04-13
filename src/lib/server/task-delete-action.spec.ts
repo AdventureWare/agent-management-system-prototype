@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlPlaneData, Task } from '$lib/types/control-plane';
 
-const deleteTask = vi.hoisted(() => vi.fn());
 const loadControlPlane = vi.hoisted(() => vi.fn());
-const updateControlPlane = vi.hoisted(() => vi.fn());
+const deleteTaskRecords = vi.hoisted(() => vi.fn());
 const cancelAgentThread = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/control-plane', () => ({
-	deleteTask,
-	loadControlPlane,
-	updateControlPlane
+	loadControlPlane
+}));
+
+vi.mock('$lib/server/control-plane-repository', () => ({
+	deleteTaskRecords
 }));
 
 vi.mock('$lib/server/agent-threads', () => ({
@@ -112,19 +113,15 @@ describe('task-delete-action', () => {
 		current = createData();
 		loadControlPlane.mockReset();
 		loadControlPlane.mockImplementation(async () => current);
-		deleteTask.mockReset();
-		deleteTask.mockImplementation((data: ControlPlaneData, taskId: string) => ({
-			...data,
-			tasks: data.tasks.filter((task) => task.id !== taskId),
-			runs: data.runs.filter((run) => run.taskId !== taskId)
-		}));
-		updateControlPlane.mockReset();
-		updateControlPlane.mockImplementation(
-			async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-				current = updater(current);
-				return current;
-			}
-		);
+		deleteTaskRecords.mockReset();
+		deleteTaskRecords.mockImplementation(async (taskIds: string[]) => {
+			current = {
+				...current,
+				tasks: current.tasks.filter((task) => !taskIds.includes(task.id)),
+				runs: current.runs.filter((run) => !taskIds.includes(run.taskId))
+			};
+			return taskIds;
+		});
 		cancelAgentThread.mockReset();
 		cancelAgentThread.mockResolvedValue(undefined);
 	});

@@ -24,9 +24,10 @@ import {
 import { buildTaskDetailCollections } from './task-detail-load-data';
 import { buildTaskGoalOptions } from './task-goal-options';
 import { buildTaskDetailRuntimeContext } from './task-detail-runtime-context';
+import { loadControlPlaneWithRunTelemetry } from './run-telemetry';
 
 export async function loadTaskDetailPageData(taskId: string) {
-	const controlPlanePromise = loadControlPlane();
+	const controlPlanePromise = loadControlPlaneWithRunTelemetry();
 	const [data, sessions] = await Promise.all([
 		controlPlanePromise,
 		listAgentThreads({

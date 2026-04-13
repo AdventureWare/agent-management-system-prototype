@@ -35,6 +35,8 @@ vi.mock('$lib/server/task-work-items', () => ({
 	buildTaskWorkItems
 }));
 
+const mutateTaskCollections = vi.hoisted(() => vi.fn());
+
 vi.mock('$lib/server/control-plane', () => ({
 	createDecision: vi.fn(
 		(input: {
@@ -71,14 +73,30 @@ vi.mock('$lib/server/control-plane', () => ({
 			) ?? null
 		);
 	}),
-	loadControlPlane: vi.fn(async () => controlPlaneState.current),
-	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = syncTaskExecutionStateLike(
-			updater(controlPlaneState.current as ControlPlaneData)
-		);
-		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
-	})
+	loadControlPlane: vi.fn(async () => controlPlaneState.current)
+}));
+
+vi.mock('$lib/server/control-plane-repository', () => ({
+	mutateTaskCollections: mutateTaskCollections.mockImplementation(
+		async (input: {
+			taskId: string;
+			mutate: (task: any, data: ControlPlaneData) => {
+				data: ControlPlaneData;
+				changedCollections: Iterable<string>;
+			};
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+			if (!existingTask) {
+				return null;
+			}
+
+			controlPlaneState.saved = syncTaskExecutionStateLike(input.mutate(existingTask, current).data);
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.current.tasks.find((task) => task.id === input.taskId) ?? null;
+		}
+	)
 }));
 
 import {
@@ -156,6 +174,7 @@ describe('task-governance helpers', () => {
 	beforeEach(() => {
 		listAgentThreads.mockClear();
 		buildTaskWorkItems.mockReset();
+		mutateTaskCollections.mockClear();
 		controlPlaneState.current = {
 			providers: [],
 			roles: [],

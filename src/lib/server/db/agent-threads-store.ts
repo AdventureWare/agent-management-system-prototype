@@ -1,6 +1,7 @@
 import { migrateAppDb } from '$lib/server/db/migrate';
 import { openAppDb } from '$lib/server/db/connection';
 import { bumpStoreRevision, readStoreRevision } from '$lib/server/db/store-revisions';
+import { syncSqliteCollectionRecords } from '$lib/server/db/sqlite-collection-sync';
 import type {
 	AgentRun,
 	AgentThread,
@@ -106,25 +107,23 @@ export function saveAgentThreadsToSqlite(
 	const db = openAppDb();
 
 	try {
-		const replaceAllRecords = db.transaction((input: AgentThreadsDb, expectedRevision?: number) => {
-			bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
-			db.exec('delete from agent_thread_records');
+		const replaceAllRecords = db.transaction(
+			(input: AgentThreadsDb, expectedRevision?: number) => {
+				bumpStoreRevision(db, AGENT_THREADS_STORE_NAME, expectedRevision);
 
-			const insertRecord = db.prepare(
-				`
-					insert into agent_thread_records (collection, id, position, payload)
-					values (?, ?, ?, ?)
-				`
-			);
-
-			for (const collection of AGENT_THREAD_COLLECTIONS) {
-				const records = input[collection] ?? [];
-
-				for (const [position, record] of records.entries()) {
-					insertRecord.run(collection, record.id, position, JSON.stringify(record));
+				for (const collection of AGENT_THREAD_COLLECTIONS) {
+					const records = input[collection] ?? [];
+					syncSqliteCollectionRecords(db, {
+						tableName: 'agent_thread_records',
+						collection,
+						records: records.map((record) => ({
+							id: record.id,
+							payload: JSON.stringify(record)
+						}))
+					});
 				}
 			}
-		});
+		);
 
 		replaceAllRecords(data, options.expectedRevision);
 	} finally {

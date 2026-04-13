@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
-const loadControlPlane = vi.hoisted(() => vi.fn());
+const loadControlPlaneWithRunTelemetry = vi.hoisted(() => vi.fn());
 const formatRelativeTime = vi.hoisted(() => vi.fn((value: string) => `relative:${value}`));
 const getOpenReviewForTask = vi.hoisted(() => vi.fn(() => null));
 const getPendingApprovalForTask = vi.hoisted(() => vi.fn(() => null));
@@ -54,9 +54,12 @@ vi.mock('$lib/server/control-plane', () => ({
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane,
 	selectExecutionProvider,
 	resolveThreadSandbox
+}));
+
+vi.mock('./run-telemetry', () => ({
+	loadControlPlaneWithRunTelemetry
 }));
 
 vi.mock('$lib/server/agent-threads', () => ({
@@ -296,8 +299,8 @@ function createData(): ControlPlaneData {
 
 describe('task-detail-page-data', () => {
 	beforeEach(() => {
-		loadControlPlane.mockReset();
-		loadControlPlane.mockResolvedValue(createData());
+		loadControlPlaneWithRunTelemetry.mockReset();
+		loadControlPlaneWithRunTelemetry.mockResolvedValue(createData());
 		formatRelativeTime.mockClear();
 		getOpenReviewForTask.mockClear();
 		getPendingApprovalForTask.mockClear();
@@ -410,7 +413,7 @@ describe('task-detail-page-data', () => {
 
 	it('returns null when the task does not exist', async () => {
 		const data = createData();
-		loadControlPlane.mockResolvedValue({
+		loadControlPlaneWithRunTelemetry.mockResolvedValue({
 			...data,
 			tasks: data.tasks.filter((task) => task.id !== 'task_1')
 		});
