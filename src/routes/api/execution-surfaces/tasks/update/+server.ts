@@ -1,5 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { loadControlPlane, parseTaskStatus, updateControlPlane } from '$lib/server/control-plane';
+import {
+	loadControlPlane,
+	parseTaskStatus,
+	updateControlPlaneCollections
+} from '$lib/server/control-plane';
 import {
 	authenticateExecutionSurface,
 	updateTaskFromExecutionSurface
@@ -31,12 +35,13 @@ export const POST = async ({ request }) => {
 		return json({ error: 'Task not found.' }, { status: 404 });
 	}
 
-	const nextData = await updateControlPlane((current) =>
-		updateTaskFromExecutionSurface(current, executionSurface, {
+	const nextData = await updateControlPlaneCollections((current) => ({
+		data: updateTaskFromExecutionSurface(current, executionSurface, {
 			taskId,
 			status: parseTaskStatus(body.status?.trim() ?? '', task.status)
-		})
-	);
+		}),
+		changedCollections: ['tasks', 'runs', 'reviews', 'approvals']
+	}));
 	const updatedTask = nextData.tasks.find((candidate) => candidate.id === taskId);
 
 	return json({ task: updatedTask });

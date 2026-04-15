@@ -18,6 +18,32 @@ async function importControlPlaneModule() {
 	return import('./control-plane');
 }
 
+const ALL_CONTROL_PLANE_COLLECTIONS = [
+	'providers',
+	'roles',
+	'projects',
+	'goals',
+	'executionSurfaces',
+	'tasks',
+	'runs',
+	'reviews',
+	'planningSessions',
+	'approvals',
+	'decisions'
+] as const;
+
+async function applyControlPlaneUpdate(
+	controlPlaneModule: Awaited<ReturnType<typeof importControlPlaneModule>>,
+	updater: (
+		data: Awaited<ReturnType<typeof controlPlaneModule.loadControlPlane>>
+	) => unknown | Promise<unknown>
+) {
+	return controlPlaneModule.updateControlPlaneCollections(async (data) => ({
+		data: (await updater(data)) as typeof data,
+		changedCollections: [...ALL_CONTROL_PLANE_COLLECTIONS]
+	}));
+}
+
 afterEach(() => {
 	process.chdir(originalCwd);
 	vi.unstubAllEnvs();
@@ -38,9 +64,9 @@ describe('control-plane sqlite backend', () => {
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 
-		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+		const controlPlaneModule = await importControlPlaneModule();
 
-		await updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			roles: [
 				{
@@ -52,7 +78,7 @@ describe('control-plane sqlite backend', () => {
 			]
 		}));
 
-		const loaded = await loadControlPlane();
+		const loaded = await controlPlaneModule.loadControlPlane();
 		const dbPath = resolve(root, 'data', 'app.sqlite');
 
 		expect(loaded.roles).toEqual([
@@ -175,9 +201,9 @@ describe('control-plane sqlite backend', () => {
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+		const controlPlaneModule = await importControlPlaneModule();
 
-		await updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			roles: [
 				{
@@ -198,7 +224,7 @@ describe('control-plane sqlite backend', () => {
 		).run('legacyRecords', 'legacy_record', 999, JSON.stringify({ id: 'legacy_record' }));
 		db.close();
 
-		const loaded = await loadControlPlane();
+		const loaded = await controlPlaneModule.loadControlPlane();
 
 		expect(loaded.roles.map((role) => role.id)).toEqual(['role_coordinator']);
 		expect(warn).toHaveBeenCalledWith(
@@ -211,9 +237,9 @@ describe('control-plane sqlite backend', () => {
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 
-		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+		const controlPlaneModule = await importControlPlaneModule();
 
-		await updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			tasks: [
 				{
@@ -340,12 +366,12 @@ describe('control-plane sqlite backend', () => {
 		);
 		db.close();
 
-		const loaded = await loadControlPlane();
+		const loaded = await controlPlaneModule.loadControlPlane();
 
 		expect(loaded.runs.map((run) => run.id)).toEqual(['run_kept']);
 		expect(loaded.reviews.map((review) => review.id)).toEqual(['review_kept']);
 
-		await updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			roles: [
 				{
@@ -357,7 +383,7 @@ describe('control-plane sqlite backend', () => {
 			]
 		}));
 
-		const reloaded = await loadControlPlane();
+		const reloaded = await controlPlaneModule.loadControlPlane();
 
 		expect(reloaded.runs.map((run) => run.id)).toEqual(['run_kept']);
 		expect(reloaded.reviews.map((review) => review.id)).toEqual(['review_kept']);
@@ -386,14 +412,14 @@ describe('control-plane sqlite backend', () => {
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
 
-		const { loadControlPlane, updateControlPlane } = await importControlPlaneModule();
+		const controlPlaneModule = await importControlPlaneModule();
 		let releaseFirstUpdate!: () => void;
 		const firstUpdateReady = new Promise<void>((resolve) => {
 			releaseFirstUpdate = resolve;
 		});
 		let firstUpdateLoaded = false;
 
-		const firstUpdate = updateControlPlane(async (data) => {
+		const firstUpdate = applyControlPlaneUpdate(controlPlaneModule, async (data) => {
 			firstUpdateLoaded = true;
 			await firstUpdateReady;
 
@@ -414,7 +440,7 @@ describe('control-plane sqlite backend', () => {
 			await Promise.resolve();
 		}
 
-		const secondUpdate = updateControlPlane((data) => ({
+		const secondUpdate = applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			projects: [
 				{
@@ -436,7 +462,7 @@ describe('control-plane sqlite backend', () => {
 		releaseFirstUpdate();
 		await Promise.all([firstUpdate, secondUpdate]);
 
-		const loaded = await loadControlPlane();
+		const loaded = await controlPlaneModule.loadControlPlane();
 
 		expect(loaded.roles.map((role) => role.id)).toEqual(['role_serialized']);
 		expect(loaded.projects.map((project) => project.id)).toEqual(['project_serialized']);
@@ -467,7 +493,7 @@ describe('control-plane sqlite backend', () => {
 			artifactPath: ''
 		});
 
-		const firstUpdate = firstModule.updateControlPlane(async (data) => {
+		const firstUpdate = applyControlPlaneUpdate(firstModule, async (data) => {
 			firstUpdateLoaded = true;
 			await firstUpdateReady;
 
@@ -482,7 +508,7 @@ describe('control-plane sqlite backend', () => {
 		}
 
 		const secondModule = await importControlPlaneModule();
-		await secondModule.updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(secondModule, (data) => ({
 			...data,
 			roles: [
 				{
@@ -578,7 +604,7 @@ describe('control-plane sqlite backend', () => {
 			summary: 'Planning session with deleted task'
 		});
 
-		await controlPlaneModule.updateControlPlane((data) => ({
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
 			...data,
 			goals: [
 				{

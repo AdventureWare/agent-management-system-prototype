@@ -70,6 +70,7 @@
 
 	let query = $state('');
 	let selectedStatus = $state('all');
+	let selectedWorkflowId = $state('all');
 	let selectedTaskView = $state<'active' | 'completed'>('active');
 	let selectedTaskIds = $state.raw<string[]>([]);
 	let selectedPreviewTaskId = $state('');
@@ -429,6 +430,7 @@
 			task.title,
 			task.summary,
 			task.projectName,
+			task.workflowName,
 			task.assigneeName,
 			task.desiredRoleName,
 			task.status,
@@ -493,6 +495,18 @@
 		}
 
 		return selectedStaleFilters.some((filterKey) => task.freshness[filterKey]);
+	}
+
+	function matchesWorkflow(task: TaskRow) {
+		if (selectedWorkflowId === 'all') {
+			return true;
+		}
+
+		if (selectedWorkflowId === 'none') {
+			return !task.workflowId;
+		}
+
+		return task.workflowId === selectedWorkflowId;
 	}
 
 	function threadActionLabel(task: TaskRow) {
@@ -564,6 +578,10 @@
 				continue;
 			}
 
+			if (!matchesWorkflow(task)) {
+				continue;
+			}
+
 			if (!matchesStaleFilters(task) || !matchesTask(task, query)) {
 				continue;
 			}
@@ -590,6 +608,37 @@
 	let activeTasks = $derived(taskCollections.activeTasks);
 	let completedTasks = $derived(taskCollections.completedTasks);
 	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);
+	let workflowFilterOptions = $derived.by(() => {
+		const workflowCounts = new Map<string, { id: string; name: string; count: number }>();
+		let withoutWorkflowCount = 0;
+
+		for (const task of tasks) {
+			if (!task.workflowId) {
+				withoutWorkflowCount += 1;
+				continue;
+			}
+
+			const existing = workflowCounts.get(task.workflowId);
+
+			if (existing) {
+				existing.count += 1;
+				continue;
+			}
+
+			workflowCounts.set(task.workflowId, {
+				id: task.workflowId,
+				name: task.workflowName || 'Unknown workflow',
+				count: 1
+			});
+		}
+
+		return {
+			workflows: [...workflowCounts.values()].sort((left, right) =>
+				left.name.localeCompare(right.name)
+			),
+			withoutWorkflowCount
+		};
+	});
 	let hiddenTaskViewNotice = $derived(
 		getHiddenTaskViewNotice({
 			selectedTaskView,
@@ -699,6 +748,7 @@
 					assigneeExecutionSurfaceId: form.assigneeExecutionSurfaceId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
+					workflowId: form.workflowId?.toString() ?? '',
 					area: ('area' in form ? form.area?.toString() : undefined) ?? 'product',
 					priority: form.priority?.toString() ?? 'medium',
 					riskLevel: form.riskLevel?.toString() ?? 'medium',
@@ -745,6 +795,7 @@
 					assigneeExecutionSurfaceId: '',
 					targetDate: '',
 					goalId: '',
+					workflowId: '',
 					area: 'product',
 					priority: 'medium',
 					riskLevel: 'medium',
@@ -775,6 +826,7 @@
 	let createTaskAssigneeExecutionSurfaceId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
+	let createTaskWorkflowId = $state('');
 	let createTaskArea = $state('product');
 	let createTaskPriority = $state('medium');
 	let createTaskRiskLevel = $state('medium');
@@ -789,6 +841,21 @@
 	let createTaskRequiredToolNames = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
+	);
+	let availableCreateTaskWorkflows = $derived(
+		data.workflows.filter(
+			(workflow) => !createTaskProjectId || workflow.projectId === createTaskProjectId
+		)
+	);
+	let selectedCreateWorkflow = $derived(
+		data.workflows.find((workflow) => workflow.id === createTaskWorkflowId) ?? null
+	);
+	let createTaskWorkflowGoalMismatch = $derived(
+		Boolean(
+			selectedCreateWorkflow?.goalId &&
+			createTaskGoalId &&
+			selectedCreateWorkflow.goalId !== createTaskGoalId
+		)
 	);
 	let selectedProjectInstalledSkillNames = $derived(
 		selectedProjectSkillSummary?.installedSkills.map((skill) => skill.id) ?? []
@@ -965,6 +1032,7 @@
 					assigneeExecutionSurfaceId?: string;
 					targetDate?: string;
 					goalId?: string;
+					workflowId?: string;
 					area?: string;
 					priority?: string;
 					riskLevel?: string;
@@ -1001,6 +1069,7 @@
 			Boolean(draft.assigneeExecutionSurfaceId?.trim()) ||
 			Boolean(draft.targetDate?.trim()) ||
 			Boolean(draft.goalId?.trim()) ||
+			Boolean(draft.workflowId?.trim()) ||
 			Boolean(draft.requiredPromptSkillNames?.trim()) ||
 			Boolean(draft.requiredCapabilityNames?.trim()) ||
 			Boolean(draft.requiredToolNames?.trim()) ||
@@ -1035,6 +1104,7 @@
 		createTaskAssigneeExecutionSurfaceId = prefill?.assigneeExecutionSurfaceId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
+		createTaskWorkflowId = prefill?.workflowId ?? '';
 		createTaskArea = (prefill as { area?: string } | null | undefined)?.area ?? 'product';
 		createTaskPriority = prefill?.priority ?? 'medium';
 		createTaskRiskLevel = prefill?.riskLevel ?? 'medium';
@@ -1070,6 +1140,7 @@
 		createTaskDelegationDoneCondition = '';
 		createTaskDelegationIntegrationNotes = '';
 		createTaskGoalId = '';
+		createTaskWorkflowId = '';
 		createTaskArea = 'product';
 		createTaskSuccessCriteria = '';
 		createTaskReadyCondition = '';
@@ -1103,6 +1174,7 @@
 			createTaskAssigneeExecutionSurfaceId = createTaskFormValues.assigneeExecutionSurfaceId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
+			createTaskWorkflowId = createTaskFormValues.workflowId;
 			createTaskArea = createTaskFormValues.area;
 			createTaskPriority = createTaskFormValues.priority;
 			createTaskRiskLevel = createTaskFormValues.riskLevel;
@@ -1123,6 +1195,16 @@
 
 		if (createTaskDraftReady && !createTaskProjectId && data.projects.length === 1) {
 			createTaskProjectId = data.projects[0]?.id ?? '';
+		}
+	});
+
+	$effect(() => {
+		if (!createTaskWorkflowId) {
+			return;
+		}
+
+		if (!availableCreateTaskWorkflows.some((workflow) => workflow.id === createTaskWorkflowId)) {
+			createTaskWorkflowId = '';
 		}
 	});
 
@@ -1172,6 +1254,7 @@
 			assigneeExecutionSurfaceId: string;
 			targetDate: string;
 			goalId: string;
+			workflowId: string;
 			area: string;
 			priority: string;
 			riskLevel: string;
@@ -1202,6 +1285,7 @@
 			createTaskAssigneeExecutionSurfaceId = savedDraft.assigneeExecutionSurfaceId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
+			createTaskWorkflowId = savedDraft.workflowId ?? '';
 			createTaskArea = savedDraft.area ?? 'product';
 			createTaskPriority = savedDraft.priority ?? 'medium';
 			createTaskRiskLevel = savedDraft.riskLevel ?? 'medium';
@@ -1260,6 +1344,7 @@
 			assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
+			workflowId: createTaskWorkflowId,
 			area: createTaskArea === 'product' ? '' : createTaskArea,
 			priority: createTaskPriority === 'medium' ? '' : createTaskPriority,
 			riskLevel: createTaskRiskLevel === 'medium' ? '' : createTaskRiskLevel,
@@ -1381,6 +1466,13 @@
 											class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 										>
 											Role {task.desiredRoleName}
+										</span>
+									{/if}
+									{#if task.workflowName}
+										<span
+											class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+										>
+											Workflow {task.workflowName}
 										</span>
 									{/if}
 									{#if task.openReview}
@@ -1589,6 +1681,13 @@
 															class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
 														>
 															Role {task.desiredRoleName}
+														</span>
+													{/if}
+													{#if task.workflowName}
+														<span
+															class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+														>
+															Workflow {task.workflowName}
 														</span>
 													{/if}
 													{#if task.openReview}
@@ -2063,6 +2162,27 @@
 						</div>
 
 						<div class="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:justify-between">
+							<label class="flex min-w-0 flex-col gap-1.5 xl:max-w-sm">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Workflow
+								</span>
+								<select
+									bind:value={selectedWorkflowId}
+									aria-label="Filter by workflow"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">All workflows</option>
+									<option value="none">
+										No workflow ({workflowFilterOptions.withoutWorkflowCount})
+									</option>
+									{#each workflowFilterOptions.workflows as workflow (workflow.id)}
+										<option value={workflow.id}>{workflow.name} ({workflow.count})</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+
+						<div class="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:justify-between">
 							<p class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
 								Stale work filters
 							</p>
@@ -2332,6 +2452,38 @@
 								<span class="mt-2 block text-xs text-slate-500">
 									Optional. Link the task to the outcome it advances.
 								</span>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Workflow</span>
+								<select
+									bind:value={createTaskWorkflowId}
+									class="select text-white"
+									name="workflowId"
+								>
+									<option value="">No workflow linked</option>
+									{#each availableCreateTaskWorkflows as workflow (workflow.id)}
+										<option value={workflow.id}>{workflow.name}</option>
+									{/each}
+								</select>
+								<span class="mt-2 block text-xs text-slate-500">
+									Optional. Use a workflow to group this task into a broader process without
+									changing task-level routing.
+								</span>
+								{#if createTaskProjectId && availableCreateTaskWorkflows.length === 0}
+									<span class="mt-2 block text-xs text-slate-500">
+										No workflows are linked to the selected project yet.
+									</span>
+								{:else if createTaskWorkflowGoalMismatch}
+									<span class="mt-2 block text-xs text-amber-300">
+										The selected workflow is linked to a different goal than the one currently
+										selected for this task.
+									</span>
+								{:else if selectedCreateWorkflow?.goalId && !createTaskGoalId}
+									<span class="mt-2 block text-xs text-slate-500">
+										If you leave Goal blank, task creation will inherit this workflow's linked goal.
+									</span>
+								{/if}
 							</label>
 
 							<label class="block">

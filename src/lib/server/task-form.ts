@@ -16,6 +16,7 @@ export type CreateTaskFormInput = {
 	readyCondition: string;
 	expectedOutcome: string;
 	projectId: string;
+	workflowId: string;
 	parentTaskId: string;
 	delegationObjective: string;
 	delegationInputContext: string;
@@ -45,6 +46,7 @@ export type TaskDetailFormInput = CreateTaskFormInput & {
 	hasExpectedOutcome: boolean;
 	hasDelegationPacketFields: boolean;
 	hasGoalId: boolean;
+	hasWorkflowId: boolean;
 	hasAssigneeExecutionSurfaceId: boolean;
 	hasPriority: boolean;
 	hasRiskLevel: boolean;
@@ -78,6 +80,7 @@ export type CreateTaskPrefill = {
 	assigneeExecutionSurfaceId: string;
 	targetDate: string;
 	goalId: string;
+	workflowId: string;
 	area: (typeof AREA_OPTIONS)[number];
 	priority: (typeof PRIORITY_OPTIONS)[number];
 	riskLevel: (typeof TASK_RISK_LEVEL_OPTIONS)[number];
@@ -152,6 +155,7 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		readyCondition: readTrimmedValue(form.get('readyCondition')),
 		expectedOutcome: readTrimmedValue(form.get('expectedOutcome')),
 		projectId: readTrimmedValue(form.get('projectId')),
+		workflowId: readTrimmedValue(form.get('workflowId')),
 		parentTaskId: readTrimmedValue(form.get('parentTaskId')),
 		delegationObjective: readTrimmedValue(form.get('delegationObjective')),
 		delegationInputContext: readTrimmedValue(form.get('delegationInputContext')),
@@ -195,6 +199,7 @@ export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 			form.has('delegationDoneCondition') ||
 			form.has('delegationIntegrationNotes'),
 		hasGoalId: form.has('goalId'),
+		hasWorkflowId: form.has('workflowId'),
 		hasAssigneeExecutionSurfaceId: form.has('assigneeExecutionSurfaceId'),
 		hasPriority: form.has('priority'),
 		hasRiskLevel: form.has('riskLevel'),
@@ -238,6 +243,7 @@ export function readCreateTaskPrefill(url: URL): CreateTaskPrefill {
 		),
 		targetDate: targetDate && isValidTaskDate(targetDate) ? targetDate : '',
 		goalId: readTrimmedValue(url.searchParams.get('goalId')),
+		workflowId: readTrimmedValue(url.searchParams.get('workflowId')),
 		area: parseOption(AREA_OPTIONS, url.searchParams.get('area'), 'product'),
 		priority: parseOption(PRIORITY_OPTIONS, url.searchParams.get('priority'), 'medium'),
 		riskLevel: parseOption(TASK_RISK_LEVEL_OPTIONS, url.searchParams.get('riskLevel'), 'medium'),

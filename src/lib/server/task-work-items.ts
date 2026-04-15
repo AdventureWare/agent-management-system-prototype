@@ -128,6 +128,7 @@ export function buildTaskWorkItems(
 	options: { now?: number } = {}
 ): TaskWorkItem[] {
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
+	const workflowMap = new Map((data.workflows ?? []).map((workflow) => [workflow.id, workflow]));
 	const executionSurfaceMap = new Map(
 		data.executionSurfaces.map((executionSurface) => [executionSurface.id, executionSurface])
 	);
@@ -154,6 +155,9 @@ export function buildTaskWorkItems(
 			return {
 				...task,
 				projectName: project?.name ?? 'No project',
+				workflowName: task.workflowId
+					? (workflowMap.get(task.workflowId)?.name ?? 'Unknown workflow')
+					: '',
 				assigneeName: task.assigneeExecutionSurfaceId
 					? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId)?.name ??
 						'Unknown execution surface')

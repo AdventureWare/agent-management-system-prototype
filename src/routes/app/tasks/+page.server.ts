@@ -90,6 +90,7 @@ function buildTaskCreateFormContext(
 		readyCondition: input.readyCondition,
 		expectedOutcome: input.expectedOutcome,
 		projectId: input.projectId,
+		workflowId: input.workflowId,
 		parentTaskId: input.parentTaskId,
 		delegationObjective: input.delegationObjective,
 		delegationInputContext: input.delegationInputContext,
@@ -126,6 +127,7 @@ function failTaskCreate(
 		readyCondition: string;
 		expectedOutcome: string;
 		projectId: string;
+		workflowId: string;
 		parentTaskId: string;
 		delegationObjective: string;
 		delegationInputContext: string;
@@ -203,6 +205,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		createTaskPrefill: readCreateTaskPrefill(url),
 		statusOptions: TASK_STATUS_OPTIONS,
 		goals: buildTaskGoalOptions(data.goals),
+		workflows: [...(data.workflows ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		availableDependencyTasks,
@@ -225,6 +228,7 @@ export const actions: Actions = {
 			readyCondition,
 			expectedOutcome,
 			projectId,
+			workflowId,
 			parentTaskId,
 			delegationObjective,
 			delegationInputContext,
@@ -288,6 +292,9 @@ export const actions: Actions = {
 		);
 		const project = current.projects.find((candidate) => candidate.id === projectId);
 		const goal = goalId ? current.goals.find((candidate) => candidate.id === goalId) : null;
+		const workflow = workflowId
+			? (current.workflows ?? []).find((candidate) => candidate.id === workflowId)
+			: null;
 		const parentTask = parentTaskId
 			? current.tasks.find((candidate) => candidate.id === parentTaskId)
 			: null;
@@ -305,6 +312,13 @@ export const actions: Actions = {
 		if (goalId && !goal) {
 			return failTaskCreate(400, {
 				message: 'Goal not found.',
+				...failureContext
+			});
+		}
+
+		if (workflowId && !workflow) {
+			return failTaskCreate(400, {
+				message: 'Workflow not found.',
 				...failureContext
 			});
 		}
@@ -333,6 +347,20 @@ export const actions: Actions = {
 		if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
 			return failTaskCreate(400, {
 				message: 'Execution surface not found.',
+				...failureContext
+			});
+		}
+
+		if (workflow && workflow.projectId !== project.id) {
+			return failTaskCreate(400, {
+				message: 'Workflow project does not match the selected task project.',
+				...failureContext
+			});
+		}
+
+		if (workflow?.goalId && goalId && workflow.goalId !== goalId) {
+			return failTaskCreate(400, {
+				message: 'Workflow goal does not match the selected task goal.',
 				...failureContext
 			});
 		}
@@ -388,7 +416,7 @@ export const actions: Actions = {
 			});
 		}
 
-		const nextGoalId = goal?.id ?? '';
+		const nextGoalId = goal?.id ?? workflow?.goalId ?? '';
 		const nextDesiredRoleId = current.roles.some((role) => role.id === desiredRoleId)
 			? desiredRoleId
 			: '';
@@ -401,6 +429,7 @@ export const actions: Actions = {
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
+			workflowId: workflow?.id ?? null,
 			parentTaskId: parentTask?.id ?? null,
 			delegationPacket: parentTask
 				? {

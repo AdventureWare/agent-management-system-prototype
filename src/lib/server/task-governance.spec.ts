@@ -125,6 +125,8 @@ function createTaskWorkItem(
 		expectedOutcome: '',
 		projectId: input.projectId ?? 'project_1',
 		projectName: input.projectName ?? 'AMS',
+		workflowId: input.workflowId ?? null,
+		workflowName: input.workflowName ?? '',
 		area: input.area ?? 'product',
 		goalId: input.goalId ?? 'goal_1',
 		priority: input.priority ?? 'medium',

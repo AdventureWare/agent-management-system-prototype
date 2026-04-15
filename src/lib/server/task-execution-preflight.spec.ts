@@ -61,10 +61,12 @@ describe('buildTaskExecutionPreflight', () => {
 
 		expect(preflight).toMatchObject({
 			hasDeclaredRequirements: true,
+			registeredExecutionSurfaceCount: 2,
 			eligibleExecutionSurfaceCount: 1,
 			fullCoverageExecutionSurfaceCount: 0,
 			uncoveredCapabilityNames: [],
 			uncoveredToolNames: ['playwright'],
+			directProvider: null,
 			currentAssignee: {
 				executionSurfaceId: 'worker_local',
 				withinConcurrencyLimit: false,
@@ -87,10 +89,49 @@ describe('buildTaskExecutionPreflight', () => {
 
 		expect(preflight).toMatchObject({
 			hasDeclaredRequirements: false,
+			registeredExecutionSurfaceCount: 0,
 			eligibleExecutionSurfaceCount: 0,
 			fullCoverageExecutionSurfaceCount: 0,
 			uncoveredCapabilityNames: [],
 			uncoveredToolNames: [],
+			directProvider: null,
+			currentAssignee: null
+		});
+	});
+
+	it('recognizes a direct provider launch path when no execution surface is registered', () => {
+		const preflight = buildTaskExecutionPreflight(
+			{
+				requiredCapabilityNames: ['planning'],
+				requiredToolNames: ['codex'],
+				assigneeExecutionSurfaceId: null
+			},
+			[],
+			{
+				id: 'provider_local',
+				name: 'Local Codex Worker',
+				enabled: true,
+				launcher: 'codex',
+				capabilities: ['planning']
+			}
+		);
+
+		expect(preflight).toMatchObject({
+			hasDeclaredRequirements: true,
+			registeredExecutionSurfaceCount: 0,
+			eligibleExecutionSurfaceCount: 0,
+			fullCoverageExecutionSurfaceCount: 0,
+			uncoveredCapabilityNames: ['planning'],
+			uncoveredToolNames: ['codex'],
+			directProvider: {
+				providerId: 'provider_local',
+				providerName: 'Local Codex Worker',
+				enabled: true,
+				canLaunchDirectly: true,
+				hasFullCoverage: true,
+				missingCapabilityNames: [],
+				missingToolNames: []
+			},
 			currentAssignee: null
 		});
 	});

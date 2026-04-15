@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createTask, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import { createTask, loadControlPlane } from '$lib/server/control-plane';
 import { listAgentThreads } from '$lib/server/agent-threads';
+import { createTaskRecord } from '$lib/server/control-plane-repository';
 import {
 	isSelfImprovementSqliteEmpty,
 	loadSelfImprovementFromSqlite,
@@ -1040,10 +1041,10 @@ export async function createTaskFromSelfImprovementOpportunity(
 		status: 'in_draft'
 	});
 
-	await updateControlPlane((current) => ({
-		...current,
-		tasks: [createdTask, ...current.tasks]
-	}));
+	await createTaskRecord({
+		task: createdTask,
+		goalId: taskContext.goalId
+	});
 
 	await setSelfImprovementOpportunityStatus({
 		opportunityId,

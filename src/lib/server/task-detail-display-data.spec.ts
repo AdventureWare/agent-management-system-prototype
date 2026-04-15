@@ -41,6 +41,7 @@ const task: Task = {
 	projectId: 'project_1',
 	area: 'product',
 	goalId: 'goal_cleanup',
+	workflowId: 'workflow_release',
 	parentTaskId: null,
 	delegationPacket: null,
 	delegationAcceptance: {
@@ -109,6 +110,7 @@ describe('task-detail-display-data', () => {
 			task,
 			projectMap: new Map([[project.id, project]]),
 			goalMap: new Map([['goal_cleanup', { name: 'Cleanup' }]]),
+			workflowMap: new Map([['workflow_release', { name: 'Release flow' }]]),
 			roleMap: new Map([['role_reviewer', { name: 'Reviewer' }]]),
 			executionSurfaceMap: new Map([[worker.id, worker]]),
 			latestRun: null,
@@ -132,6 +134,7 @@ describe('task-detail-display-data', () => {
 		expect(taskView).toMatchObject({
 			projectName: 'Agent Management System Prototype',
 			goalName: 'Cleanup',
+			workflowName: 'Release flow',
 			desiredRoleName: 'Reviewer',
 			assigneeName: 'Planner',
 			hasActiveRun: false,

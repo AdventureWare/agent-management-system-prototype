@@ -8,6 +8,7 @@ export type AppNavigationLinkId =
 	| 'runs'
 	| 'projects'
 	| 'goals'
+	| 'workflows'
 	| 'planning'
 	| 'executionSurfaces'
 	| 'roles'
@@ -23,6 +24,7 @@ export type AppNavigationRoute =
 	| '/app/runs'
 	| '/app/projects'
 	| '/app/goals'
+	| '/app/workflows'
 	| '/app/planning'
 	| '/app/execution-surfaces'
 	| '/app/roles'
@@ -70,6 +72,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		links: [
 			{ id: 'projects', label: 'Projects', href: '/app/projects' },
 			{ id: 'goals', label: 'Goals', href: '/app/goals' },
+			{ id: 'workflows', label: 'Workflows', href: '/app/workflows' },
 			{ id: 'planning', label: 'Planning', href: '/app/planning' }
 		]
 	},

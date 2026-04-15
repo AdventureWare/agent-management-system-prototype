@@ -2,7 +2,7 @@ import {
 	createDecision,
 	createTask,
 	loadControlPlane,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import {
 	applyGoalRelationships,
@@ -196,6 +196,7 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 			projectId: parentTask.projectId,
 			area: parentTask.area,
 			goalId: goal?.id ?? '',
+			workflowId: parentTask.workflowId ?? null,
 			parentTaskId: parentTask.id,
 			delegationPacket: {
 				objective: template.delegationObjective,
@@ -222,7 +223,7 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 		createdTasks.map((task) => `"${task.title}"`)
 	);
 
-	await updateControlPlane((data) => {
+	await updateControlPlaneCollections((data) => {
 		let nextData: ControlPlaneData = {
 			...data,
 			tasks: [
@@ -248,13 +249,19 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 		};
 
 		if (!goal) {
-			return nextData;
+			return {
+				data: nextData,
+				changedCollections: ['tasks', 'decisions']
+			};
 		}
 
 		const nextGoal = nextData.goals.find((candidate) => candidate.id === goal.id);
 
 		if (!nextGoal) {
-			return nextData;
+			return {
+				data: nextData,
+				changedCollections: ['tasks', 'decisions']
+			};
 		}
 
 		nextData = applyGoalRelationships({
@@ -265,7 +272,10 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 			taskIds: getGoalLinkedTaskIds(nextData, nextGoal)
 		});
 
-		return nextData;
+		return {
+			data: nextData,
+			changedCollections: ['tasks', 'goals', 'decisions']
+		};
 	});
 
 	return {

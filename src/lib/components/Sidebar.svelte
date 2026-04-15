@@ -34,6 +34,7 @@
 		runs: ActivityIcon,
 		projects: FolderOpenIcon,
 		goals: TargetIcon,
+		workflows: TargetIcon,
 		planning: CalendarRangeIcon,
 		executionSurfaces: UsersIcon,
 		roles: BriefcaseBusinessIcon,

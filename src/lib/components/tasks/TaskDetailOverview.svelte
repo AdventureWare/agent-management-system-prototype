@@ -32,6 +32,8 @@
 
 	type TaskOverviewView = {
 		projectName: string;
+		workflowName?: string | null;
+		workflowId?: string | null;
 		assigneeName: string;
 		desiredRoleName?: string | null;
 		desiredRoleId?: string | null;
@@ -153,6 +155,19 @@
 			class="card border border-slate-800 bg-slate-950/70 p-4"
 			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
 			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+		/>
+		<DetailFactCard
+			label="Workflow"
+			value={task.workflowName || 'Not linked'}
+			detail={task.workflowId
+				? `Workflow ${task.workflowId}`
+				: 'Attach this task to a workflow to track it as part of a process.'}
+			href={task.workflowId ? resolve(`/app/workflows`) : undefined}
+			hrefLabel={task.workflowId ? 'Open workflows' : undefined}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+			detailClass="ui-wrap-anywhere mt-2 text-sm text-slate-400"
 		/>
 		<DetailFactCard
 			label="Assignee"

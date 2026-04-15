@@ -16,6 +16,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		readyCondition: '',
 		expectedOutcome: '',
 		projectId: '',
+		workflowId: '',
 		parentTaskId: '',
 		delegationObjective: '',
 		delegationInputContext: '',
@@ -42,6 +43,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		hasExpectedOutcome: false,
 		hasDelegationPacketFields: false,
 		hasGoalId: false,
+		hasWorkflowId: false,
 		hasAssigneeExecutionSurfaceId: false,
 		hasPriority: false,
 		hasRiskLevel: false,
@@ -207,6 +209,20 @@ describe('buildTaskLaunchPlan', () => {
 		expect(error).toBeInstanceOf(TaskLaunchPlanError);
 		expect(error).toMatchObject({ status: 409 });
 		expect(String(error)).toMatch(/does not cover/);
+	});
+
+	it('allows launch through a direct provider when no execution surfaces are registered', async () => {
+		const { current, task } = buildFixture({
+			requiredCapabilityNames: ['planning'],
+			requiredToolNames: ['codex']
+		});
+		current.executionSurfaces = [];
+
+		const plan = await buildTaskLaunchPlan(current, task, buildTaskDetailInput());
+
+		expect(plan.effectiveExecutionSurface).toBeNull();
+		expect(plan.provider?.id).toBe('provider_local');
+		expect(plan.effectiveRequiredToolNames).toEqual(['codex']);
 	});
 
 	it('blocks launch when the chosen execution surface is already at task capacity', async () => {

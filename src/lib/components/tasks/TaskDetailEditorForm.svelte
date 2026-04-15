@@ -49,6 +49,7 @@
 		readyCondition?: string | null;
 		expectedOutcome?: string | null;
 		parentTaskId?: string | null;
+		workflowId?: string | null;
 		delegationPacket?: TaskDelegationPacket | null;
 		delegationAcceptance?: TaskDelegationAcceptance | null;
 		projectId: string;
@@ -79,6 +80,13 @@
 	type GoalOption = {
 		id: string;
 		label: string;
+	};
+
+	type WorkflowOption = {
+		id: string;
+		name: string;
+		projectId: string;
+		goalId?: string | null;
 	};
 
 	type ExecutionSurfaceOption = {
@@ -147,6 +155,7 @@
 		task,
 		projects,
 		goals,
+		workflows,
 		statusOptions,
 		executionSurfaces,
 		assignmentSuggestions,
@@ -160,6 +169,7 @@
 		task: TaskEditorView;
 		projects: ProjectOption[];
 		goals: GoalOption[];
+		workflows: WorkflowOption[];
 		statusOptions: TaskStatus[];
 		executionSurfaces: ExecutionSurfaceOption[];
 		assignmentSuggestions: AssignmentSuggestionView[];
@@ -431,7 +441,7 @@
 			</div>
 
 			<div
-				class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px_220px]"
+				class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px_220px]"
 			>
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
@@ -460,6 +470,22 @@
 						{:else}
 							This is the canonical task-to-goal link used by goal detail and hierarchy views.
 						{/if}
+					</p>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Workflow</span>
+					<select class="select text-white" name="workflowId">
+						<option value="" selected={!task.workflowId}>No workflow linked</option>
+						{#each workflows as workflow (workflow.id)}
+							<option value={workflow.id} selected={task.workflowId === workflow.id}>
+								{workflow.name}
+							</option>
+						{/each}
+					</select>
+					<p class="mt-2 text-xs text-slate-500">
+						Group this task into a reusable or ad hoc process without changing its task-level role
+						and assignment.
 					</p>
 				</label>
 

@@ -32,6 +32,7 @@ export type TaskFreshnessSummary = {
 
 export type TaskWorkItem = Task & {
 	projectName: string;
+	workflowName: string;
 	assigneeName: string;
 	desiredRoleName: string;
 	dependencyTaskNames: string[];

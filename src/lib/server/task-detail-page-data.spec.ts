@@ -187,6 +187,21 @@ function createData(): ControlPlaneData {
 				targetDate: null
 			}
 		],
+		workflows: [
+			{
+				id: 'workflow_release',
+				name: 'Release flow',
+				summary: 'Coordinate release work.',
+				projectId: 'project_a',
+				goalId: 'goal_child',
+				kind: 'repeatable',
+				status: 'active',
+				templateKey: null,
+				targetDate: '2026-04-15',
+				createdAt: '2026-04-01T10:00:00.000Z',
+				updatedAt: '2026-04-01T10:00:00.000Z'
+			}
+		],
 		executionSurfaces: [
 			{
 				id: 'worker_b',
@@ -227,6 +242,7 @@ function createData(): ControlPlaneData {
 				projectId: 'project_a',
 				area: 'product',
 				goalId: '',
+				workflowId: null,
 				parentTaskId: null,
 				delegationPacket: null,
 				priority: 'medium',
@@ -257,6 +273,7 @@ function createData(): ControlPlaneData {
 				projectId: 'project_a',
 				area: 'product',
 				goalId: 'goal_child',
+				workflowId: 'workflow_release',
 				parentTaskId: 'task_parent',
 				delegationPacket: null,
 				priority: 'medium',
@@ -387,6 +404,7 @@ describe('task-detail-page-data', () => {
 			'Zulu Project'
 		]);
 		expect(result?.roles.map((role) => role.name)).toEqual(['Architect', 'Builder']);
+		expect(result?.workflows.map((workflow) => workflow.name)).toEqual(['Release flow']);
 		expect(result?.executionSurfaces.map((worker) => worker.name)).toEqual([
 			'Alpha ExecutionSurface',
 			'Zulu ExecutionSurface'
@@ -409,6 +427,11 @@ describe('task-detail-page-data', () => {
 				}
 			]
 		});
+		expect(buildTaskDetailTaskView).toHaveBeenCalledWith(
+			expect.objectContaining({
+				workflowMap: expect.any(Map)
+			})
+		);
 	});
 
 	it('returns null when the task does not exist', async () => {

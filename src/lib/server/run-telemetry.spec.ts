@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlPlaneData } from '$lib/types/control-plane';
 
 const readFile = vi.hoisted(() => vi.fn());
@@ -141,9 +141,15 @@ function createData(): ControlPlaneData {
 
 describe('run telemetry', () => {
 	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-10T12:30:00.000Z'));
 		readFile.mockReset();
 		existsSync.mockReset();
 		existsSync.mockReturnValue(false);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it('hydrates run usage and rough cost from managed summary data', async () => {

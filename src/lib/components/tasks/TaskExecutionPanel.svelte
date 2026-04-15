@@ -36,10 +36,20 @@
 
 	type ExecutionPreflightView = {
 		hasDeclaredRequirements: boolean;
+		registeredExecutionSurfaceCount: number;
 		eligibleExecutionSurfaceCount: number;
 		fullCoverageExecutionSurfaceCount: number;
 		uncoveredCapabilityNames: string[];
 		uncoveredToolNames: string[];
+		directProvider: {
+			providerName: string;
+			enabled: boolean;
+			launcher: string;
+			canLaunchDirectly: boolean;
+			missingCapabilityNames: string[];
+			missingToolNames: string[];
+			hasFullCoverage: boolean;
+		} | null;
 		currentAssignee: {
 			executionSurfaceName: string;
 			withinConcurrencyLimit: boolean;
@@ -226,8 +236,15 @@
 				(!executionPreflight.currentAssignee.hasFullCoverage ||
 					!executionPreflight.currentAssignee.withinConcurrencyLimit)
 			) ||
+			Boolean(
+				executionPreflight.registeredExecutionSurfaceCount === 0 &&
+				executionPreflight.directProvider &&
+				!executionPreflight.directProvider.hasFullCoverage
+			) ||
 			(executionPreflight.hasDeclaredRequirements &&
-				executionPreflight.fullCoverageExecutionSurfaceCount === 0)
+				executionPreflight.fullCoverageExecutionSurfaceCount === 0 &&
+				executionPreflight.registeredExecutionSurfaceCount === 0 &&
+				!executionPreflight.directProvider?.canLaunchDirectly)
 	);
 
 	function boolLabel(value: boolean, yesLabel: string, noLabel: string) {
@@ -332,6 +349,11 @@
 						1
 							? ''
 							: 's'} currently cover all declared capability and tool requirements.
+					{:else if executionPreflight.registeredExecutionSurfaceCount === 0 && executionPreflight.directProvider?.canLaunchDirectly}
+						No execution surface is registered yet, but {executionPreflight.directProvider
+							.providerName}
+						can launch this task directly via {executionPreflight.directProvider.launcher ||
+							'its configured launcher'}.
 					{:else}
 						No execution surface currently covers all declared capability and tool requirements.
 					{/if}
@@ -342,6 +364,11 @@
 						? ''
 						: 's'}
 				</p>
+				{#if executionPreflight.registeredExecutionSurfaceCount === 0 && executionPreflight.directProvider?.canLaunchDirectly}
+					<p class="mt-2 text-sm text-emerald-100">
+						Direct provider launch is available even without a registered execution surface.
+					</p>
+				{/if}
 
 				{#if executionPreflight.uncoveredCapabilityNames.length > 0}
 					<p class="mt-3 text-sm text-amber-100">
@@ -374,6 +401,26 @@
 						<p class="mt-2 text-sm text-amber-100">
 							Assigned execution surface is missing tools:
 							{executionPreflight.currentAssignee.missingToolNames.join(', ')}
+						</p>
+					{/if}
+				{/if}
+				{#if executionPreflight.registeredExecutionSurfaceCount === 0 && executionPreflight.directProvider && !executionPreflight.directProvider.canLaunchDirectly}
+					<p class="mt-3 text-sm text-slate-300">
+						Direct provider fallback: {executionPreflight.directProvider.providerName}
+					</p>
+					{#if !executionPreflight.directProvider.enabled}
+						<p class="mt-2 text-sm text-amber-100">The direct provider is currently disabled.</p>
+					{/if}
+					{#if executionPreflight.directProvider.missingCapabilityNames.length > 0}
+						<p class="mt-2 text-sm text-amber-100">
+							Direct provider is missing capabilities:
+							{executionPreflight.directProvider.missingCapabilityNames.join(', ')}
+						</p>
+					{/if}
+					{#if executionPreflight.directProvider.missingToolNames.length > 0}
+						<p class="mt-2 text-sm text-amber-100">
+							Direct provider is missing tools:
+							{executionPreflight.directProvider.missingToolNames.join(', ')}
 						</p>
 					{/if}
 				{/if}

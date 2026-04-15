@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import { loadControlPlane, updateControlPlaneCollections } from '$lib/server/control-plane';
 import type { RunSpendRollupItem, RunUsageCostSummary } from '$lib/types/home-dashboard';
 import type {
 	ControlPlaneData,
@@ -336,7 +336,10 @@ export async function loadControlPlaneWithRunTelemetry() {
 		return data;
 	}
 
-	return updateControlPlane(async (current) => await syncControlPlaneRunTelemetry(current));
+	return updateControlPlaneCollections(async (current) => ({
+		data: await syncControlPlaneRunTelemetry(current),
+		changedCollections: ['runs']
+	}));
 }
 
 function createRollupMap() {

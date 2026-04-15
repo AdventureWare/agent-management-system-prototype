@@ -24,6 +24,7 @@ describe('task-form', () => {
 		form.set('assigneeExecutionSurfaceId', '  worker_1  ');
 		form.set('targetDate', ' 2026-04-10 ');
 		form.set('goalId', '  goal_cleanup ');
+		form.set('workflowId', '  workflow_release ');
 		form.set('area', 'invalid');
 		form.set('priority', 'high');
 		form.set('riskLevel', 'invalid');
@@ -55,6 +56,7 @@ describe('task-form', () => {
 			assigneeExecutionSurfaceId: 'worker_1',
 			targetDate: '2026-04-10',
 			goalId: 'goal_cleanup',
+			workflowId: 'workflow_release',
 			area: 'product',
 			priority: 'high',
 			riskLevel: 'medium',
@@ -76,6 +78,7 @@ describe('task-form', () => {
 		form.set('instructions', 'Task instructions');
 		form.set('projectId', 'project_1');
 		form.set('goalId', '');
+		form.set('workflowId', '');
 		form.set('assigneeExecutionSurfaceId', '');
 		form.set('priority', 'medium');
 		form.set('requiredThreadSandbox', '');
@@ -93,6 +96,7 @@ describe('task-form', () => {
 			projectId: 'project_1',
 			hasDelegationPacketFields: true,
 			hasGoalId: true,
+			hasWorkflowId: true,
 			hasAssigneeExecutionSurfaceId: true,
 			hasPriority: true,
 			hasRiskLevel: false,
@@ -116,6 +120,7 @@ describe('task-form', () => {
 		url.searchParams.set('targetDate', 'not-a-date');
 		url.searchParams.set('area', 'invalid');
 		url.searchParams.set('priority', 'high');
+		url.searchParams.set('workflowId', ' workflow_release ');
 		url.searchParams.set('requiresReview', 'false');
 		url.searchParams.set('dependencyTaskIds', 'task_a, task_b, task_a');
 		url.searchParams.set('requiredPromptSkillNames', 'frontend-sveltekit, docs-writer');
@@ -126,6 +131,7 @@ describe('task-form', () => {
 			open: true,
 			projectId: 'project_1',
 			targetDate: '',
+			workflowId: 'workflow_release',
 			area: 'product',
 			priority: 'high',
 			requiresReview: false,

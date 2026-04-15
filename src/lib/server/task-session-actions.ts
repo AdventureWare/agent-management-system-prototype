@@ -1,4 +1,8 @@
-import { createDecision, loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import {
+	createDecision,
+	loadControlPlane,
+	updateControlPlaneCollections
+} from '$lib/server/control-plane';
 import { getAgentThread, recoverAgentThread } from '$lib/server/agent-threads';
 import { readTaskDetailForm } from '$lib/server/task-form';
 import { buildStalledRecoveryState } from '$lib/server/task-detail-runtime-context';
@@ -171,18 +175,21 @@ export async function recoverTaskSession(taskId: string, form: FormData) {
 
 	const recoveryDecisionAt = new Date().toISOString();
 
-	await updateControlPlane((data) => ({
-		...data,
-		decisions: [
-			createDecision({
-				taskId,
-				runId: activeTaskRun.id,
-				decisionType: 'task_recovered',
-				summary: `Recovered stalled work by retiring run ${activeTaskRun.id} and re-queuing the task${launchedSessionId ? ` in thread ${launchedSessionId}` : ''}.`,
-				createdAt: recoveryDecisionAt
-			}),
-			...(data.decisions ?? [])
-		]
+	await updateControlPlaneCollections((data) => ({
+		data: {
+			...data,
+			decisions: [
+				createDecision({
+					taskId,
+					runId: activeTaskRun.id,
+					decisionType: 'task_recovered',
+					summary: `Recovered stalled work by retiring run ${activeTaskRun.id} and re-queuing the task${launchedSessionId ? ` in thread ${launchedSessionId}` : ''}.`,
+					createdAt: recoveryDecisionAt
+				}),
+				...(data.decisions ?? [])
+			]
+		},
+		changedCollections: ['decisions']
 	}));
 
 	return {

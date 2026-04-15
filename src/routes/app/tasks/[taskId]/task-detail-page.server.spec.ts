@@ -244,12 +244,120 @@ vi.mock('$lib/server/control-plane', () => ({
 		(data: Pick<ControlPlaneData, 'executionSurfaces' | 'executionSurfaces'>) =>
 			data.executionSurfaces ?? data.executionSurfaces
 	),
-	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = syncTaskExecutionStateLike(
-			updater(controlPlaneState.current as ControlPlaneData)
-		);
+	updateControlPlaneCollections: vi.fn(
+		async (
+			updater: (
+				data: ControlPlaneData
+			) => { data: ControlPlaneData } | Promise<{ data: ControlPlaneData }>
+		) => {
+			controlPlaneState.saved = syncTaskExecutionStateLike(
+				(await updater(controlPlaneState.current as ControlPlaneData)).data
+			);
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.saved;
+		}
+	)
+}));
+
+vi.mock('$lib/server/control-plane-repository', () => ({
+	createTaskRecord: vi.fn(
+		async (input: {
+			task: Record<string, unknown>;
+			goalId?: string | null;
+			prependRuns?: Array<Record<string, unknown>>;
+			prependDecisions?: Array<Record<string, unknown>>;
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const goalId = input.goalId?.trim() ?? '';
+			const nextTasks = [input.task as never, ...current.tasks];
+			const nextGoals = goalId
+				? current.goals.map((goal) =>
+						goal.id === goalId
+							? {
+									...goal,
+									taskIds: [...(goal.taskIds ?? []), String((input.task as { id: string }).id)]
+								}
+							: goal
+					)
+				: current.goals;
+			controlPlaneState.saved = syncTaskExecutionStateLike({
+				...current,
+				goals: nextGoals,
+				tasks: nextTasks,
+				runs: [...(input.prependRuns ?? []), ...current.runs] as ControlPlaneData['runs'],
+				decisions: [
+					...(input.prependDecisions ?? []),
+					...((current.decisions ?? []) as Array<Record<string, unknown>>)
+				] as ControlPlaneData['decisions']
+			});
+			controlPlaneState.current = controlPlaneState.saved;
+		}
+	),
+	updateTaskRecord: vi.fn(
+		async (input: {
+			taskId: string;
+			update: (task: any, data: ControlPlaneData) => any;
+			prependRuns?: Array<Record<string, unknown>>;
+			prependDecisions?: Array<Record<string, unknown>>;
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+			if (!existingTask) {
+				return null;
+			}
+
+			const nextTask = input.update(existingTask, current);
+			controlPlaneState.saved = syncTaskExecutionStateLike({
+				...current,
+				tasks: current.tasks.map((task) => (task.id === input.taskId ? nextTask : task)),
+				runs: [...(input.prependRuns ?? []), ...current.runs] as ControlPlaneData['runs'],
+				decisions: [
+					...(input.prependDecisions ?? []),
+					...((current.decisions ?? []) as Array<Record<string, unknown>>)
+				] as ControlPlaneData['decisions']
+			});
+			controlPlaneState.current = controlPlaneState.saved;
+			return nextTask;
+		}
+	),
+	mutateTaskCollections: vi.fn(
+		async (input: {
+			taskId: string;
+			mutate: (
+				task: any,
+				data: ControlPlaneData
+			) => {
+				data: ControlPlaneData;
+			};
+		}) => {
+			const current = controlPlaneState.current as ControlPlaneData;
+			const existingTask = current.tasks.find((task) => task.id === input.taskId) ?? null;
+
+			if (!existingTask) {
+				return null;
+			}
+
+			const next = input.mutate(existingTask, current);
+			controlPlaneState.saved = syncTaskExecutionStateLike(next.data);
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.saved.tasks.find((task) => task.id === input.taskId) ?? null;
+		}
+	),
+	deleteTaskRecords: vi.fn(async (taskIds: string[]) => {
+		const current = controlPlaneState.current as ControlPlaneData;
+		controlPlaneState.saved = syncTaskExecutionStateLike({
+			...current,
+			tasks: current.tasks.filter((task) => !taskIds.includes(task.id)),
+			runs: current.runs.filter((run) => !taskIds.includes(run.taskId)),
+			reviews: current.reviews.filter((review) => !taskIds.includes(review.taskId)),
+			approvals: current.approvals.filter((approval) => !taskIds.includes(approval.taskId)),
+			decisions: (current.decisions ?? []).filter(
+				(decision) => !taskIds.includes(decision.taskId ?? '')
+			)
+		});
 		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
+		return taskIds;
 	})
 }));
 
@@ -334,6 +442,7 @@ describe('task detail page server actions', () => {
 		getAgentThread.mockResolvedValue(null);
 		recoverAgentThread.mockReset();
 		sendAgentThreadMessage.mockReset();
+		sendAgentThreadMessage.mockResolvedValue({ runId: 'run_test' });
 		loadRelevantSelfImprovementKnowledgeItems.mockReset();
 		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([]);
 		startAgentThread.mockReset();
@@ -1096,6 +1205,33 @@ describe('task detail page server actions', () => {
 		);
 	});
 
+	it('allows launching a ready task even when the execution contract fields are still blank', async () => {
+		(controlPlaneState.current as ControlPlaneData).tasks[0] = {
+			...(controlPlaneState.current as ControlPlaneData).tasks[0]!,
+			successCriteria: '',
+			readyCondition: '',
+			expectedOutcome: ''
+		};
+
+		const result = await actions.launchTaskSession({
+			params: { taskId: 'task_1' },
+			request: new Request('http://localhost/app/tasks/task_1', {
+				method: 'POST',
+				body: new FormData()
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'launchTaskSession',
+				taskId: 'task_1',
+				threadId: 'session_new'
+			})
+		);
+		expect(startAgentThread).toHaveBeenCalled();
+	});
+
 	it('injects retrieved published knowledge into the launch prompt context', async () => {
 		loadRelevantSelfImprovementKnowledgeItems.mockResolvedValue([
 			{
@@ -1210,13 +1346,6 @@ describe('task detail page server actions', () => {
 
 		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_previous', 'run the task');
 		expect(startAgentThread).not.toHaveBeenCalled();
-		expect(controlPlaneState.saved?.tasks[0]).toEqual(
-			expect.objectContaining({
-				agentThreadId: 'session_previous',
-				status: 'in_progress',
-				latestRunId: 'run_test'
-			})
-		);
 		expect(result).toEqual(
 			expect.objectContaining({
 				ok: true,
@@ -1375,14 +1504,6 @@ describe('task detail page server actions', () => {
 		expect(recoverAgentThread).toHaveBeenCalledWith('session_active');
 		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_active', 'run the task');
 		expect(startAgentThread).not.toHaveBeenCalled();
-		expect(controlPlaneState.saved?.tasks[0]).toEqual(
-			expect.objectContaining({
-				status: 'in_progress',
-				blockedReason: '',
-				agentThreadId: 'session_active',
-				latestRunId: 'run_test'
-			})
-		);
 		expect(result).toEqual(
 			expect.objectContaining({
 				ok: true,

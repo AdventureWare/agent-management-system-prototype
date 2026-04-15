@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import {
 	loadControlPlane,
 	parseExecutionSurfaceStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import {
 	authenticateExecutionSurface,
@@ -28,8 +28,8 @@ export const POST = async ({ request }) => {
 		body.executionSurfaceToken?.trim() ?? ''
 	);
 
-	const nextData = await updateControlPlane((current) =>
-		updateExecutionSurfaceHeartbeat(current, executionSurface.id, {
+	const nextData = await updateControlPlaneCollections((current) => ({
+		data: updateExecutionSurfaceHeartbeat(current, executionSurface.id, {
 			status: body.status
 				? parseExecutionSurfaceStatus(body.status, executionSurface.status)
 				: executionSurface.status,
@@ -38,8 +38,9 @@ export const POST = async ({ request }) => {
 			tags: Array.isArray(body.tags)
 				? body.tags.map((tag) => tag.trim()).filter(Boolean)
 				: undefined
-		})
-	);
+		}),
+		changedCollections: ['executionSurfaces']
+	}));
 
 	const updatedExecutionSurface = nextData.executionSurfaces.find(
 		(candidate) => candidate.id === executionSurface.id

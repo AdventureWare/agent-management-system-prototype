@@ -19,11 +19,17 @@ const assistGoalWritingMock = vi.hoisted(() =>
 );
 
 const updateControlPlaneMock = vi.hoisted(() =>
-	vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
-		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
-	})
+	vi.fn(
+		async (updater: (data: ControlPlaneData) => { data: ControlPlaneData } | ControlPlaneData) => {
+			const result = updater(controlPlaneState.current as ControlPlaneData);
+			controlPlaneState.saved =
+				result && typeof result === 'object' && 'data' in result
+					? (result.data as ControlPlaneData)
+					: (result as ControlPlaneData);
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.saved;
+		}
+	)
 );
 
 vi.mock('$lib/server/artifact-browser', () => ({
@@ -59,7 +65,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseArea: vi.fn((_value: string, fallback: string) => fallback),
 	parseGoalStatus: vi.fn((_value: string, fallback: string) => fallback),
-	updateControlPlane: updateControlPlaneMock
+	updateControlPlaneCollections: updateControlPlaneMock
 }));
 
 vi.mock('$lib/server/goal-writing-assist', () => ({

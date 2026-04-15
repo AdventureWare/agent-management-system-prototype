@@ -20,7 +20,7 @@ import {
 	loadControlPlane,
 	parseArea,
 	parseGoalStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 function isValidDate(value: string) {
@@ -288,7 +288,7 @@ export const actions: Actions = {
 			});
 		}
 
-		await updateControlPlane((data) => {
+		await updateControlPlaneCollections((data) => {
 			const goal = createGoal({
 				name: values.name,
 				summary: values.summary,
@@ -302,16 +302,19 @@ export const actions: Actions = {
 				status: values.status
 			});
 
-			return applyGoalRelationships({
-				data: {
-					...data,
-					goals: [goal, ...data.goals]
-				},
-				goalId: goal.id,
-				parentGoalId,
-				projectIds: values.projectIds,
-				taskIds: values.taskIds
-			});
+			return {
+				data: applyGoalRelationships({
+					data: {
+						...data,
+						goals: [goal, ...data.goals]
+					},
+					goalId: goal.id,
+					parentGoalId,
+					projectIds: values.projectIds,
+					taskIds: values.taskIds
+				}),
+				changedCollections: ['goals', 'tasks']
+			};
 		});
 
 		return { ok: true, successAction: 'createGoal' };

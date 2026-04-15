@@ -42,6 +42,7 @@ const createTaskMock = vi.hoisted(() =>
 			expectedOutcome?: string;
 			projectId: string;
 			goalId: string;
+			workflowId?: string | null;
 			parentTaskId?: string | null;
 			delegationPacket?: {
 				objective: string;
@@ -74,6 +75,7 @@ const createTaskMock = vi.hoisted(() =>
 			projectId: input.projectId,
 			area: 'product',
 			goalId: input.goalId,
+			workflowId: input.workflowId ?? null,
 			parentTaskId: input.parentTaskId ?? null,
 			delegationPacket: input.delegationPacket ?? null,
 			priority: input.priority ?? 'medium',
@@ -217,13 +219,19 @@ vi.mock('$lib/server/control-plane', () => ({
 			null
 	),
 	taskHasUnmetDependencies: vi.fn(() => false),
-	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = syncTaskExecutionStateLike(
-			updater(controlPlaneState.current as ControlPlaneData)
-		);
-		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
-	})
+	updateControlPlaneCollections: vi.fn(
+		async (
+			updater: (
+				data: ControlPlaneData
+			) => { data: ControlPlaneData } | Promise<{ data: ControlPlaneData }>
+		) => {
+			controlPlaneState.saved = syncTaskExecutionStateLike(
+				(await updater(controlPlaneState.current as ControlPlaneData)).data
+			);
+			controlPlaneState.current = controlPlaneState.saved;
+			return controlPlaneState.saved;
+		}
+	)
 }));
 
 vi.mock('$lib/server/control-plane-repository', () => ({
@@ -405,6 +413,21 @@ describe('tasks page server actions', () => {
 					taskIds: ['task_existing']
 				}
 			],
+			workflows: [
+				{
+					id: 'workflow_release',
+					name: 'Release flow',
+					summary: 'Coordinate release work.',
+					projectId: 'project_ams',
+					goalId: 'goal_queue_quality',
+					kind: 'repeatable',
+					status: 'active',
+					templateKey: null,
+					targetDate: '2026-04-20',
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			],
 			executionSurfaces: [],
 			tasks: [
 				{
@@ -478,6 +501,34 @@ describe('tasks page server actions', () => {
 				requiredToolNames: ['codex', 'playwright'],
 				agentThreadId: null,
 				runCount: 0
+			})
+		);
+	});
+
+	it('links a created task to the selected workflow and inherits its goal when none is provided', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('workflowId', 'workflow_release');
+		form.set('name', 'Prepare release notes');
+		form.set('instructions', 'Draft the notes needed for the next release.');
+
+		await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				goalId: 'goal_queue_quality',
+				workflowId: 'workflow_release'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				goalId: 'goal_queue_quality',
+				workflowId: 'workflow_release'
 			})
 		);
 	});
@@ -904,6 +955,31 @@ describe('tasks page server actions', () => {
 				agentThreadId: 'session_created'
 			})
 		);
+	});
+
+	it('allows create-and-run with only the basic task brief filled out', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Quick launch task');
+		form.set('instructions', 'Launch directly from the quick create flow.');
+		form.set('submitMode', 'createAndRun');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTaskAndRun',
+				taskId: 'task_quick_launch_task',
+				threadId: 'session_created'
+			})
+		);
+		expect(startAgentThreadMock).toHaveBeenCalled();
 	});
 
 	it('prefers the project default sandbox over the provider default during create-and-run', async () => {

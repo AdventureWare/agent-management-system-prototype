@@ -99,11 +99,6 @@ vi.mock('$lib/server/control-plane', () => ({
 	resolveThreadSandbox: vi.fn(({ project, fallback }) => project?.defaultThreadSandbox ?? fallback),
 	taskHasUnmetDependencies: vi.fn(() => false),
 	wouldCreateProjectCycle: vi.fn(() => false),
-	updateControlPlane: vi.fn(async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-		controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData);
-		controlPlaneState.current = controlPlaneState.saved;
-		return controlPlaneState.saved;
-	}),
 	updateControlPlaneCollections: vi.fn(
 		async (updater: (data: ControlPlaneData) => { data: ControlPlaneData }) => {
 			controlPlaneState.saved = updater(controlPlaneState.current as ControlPlaneData).data;

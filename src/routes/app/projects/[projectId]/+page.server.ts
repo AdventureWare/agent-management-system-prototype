@@ -17,8 +17,7 @@ import {
 	loadControlPlane,
 	taskHasUnmetDependencies,
 	wouldCreateProjectCycle,
-	updateControlPlaneCollections,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 function readProjectThreadSandbox(value: FormDataEntryValue | null) {
@@ -214,7 +213,10 @@ export const actions: Actions = {
 			});
 		}
 
-		await updateControlPlane((data) => removeProjectFromControlPlane(data, params.projectId));
+		await updateControlPlaneCollections((data) => ({
+			data: removeProjectFromControlPlane(data, params.projectId),
+			changedCollections: ['projects', 'goals', 'planningSessions']
+		}));
 
 		throw redirect(303, '/app/projects?deleted=1');
 	}

@@ -5,7 +5,7 @@ import {
 	loadControlPlane,
 	parseExecutionSurfaceLocation,
 	parseExecutionSurfaceStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import {
 	assertBootstrapToken,
@@ -67,7 +67,7 @@ export const POST = async ({ request }) => {
 	const executionSurfaceToken = createExecutionSurfaceAuthToken();
 	let createdExecutionSurfaceId = '';
 
-	await updateControlPlane((current) => {
+	await updateControlPlaneCollections((current) => {
 		const executionSurface = createExecutionSurface({
 			name,
 			providerId,
@@ -100,8 +100,11 @@ export const POST = async ({ request }) => {
 		createdExecutionSurfaceId = executionSurface.id;
 
 		return {
-			...current,
-			executionSurfaces: [executionSurface, ...current.executionSurfaces]
+			data: {
+				...current,
+				executionSurfaces: [executionSurface, ...current.executionSurfaces]
+			},
+			changedCollections: ['executionSurfaces']
 		};
 	});
 

@@ -21,7 +21,7 @@ import {
 	loadControlPlane,
 	parseArea,
 	parseGoalStatus,
-	updateControlPlane
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 
 function isValidDate(value: string) {
@@ -347,7 +347,7 @@ export const actions: Actions = {
 
 		let goalUpdated = false;
 
-		await updateControlPlane((data) => {
+		await updateControlPlaneCollections((data) => {
 			const nextData = {
 				...data,
 				goals: data.goals.map((goal) => {
@@ -369,13 +369,16 @@ export const actions: Actions = {
 				})
 			};
 
-			return applyGoalRelationships({
-				data: nextData,
-				goalId: params.goalId,
-				parentGoalId,
-				projectIds: values.projectIds,
-				taskIds: values.taskIds
-			});
+			return {
+				data: applyGoalRelationships({
+					data: nextData,
+					goalId: params.goalId,
+					parentGoalId,
+					projectIds: values.projectIds,
+					taskIds: values.taskIds
+				}),
+				changedCollections: ['goals', 'tasks']
+			};
 		});
 
 		if (!goalUpdated) {
@@ -396,7 +399,10 @@ export const actions: Actions = {
 			return fail(404, { message: 'Goal not found.' });
 		}
 
-		await updateControlPlane((data) => removeGoalFromControlPlane(data, params.goalId));
+		await updateControlPlaneCollections((data) => ({
+			data: removeGoalFromControlPlane(data, params.goalId),
+			changedCollections: ['goals', 'tasks', 'planningSessions', 'decisions']
+		}));
 
 		throw redirect(303, '/app/goals?deleted=1');
 	}

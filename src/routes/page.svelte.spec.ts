@@ -23,6 +23,7 @@ describe('/+page.svelte', () => {
 					highRiskTaskCount: 0,
 					projectCount: 0,
 					goalCount: 0,
+					workflowCount: 0,
 					executionSurfaceCount: 0,
 					onlineExecutionSurfaceCount: 0,
 					busyExecutionSurfaceCount: 0

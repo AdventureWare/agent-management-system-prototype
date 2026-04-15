@@ -27,6 +27,8 @@ import {
 	RUN_STATUS_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
+	WORKFLOW_KIND_OPTIONS,
+	WORKFLOW_STATUS_OPTIONS,
 	EXECUTION_SURFACE_LOCATION_OPTIONS,
 	EXECUTION_SURFACE_STATUS_OPTIONS,
 	normalizeTaskStatus,
@@ -61,6 +63,9 @@ import {
 	type Task,
 	type TaskAttachment,
 	type TaskStatus,
+	type Workflow,
+	type WorkflowKind,
+	type WorkflowStatus,
 	type ExecutionSurface,
 	type ExecutionSurfaceLocation,
 	type ExecutionSurfaceStatus
@@ -128,6 +133,14 @@ function isPlanningConfidence(value: string): value is PlanningConfidence {
 	return PLANNING_CONFIDENCE_OPTIONS.includes(value as PlanningConfidence);
 }
 
+function isWorkflowStatus(value: string): value is WorkflowStatus {
+	return WORKFLOW_STATUS_OPTIONS.includes(value as WorkflowStatus);
+}
+
+function isWorkflowKind(value: string): value is WorkflowKind {
+	return WORKFLOW_KIND_OPTIONS.includes(value as WorkflowKind);
+}
+
 function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
 }
@@ -138,6 +151,7 @@ function defaultData(): ControlPlaneData {
 		roles: [],
 		projects: [],
 		goals: [],
+		workflows: [],
 		executionSurfaces: [],
 		tasks: [],
 		runs: [],
@@ -203,6 +217,13 @@ type LegacyGoal = Partial<Goal> & {
 	confidence?: unknown;
 };
 
+type LegacyWorkflow = Partial<Workflow> & {
+	kind?: unknown;
+	status?: unknown;
+	templateKey?: unknown;
+	targetDate?: unknown;
+};
+
 type LegacyTask = Partial<Task> & {
 	area?: unknown;
 	agentThreadId?: unknown;
@@ -213,6 +234,7 @@ type LegacyTask = Partial<Task> & {
 	successCriteria?: unknown;
 	readyCondition?: unknown;
 	expectedOutcome?: unknown;
+	workflowId?: unknown;
 	parentTaskId?: unknown;
 	delegationPacket?: unknown;
 	delegationAcceptance?: unknown;
@@ -619,6 +641,30 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 	};
 }
 
+function normalizeWorkflow(workflow: LegacyWorkflow): Workflow {
+	const now = new Date().toISOString();
+	const kindValue = typeof workflow.kind === 'string' ? workflow.kind : '';
+	const statusValue = typeof workflow.status === 'string' ? workflow.status : '';
+
+	return {
+		id: typeof workflow.id === 'string' ? workflow.id : createWorkflowId(),
+		name: typeof workflow.name === 'string' ? workflow.name : '',
+		summary: typeof workflow.summary === 'string' ? workflow.summary : '',
+		projectId: typeof workflow.projectId === 'string' ? workflow.projectId : '',
+		goalId:
+			typeof workflow.goalId === 'string' && workflow.goalId.trim() ? workflow.goalId.trim() : null,
+		kind: isWorkflowKind(kindValue) ? kindValue : 'ad_hoc',
+		status: isWorkflowStatus(statusValue) ? statusValue : 'draft',
+		templateKey:
+			typeof workflow.templateKey === 'string' && workflow.templateKey.trim()
+				? workflow.templateKey.trim()
+				: null,
+		targetDate: normalizeOptionalDate(workflow.targetDate),
+		createdAt: typeof workflow.createdAt === 'string' ? workflow.createdAt : now,
+		updatedAt: typeof workflow.updatedAt === 'string' ? workflow.updatedAt : now
+	};
+}
+
 function normalizeProject(
 	project: Partial<Project> & { defaultCoordinationFolder?: unknown }
 ): Project {
@@ -956,6 +1002,8 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		projectId: inferTaskProjectId(task, projects),
 		area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
+		workflowId:
+			typeof task.workflowId === 'string' && task.workflowId.trim() ? task.workflowId.trim() : null,
 		parentTaskId:
 			typeof task.parentTaskId === 'string' && task.parentTaskId.trim() ? task.parentTaskId : null,
 		delegationPacket: normalizeDelegationPacket(task.delegationPacket),
@@ -1135,6 +1183,7 @@ export function syncGovernanceQueues(data: ControlPlaneData): ControlPlaneData {
 
 export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
+	const workflowIds = new Set((data.workflows ?? []).map((workflow) => workflow.id));
 	const taskIds = new Set(data.tasks.map((task) => task.id));
 	const issues: string[] = [];
 
@@ -1153,6 +1202,10 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	for (const task of data.tasks) {
 		if (task.goalId && !goalIds.has(task.goalId)) {
 			issues.push(`Task ${task.id} references missing goal ${task.goalId}.`);
+		}
+
+		if (task.workflowId && !workflowIds.has(task.workflowId)) {
+			issues.push(`Task ${task.id} references missing workflow ${task.workflowId}.`);
 		}
 	}
 
@@ -1208,6 +1261,12 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlaneData {
 	const projectIds = new Set(data.projects.map((project) => project.id));
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
+	const workflows = (data.workflows ?? []).map((workflow) => ({
+		...workflow,
+		projectId: projectIds.has(workflow.projectId) ? workflow.projectId : '',
+		goalId: workflow.goalId && goalIds.has(workflow.goalId) ? workflow.goalId : null
+	}));
+	const workflowIds = new Set(workflows.map((workflow) => workflow.id));
 	const tasks = data.tasks.map((task) => {
 		const nextGoalId = task.goalId && goalIds.has(task.goalId) ? task.goalId : '';
 		const nextParentTaskId =
@@ -1216,6 +1275,7 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 		return {
 			...task,
 			goalId: nextGoalId,
+			workflowId: task.workflowId && workflowIds.has(task.workflowId) ? task.workflowId : null,
 			parentTaskId: nextParentTaskId
 		};
 	});
@@ -1261,6 +1321,7 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 	return {
 		...data,
 		goals,
+		workflows,
 		tasks: repairedTasks,
 		runs,
 		reviews,
@@ -1315,6 +1376,9 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 	const decisions = Array.isArray(parsed.decisions)
 		? parsed.decisions.map((decision) => normalizeDecision(decision as LegacyDecision))
 		: [];
+	const workflows = Array.isArray(parsed.workflows)
+		? parsed.workflows.map((workflow) => normalizeWorkflow(workflow as LegacyWorkflow))
+		: [];
 	const normalized = repairControlPlaneIntegrity({
 		providers,
 		roles: Array.isArray(parsed.roles)
@@ -1324,6 +1388,7 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		goals: Array.isArray(parsed.goals)
 			? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
 			: [],
+		workflows,
 		executionSurfaces: rawExecutionSurfaces.map((surface) =>
 			normalizeExecutionSurface(surface as LegacyExecutionSurface)
 		),
@@ -1489,14 +1554,6 @@ async function runQueuedControlPlaneUpdate(
 	return await queuedUpdate;
 }
 
-export async function updateControlPlane(
-	updater: (data: ControlPlaneData) => ControlPlaneData | Promise<ControlPlaneData>
-) {
-	return runQueuedControlPlaneUpdate(async (data) => ({
-		data: await updater(data)
-	}));
-}
-
 export async function updateControlPlaneCollections(
 	updater: (data: ControlPlaneData) => ControlPlaneUpdatePlan | Promise<ControlPlaneUpdatePlan>
 ) {
@@ -1556,6 +1613,7 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 		highRiskTaskCount: highRiskTasks.length,
 		projectCount: data.projects.length,
 		goalCount: data.goals.length,
+		workflowCount: (data.workflows ?? []).length,
 		executionSurfaceCount: data.executionSurfaces.length,
 		onlineExecutionSurfaceCount: onlineExecutionSurfaces.length,
 		busyExecutionSurfaceCount: busyExecutionSurfaces.length
@@ -1576,6 +1634,10 @@ export function createRoleId() {
 
 export function createProjectId() {
 	return `project_${randomUUID()}`;
+}
+
+export function createWorkflowId() {
+	return `workflow_${randomUUID()}`;
 }
 
 export function createTaskId() {
@@ -1781,6 +1843,35 @@ export function createGoal(input: {
 		targetDate: input.targetDate ?? null,
 		planningPriority: input.planningPriority ?? 0,
 		confidence: input.confidence ?? 'medium'
+	};
+}
+
+export function createWorkflow(input: {
+	name: string;
+	summary: string;
+	projectId: string;
+	goalId?: string | null;
+	kind?: WorkflowKind;
+	status?: WorkflowStatus;
+	templateKey?: string | null;
+	targetDate?: string | null;
+	createdAt?: string;
+	updatedAt?: string;
+}): Workflow {
+	const now = new Date().toISOString();
+
+	return {
+		id: createWorkflowId(),
+		name: input.name,
+		summary: input.summary,
+		projectId: input.projectId,
+		goalId: input.goalId ?? null,
+		kind: input.kind ?? 'ad_hoc',
+		status: input.status ?? 'draft',
+		templateKey: input.templateKey?.trim() ? input.templateKey.trim() : null,
+		targetDate: input.targetDate ?? null,
+		createdAt: input.createdAt ?? now,
+		updatedAt: input.updatedAt ?? input.createdAt ?? now
 	};
 }
 
@@ -2009,6 +2100,7 @@ export function createTask(input: {
 	projectId: string;
 	area?: Area;
 	goalId: string;
+	workflowId?: string | null;
 	parentTaskId?: string | null;
 	delegationPacket?: DelegationPacket | null;
 	delegationAcceptance?: DelegationAcceptance | null;
@@ -2046,6 +2138,7 @@ export function createTask(input: {
 		projectId: input.projectId,
 		area,
 		goalId: input.goalId,
+		workflowId: input.workflowId?.trim() ? input.workflowId.trim() : null,
 		parentTaskId: input.parentTaskId?.trim() ? input.parentTaskId : null,
 		delegationPacket: normalizeDelegationPacket(input.delegationPacket ?? null),
 		delegationAcceptance: normalizeDelegationAcceptance(input.delegationAcceptance ?? null),

@@ -6,7 +6,7 @@ import {
 } from './task-execution-contract';
 
 describe('task-execution-contract', () => {
-	it('marks launch as blocked until all execution contract fields are present', () => {
+	it('keeps launch available while still flagging review gaps when contract fields are missing', () => {
 		const contract = buildTaskExecutionContractStatus({
 			successCriteria: 'Ship the change with clear acceptance criteria.',
 			readyCondition: '',
@@ -14,14 +14,12 @@ describe('task-execution-contract', () => {
 		});
 
 		expect(contract).toMatchObject({
-			canLaunch: false,
+			canLaunch: true,
 			canReviewAgainstContract: false,
 			missingLaunchFieldLabels: ['ready condition', 'expected outcome'],
 			missingReviewFieldLabels: ['expected outcome']
 		});
-		expect(getTaskLaunchContractBlockerMessage(contract)).toContain(
-			'ready condition and expected outcome'
-		);
+		expect(getTaskLaunchContractBlockerMessage(contract)).toBeNull();
 		expect(getTaskReviewContractGapMessage(contract)).toContain('expected outcome');
 	});
 

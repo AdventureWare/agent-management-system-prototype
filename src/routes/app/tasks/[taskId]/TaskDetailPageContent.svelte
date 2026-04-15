@@ -268,6 +268,14 @@
 			);
 		}
 
+		if (
+			data.executionPreflight.registeredExecutionSurfaceCount === 0 &&
+			data.executionPreflight.eligibleExecutionSurfaceCount === 0 &&
+			data.executionPreflight.directProvider?.canLaunchDirectly
+		) {
+			return false;
+		}
+
 		return data.executionPreflight.eligibleExecutionSurfaceCount === 0;
 	});
 	let runTaskDisabled = $derived(
@@ -290,6 +298,13 @@
 		}
 
 		if (launchCoverageBlocked) {
+			if (
+				data.executionPreflight.registeredExecutionSurfaceCount === 0 &&
+				data.executionPreflight.directProvider
+			) {
+				return 'Current execution-surface coverage and direct provider coverage do not satisfy this task’s declared launch requirements.';
+			}
+
 			return 'Current execution-surface coverage does not satisfy this task’s declared launch requirements.';
 		}
 
@@ -336,6 +351,26 @@
 				].filter(Boolean);
 
 				return `${data.executionPreflight.currentAssignee.executionSurfaceName} does not cover the declared ${missingParts.join(' · ')}.`;
+			}
+
+			if (
+				data.executionPreflight.registeredExecutionSurfaceCount === 0 &&
+				data.executionPreflight.directProvider
+			) {
+				const missingParts = [
+					data.executionPreflight.directProvider.missingCapabilityNames.length > 0
+						? `capabilities: ${data.executionPreflight.directProvider.missingCapabilityNames.join(', ')}`
+						: '',
+					data.executionPreflight.directProvider.missingToolNames.length > 0
+						? `tools: ${data.executionPreflight.directProvider.missingToolNames.join(', ')}`
+						: ''
+				].filter(Boolean);
+
+				if (!data.executionPreflight.directProvider.enabled && missingParts.length === 0) {
+					return `No execution surface is registered for this task, and ${data.executionPreflight.directProvider.providerName} is currently disabled.`;
+				}
+
+				return `No execution surface is registered for this task, and ${data.executionPreflight.directProvider.providerName} does not cover the declared ${missingParts.join(' · ')}.`;
 			}
 
 			return 'No current execution surface can launch this task with its declared capability and tool requirements.';
@@ -399,6 +434,7 @@
 				task={data.task}
 				projects={data.projects}
 				goals={data.goals}
+				workflows={data.workflows}
 				statusOptions={data.statusOptions}
 				executionSurfaces={data.executionSurfaces}
 				assignmentSuggestions={data.assignmentSuggestions}

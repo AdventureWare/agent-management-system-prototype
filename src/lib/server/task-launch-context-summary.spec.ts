@@ -139,11 +139,11 @@ describe('buildTaskLaunchContextSummary', () => {
 				additionalWritableRoots: ['/tmp/project/cache']
 			},
 			contract: {
-				canLaunch: false,
+				canLaunch: true,
 				canReviewAgainstContract: true,
 				missingLaunchFieldLabels: ['ready condition'],
 				missingReviewFieldLabels: [],
-				launchBlockerMessage: expect.stringContaining('ready condition'),
+				launchBlockerMessage: null,
 				reviewGapMessage: null
 			},
 			promptInputs: {

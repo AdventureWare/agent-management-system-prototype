@@ -77,6 +77,21 @@ function createControlPlane(): ControlPlaneData {
 				defaultBranch: ''
 			}
 		],
+		workflows: [
+			{
+				id: 'workflow_1',
+				name: 'Release flow',
+				summary: 'Coordinate release work',
+				projectId: 'project_1',
+				goalId: null,
+				kind: 'repeatable',
+				status: 'active',
+				templateKey: null,
+				targetDate: null,
+				createdAt: '2026-03-31T08:00:00.000Z',
+				updatedAt: '2026-03-31T08:00:00.000Z'
+			}
+		],
 		goals: [],
 		executionSurfaces: [
 			{
@@ -103,6 +118,7 @@ function createControlPlane(): ControlPlaneData {
 				projectId: 'project_1',
 				area: 'product',
 				goalId: '',
+				workflowId: 'workflow_1',
 				priority: 'medium',
 				status: 'in_progress',
 				riskLevel: 'medium',
@@ -151,6 +167,7 @@ function createControlPlane(): ControlPlaneData {
 				projectId: 'project_1',
 				area: 'product',
 				goalId: '',
+				workflowId: 'workflow_missing',
 				priority: 'medium',
 				status: 'ready',
 				riskLevel: 'medium',
@@ -264,5 +281,16 @@ describe('task-work-items', () => {
 		const staleTasks = selectStaleTaskWorkItems(buildTaskWorkItems(createControlPlane(), sessions));
 
 		expect(staleTasks.map((task) => task.id)).toEqual(['task_stale_wip', 'task_quiet_thread']);
+	});
+
+	it('adds workflow names to enriched task rows', () => {
+		const tasks = buildTaskWorkItems(createControlPlane(), []);
+		const workflowTask = tasks.find((task) => task.id === 'task_stale_wip');
+		const missingWorkflowTask = tasks.find((task) => task.id === 'task_fresh');
+		const noWorkflowTask = tasks.find((task) => task.id === 'task_quiet_thread');
+
+		expect(workflowTask?.workflowName).toBe('Release flow');
+		expect(missingWorkflowTask?.workflowName).toBe('Unknown workflow');
+		expect(noWorkflowTask?.workflowName).toBe('');
 	});
 });

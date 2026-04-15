@@ -55,6 +55,15 @@ export const PROVIDER_KIND_OPTIONS = ['local', 'cloud', 'api'] as const;
 export const PROVIDER_SETUP_STATUS_OPTIONS = ['connected', 'needs_setup', 'planned'] as const;
 export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'custom'] as const;
 export const PLANNING_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'] as const;
+export const WORKFLOW_STATUS_OPTIONS = [
+	'draft',
+	'active',
+	'blocked',
+	'review',
+	'done',
+	'canceled'
+] as const;
+export const WORKFLOW_KIND_OPTIONS = ['ad_hoc', 'repeatable'] as const;
 
 export type Area = (typeof AREA_OPTIONS)[number];
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
@@ -72,6 +81,8 @@ export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
+export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
+export type WorkflowKind = (typeof WORKFLOW_KIND_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
 
@@ -310,6 +321,27 @@ export function formatProviderSetupStatusLabel(status: string): string {
 	return formatEnumLabel(status);
 }
 
+export function formatWorkflowStatusLabel(status: string): string {
+	return formatEnumLabel(status);
+}
+
+export function workflowStatusToneClass(status: string): string {
+	switch (status) {
+		case 'active':
+			return statusToneClass('progress');
+		case 'blocked':
+			return statusToneClass('attention');
+		case 'review':
+			return statusToneClass('decision');
+		case 'done':
+			return statusToneClass('success');
+		case 'draft':
+		case 'canceled':
+		default:
+			return statusToneClass('neutral');
+	}
+}
+
 export function providerSetupStatusToneClass(status: string): string {
 	switch (status) {
 		case 'connected':
@@ -414,6 +446,20 @@ export type ExecutionSurface = {
 	authTokenHash: string;
 };
 
+export type Workflow = {
+	id: string;
+	name: string;
+	summary: string;
+	projectId: string;
+	goalId: string | null;
+	kind: WorkflowKind;
+	status: WorkflowStatus;
+	templateKey?: string | null;
+	targetDate?: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
 export type DelegationPacket = {
 	objective: string;
 	inputContext: string;
@@ -437,6 +483,7 @@ export type Task = {
 	projectId: string;
 	area: Area;
 	goalId: string;
+	workflowId?: string | null;
 	parentTaskId?: string | null;
 	delegationPacket?: DelegationPacket | null;
 	delegationAcceptance?: DelegationAcceptance | null;
@@ -556,6 +603,7 @@ export type ControlPlaneData = {
 	roles: Role[];
 	projects: Project[];
 	goals: Goal[];
+	workflows?: Workflow[];
 	executionSurfaces: ExecutionSurface[];
 	tasks: Task[];
 	runs: Run[];

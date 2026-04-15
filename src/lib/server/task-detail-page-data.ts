@@ -2,7 +2,8 @@ import {
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane
+	loadControlPlane,
+	selectExecutionProvider
 } from '$lib/server/control-plane';
 import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
@@ -48,6 +49,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 	);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
+	const workflowMap = new Map((data.workflows ?? []).map((workflow) => [workflow.id, workflow]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const parentTask = task.parentTaskId
 		? (data.tasks.find((candidate) => candidate.id === task.parentTaskId) ?? null)
@@ -95,7 +97,11 @@ export async function loadTaskDetailPageData(taskId: string) {
 		data.providers,
 		task.assigneeExecutionSurfaceId
 	);
-	const executionPreflight = buildTaskExecutionPreflight(task, rawAssignmentSuggestions);
+	const executionPreflight = buildTaskExecutionPreflight(
+		task,
+		rawAssignmentSuggestions,
+		selectExecutionProvider(data, assignedExecutionSurface)
+	);
 	const executionRequirementInventory = buildExecutionRequirementInventory(data);
 	const [retrievedKnowledgeItems, artifactBrowser] = await Promise.all([
 		loadRelevantSelfImprovementKnowledgeItems({
@@ -128,6 +134,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 			task,
 			projectMap,
 			goalMap,
+			workflowMap,
 			roleMap,
 			executionSurfaceMap: executionSurfaceMap,
 			latestRun,
@@ -150,6 +157,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 		retrievedKnowledgeItems,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		goals: buildTaskGoalOptions(data.goals),
+		workflows: [...(data.workflows ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		executionSurfaces: [...data.executionSurfaces].sort((a, b) => a.name.localeCompare(b.name)),
 		assignmentSuggestions,

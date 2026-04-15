@@ -28,6 +28,7 @@ import {
 	buildTaskExecutionContractStatus,
 	getTaskLaunchContractBlockerMessage
 } from '$lib/task-execution-contract';
+import { describeDirectProviderTaskFit } from '$lib/server/direct-provider-task-fit';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import {
 	describeExecutionSurfaceTaskFit,
@@ -219,6 +220,10 @@ export async function buildTaskLaunchPlan(
 				) ?? null);
 	const effectiveExecutionSurface =
 		directlyAssignedExecutionSurface ?? autoSelectedExecutionSurface;
+	const directProviderFit =
+		effectiveExecutionSurface || current.executionSurfaces.length > 0
+			? null
+			: describeDirectProviderTaskFit(selectExecutionProvider(current, null), taskForRouting);
 	const effectiveDependencyTaskIds = input.hasDependencyTaskSelection
 		? input.dependencyTaskIds
 		: task.dependencyTaskIds;
@@ -262,7 +267,8 @@ export async function buildTaskLaunchPlan(
 
 	if (
 		(normalizedRequiredCapabilityNames.length > 0 || normalizedRequiredToolNames.length > 0) &&
-		!effectiveExecutionSurface
+		!effectiveExecutionSurface &&
+		!directProviderFit?.canLaunchDirectly
 	) {
 		const matchingSuggestions = assignmentSuggestions.filter(
 			(suggestion) => suggestion.matchingRequirements
@@ -288,6 +294,29 @@ export async function buildTaskLaunchPlan(
 			throw new TaskLaunchPlanError(
 				409,
 				`No matching execution surface can take this task right now${blockerSummary}.`
+			);
+		}
+
+		if (directProviderFit) {
+			const gaps = [
+				directProviderFit.missingCapabilityNames.length > 0
+					? `capabilities: ${directProviderFit.missingCapabilityNames.join(', ')}`
+					: '',
+				directProviderFit.missingToolNames.length > 0
+					? `tools: ${directProviderFit.missingToolNames.join(', ')}`
+					: ''
+			].filter(Boolean);
+
+			if (!directProviderFit.enabled && gaps.length === 0) {
+				throw new TaskLaunchPlanError(
+					409,
+					`${directProviderFit.providerName} is currently disabled, and no execution surface is registered to launch this task.`
+				);
+			}
+
+			throw new TaskLaunchPlanError(
+				409,
+				`${directProviderFit.providerName} does not cover this task’s declared ${gaps.join(' · ')}, and no execution surface is registered to satisfy the remaining requirements.`
 			);
 		}
 

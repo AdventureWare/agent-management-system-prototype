@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { loadControlPlane, updateControlPlane } from '$lib/server/control-plane';
+import { loadControlPlane, updateControlPlaneCollections } from '$lib/server/control-plane';
 import {
 	authenticateExecutionSurface,
 	claimTaskForExecutionSurface
@@ -22,9 +22,10 @@ export const POST = async ({ request }) => {
 		body.executionSurfaceId?.trim() ?? '',
 		body.executionSurfaceToken?.trim() ?? ''
 	);
-	const nextData = await updateControlPlane((current) =>
-		claimTaskForExecutionSurface(current, executionSurface, body.taskId?.trim() ?? '')
-	);
+	const nextData = await updateControlPlaneCollections((current) => ({
+		data: claimTaskForExecutionSurface(current, executionSurface, body.taskId?.trim() ?? ''),
+		changedCollections: ['tasks', 'runs', 'reviews', 'approvals']
+	}));
 	const task = nextData.tasks.find((candidate) => candidate.id === body.taskId?.trim());
 
 	return json({ task });

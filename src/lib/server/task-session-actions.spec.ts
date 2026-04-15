@@ -25,7 +25,7 @@ const createDecision = vi.hoisted(() =>
 	)
 );
 const loadControlPlane = vi.hoisted(() => vi.fn());
-const updateControlPlane = vi.hoisted(() => vi.fn());
+const updateControlPlaneCollections = vi.hoisted(() => vi.fn());
 const getAgentThread = vi.hoisted(() => vi.fn());
 const recoverAgentThread = vi.hoisted(() => vi.fn());
 const buildStalledRecoveryState = vi.hoisted(() => vi.fn());
@@ -35,7 +35,7 @@ const launchTaskFromPlan = vi.hoisted(() => vi.fn());
 vi.mock('$lib/server/control-plane', () => ({
 	createDecision,
 	loadControlPlane,
-	updateControlPlane
+	updateControlPlaneCollections
 }));
 
 vi.mock('$lib/server/agent-threads', () => ({
@@ -135,10 +135,20 @@ describe('task-session-actions', () => {
 		createDecision.mockClear();
 		loadControlPlane.mockReset();
 		loadControlPlane.mockImplementation(async () => current);
-		updateControlPlane.mockReset();
-		updateControlPlane.mockImplementation(
-			async (updater: (data: ControlPlaneData) => ControlPlaneData) => {
-				current = updater(current);
+		updateControlPlaneCollections.mockReset();
+		updateControlPlaneCollections.mockImplementation(
+			async (
+				updater: (data: ControlPlaneData) =>
+					| {
+							data: ControlPlaneData;
+							changedCollections: string[];
+					  }
+					| Promise<{
+							data: ControlPlaneData;
+							changedCollections: string[];
+					  }>
+			) => {
+				current = (await updater(current)).data;
 				return current;
 			}
 		);

@@ -28,6 +28,8 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		hasDelegationPacketFields,
 		projectId,
 		goalId,
+		workflowId,
+		hasWorkflowId,
 		assigneeExecutionSurfaceId,
 		desiredRoleId,
 		hasDesiredRoleId,
@@ -46,6 +48,9 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 	const current = await loadControlPlane();
 	const project = current.projects.find((candidate) => candidate.id === projectId);
 	const goal = goalId ? (current.goals.find((candidate) => candidate.id === goalId) ?? null) : null;
+	const workflow = workflowId
+		? ((current.workflows ?? []).find((candidate) => candidate.id === workflowId) ?? null)
+		: null;
 	const assignedExecutionSurface = assigneeExecutionSurfaceId
 		? (current.executionSurfaces.find((candidate) => candidate.id === assigneeExecutionSurfaceId) ??
 			null)
@@ -60,6 +65,10 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 
 	if (goalId && !goal) {
 		throw new TaskUpdateActionError(400, 'Goal not found.');
+	}
+
+	if (workflowId && !workflow) {
+		throw new TaskUpdateActionError(400, 'Workflow not found.');
 	}
 
 	if (assigneeExecutionSurfaceId && !assignedExecutionSurface) {
@@ -79,6 +88,21 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		desiredRoleId !== existingTask.desiredRoleId
 	) {
 		throw new TaskUpdateActionError(400, 'Desired role not found.');
+	}
+
+	const nextWorkflowId = hasWorkflowId ? (workflow?.id ?? null) : (existingTask.workflowId ?? null);
+
+	if (workflow && workflow.projectId !== project.id) {
+		throw new TaskUpdateActionError(
+			400,
+			'Workflow project does not match the selected task project.'
+		);
+	}
+
+	const effectiveGoalId = goal?.id ?? existingTask.goalId;
+
+	if (workflow?.goalId && effectiveGoalId && workflow.goalId !== effectiveGoalId) {
+		throw new TaskUpdateActionError(400, 'Workflow goal does not match the selected task goal.');
 	}
 
 	const invalidDependencyTaskIds = dependencyTaskIds.filter(
@@ -201,6 +225,7 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 			delegationPacket: nextDelegationPacket,
 			projectId: project.id,
 			goalId: nextGoalId,
+			workflowId: nextWorkflowId,
 			status: nextStatus,
 			assigneeExecutionSurfaceId: nextAssignedExecutionSurface?.id ?? null,
 			priority: nextPriority,
