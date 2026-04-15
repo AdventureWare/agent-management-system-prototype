@@ -1198,7 +1198,7 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "medium",
-      "status": "in_progress",
+      "status": "review",
       "riskLevel": "medium",
       "approvalMode": "none",
       "requiredThreadSandbox": null,
@@ -1218,7 +1218,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output",
       "attachments": [],
       "createdAt": "2026-04-09T17:38:28.991Z",
-      "updatedAt": "2026-04-15T12:59:02.723Z"
+      "updatedAt": "2026-04-15T12:59:36.577Z"
     },
     {
       "id": "task_7a9d2703-a420-4e16-8611-61bfbb1ade30",
@@ -7213,18 +7213,18 @@
       "executionSurfaceId": null,
       "providerId": null,
       "agentThreadRunId": "run_5e9995a6-801d-4b31-97a1-23f55d85a0a2",
-      "status": "running",
+      "status": "completed",
       "createdAt": "2026-04-14T00:26:17.406Z",
-      "updatedAt": "2026-04-15T12:59:02.723Z",
+      "updatedAt": "2026-04-15T12:59:36.577Z",
       "startedAt": "2026-04-14T00:26:17.405Z",
-      "endedAt": null,
+      "endedAt": "2026-04-15T12:59:36.577Z",
       "threadId": "019d7353-0823-71b2-a1c6-648140a30e7e",
       "agentThreadId": "thread_0fbbd569-9341-429c-95ef-46eb3c79f61b",
       "promptDigest": "c858737cbd091d2d",
       "artifactPaths": [
         "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output"
       ],
-      "summary": "Linked work thread is actively running.",
+      "summary": "Task run finished and is ready for review.",
       "lastHeartbeatAt": "2026-04-15T12:59:02.723Z",
       "errorSummary": "",
       "usageSource": "provider_reported",
