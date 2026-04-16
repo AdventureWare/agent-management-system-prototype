@@ -63,7 +63,6 @@ export const WORKFLOW_STATUS_OPTIONS = [
 	'done',
 	'canceled'
 ] as const;
-export const WORKFLOW_KIND_OPTIONS = ['ad_hoc', 'repeatable'] as const;
 
 export type Area = (typeof AREA_OPTIONS)[number];
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
@@ -82,7 +81,6 @@ export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number]
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
 export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
-export type WorkflowKind = (typeof WORKFLOW_KIND_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
 
@@ -451,11 +449,47 @@ export type Workflow = {
 	name: string;
 	summary: string;
 	projectId: string;
-	goalId: string | null;
-	kind: WorkflowKind;
 	status: WorkflowStatus;
 	templateKey?: string | null;
-	targetDate?: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type WorkflowStep = {
+	id: string;
+	workflowId: string;
+	title: string;
+	summary: string;
+	desiredRoleId: string;
+	dependsOnStepIds?: string[];
+	position: number;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type TaskTemplate = {
+	id: string;
+	name: string;
+	summary: string;
+	projectId: string;
+	goalId: string | null;
+	workflowId: string | null;
+	taskTitle: string;
+	taskSummary: string;
+	successCriteria: string;
+	readyCondition: string;
+	expectedOutcome: string;
+	area: Area;
+	priority: Priority;
+	riskLevel: TaskRiskLevel;
+	approvalMode: TaskApprovalMode;
+	requiredThreadSandbox: AgentSandbox | null;
+	requiresReview: boolean;
+	desiredRoleId: string;
+	assigneeExecutionSurfaceId: string | null;
+	requiredPromptSkillNames: string[];
+	requiredCapabilityNames: string[];
+	requiredToolNames: string[];
 	createdAt: string;
 	updatedAt: string;
 };
@@ -604,6 +638,8 @@ export type ControlPlaneData = {
 	projects: Project[];
 	goals: Goal[];
 	workflows?: Workflow[];
+	workflowSteps?: WorkflowStep[];
+	taskTemplates?: TaskTemplate[];
 	executionSurfaces: ExecutionSurface[];
 	tasks: Task[];
 	runs: Run[];

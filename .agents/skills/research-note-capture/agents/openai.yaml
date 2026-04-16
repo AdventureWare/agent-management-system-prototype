@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Note Capture"
+  short_description: "Turn research into durable notes with provenance"
+  default_prompt: "Use $research-note-capture to turn research into durable notes, study materials, or Obsidian-ready markdown with clear provenance, evidence, and open questions."

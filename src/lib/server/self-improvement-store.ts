@@ -7,7 +7,6 @@ import { listAgentThreads } from '$lib/server/agent-threads';
 import { createTaskRecord } from '$lib/server/control-plane-repository';
 import {
 	isSelfImprovementSqliteEmpty,
-	loadSelfImprovementFromSqlite,
 	loadSelfImprovementSnapshotFromSqlite,
 	saveSelfImprovementToSqlite,
 	type SelfImprovementStoreDb

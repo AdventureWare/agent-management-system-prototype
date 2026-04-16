@@ -1,0 +1,4 @@
+interface:
+  display_name: "Campaign Brief Planning"
+  short_description: "Turn strategy into a launch-ready campaign brief"
+  default_prompt: "Use $campaign-brief-planning to turn an approved marketing direction into a concrete campaign brief with channels, assets, CTA flow, dependencies, and success metrics."

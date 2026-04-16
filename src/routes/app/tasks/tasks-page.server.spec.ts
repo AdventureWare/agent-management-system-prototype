@@ -103,6 +103,59 @@ const createTaskMock = vi.hoisted(() =>
 	)
 );
 
+const createTaskTemplateMock = vi.hoisted(() =>
+	vi.fn(
+		(input: {
+			name: string;
+			summary?: string;
+			projectId: string;
+			goalId?: string | null;
+			workflowId?: string | null;
+			taskTitle?: string;
+			taskSummary?: string;
+			successCriteria?: string;
+			readyCondition?: string;
+			expectedOutcome?: string;
+			area?: string;
+			priority?: string;
+			riskLevel?: string;
+			approvalMode?: string;
+			requiredThreadSandbox?: string | null;
+			requiresReview?: boolean;
+			desiredRoleId?: string;
+			assigneeExecutionSurfaceId?: string | null;
+			requiredPromptSkillNames?: string[];
+			requiredCapabilityNames?: string[];
+			requiredToolNames?: string[];
+		}) => ({
+			id: `task_template_${input.name.toLowerCase().replace(/\s+/g, '_')}`,
+			name: input.name,
+			summary: input.summary ?? '',
+			projectId: input.projectId,
+			goalId: input.goalId ?? null,
+			workflowId: input.workflowId ?? null,
+			taskTitle: input.taskTitle ?? '',
+			taskSummary: input.taskSummary ?? '',
+			successCriteria: input.successCriteria ?? '',
+			readyCondition: input.readyCondition ?? '',
+			expectedOutcome: input.expectedOutcome ?? '',
+			area: input.area ?? 'product',
+			priority: input.priority ?? 'medium',
+			riskLevel: input.riskLevel ?? 'medium',
+			approvalMode: input.approvalMode ?? 'none',
+			requiredThreadSandbox: input.requiredThreadSandbox ?? null,
+			requiresReview: input.requiresReview ?? true,
+			desiredRoleId: input.desiredRoleId ?? '',
+			assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId ?? null,
+			requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
+			requiredCapabilityNames: input.requiredCapabilityNames ?? [],
+			requiredToolNames: input.requiredToolNames ?? [],
+			createdAt: '2026-03-30T12:00:00.000Z',
+			updatedAt: '2026-03-30T12:00:00.000Z'
+		})
+	)
+);
+
 const startAgentThreadMock = vi.hoisted(() =>
 	vi.fn(async () => ({
 		agentThreadId: 'session_created',
@@ -177,6 +230,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	createTaskAttachmentId: vi.fn(() => 'attachment_created'),
 	createRun: createRunMock,
 	createTask: createTaskMock,
+	createTaskTemplate: createTaskTemplateMock,
 	deleteTask: vi.fn(),
 	formatRelativeTime: vi.fn(() => 'just now'),
 	getOpenReviewForTask: vi.fn(() => null),
@@ -350,6 +404,7 @@ describe('tasks page server actions', () => {
 		assistTaskWritingMock.mockClear();
 		createRunMock.mockClear();
 		createTaskMock.mockClear();
+		createTaskTemplateMock.mockClear();
 		startAgentThreadMock.mockClear();
 		getWorkspaceExecutionIssueMock.mockReset();
 		getWorkspaceExecutionIssueMock.mockReturnValue(null);
@@ -419,15 +474,37 @@ describe('tasks page server actions', () => {
 					name: 'Release flow',
 					summary: 'Coordinate release work.',
 					projectId: 'project_ams',
-					goalId: 'goal_queue_quality',
-					kind: 'repeatable',
 					status: 'active',
 					templateKey: null,
-					targetDate: '2026-04-20',
 					createdAt: '2026-03-30T12:00:00.000Z',
 					updatedAt: '2026-03-30T12:00:00.000Z'
 				}
 			],
+			workflowSteps: [
+				{
+					id: 'workflow_step_requirements',
+					workflowId: 'workflow_release',
+					title: 'Requirements gathering',
+					summary: 'Clarify the feature need and success criteria.',
+					desiredRoleId: 'role_coordinator',
+					dependsOnStepIds: [],
+					position: 1,
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				},
+				{
+					id: 'workflow_step_implementation',
+					workflowId: 'workflow_release',
+					title: 'Implementation',
+					summary: 'Build the feature slice.',
+					desiredRoleId: 'role_reviewer',
+					dependsOnStepIds: ['workflow_step_requirements'],
+					position: 2,
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			],
+			taskTemplates: [],
 			executionSurfaces: [],
 			tasks: [
 				{
@@ -505,29 +582,132 @@ describe('tasks page server actions', () => {
 		);
 	});
 
-	it('links a created task to the selected workflow and inherits its goal when none is provided', async () => {
+	it('applies the selected workflow when creating a task and instantiates the task set', async () => {
 		const form = new FormData();
 		form.set('projectId', 'project_ams');
 		form.set('workflowId', 'workflow_release');
 		form.set('name', 'Prepare release notes');
 		form.set('instructions', 'Draft the notes needed for the next release.');
 
-		await actions.createTask({
+		const result = await actions.createTask({
 			request: new Request('http://localhost/app/tasks', {
 				method: 'POST',
 				body: form
 			})
 		} as never);
 
-		expect(createTaskMock).toHaveBeenCalledWith(
+		expect(result).toEqual(
 			expect.objectContaining({
-				goalId: 'goal_queue_quality',
+				ok: true,
+				successAction: 'createTaskWithWorkflow',
+				createdTaskCount: 3,
+				parentTaskId: 'task_prepare_release_notes'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.slice(0, 3)).toEqual([
+			expect.objectContaining({
+				id: 'task_prepare_release_notes',
+				title: 'Prepare release notes',
+				parentTaskId: null,
+				workflowId: 'workflow_release',
+				goalId: ''
+			}),
+			expect.objectContaining({
+				id: 'task_prepare_release_notes:_requirements_gathering',
+				title: 'Prepare release notes: Requirements gathering',
+				parentTaskId: 'task_prepare_release_notes',
+				workflowId: 'workflow_release',
+				desiredRoleId: 'role_coordinator'
+			}),
+			expect.objectContaining({
+				id: 'task_prepare_release_notes:_implementation',
+				title: 'Prepare release notes: Implementation',
+				parentTaskId: 'task_prepare_release_notes',
+				workflowId: 'workflow_release',
+				desiredRoleId: 'role_reviewer',
+				dependencyTaskIds: ['task_prepare_release_notes:_requirements_gathering']
+			})
+		]);
+	});
+
+	it('rejects create and run when a workflow template is selected', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('workflowId', 'workflow_release');
+		form.set('name', 'Ship release notes');
+		form.set('instructions', 'Use the release workflow.');
+		form.set('submitMode', 'createAndRun');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: expect.objectContaining({
+				formContext: 'taskCreate',
+				workflowId: 'workflow_release',
+				submitMode: 'createAndRun'
+			})
+		});
+		expect(createTaskMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: 'Ship release notes',
 				workflowId: 'workflow_release'
 			})
 		);
-		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+	});
+
+	it('saves a task template from the current create-task draft', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('goalId', 'goal_queue_quality');
+		form.set('workflowId', 'workflow_release');
+		form.set('name', 'Research competitive marketplace patterns');
+		form.set(
+			'instructions',
+			'Investigate adjacent marketplace UX patterns and summarize findings.'
+		);
+		form.set('desiredRoleId', 'role_reviewer');
+		form.set('requiredCapabilityNames', 'planning, citations');
+		form.set('taskTemplateName', 'Research brief');
+		form.set('taskTemplateSummary', 'Reusable defaults for repeatable research requests.');
+
+		const result = await actions.saveTaskTemplate({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
 			expect.objectContaining({
+				ok: true,
+				formContext: 'taskCreate',
+				reopenCreateModal: true,
+				successAction: 'saveTaskTemplate',
+				taskTemplateId: 'task_template_research_brief'
+			})
+		);
+		expect(createTaskTemplateMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: 'Research brief',
+				projectId: 'project_ams',
 				goalId: 'goal_queue_quality',
+				workflowId: 'workflow_release',
+				taskTitle: 'Research competitive marketplace patterns',
+				desiredRoleId: 'role_reviewer',
+				requiredCapabilityNames: ['planning', 'citations']
+			})
+		);
+		expect(controlPlaneState.saved?.taskTemplates?.[0]).toEqual(
+			expect.objectContaining({
+				id: 'task_template_research_brief',
+				name: 'Research brief',
+				projectId: 'project_ams',
 				workflowId: 'workflow_release'
 			})
 		);

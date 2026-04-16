@@ -1,0 +1,4 @@
+interface:
+  display_name: "Information Organization Implementation"
+  short_description: "Implement practical folder, docs, and metadata systems"
+  default_prompt: "Use $information-organization-implementation to implement or refactor directory layouts, naming conventions, metadata, source-of-truth boundaries, or documentation structures."

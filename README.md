@@ -40,7 +40,7 @@ The rest of the top-level surfaces are real, but mostly play supporting roles to
 - `Execution surfaces`, `Roles`, `Providers`: routing and capacity metadata
 - `Home`: a cross-cutting operator dashboard
 
-See `docs/current-product-surfaces.md` for a route-by-route audit of what each surface is currently doing in code.
+See `docs/README.md` for the current documentation index and surviving design notes.
 
 ## Run locally
 
@@ -157,5 +157,4 @@ The runner script is:
 
 ## Product docs
 
-- `docs/product-spec.md`
-- `docs/current-product-surfaces.md`
+- `docs/README.md`

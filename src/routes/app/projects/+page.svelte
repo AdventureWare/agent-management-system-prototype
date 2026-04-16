@@ -1,17 +1,34 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { getHiddenCollapsedRowCount } from '$lib/client/collection-visibility';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import DataTableSection from '$lib/components/DataTableSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PathField from '$lib/components/PathField.svelte';
 
 	let { data, form } = $props();
 	const CREATE_PROJECT_DRAFT_KEY = 'ams:create-project';
+	const ROOT_PROJECT_PARENT_KEY = '__root__';
+
+	type ProjectDirectoryProject = (typeof data.projects)[number];
+	type ProjectDirectoryRow = ProjectDirectoryProject & {
+		depth: number;
+		visibleChildCount: number;
+		isExpanded: boolean;
+		isDirectMatch: boolean;
+		isContextRow: boolean;
+	};
+	type ProjectDirectoryState = {
+		rows: ProjectDirectoryRow[];
+		matchingRowCount: number;
+		hiddenCollapsedRowCount: number;
+	};
 
 	let createProjectDraftReady = $state(false);
 	let projectName = $state('');
@@ -25,6 +42,7 @@
 	let additionalWritableRoots = $state('');
 	let defaultThreadSandbox = $state('');
 	let query = $state('');
+	let collapsedProjectIds = $state.raw<string[]>([]);
 
 	function modalShouldStartOpen() {
 		return Boolean(form?.message);
@@ -32,13 +50,10 @@
 
 	let isCreateModalOpen = $state(modalShouldStartOpen());
 
-	let configuredRepoCount = $derived(
-		data.projects.filter((project) => project.defaultRepoPath || project.defaultRepoUrl).length
-	);
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createProject');
 	let deleteSuccess = $derived(data.deleted);
 
-	function matchesProject(project: (typeof data.projects)[number], term: string) {
+	function matchesProject(project: ProjectDirectoryProject, term: string) {
 		const normalizedTerm = term.trim().toLowerCase();
 
 		if (!normalizedTerm) {
@@ -63,9 +78,126 @@
 			.includes(normalizedTerm);
 	}
 
-	let filteredProjects = $derived(
-		data.projects.filter((project) => matchesProject(project, query))
+	let forceExpandedTree = $derived(query.trim().length > 0);
+	let totalProjectCount = $derived(data.projects.length);
+	let rootProjectCount = $derived(
+		data.projects.filter((project) => !project.parentProjectId).length
 	);
+	let subprojectCount = $derived(data.projects.filter((project) => project.parentProjectId).length);
+	let projectDirectoryState = $derived.by<ProjectDirectoryState>(() => {
+		const projectById: Record<string, ProjectDirectoryProject> = {};
+
+		for (const project of data.projects) {
+			projectById[project.id] = project;
+		}
+
+		const childrenByParentId: Record<string, ProjectDirectoryProject[]> = {};
+
+		for (const project of data.projects) {
+			const parentKey =
+				project.parentProjectId && projectById[project.parentProjectId]
+					? project.parentProjectId
+					: ROOT_PROJECT_PARENT_KEY;
+			const siblings = childrenByParentId[parentKey] ?? [];
+			siblings.push(project);
+			childrenByParentId[parentKey] = siblings;
+		}
+
+		const directMatchIds: Record<string, boolean> = {};
+		const includedProjectIds: Record<string, boolean> = {};
+
+		function includeProject(project: ProjectDirectoryProject): boolean {
+			const children = childrenByParentId[project.id] ?? [];
+			const hasIncludedDescendant = children.some(includeProject);
+			const isDirectMatch = matchesProject(project, query);
+
+			if (isDirectMatch) {
+				directMatchIds[project.id] = true;
+			}
+
+			if (isDirectMatch || hasIncludedDescendant) {
+				includedProjectIds[project.id] = true;
+				return true;
+			}
+
+			return false;
+		}
+
+		for (const rootProject of childrenByParentId[ROOT_PROJECT_PARENT_KEY] ?? []) {
+			includeProject(rootProject);
+		}
+
+		const rows: ProjectDirectoryRow[] = [];
+
+		function visit(project: ProjectDirectoryProject, depth: number) {
+			if (!includedProjectIds[project.id]) {
+				return;
+			}
+
+			const visibleChildren = (childrenByParentId[project.id] ?? []).filter(
+				(childProject) => includedProjectIds[childProject.id]
+			);
+			const isExpanded = forceExpandedTree || !collapsedProjectIds.includes(project.id);
+
+			rows.push({
+				...project,
+				depth,
+				visibleChildCount: visibleChildren.length,
+				isExpanded,
+				isDirectMatch: Boolean(directMatchIds[project.id]),
+				isContextRow: Boolean(includedProjectIds[project.id]) && !directMatchIds[project.id]
+			});
+
+			if (visibleChildren.length > 0 && isExpanded) {
+				for (const childProject of visibleChildren) {
+					visit(childProject, depth + 1);
+				}
+			}
+		}
+
+		for (const rootProject of childrenByParentId[ROOT_PROJECT_PARENT_KEY] ?? []) {
+			visit(rootProject, 0);
+		}
+
+		const matchingRowCount = Object.keys(includedProjectIds).length;
+
+		return {
+			rows,
+			matchingRowCount,
+			hiddenCollapsedRowCount: getHiddenCollapsedRowCount({
+				matchingRowCount,
+				visibleRowCount: rows.length
+			})
+		};
+	});
+	let visibleProjectRows = $derived(projectDirectoryState.rows);
+	let matchingProjectRowCount = $derived(projectDirectoryState.matchingRowCount);
+	let hiddenCollapsedProjectRowCount = $derived(projectDirectoryState.hiddenCollapsedRowCount);
+
+	function toggleProjectExpansion(projectId: string) {
+		if (collapsedProjectIds.includes(projectId)) {
+			collapsedProjectIds = collapsedProjectIds.filter((candidate) => candidate !== projectId);
+			return;
+		}
+
+		collapsedProjectIds = [...collapsedProjectIds, projectId];
+	}
+
+	function projectIndentStyle(depth: number) {
+		return `padding-left: ${depth * 1.35}rem;`;
+	}
+
+	function hierarchyLabel(depth: number) {
+		if (depth === 0) {
+			return 'Root project';
+		}
+
+		if (depth === 1) {
+			return 'Subproject';
+		}
+
+		return `Level ${depth + 1}`;
+	}
 
 	function closeCreateModal() {
 		isCreateModalOpen = false;
@@ -128,11 +260,11 @@
 	});
 </script>
 
-<AppPage>
+<AppPage width="full">
 	<PageHeader
 		eyebrow="Projects"
-		title="Browse project contexts first"
-		description="The project page should act like a directory, not a wall of forms. Search for the project you want, then open one detail page to edit defaults, inspect linked work, and see how that project is being used."
+		title="Browse the project hierarchy first"
+		description="Projects now read like a directory instead of a wall of cards. Scan the tree, keep parent and subproject context visible, then open one project detail page when you need the full record."
 	>
 		{#snippet actions()}
 			<AppButton
@@ -169,9 +301,27 @@
 		</p>
 	{/if}
 
+	<div class="grid gap-3 md:grid-cols-3">
+		<MetricCard
+			label="Projects tracked"
+			value={totalProjectCount}
+			detail="Every project in the current directory, including nested subprojects."
+		/>
+		<MetricCard
+			label="Top-level projects"
+			value={rootProjectCount}
+			detail="Root projects that anchor the rest of the hierarchy."
+		/>
+		<MetricCard
+			label="Subprojects"
+			value={subprojectCount}
+			detail="Projects that live underneath a parent record."
+		/>
+	</div>
+
 	<CollectionToolbar
 		title="Project directory"
-		description="Search by name, summary, path, or repo hint, then open the project you want."
+		description="Search by project name, description, or parent context, then open the record you want."
 	>
 		{#snippet controls()}
 			<div class="w-full xl:w-80">
@@ -184,98 +334,119 @@
 				/>
 			</div>
 		{/snippet}
+	</CollectionToolbar>
 
-		{#if filteredProjects.length === 0}
-			<p class="ui-empty-state mt-6">No projects match the current search.</p>
-		{:else}
-			<div class="mt-6 grid gap-4 md:grid-cols-2">
-				{#each filteredProjects as project (project.id)}
-					<a
-						class="group flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-sky-400/40 hover:bg-slate-900"
-						href={resolve(`/app/projects/${project.id}`)}
-					>
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0 space-y-2">
-								<h3
-									class="ui-wrap-anywhere text-lg font-semibold text-white transition group-hover:text-sky-200"
-								>
-									{project.name}
-								</h3>
-								<p class="ui-clamp-3 text-sm text-slate-300">{project.summary}</p>
-							</div>
-						</div>
-
-						<div class="mt-4 grid gap-3 sm:grid-cols-3">
-							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Linked tasks</p>
-								<p class="mt-2 text-lg font-semibold text-white">{project.taskCount}</p>
-							</div>
-							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Goals in scope</p>
-								<p class="mt-2 text-lg font-semibold text-white">{project.goalCount}</p>
-							</div>
-							<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Repo defaults</p>
-								<p class="mt-2 text-lg font-semibold text-white">
-									{project.defaultRepoPath || project.defaultRepoUrl ? 'Ready' : 'Unset'}
-								</p>
-							</div>
-						</div>
-
-						<div class="mt-4 space-y-2 text-sm text-slate-400">
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Hierarchy:</span>
-								{project.parentProjectName
-									? `Subproject of ${project.parentProjectName}`
-									: 'Top-level project'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Root:</span>
-								{project.projectRootFolder || 'Not configured'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Artifact root:</span>
-								{project.defaultArtifactRoot || 'Not configured'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Branch:</span>
-								{project.defaultBranch || 'Not configured'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Extra roots:</span>
-								{project.additionalWritableRoots?.length
-									? `${project.additionalWritableRoots.length} linked`
-									: 'None'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Subprojects:</span>
-								{project.childProjectCount || 'None'}
-							</p>
-							<p class="ui-clamp-2">
-								<span class="text-slate-500">Thread sandbox:</span>
-								{project.defaultThreadSandbox || 'Inherit provider default'}
-							</p>
-						</div>
-
-						<div
-							class="mt-5 flex items-center justify-between border-t border-slate-800 pt-4 text-xs font-medium tracking-[0.16em] text-slate-500 uppercase"
-						>
-							<span>{project.defaultRepoUrl ? 'Repo attached' : 'No remote repo'}</span>
-							<span class="text-sky-300 transition group-hover:text-sky-200"> Open details </span>
-						</div>
-					</a>
-				{/each}
+	<DataTableSection
+		title="Projects"
+		description="Browse projects and subprojects, open project details to see more information and edit."
+		summary={`${matchingProjectRowCount} matching row${matchingProjectRowCount === 1 ? '' : 's'}`}
+		empty={visibleProjectRows.length === 0}
+		emptyMessage="No projects match the current search."
+	>
+		{#if hiddenCollapsedProjectRowCount > 0}
+			<div
+				class="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+			>
+				<p class="text-sm text-amber-100">
+					{hiddenCollapsedProjectRowCount} matching project{hiddenCollapsedProjectRowCount === 1
+						? ' is'
+						: 's are'} currently hidden inside collapsed branches.
+				</p>
+				<button
+					class="inline-flex items-center justify-center rounded-full border border-amber-800/70 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-amber-100 uppercase transition hover:border-amber-700 hover:text-white"
+					type="button"
+					onclick={() => {
+						collapsedProjectIds = [];
+					}}
+				>
+					Expand all
+				</button>
 			</div>
 		{/if}
 
-		<div class="mt-6">
-			<MetricCard
-				label="Repo coverage"
-				value={configuredRepoCount}
-				detail="Projects with a checkout path or remote repo already attached."
-			/>
-		</div>
-	</CollectionToolbar>
+		<table class="min-w-full divide-y divide-slate-800 text-left">
+			<thead class="bg-slate-900/70">
+				<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">
+					<th class="px-4 py-3">Project tree</th>
+					<th class="px-4 py-3">Parent</th>
+					<th class="px-4 py-3">Open</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-800 bg-slate-950/40">
+				{#each visibleProjectRows as project (project.id)}
+					<tr
+						class={`align-top transition ${project.isContextRow ? 'bg-slate-950/20 hover:bg-slate-900/40' : 'hover:bg-slate-900/60'}`}
+					>
+						<td class="px-4 py-4">
+							<div
+								class="flex min-w-[22rem] items-start gap-3"
+								style={projectIndentStyle(project.depth)}
+							>
+								<div class="flex h-7 w-7 items-center justify-center">
+									{#if project.visibleChildCount > 0}
+										<button
+											aria-label={`${project.isExpanded ? 'Collapse' : 'Expand'} subprojects for ${project.name}`}
+											class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-950 text-xs font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
+											type="button"
+											onclick={() => {
+												toggleProjectExpansion(project.id);
+											}}
+										>
+											{project.isExpanded ? '-' : '+'}
+										</button>
+									{:else}
+										<span
+											class={`block h-2.5 w-2.5 rounded-full ${project.depth === 0 ? 'bg-sky-400/70' : 'bg-slate-600'}`}
+										></span>
+									{/if}
+								</div>
+
+								<div class="min-w-0 space-y-2">
+									<div class="flex flex-wrap items-center gap-2">
+										<a
+											class={`ui-wrap-anywhere text-sm font-semibold transition hover:text-sky-200 ${project.isContextRow ? 'text-slate-300' : 'text-white'}`}
+											href={resolve(`/app/projects/${project.id}`)}
+										>
+											{project.name}
+										</a>
+										<span
+											class="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[0.65rem] font-medium tracking-[0.14em] text-slate-300 uppercase"
+										>
+											{hierarchyLabel(project.depth)}
+										</span>
+										{#if project.isContextRow}
+											<span
+												class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-[0.65rem] font-medium tracking-[0.14em] text-slate-400 uppercase"
+											>
+												Context
+											</span>
+										{/if}
+									</div>
+									<a
+										class={`block rounded-lg transition hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-sky-400 ${project.isContextRow ? 'text-slate-400' : 'text-slate-300'}`}
+										href={resolve(`/app/projects/${project.id}`)}
+									>
+										<p class="ui-clamp-2 text-sm">{project.summary}</p>
+									</a>
+								</div>
+							</div>
+						</td>
+						<td class="px-4 py-4 text-sm text-slate-300">
+							{project.parentProjectName || 'Top level'}
+						</td>
+						<td class="px-4 py-4">
+							<a
+								class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.16em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+								href={resolve(`/app/projects/${project.id}`)}
+							>
+								Open
+							</a>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</DataTableSection>
 </AppPage>
 
 {#if isCreateModalOpen}

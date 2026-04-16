@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence To Insight"
+  short_description: "Turn research into defensible synthesis and recommendations"
+  default_prompt: "Use $evidence-to-insight to turn gathered research into credible insights, explanations, recommendations, or drafts that stay proportional to the underlying evidence."

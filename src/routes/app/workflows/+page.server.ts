@@ -2,44 +2,118 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	createWorkflow,
+	createWorkflowStep,
 	loadControlPlane,
 	updateControlPlaneCollections
 } from '$lib/server/control-plane';
-import { getWorkflowRollup, getWorkflowTasks, sortWorkflowsByName } from '$lib/server/workflows';
 import {
-	WORKFLOW_KIND_OPTIONS,
-	type WorkflowKind,
-	type WorkflowStatus
-} from '$lib/types/control-plane';
+	getWorkflowRollup,
+	getWorkflowSteps,
+	getWorkflowTasks,
+	sortWorkflowsByName
+} from '$lib/server/workflows';
+import { instantiateWorkflowTemplate } from '$lib/server/workflow-template-instantiation';
 
 function isValidDate(value: string) {
 	return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-function parseWorkflowKind(value: string): WorkflowKind {
-	return WORKFLOW_KIND_OPTIONS.includes(value as WorkflowKind) ? (value as WorkflowKind) : 'ad_hoc';
+function parseDependencyPositions(value: string) {
+	return [
+		...new Set(
+			value
+				.split(',')
+				.map((entry) => Number.parseInt(entry.trim(), 10))
+				.filter((position) => Number.isInteger(position) && position > 0)
+		)
+	].sort((left, right) => left - right);
 }
 
-function parseManualWorkflowStatus(value: string): WorkflowStatus | null {
-	switch (value) {
-		case 'draft':
-		case 'active':
-		case 'done':
-		case 'canceled':
-			return value;
-		default:
-			return null;
+function readWorkflowStepFields(form: FormData) {
+	const titles = form.getAll('stepTitle').map((value) => value.toString().trim());
+	const desiredRoleIds = form.getAll('stepDesiredRoleId').map((value) => value.toString().trim());
+	const summaries = form.getAll('stepSummary').map((value) => value.toString().trim());
+	const dependencyPositions = form
+		.getAll('stepDependsOnStepPositions')
+		.map((value) => parseDependencyPositions(value.toString()));
+	const maxLength = Math.max(
+		titles.length,
+		desiredRoleIds.length,
+		summaries.length,
+		dependencyPositions.length
+	);
+
+	if (maxLength === 0) {
+		return [];
 	}
+
+	const stepFields: Array<{
+		title: string;
+		desiredRoleId: string;
+		summary: string;
+		dependsOnStepPositions: number[];
+		position: number;
+	}> = [];
+
+	for (let index = 0; index < maxLength; index += 1) {
+		const title = titles[index] ?? '';
+		const desiredRoleId = desiredRoleIds[index] ?? '';
+		const summary = summaries[index] ?? '';
+		const dependsOnStepPositions = dependencyPositions[index] ?? [];
+
+		if (!title && !desiredRoleId && !summary && dependsOnStepPositions.length === 0) {
+			continue;
+		}
+
+		stepFields.push({
+			title,
+			desiredRoleId,
+			summary,
+			dependsOnStepPositions,
+			position: stepFields.length + 1
+		});
+	}
+
+	return stepFields;
+}
+
+function buildWorkflowStepRecords(
+	workflowId: string,
+	steps: Array<{
+		title: string;
+		desiredRoleId: string;
+		summary: string;
+		dependsOnStepPositions: number[];
+		position: number;
+	}>
+) {
+	const draftedSteps = steps.map((step) =>
+		createWorkflowStep({
+			workflowId,
+			title: step.title,
+			summary: step.summary,
+			desiredRoleId: step.desiredRoleId,
+			position: step.position
+		})
+	);
+	const stepIdByPosition = new Map(draftedSteps.map((step) => [step.position, step.id]));
+
+	return draftedSteps.map((step, index) => ({
+		...step,
+		dependsOnStepIds: steps[index]?.dependsOnStepPositions
+			.map((position) => stepIdByPosition.get(position) ?? '')
+			.filter(Boolean)
+	}));
 }
 
 function readWorkflowForm(form: FormData) {
+	const stepFields = readWorkflowStepFields(form);
+
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
 		projectId: form.get('projectId')?.toString().trim() ?? '',
-		goalId: form.get('goalId')?.toString().trim() ?? '',
-		kind: parseWorkflowKind(form.get('kind')?.toString().trim() ?? ''),
-		targetDate: form.get('targetDate')?.toString().trim() ?? ''
+		stepFields
 	};
 }
 
@@ -48,34 +122,18 @@ function buildWorkflowFormValues(values: ReturnType<typeof readWorkflowForm>) {
 		name: values.name,
 		summary: values.summary,
 		projectId: values.projectId,
-		goalId: values.goalId,
-		kind: values.kind,
-		targetDate: values.targetDate
+		stepFields: values.stepFields
 	};
-}
-
-function getLinkedWorkflowTasks(
-	data: Awaited<ReturnType<typeof loadControlPlane>>,
-	workflowId: string
-) {
-	return data.tasks.filter((task) => task.workflowId === workflowId);
 }
 
 export const load: PageServerLoad = async () => {
 	const data = await loadControlPlane();
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
-	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
+	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 
 	return {
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
-		goals: [...data.goals]
-			.map((goal) => ({
-				id: goal.id,
-				name: goal.name,
-				label: goal.parentGoalId ? `${goal.name} (${goal.parentGoalId})` : goal.name
-			}))
-			.sort((a, b) => a.name.localeCompare(b.name)),
-		workflowKindOptions: WORKFLOW_KIND_OPTIONS,
+		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		workflows: sortWorkflowsByName(data.workflows ?? []).map((workflow) => {
 			const workflowTasks = getWorkflowTasks(data, workflow.id)
 				.map((task) => ({
@@ -85,12 +143,32 @@ export const load: PageServerLoad = async () => {
 					projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project'
 				}))
 				.sort((left, right) => left.title.localeCompare(right.title));
+			const orderedWorkflowSteps = getWorkflowSteps(data, workflow.id);
+			const workflowStepMap = new Map(orderedWorkflowSteps.map((step) => [step.id, step]));
+			const workflowSteps = orderedWorkflowSteps.map((step) => ({
+				...step,
+				desiredRoleName: step.desiredRoleId
+					? (roleMap.get(step.desiredRoleId)?.name ?? step.desiredRoleId)
+					: '',
+				dependsOnStepTitles: (step.dependsOnStepIds ?? [])
+					.map((dependencyStepId) => {
+						const dependencyStep = workflowStepMap.get(dependencyStepId);
+
+						return dependencyStep
+							? `Step ${dependencyStep.position} · ${dependencyStep.title}`
+							: '';
+					})
+					.filter(Boolean),
+				dependsOnStepPositions: (step.dependsOnStepIds ?? [])
+					.map((dependencyStepId) => workflowStepMap.get(dependencyStepId)?.position ?? 0)
+					.filter((position) => position > 0)
+			}));
 
 			return {
 				...workflow,
 				projectName: projectMap.get(workflow.projectId)?.name ?? 'Unknown project',
-				goalName: workflow.goalId ? (goalMap.get(workflow.goalId)?.name ?? 'Unknown goal') : '',
 				rollup: getWorkflowRollup(data, workflow),
+				steps: workflowSteps,
 				taskPreview: workflowTasks.slice(0, 5)
 			};
 		})
@@ -100,6 +178,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	createWorkflow: async ({ request }) => {
 		const values = readWorkflowForm(await request.formData());
+		const steps = values.stepFields;
 
 		if (!values.name || !values.summary || !values.projectId) {
 			return fail(400, {
@@ -108,18 +187,19 @@ export const actions: Actions = {
 			});
 		}
 
-		if (values.targetDate && !isValidDate(values.targetDate)) {
+		if (steps.length === 0) {
 			return fail(400, {
-				message: 'Target date must use YYYY-MM-DD.',
+				message: 'Add at least one workflow step.',
 				values: buildWorkflowFormValues(values)
 			});
 		}
 
 		const current = await loadControlPlane();
 		const project = current.projects.find((candidate) => candidate.id === values.projectId) ?? null;
-		const goal = values.goalId
-			? (current.goals.find((candidate) => candidate.id === values.goalId) ?? null)
-			: null;
+		const roleIds = new Set(current.roles.map((role) => role.id));
+		const invalidStepRole = steps.find(
+			(step) => step.desiredRoleId && !roleIds.has(step.desiredRoleId)
+		);
 		const duplicateWorkflow = (current.workflows ?? []).find(
 			(workflow) =>
 				workflow.projectId === values.projectId &&
@@ -133,9 +213,9 @@ export const actions: Actions = {
 			});
 		}
 
-		if (values.goalId && !goal) {
+		if (invalidStepRole) {
 			return fail(400, {
-				message: 'Goal not found.',
+				message: `Workflow step "${invalidStepRole.title}" references a missing role.`,
 				values: buildWorkflowFormValues(values)
 			});
 		}
@@ -147,22 +227,31 @@ export const actions: Actions = {
 			});
 		}
 
+		const workflowRecord = createWorkflow({
+			name: values.name,
+			summary: values.summary,
+			projectId: values.projectId
+		});
+		const invalidDependencyPosition = steps.find((step) =>
+			step.dependsOnStepPositions.some((position) => position >= step.position)
+		);
+
+		if (invalidDependencyPosition) {
+			return fail(400, {
+				message: `Workflow step "${invalidDependencyPosition.title}" can only depend on earlier steps.`,
+				values: buildWorkflowFormValues(values)
+			});
+		}
+
+		const workflowStepRecords = buildWorkflowStepRecords(workflowRecord.id, steps);
+
 		await updateControlPlaneCollections((data) => ({
 			data: {
 				...data,
-				workflows: [
-					createWorkflow({
-						name: values.name,
-						summary: values.summary,
-						projectId: values.projectId,
-						goalId: values.goalId || null,
-						kind: values.kind,
-						targetDate: values.targetDate || null
-					}),
-					...(data.workflows ?? [])
-				]
+				workflows: [workflowRecord, ...(data.workflows ?? [])],
+				workflowSteps: [...workflowStepRecords, ...(data.workflowSteps ?? [])]
 			},
-			changedCollections: ['workflows']
+			changedCollections: ['workflows', 'workflowSteps']
 		}));
 
 		return {
@@ -175,10 +264,12 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const workflowId = form.get('workflowId')?.toString().trim() ?? '';
 		const values = readWorkflowForm(form);
+		const steps = values.stepFields;
 
 		if (!workflowId) {
 			return fail(400, {
 				message: 'Workflow ID is required.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
@@ -186,13 +277,15 @@ export const actions: Actions = {
 		if (!values.name || !values.summary || !values.projectId) {
 			return fail(400, {
 				message: 'Name, summary, and project are required.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
 
-		if (values.targetDate && !isValidDate(values.targetDate)) {
+		if (steps.length === 0) {
 			return fail(400, {
-				message: 'Target date must use YYYY-MM-DD.',
+				message: 'Add at least one workflow step.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
@@ -200,9 +293,10 @@ export const actions: Actions = {
 		const current = await loadControlPlane();
 		const existingWorkflow =
 			(current.workflows ?? []).find((workflow) => workflow.id === workflowId) ?? null;
-		const goal = values.goalId
-			? (current.goals.find((candidate) => candidate.id === values.goalId) ?? null)
-			: null;
+		const roleIds = new Set(current.roles.map((role) => role.id));
+		const invalidStepRole = steps.find(
+			(step) => step.desiredRoleId && !roleIds.has(step.desiredRoleId)
+		);
 		const duplicateWorkflow = (current.workflows ?? []).find(
 			(workflow) =>
 				workflow.id !== workflowId &&
@@ -213,6 +307,7 @@ export const actions: Actions = {
 		if (!existingWorkflow) {
 			return fail(404, {
 				message: 'Workflow not found.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
@@ -220,13 +315,15 @@ export const actions: Actions = {
 		if (existingWorkflow.projectId !== values.projectId) {
 			return fail(400, {
 				message: 'Workflow project cannot be changed after creation.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
 
-		if (values.goalId && !goal) {
+		if (invalidStepRole) {
 			return fail(400, {
-				message: 'Goal not found.',
+				message: `Workflow step "${invalidStepRole.title}" references a missing role.`,
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
@@ -234,91 +331,24 @@ export const actions: Actions = {
 		if (duplicateWorkflow) {
 			return fail(400, {
 				message: 'A workflow with that name already exists for the selected project.',
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
 
-		if (
-			values.goalId &&
-			current.tasks.some(
-				(task) => task.workflowId === workflowId && task.goalId && task.goalId !== values.goalId
-			)
-		) {
+		const invalidDependencyPosition = steps.find((step) =>
+			step.dependsOnStepPositions.some((position) => position >= step.position)
+		);
+
+		if (invalidDependencyPosition) {
 			return fail(400, {
-				message:
-					'This workflow already has linked tasks with a different goal. Move those tasks first or keep the existing workflow goal.',
+				message: `Workflow step "${invalidDependencyPosition.title}" can only depend on earlier steps.`,
+				workflowId,
 				values: buildWorkflowFormValues(values)
 			});
 		}
 
-		let workflowUpdated = false;
-
-		await updateControlPlaneCollections((data) => ({
-			data: {
-				...data,
-				workflows: (data.workflows ?? []).map((workflow) => {
-					if (workflow.id !== workflowId) {
-						return workflow;
-					}
-
-					workflowUpdated = true;
-
-					return {
-						...workflow,
-						name: values.name,
-						summary: values.summary,
-						goalId: values.goalId || null,
-						kind: values.kind,
-						targetDate: values.targetDate || null,
-						updatedAt: new Date().toISOString()
-					};
-				})
-			},
-			changedCollections: ['workflows']
-		}));
-
-		if (!workflowUpdated) {
-			return fail(404, {
-				message: 'Workflow not found.',
-				values: buildWorkflowFormValues(values)
-			});
-		}
-
-		return {
-			ok: true,
-			successAction: 'updateWorkflow',
-			workflowId
-		};
-	},
-
-	setWorkflowStatus: async ({ request }) => {
-		const form = await request.formData();
-		const workflowId = form.get('workflowId')?.toString().trim() ?? '';
-		const targetStatus = parseManualWorkflowStatus(form.get('status')?.toString().trim() ?? '');
-
-		if (!workflowId || !targetStatus) {
-			return fail(400, {
-				message: 'Workflow ID and a valid status are required.'
-			});
-		}
-
-		const current = await loadControlPlane();
-		const existingWorkflow =
-			(current.workflows ?? []).find((workflow) => workflow.id === workflowId) ?? null;
-
-		if (!existingWorkflow) {
-			return fail(404, {
-				message: 'Workflow not found.'
-			});
-		}
-
-		const linkedTasks = getLinkedWorkflowTasks(current, workflowId);
-
-		if (targetStatus === 'done' && linkedTasks.some((task) => task.status !== 'done')) {
-			return fail(400, {
-				message: 'Workflow can only be marked done after every linked task is done.'
-			});
-		}
+		const workflowStepRecords = buildWorkflowStepRecords(workflowId, steps);
 
 		await updateControlPlaneCollections((data) => ({
 			data: {
@@ -327,20 +357,65 @@ export const actions: Actions = {
 					workflow.id === workflowId
 						? {
 								...workflow,
-								status: targetStatus,
+								name: values.name,
+								summary: values.summary,
 								updatedAt: new Date().toISOString()
 							}
 						: workflow
-				)
+				),
+				workflowSteps: [
+					...workflowStepRecords,
+					...(data.workflowSteps ?? []).filter((step) => step.workflowId !== workflowId)
+				]
 			},
-			changedCollections: ['workflows']
+			changedCollections: ['workflows', 'workflowSteps']
 		}));
 
 		return {
 			ok: true,
-			successAction: 'setWorkflowStatus',
+			successAction: 'updateWorkflow',
+			workflowId
+		};
+	},
+
+	instantiateWorkflow: async ({ request }) => {
+		const form = await request.formData();
+		const workflowId = form.get('workflowId')?.toString().trim() ?? '';
+		const taskName = form.get('taskName')?.toString().trim() ?? '';
+		const taskSummary = form.get('taskSummary')?.toString().trim() ?? '';
+
+		if (!workflowId || !taskName) {
+			return fail(400, {
+				message: 'Workflow and task name are required.'
+			});
+		}
+
+		const current = await loadControlPlane();
+		const plan = instantiateWorkflowTemplate(current, {
 			workflowId,
-			status: targetStatus
+			taskName,
+			taskSummary
+		});
+
+		if (!plan.ok) {
+			return fail(plan.status, {
+				message: plan.message
+			});
+		}
+
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				tasks: [...plan.nextTasks, ...data.tasks]
+			},
+			changedCollections: ['tasks']
+		}));
+
+		return {
+			ok: true,
+			successAction: 'instantiateWorkflow',
+			parentTaskId: plan.parentTask.id,
+			createdTaskCount: plan.nextTasks.length
 		};
 	},
 
@@ -364,18 +439,19 @@ export const actions: Actions = {
 			});
 		}
 
-		if (getLinkedWorkflowTasks(current, workflowId).length > 0) {
+		if (getWorkflowTasks(current, workflowId).length > 0) {
 			return fail(400, {
-				message: 'Workflow cannot be deleted while linked tasks still point to it.'
+				message: 'Workflow cannot be deleted while generated tasks still point to it.'
 			});
 		}
 
 		await updateControlPlaneCollections((data) => ({
 			data: {
 				...data,
-				workflows: (data.workflows ?? []).filter((workflow) => workflow.id !== workflowId)
+				workflows: (data.workflows ?? []).filter((workflow) => workflow.id !== workflowId),
+				workflowSteps: (data.workflowSteps ?? []).filter((step) => step.workflowId !== workflowId)
 			},
-			changedCollections: ['workflows']
+			changedCollections: ['workflows', 'workflowSteps']
 		}));
 
 		return {

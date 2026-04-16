@@ -3,7 +3,7 @@ import {
 	getPendingApprovalForTask,
 	taskHasUnmetDependencies
 } from '$lib/server/control-plane';
-import type { ControlPlaneData, Task, Workflow } from '$lib/types/control-plane';
+import type { ControlPlaneData, Task, Workflow, WorkflowStep } from '$lib/types/control-plane';
 
 export type WorkflowRollup = {
 	taskCount: number;
@@ -25,6 +25,21 @@ export function sortWorkflowsByName<T extends { name: string }>(workflows: T[]) 
 
 export function getWorkflowTasks(data: Pick<ControlPlaneData, 'tasks'>, workflowId: string) {
 	return data.tasks.filter((task) => task.workflowId === workflowId);
+}
+
+export function getWorkflowSteps(
+	data: Pick<ControlPlaneData, 'workflowSteps'>,
+	workflowId: string
+): WorkflowStep[] {
+	return [...(data.workflowSteps ?? [])]
+		.filter((step) => step.workflowId === workflowId)
+		.sort((left, right) => {
+			if (left.position !== right.position) {
+				return left.position - right.position;
+			}
+
+			return left.title.localeCompare(right.title);
+		});
 }
 
 function taskHasPendingAcceptance(task: Task) {

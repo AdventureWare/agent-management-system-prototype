@@ -2,7 +2,6 @@ import {
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane,
 	selectExecutionProvider
 } from '$lib/server/control-plane';
 import { listAgentThreads } from '$lib/server/agent-threads';

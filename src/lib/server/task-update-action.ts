@@ -101,10 +101,6 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 
 	const effectiveGoalId = goal?.id ?? existingTask.goalId;
 
-	if (workflow?.goalId && effectiveGoalId && workflow.goalId !== effectiveGoalId) {
-		throw new TaskUpdateActionError(400, 'Workflow goal does not match the selected task goal.');
-	}
-
 	const invalidDependencyTaskIds = dependencyTaskIds.filter(
 		(dependencyTaskId) =>
 			dependencyTaskId === taskId ||

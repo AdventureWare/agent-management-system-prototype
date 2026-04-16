@@ -34,6 +34,7 @@
 		runs: ActivityIcon,
 		projects: FolderOpenIcon,
 		goals: TargetIcon,
+		taskTemplates: ListTodoIcon,
 		workflows: TargetIcon,
 		planning: CalendarRangeIcon,
 		executionSurfaces: UsersIcon,

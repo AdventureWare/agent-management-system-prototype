@@ -1,0 +1,4 @@
+interface:
+  display_name: "Information Organization Design"
+  short_description: "Design clear, durable information structures"
+  default_prompt: "Use $information-organization-design to design or audit information structures for documents, directories, repositories, knowledge bases, or AI-readable systems."

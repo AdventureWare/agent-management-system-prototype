@@ -13,6 +13,7 @@ import {
 	getProjectScopeProjectIds,
 	projectMatchesPath,
 	repairControlPlaneIntegrity,
+	syncWorkflowParentTaskStatuses,
 	resolveThreadSandbox,
 	syncGovernanceQueues,
 	summarizeControlPlane,
@@ -650,6 +651,124 @@ describe('control-plane helpers', () => {
 				status: 'pending'
 			})
 		]);
+	});
+
+	it('derives workflow parent task status from generated child tasks', () => {
+		const fixture = buildFixture();
+		fixture.tasks = [
+			createTask({
+				title: 'Implement v1 Marketplace',
+				summary: 'Parent task for a feature workflow run.',
+				projectId: 'project_1',
+				area: 'product',
+				goalId: 'goal_1',
+				workflowId: 'workflow_feature_development',
+				priority: 'medium',
+				status: 'in_draft',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: false,
+				desiredRoleId: '',
+				artifactPath: '/tmp/marketplace'
+			}),
+			createTask({
+				title: 'Requirements Gathering',
+				summary: 'Step 1',
+				projectId: 'project_1',
+				area: 'product',
+				goalId: 'goal_1',
+				workflowId: 'workflow_feature_development',
+				parentTaskId: 'task_parent',
+				priority: 'medium',
+				status: 'done',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_goal_strategist',
+				artifactPath: '/tmp/marketplace'
+			}),
+			createTask({
+				title: 'Implementation',
+				summary: 'Step 2',
+				projectId: 'project_1',
+				area: 'product',
+				goalId: 'goal_1',
+				workflowId: 'workflow_feature_development',
+				parentTaskId: 'task_parent',
+				priority: 'medium',
+				status: 'in_progress',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_app_worker',
+				artifactPath: '/tmp/marketplace'
+			})
+		];
+		fixture.tasks[0] = { ...fixture.tasks[0]!, id: 'task_parent' };
+
+		const next = syncWorkflowParentTaskStatuses(fixture);
+
+		expect(next.tasks.find((task) => task.id === 'task_parent')?.status).toBe('in_progress');
+	});
+
+	it('marks a workflow parent task done when all generated child tasks are done', () => {
+		const fixture = buildFixture();
+		fixture.tasks = [
+			{
+				...createTask({
+					title: 'Implement v1 Marketplace',
+					summary: 'Parent task for a feature workflow run.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: 'goal_1',
+					workflowId: 'workflow_feature_development',
+					priority: 'medium',
+					status: 'review',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: false,
+					desiredRoleId: '',
+					artifactPath: '/tmp/marketplace'
+				}),
+				id: 'task_parent'
+			},
+			createTask({
+				title: 'Requirements Gathering',
+				summary: 'Step 1',
+				projectId: 'project_1',
+				area: 'product',
+				goalId: 'goal_1',
+				workflowId: 'workflow_feature_development',
+				parentTaskId: 'task_parent',
+				priority: 'medium',
+				status: 'done',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_goal_strategist',
+				artifactPath: '/tmp/marketplace'
+			}),
+			createTask({
+				title: 'Implementation',
+				summary: 'Step 2',
+				projectId: 'project_1',
+				area: 'product',
+				goalId: 'goal_1',
+				workflowId: 'workflow_feature_development',
+				parentTaskId: 'task_parent',
+				priority: 'medium',
+				status: 'done',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: 'role_app_worker',
+				artifactPath: '/tmp/marketplace'
+			})
+		];
+
+		const next = syncWorkflowParentTaskStatuses(fixture);
+
+		expect(next.tasks.find((task) => task.id === 'task_parent')?.status).toBe('done');
 	});
 
 	it('creates projects with blank config defaults when omitted', () => {

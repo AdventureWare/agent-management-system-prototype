@@ -30,9 +30,11 @@ playwright-report/
 .playwright-mcp/
 output/playwright/
 screenshots/
+kwipoo-toast-*.png
+*.ts.net.crt
+*.ts.net.key
 
 # Runtime session artifacts
 data/agent-sessions/
 data
 agent_output/
-

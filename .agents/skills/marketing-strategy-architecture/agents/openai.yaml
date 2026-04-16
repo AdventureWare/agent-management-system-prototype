@@ -1,0 +1,4 @@
+interface:
+  display_name: "Marketing Strategy Architecture"
+  short_description: "Define audience, positioning, channels, and measurement"
+  default_prompt: "Use $marketing-strategy-architecture to define audience, positioning, funnel priorities, channel sequencing, and measurement for a product or campaign."

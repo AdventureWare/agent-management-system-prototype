@@ -193,11 +193,8 @@ function createData(): ControlPlaneData {
 				name: 'Release flow',
 				summary: 'Coordinate release work.',
 				projectId: 'project_a',
-				goalId: 'goal_child',
-				kind: 'repeatable',
 				status: 'active',
 				templateKey: null,
-				targetDate: '2026-04-15',
 				createdAt: '2026-04-01T10:00:00.000Z',
 				updatedAt: '2026-04-01T10:00:00.000Z'
 			}

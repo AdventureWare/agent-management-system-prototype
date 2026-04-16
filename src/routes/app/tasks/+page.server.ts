@@ -1,14 +1,17 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
 	createTask,
+	createTaskTemplate,
 	getPendingApprovalForTask,
 	loadControlPlane,
 	parseTaskStatus,
 	resolveThreadSandbox,
-	selectExecutionProvider
+	selectExecutionProvider,
+	updateControlPlaneCollections
 } from '$lib/server/control-plane';
 import {
 	createTaskRecord,
@@ -27,7 +30,6 @@ import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
-import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
 import {
 	buildTaskExecutionContractStatus,
 	getTaskLaunchContractBlockerMessage
@@ -43,6 +45,8 @@ import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { describeExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
+import { appendGoalTaskRelationships } from '$lib/server/goal-relationships';
+import { buildTaskTemplateDraft, decorateTaskTemplates } from '$lib/server/task-templates';
 import {
 	approveTaskApproval,
 	approveTaskReview,
@@ -50,6 +54,8 @@ import {
 	requestTaskReviewChanges,
 	TaskGovernanceActionError
 } from '$lib/server/task-governance';
+import { getWorkflowSteps, sortWorkflowsByName } from '$lib/server/workflows';
+import { instantiateWorkflowTemplate } from '$lib/server/workflow-template-instantiation';
 import type { ControlPlaneData, Role, Task } from '$lib/types/control-plane';
 
 function readTaskId(form: FormData) {
@@ -72,6 +78,38 @@ function readTaskAttachments(form: FormData) {
 	return form
 		.getAll('attachments')
 		.filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+function readTaskTemplateName(form: FormData) {
+	return form.get('taskTemplateName')?.toString().trim() ?? '';
+}
+
+function readTaskTemplateSummary(form: FormData) {
+	return form.get('taskTemplateSummary')?.toString().trim() ?? '';
+}
+
+function buildTaskTemplateDraftInput(input: ReturnType<typeof readCreateTaskForm>) {
+	return {
+		projectId: input.projectId,
+		goalId: input.goalId,
+		workflowId: input.workflowId,
+		taskTitle: input.name,
+		taskSummary: input.instructions,
+		successCriteria: input.successCriteria,
+		readyCondition: input.readyCondition,
+		expectedOutcome: input.expectedOutcome,
+		area: input.area,
+		priority: input.priority,
+		riskLevel: input.riskLevel,
+		approvalMode: input.approvalMode,
+		requiredThreadSandbox: input.requiredThreadSandbox,
+		requiresReview: input.requiresReview,
+		desiredRoleId: input.desiredRoleId,
+		assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId,
+		requiredPromptSkillNames: input.requiredPromptSkillNames,
+		requiredCapabilityNames: input.requiredCapabilityNames,
+		requiredToolNames: input.requiredToolNames
+	};
 }
 
 function getActionErrorMessage(error: unknown, fallback: string) {
@@ -205,7 +243,14 @@ export const load: PageServerLoad = async ({ url }) => {
 		createTaskPrefill: readCreateTaskPrefill(url),
 		statusOptions: TASK_STATUS_OPTIONS,
 		goals: buildTaskGoalOptions(data.goals),
-		workflows: [...(data.workflows ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+		workflows: sortWorkflowsByName(data.workflows ?? []).map((workflow) => ({
+			...workflow,
+			projectName:
+				data.projects.find((project) => project.id === workflow.projectId)?.name ??
+				'Unknown project',
+			stepCount: getWorkflowSteps(data, workflow.id).length
+		})),
+		taskTemplates: decorateTaskTemplates(data),
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		availableDependencyTasks,
@@ -330,6 +375,14 @@ export const actions: Actions = {
 			});
 		}
 
+		if (workflow && parentTaskId) {
+			return failTaskCreate(400, {
+				message:
+					'Workflow templates can only be applied to a new parent task, not a delegated child task.',
+				...failureContext
+			});
+		}
+
 		if (parentTaskId && !delegationObjective.trim()) {
 			return failTaskCreate(400, {
 				message: 'Delegated child tasks need a clear delegation objective.',
@@ -358,9 +411,10 @@ export const actions: Actions = {
 			});
 		}
 
-		if (workflow?.goalId && goalId && workflow.goalId !== goalId) {
+		if (workflow && submitMode === 'createAndRun') {
 			return failTaskCreate(400, {
-				message: 'Workflow goal does not match the selected task goal.',
+				message:
+					'Workflow-backed tasks create a parent task plus child tasks. Create the task set first, then run the child task that should start execution.',
 				...failureContext
 			});
 		}
@@ -416,10 +470,99 @@ export const actions: Actions = {
 			});
 		}
 
-		const nextGoalId = goal?.id ?? workflow?.goalId ?? '';
+		const nextGoalId = goal?.id ?? '';
 		const nextDesiredRoleId = current.roles.some((role) => role.id === desiredRoleId)
 			? desiredRoleId
 			: '';
+		const artifactPath = project.defaultArtifactRoot || project.projectRootFolder || '';
+
+		if (workflow) {
+			const plan = instantiateWorkflowTemplate(current, {
+				workflowId: workflow.id,
+				taskName: name,
+				taskSummary: instructions
+			});
+
+			if (!plan.ok) {
+				return failTaskCreate(plan.status, {
+					message: plan.message,
+					...failureContext
+				});
+			}
+
+			const workflowArea = goal?.area ?? area;
+			const parentTask: Task = {
+				...plan.parentTask,
+				summary: instructions,
+				successCriteria,
+				readyCondition,
+				expectedOutcome,
+				goalId: nextGoalId,
+				area: workflowArea,
+				priority,
+				riskLevel,
+				approvalMode: 'none',
+				requiredThreadSandbox: null,
+				requiresReview: false,
+				desiredRoleId: '',
+				assigneeExecutionSurfaceId: null,
+				blockedReason: '',
+				dependencyTaskIds: [],
+				targetDate: targetDate || null,
+				requiredPromptSkillNames: [],
+				requiredCapabilityNames: [],
+				requiredToolNames: [],
+				artifactPath
+			};
+			const attachments =
+				uploads.length > 0
+					? await persistTaskAttachments({
+							taskId: parentTask.id,
+							attachmentRoot,
+							uploads
+						})
+					: [];
+			const createdParentTask: Task =
+				attachments.length > 0 ? { ...parentTask, attachments } : parentTask;
+			const linkedTasks: Task[] = plan.linkedTasks.map((task) => ({
+				...task,
+				goalId: nextGoalId,
+				area: workflowArea,
+				artifactPath
+			}));
+
+			await updateControlPlaneCollections((data) => {
+				let nextData: ControlPlaneData = {
+					...data,
+					tasks: [createdParentTask, ...linkedTasks, ...data.tasks]
+				};
+				const changedCollections: Array<'tasks' | 'goals'> = ['tasks'];
+
+				if (nextGoalId) {
+					nextData = appendGoalTaskRelationships({
+						data: nextData,
+						goalId: nextGoalId,
+						projectIds: [workflow.projectId],
+						taskIds: [createdParentTask.id, ...linkedTasks.map((task) => task.id)]
+					});
+					changedCollections.push('goals');
+				}
+
+				return {
+					data: nextData,
+					changedCollections
+				};
+			});
+
+			return {
+				ok: true,
+				successAction: 'createTaskWithWorkflow',
+				parentTaskId: createdParentTask.id,
+				createdTaskCount: 1 + linkedTasks.length,
+				attachmentCount: attachments.length
+			};
+		}
+
 		const baseTask = createTask({
 			title: name,
 			summary: instructions,
@@ -429,8 +572,8 @@ export const actions: Actions = {
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
-			workflowId: workflow?.id ?? null,
-			parentTaskId: parentTask?.id ?? null,
+			workflowId: workflowId || null,
+			parentTaskId: parentTaskId || null,
 			delegationPacket: parentTask
 				? {
 						objective: delegationObjective,
@@ -453,7 +596,7 @@ export const actions: Actions = {
 			requiredPromptSkillNames: normalizedRequiredPromptSkillNames,
 			requiredCapabilityNames: normalizedRequiredCapabilityNames,
 			requiredToolNames: normalizedRequiredToolNames,
-			artifactPath: project.defaultArtifactRoot || project.projectRootFolder || ''
+			artifactPath
 		});
 		const attachments =
 			uploads.length > 0
@@ -598,6 +741,83 @@ export const actions: Actions = {
 			taskId: createdTask.id,
 			threadId: session.agentThreadId,
 			attachmentCount: attachments.length
+		};
+	},
+
+	saveTaskTemplate: async ({ request }) => {
+		const form = await request.formData();
+		const createTaskInput = readCreateTaskForm(form);
+		const submitMode = readCreateTaskSubmitMode(form);
+		const templateName = readTaskTemplateName(form);
+		const templateSummary = readTaskTemplateSummary(form);
+		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> =
+			buildTaskCreateFormContext(createTaskInput, submitMode);
+
+		if (!templateName) {
+			return failTaskCreate(400, {
+				message: 'Task template name is required.',
+				...failureContext
+			});
+		}
+
+		if (!createTaskInput.projectId) {
+			return failTaskCreate(400, {
+				message: 'Select a project before saving a task template.',
+				...failureContext
+			});
+		}
+
+		const current = await loadControlPlane();
+		const draft = await buildTaskTemplateDraft(
+			current,
+			buildTaskTemplateDraftInput(createTaskInput)
+		);
+
+		if (!draft.ok) {
+			return failTaskCreate(400, {
+				message: draft.message,
+				...failureContext
+			});
+		}
+		const taskTemplate = createTaskTemplate({
+			name: templateName,
+			summary: templateSummary,
+			projectId: draft.project.id,
+			goalId: draft.goal?.id ?? null,
+			workflowId: createTaskInput.parentTaskId ? null : (draft.workflow?.id ?? null),
+			taskTitle: createTaskInput.name,
+			taskSummary: createTaskInput.instructions,
+			successCriteria: createTaskInput.successCriteria,
+			readyCondition: createTaskInput.readyCondition,
+			expectedOutcome: createTaskInput.expectedOutcome,
+			area: createTaskInput.area,
+			priority: createTaskInput.priority,
+			riskLevel: createTaskInput.riskLevel,
+			approvalMode: createTaskInput.approvalMode,
+			requiredThreadSandbox: createTaskInput.requiredThreadSandbox,
+			requiresReview: createTaskInput.requiresReview,
+			desiredRoleId: createTaskInput.desiredRoleId,
+			assigneeExecutionSurfaceId: draft.assignedExecutionSurface?.id ?? null,
+			requiredPromptSkillNames: draft.normalizedRequiredPromptSkillNames,
+			requiredCapabilityNames: draft.normalizedRequiredCapabilityNames,
+			requiredToolNames: draft.normalizedRequiredToolNames
+		});
+
+		await updateControlPlaneCollections((data) => ({
+			data: {
+				...data,
+				taskTemplates: [taskTemplate, ...(data.taskTemplates ?? [])]
+			},
+			changedCollections: ['taskTemplates']
+		}));
+
+		return {
+			ok: true,
+			reopenCreateModal: true,
+			successAction: 'saveTaskTemplate',
+			taskTemplateId: taskTemplate.id,
+			taskTemplateName: taskTemplate.name,
+			...failureContext
 		};
 	},
 

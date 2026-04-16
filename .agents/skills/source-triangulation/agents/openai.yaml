@@ -1,0 +1,4 @@
+interface:
+  display_name: "Source Triangulation"
+  short_description: "Rank source quality and verify claims across evidence"
+  default_prompt: "Use $source-triangulation to find reputable sources, rank evidence quality, check recency, and verify whether key claims are actually supported."

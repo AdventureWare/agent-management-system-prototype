@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { WORKFLOW_KIND_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
 
 describe('/app/workflows/+page.svelte', () => {
-	it('renders create and update controls for workflows', async () => {
+	it('renders workflow templates with steps and instantiation controls', async () => {
 		render(Page, {
 			form: {} as never,
 			data: {
@@ -21,40 +20,60 @@ describe('/app/workflows/+page.svelte', () => {
 						defaultBranch: ''
 					}
 				],
-				goals: [{ id: 'goal_1', name: 'Release confidence', label: 'Release confidence' }],
-				workflowKindOptions: WORKFLOW_KIND_OPTIONS,
+				roles: [
+					{ id: 'role_product', name: 'Product strategist', area: 'shared', description: '' },
+					{ id: 'role_engineer', name: 'Engineer', area: 'shared', description: '' }
+				],
 				workflows: [
 					{
 						id: 'workflow_1',
-						name: 'Release flow',
-						summary: 'Coordinate release work.',
+						name: 'Feature development',
+						summary: 'Reusable feature delivery process.',
 						projectId: 'project_1',
 						projectName: 'Agent Management System Prototype',
-						goalId: 'goal_1',
-						goalName: 'Release confidence',
-						kind: 'repeatable',
-						status: 'active',
+						status: 'draft',
 						templateKey: null,
-						targetDate: '2026-04-20',
-						createdAt: '2026-04-14T09:00:00.000Z',
-						updatedAt: '2026-04-14T09:00:00.000Z',
+						createdAt: '2026-04-15T09:00:00.000Z',
+						updatedAt: '2026-04-15T09:00:00.000Z',
 						rollup: {
-							taskCount: 1,
+							taskCount: 2,
 							inDraftCount: 0,
-							readyCount: 1,
+							readyCount: 2,
 							inProgressCount: 0,
 							reviewCount: 0,
 							blockedCount: 0,
 							doneCount: 0,
 							waitingOnDependenciesCount: 0,
 							pendingAcceptanceCount: 0,
-							runnableTaskCount: 1,
+							runnableTaskCount: 2,
 							derivedStatus: 'active'
 						},
+						steps: [
+							{
+								id: 'workflow_step_1',
+								title: 'Requirements gathering',
+								summary: 'Clarify scope.',
+								desiredRoleId: 'role_product',
+								desiredRoleName: 'Product strategist',
+								dependsOnStepTitles: [],
+								dependsOnStepPositions: [],
+								position: 1
+							},
+							{
+								id: 'workflow_step_2',
+								title: 'Technical implementation',
+								summary: 'Build the feature.',
+								desiredRoleId: 'role_engineer',
+								desiredRoleName: 'Engineer',
+								dependsOnStepTitles: ['Step 1 · Requirements gathering'],
+								dependsOnStepPositions: [1],
+								position: 2
+							}
+						],
 						taskPreview: [
 							{
 								id: 'task_1',
-								title: 'Draft release notes',
+								title: 'Build dark mode: Requirements gathering',
 								status: 'ready',
 								projectName: 'Agent Management System Prototype'
 							}
@@ -65,25 +84,20 @@ describe('/app/workflows/+page.svelte', () => {
 		});
 
 		await expect
-			.element(page.getByRole('heading', { name: 'Create workflow' }))
+			.element(page.getByRole('heading', { name: 'Create workflow template' }))
 			.toBeInTheDocument();
 		await expect
-			.element(page.getByRole('heading', { name: 'Workflow registry' }))
+			.element(page.getByRole('heading', { name: 'Template library' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Release flow')).toBeInTheDocument();
-		await expect.element(page.getByText('Edit workflow metadata')).toBeInTheDocument();
+		await expect.element(page.getByText('Feature development')).toBeInTheDocument();
 		await expect
-			.element(page.getByRole('link', { name: 'Create task in workflow' }))
+			.element(page.getByText('Step 1 · Requirements gathering', { exact: true }))
 			.toBeInTheDocument();
+		await expect.element(page.getByText('Role · Product strategist')).toBeInTheDocument();
 		await expect
-			.element(page.getByRole('button', { name: 'Activate workflow' }))
+			.element(page.getByText('Depends on Step 1 · Requirements gathering', { exact: true }))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Cancel workflow' })).toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Delete workflow' })).toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Save workflow' })).toBeInTheDocument();
-		expect(page.getByRole('button', { name: 'Delete workflow' }).element()).toHaveProperty(
-			'disabled',
-			true
-		);
+		await expect.element(page.getByRole('button', { name: 'Create task set' })).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Save template' })).toBeInTheDocument();
 	});
 });

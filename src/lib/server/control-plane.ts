@@ -27,7 +27,6 @@ import {
 	RUN_STATUS_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
-	WORKFLOW_KIND_OPTIONS,
 	WORKFLOW_STATUS_OPTIONS,
 	EXECUTION_SURFACE_LOCATION_OPTIONS,
 	EXECUTION_SURFACE_STATUS_OPTIONS,
@@ -60,11 +59,12 @@ import {
 	type RunUsageSource,
 	type TaskApprovalMode,
 	type TaskRiskLevel,
+	type TaskTemplate,
 	type Task,
 	type TaskAttachment,
 	type TaskStatus,
 	type Workflow,
-	type WorkflowKind,
+	type WorkflowStep,
 	type WorkflowStatus,
 	type ExecutionSurface,
 	type ExecutionSurfaceLocation,
@@ -137,10 +137,6 @@ function isWorkflowStatus(value: string): value is WorkflowStatus {
 	return WORKFLOW_STATUS_OPTIONS.includes(value as WorkflowStatus);
 }
 
-function isWorkflowKind(value: string): value is WorkflowKind {
-	return WORKFLOW_KIND_OPTIONS.includes(value as WorkflowKind);
-}
-
 function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
 }
@@ -152,6 +148,8 @@ function defaultData(): ControlPlaneData {
 		projects: [],
 		goals: [],
 		workflows: [],
+		workflowSteps: [],
+		taskTemplates: [],
 		executionSurfaces: [],
 		tasks: [],
 		runs: [],
@@ -222,6 +220,19 @@ type LegacyWorkflow = Partial<Workflow> & {
 	status?: unknown;
 	templateKey?: unknown;
 	targetDate?: unknown;
+};
+
+type LegacyWorkflowStep = Partial<WorkflowStep> & {
+	position?: unknown;
+	dependsOnStepIds?: unknown;
+};
+
+type LegacyTaskTemplate = Partial<TaskTemplate> & {
+	requiredThreadSandbox?: unknown;
+	assigneeExecutionSurfaceId?: unknown;
+	requiredPromptSkillNames?: unknown;
+	requiredCapabilityNames?: unknown;
+	requiredToolNames?: unknown;
 };
 
 type LegacyTask = Partial<Task> & {
@@ -643,7 +654,6 @@ function normalizeGoal(goal: LegacyGoal): Goal {
 
 function normalizeWorkflow(workflow: LegacyWorkflow): Workflow {
 	const now = new Date().toISOString();
-	const kindValue = typeof workflow.kind === 'string' ? workflow.kind : '';
 	const statusValue = typeof workflow.status === 'string' ? workflow.status : '';
 
 	return {
@@ -651,17 +661,103 @@ function normalizeWorkflow(workflow: LegacyWorkflow): Workflow {
 		name: typeof workflow.name === 'string' ? workflow.name : '',
 		summary: typeof workflow.summary === 'string' ? workflow.summary : '',
 		projectId: typeof workflow.projectId === 'string' ? workflow.projectId : '',
-		goalId:
-			typeof workflow.goalId === 'string' && workflow.goalId.trim() ? workflow.goalId.trim() : null,
-		kind: isWorkflowKind(kindValue) ? kindValue : 'ad_hoc',
 		status: isWorkflowStatus(statusValue) ? statusValue : 'draft',
 		templateKey:
 			typeof workflow.templateKey === 'string' && workflow.templateKey.trim()
 				? workflow.templateKey.trim()
 				: null,
-		targetDate: normalizeOptionalDate(workflow.targetDate),
 		createdAt: typeof workflow.createdAt === 'string' ? workflow.createdAt : now,
 		updatedAt: typeof workflow.updatedAt === 'string' ? workflow.updatedAt : now
+	};
+}
+
+function normalizeWorkflowStep(step: LegacyWorkflowStep): WorkflowStep | null {
+	const now = new Date().toISOString();
+	const workflowId = typeof step.workflowId === 'string' ? step.workflowId.trim() : '';
+	const title = typeof step.title === 'string' ? step.title.trim() : '';
+
+	if (!workflowId || !title) {
+		return null;
+	}
+
+	return {
+		id: typeof step.id === 'string' ? step.id : createWorkflowStepId(),
+		workflowId,
+		title,
+		summary: typeof step.summary === 'string' ? step.summary.trim() : '',
+		desiredRoleId: typeof step.desiredRoleId === 'string' ? step.desiredRoleId.trim() : '',
+		dependsOnStepIds: Array.isArray(step.dependsOnStepIds)
+			? [...new Set(step.dependsOnStepIds.map((value) => String(value).trim()).filter(Boolean))]
+			: undefined,
+		position:
+			typeof step.position === 'number' && Number.isFinite(step.position) && step.position > 0
+				? Math.round(step.position)
+				: 1,
+		createdAt: typeof step.createdAt === 'string' ? step.createdAt : now,
+		updatedAt: typeof step.updatedAt === 'string' ? step.updatedAt : now
+	};
+}
+
+function normalizeTaskTemplate(template: LegacyTaskTemplate): TaskTemplate | null {
+	const now = new Date().toISOString();
+	const name = typeof template.name === 'string' ? template.name.trim() : '';
+	const projectId = typeof template.projectId === 'string' ? template.projectId.trim() : '';
+
+	if (!name || !projectId) {
+		return null;
+	}
+
+	const area =
+		typeof template.area === 'string' && isArea(template.area) ? template.area : 'product';
+	const priority =
+		typeof template.priority === 'string' && isPriority(template.priority)
+			? template.priority
+			: 'medium';
+	const riskLevel =
+		typeof template.riskLevel === 'string' && isTaskRiskLevel(template.riskLevel)
+			? template.riskLevel
+			: 'medium';
+	const approvalMode =
+		typeof template.approvalMode === 'string' && isTaskApprovalMode(template.approvalMode)
+			? template.approvalMode
+			: 'none';
+
+	return {
+		id: typeof template.id === 'string' ? template.id : createTaskTemplateId(),
+		name,
+		summary: typeof template.summary === 'string' ? template.summary.trim() : '',
+		projectId,
+		goalId:
+			typeof template.goalId === 'string' && template.goalId.trim() ? template.goalId.trim() : null,
+		workflowId:
+			typeof template.workflowId === 'string' && template.workflowId.trim()
+				? template.workflowId.trim()
+				: null,
+		taskTitle: typeof template.taskTitle === 'string' ? template.taskTitle.trim() : '',
+		taskSummary: typeof template.taskSummary === 'string' ? template.taskSummary.trim() : '',
+		successCriteria:
+			typeof template.successCriteria === 'string' ? template.successCriteria.trim() : '',
+		readyCondition:
+			typeof template.readyCondition === 'string' ? template.readyCondition.trim() : '',
+		expectedOutcome:
+			typeof template.expectedOutcome === 'string' ? template.expectedOutcome.trim() : '',
+		area,
+		priority,
+		riskLevel,
+		approvalMode,
+		requiredThreadSandbox: normalizeOptionalAgentSandbox(template.requiredThreadSandbox),
+		requiresReview: typeof template.requiresReview === 'boolean' ? template.requiresReview : true,
+		desiredRoleId: typeof template.desiredRoleId === 'string' ? template.desiredRoleId.trim() : '',
+		assigneeExecutionSurfaceId:
+			typeof template.assigneeExecutionSurfaceId === 'string' &&
+			template.assigneeExecutionSurfaceId.trim()
+				? template.assigneeExecutionSurfaceId.trim()
+				: null,
+		requiredPromptSkillNames: normalizeStringList(template.requiredPromptSkillNames),
+		requiredCapabilityNames: normalizeStringList(template.requiredCapabilityNames),
+		requiredToolNames: normalizeStringList(template.requiredToolNames),
+		createdAt: typeof template.createdAt === 'string' ? template.createdAt : now,
+		updatedAt: typeof template.updatedAt === 'string' ? template.updatedAt : now
 	};
 }
 
@@ -1076,6 +1172,85 @@ export function syncTaskExecutionState(data: ControlPlaneData): ControlPlaneData
 	};
 }
 
+function deriveWorkflowParentTaskStatus(childTasks: readonly Task[]): TaskStatus {
+	if (childTasks.length === 0) {
+		return 'in_draft';
+	}
+
+	if (childTasks.every((task) => task.status === 'done')) {
+		return 'done';
+	}
+
+	if (childTasks.some((task) => task.status === 'in_progress')) {
+		return 'in_progress';
+	}
+
+	if (childTasks.some((task) => task.status === 'review')) {
+		return 'review';
+	}
+
+	if (childTasks.some((task) => task.status === 'blocked')) {
+		return 'blocked';
+	}
+
+	if (childTasks.some((task) => task.status === 'ready')) {
+		return 'ready';
+	}
+
+	return 'in_draft';
+}
+
+export function syncWorkflowParentTaskStatuses(data: ControlPlaneData): ControlPlaneData {
+	const childTasksByParentId = new Map<string, Task[]>();
+
+	for (const task of data.tasks) {
+		if (!task.parentTaskId || !task.workflowId) {
+			continue;
+		}
+
+		const existingChildren = childTasksByParentId.get(task.parentTaskId) ?? [];
+		existingChildren.push(task);
+		childTasksByParentId.set(task.parentTaskId, existingChildren);
+	}
+
+	if (childTasksByParentId.size === 0) {
+		return data;
+	}
+
+	const now = new Date().toISOString();
+	let hasChanges = false;
+	const tasks = data.tasks.map((task) => {
+		const childTasks = childTasksByParentId.get(task.id) ?? [];
+
+		if (!task.workflowId || childTasks.length === 0) {
+			return task;
+		}
+
+		const workflowChildTasks = childTasks.filter(
+			(childTask) => childTask.workflowId === task.workflowId
+		);
+
+		if (workflowChildTasks.length === 0) {
+			return task;
+		}
+
+		const derivedStatus = deriveWorkflowParentTaskStatus(workflowChildTasks);
+
+		if (task.status === derivedStatus) {
+			return task;
+		}
+
+		hasChanges = true;
+		return {
+			...task,
+			status: derivedStatus,
+			updatedAt: now
+		};
+	});
+
+	return hasChanges ? { ...data, tasks } : data;
+}
+
 function taskNeedsApproval(task: Task) {
 	switch (task.approvalMode) {
 		case 'before_run':
@@ -1184,6 +1359,8 @@ export function syncGovernanceQueues(data: ControlPlaneData): ControlPlaneData {
 export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
 	const workflowIds = new Set((data.workflows ?? []).map((workflow) => workflow.id));
+	const roleIds = new Set(data.roles.map((role) => role.id));
+	const executionSurfaceIds = new Set(data.executionSurfaces.map((surface) => surface.id));
 	const taskIds = new Set(data.tasks.map((task) => task.id));
 	const issues: string[] = [];
 
@@ -1206,6 +1383,78 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 
 		if (task.workflowId && !workflowIds.has(task.workflowId)) {
 			issues.push(`Task ${task.id} references missing workflow ${task.workflowId}.`);
+		}
+	}
+
+	for (const workflowStep of data.workflowSteps ?? []) {
+		if (!workflowIds.has(workflowStep.workflowId)) {
+			issues.push(
+				`Workflow step ${workflowStep.id} references missing workflow ${workflowStep.workflowId}.`
+			);
+		}
+
+		if (workflowStep.desiredRoleId && !roleIds.has(workflowStep.desiredRoleId)) {
+			issues.push(
+				`Workflow step ${workflowStep.id} references missing role ${workflowStep.desiredRoleId}.`
+			);
+		}
+
+		for (const dependencyStepId of workflowStep.dependsOnStepIds ?? []) {
+			if (
+				!(data.workflowSteps ?? []).some(
+					(step) => step.id === dependencyStepId && step.workflowId === workflowStep.workflowId
+				)
+			) {
+				issues.push(
+					`Workflow step ${workflowStep.id} references missing workflow-step dependency ${dependencyStepId}.`
+				);
+			}
+		}
+	}
+
+	for (const taskTemplate of data.taskTemplates ?? []) {
+		if (!taskTemplate.projectId) {
+			issues.push(`Task template ${taskTemplate.id} is missing a project.`);
+		}
+
+		if (taskTemplate.goalId && !goalIds.has(taskTemplate.goalId)) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing goal ${taskTemplate.goalId}.`
+			);
+		}
+
+		if (taskTemplate.workflowId && !workflowIds.has(taskTemplate.workflowId)) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing workflow ${taskTemplate.workflowId}.`
+			);
+		}
+
+		if (taskTemplate.workflowId) {
+			const workflow =
+				(data.workflows ?? []).find(
+					(candidateWorkflow) => candidateWorkflow.id === taskTemplate.workflowId
+				) ?? null;
+
+			if (workflow && workflow.projectId !== taskTemplate.projectId) {
+				issues.push(
+					`Task template ${taskTemplate.id} references workflow ${taskTemplate.workflowId} from a different project.`
+				);
+			}
+		}
+
+		if (taskTemplate.desiredRoleId && !roleIds.has(taskTemplate.desiredRoleId)) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing role ${taskTemplate.desiredRoleId}.`
+			);
+		}
+
+		if (
+			taskTemplate.assigneeExecutionSurfaceId &&
+			!executionSurfaceIds.has(taskTemplate.assigneeExecutionSurfaceId)
+		) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing execution surface ${taskTemplate.assigneeExecutionSurfaceId}.`
+			);
 		}
 	}
 
@@ -1261,12 +1510,75 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlaneData {
 	const projectIds = new Set(data.projects.map((project) => project.id));
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
+	const roleIds = new Set(data.roles.map((role) => role.id));
+	const executionSurfaceIds = new Set(data.executionSurfaces.map((surface) => surface.id));
 	const workflows = (data.workflows ?? []).map((workflow) => ({
 		...workflow,
-		projectId: projectIds.has(workflow.projectId) ? workflow.projectId : '',
-		goalId: workflow.goalId && goalIds.has(workflow.goalId) ? workflow.goalId : null
+		projectId: projectIds.has(workflow.projectId) ? workflow.projectId : ''
 	}));
 	const workflowIds = new Set(workflows.map((workflow) => workflow.id));
+	const workflowSteps = (data.workflowSteps ?? [])
+		.filter((step) => workflowIds.has(step.workflowId))
+		.map((step) => ({
+			...step,
+			desiredRoleId: step.desiredRoleId && roleIds.has(step.desiredRoleId) ? step.desiredRoleId : ''
+		}))
+		.sort((left, right) => {
+			if (left.workflowId !== right.workflowId) {
+				return left.workflowId.localeCompare(right.workflowId);
+			}
+
+			if (left.position !== right.position) {
+				return left.position - right.position;
+			}
+
+			return left.id.localeCompare(right.id);
+		});
+	const workflowStepIdsByWorkflow = new Map<string, Set<string>>();
+
+	for (const step of workflowSteps) {
+		const existing = workflowStepIdsByWorkflow.get(step.workflowId) ?? new Set<string>();
+		existing.add(step.id);
+		workflowStepIdsByWorkflow.set(step.workflowId, existing);
+	}
+
+	const repairedWorkflowSteps = workflowSteps.map((step) => ({
+		...step,
+		dependsOnStepIds: Array.isArray(step.dependsOnStepIds)
+			? [...new Set(step.dependsOnStepIds)]
+					.filter((dependencyStepId) => dependencyStepId !== step.id)
+					.filter((dependencyStepId) =>
+						workflowStepIdsByWorkflow.get(step.workflowId)?.has(dependencyStepId)
+					)
+			: undefined
+	}));
+	const taskTemplates = (data.taskTemplates ?? [])
+		.filter((template) => projectIds.has(template.projectId))
+		.map((template) => {
+			const workflowId =
+				template.workflowId && workflowIds.has(template.workflowId) ? template.workflowId : null;
+			const workflow = workflowId
+				? (workflows.find((candidateWorkflow) => candidateWorkflow.id === workflowId) ?? null)
+				: null;
+			const nextWorkflowId =
+				workflow && workflow.projectId === template.projectId ? workflow.id : null;
+			const goalId = template.goalId && goalIds.has(template.goalId) ? template.goalId : null;
+
+			return {
+				...template,
+				goalId,
+				workflowId: nextWorkflowId,
+				desiredRoleId:
+					template.desiredRoleId && roleIds.has(template.desiredRoleId)
+						? template.desiredRoleId
+						: '',
+				assigneeExecutionSurfaceId:
+					template.assigneeExecutionSurfaceId &&
+					executionSurfaceIds.has(template.assigneeExecutionSurfaceId)
+						? template.assigneeExecutionSurfaceId
+						: null
+			};
+		});
 	const tasks = data.tasks.map((task) => {
 		const nextGoalId = task.goalId && goalIds.has(task.goalId) ? task.goalId : '';
 		const nextParentTaskId =
@@ -1322,6 +1634,8 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 		...data,
 		goals,
 		workflows,
+		workflowSteps: repairedWorkflowSteps,
+		taskTemplates,
 		tasks: repairedTasks,
 		runs,
 		reviews,
@@ -1379,6 +1693,16 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 	const workflows = Array.isArray(parsed.workflows)
 		? parsed.workflows.map((workflow) => normalizeWorkflow(workflow as LegacyWorkflow))
 		: [];
+	const workflowSteps = Array.isArray(parsed.workflowSteps)
+		? parsed.workflowSteps
+				.map((step) => normalizeWorkflowStep(step as LegacyWorkflowStep))
+				.filter((step): step is WorkflowStep => step !== null)
+		: [];
+	const taskTemplates = Array.isArray(parsed.taskTemplates)
+		? parsed.taskTemplates
+				.map((template) => normalizeTaskTemplate(template as LegacyTaskTemplate))
+				.filter((template): template is TaskTemplate => template !== null)
+		: [];
 	const normalized = repairControlPlaneIntegrity({
 		providers,
 		roles: Array.isArray(parsed.roles)
@@ -1389,6 +1713,8 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 			? parsed.goals.map((goal) => normalizeGoal(goal as LegacyGoal))
 			: [],
 		workflows,
+		workflowSteps,
+		taskTemplates,
 		executionSurfaces: rawExecutionSurfaces.map((surface) =>
 			normalizeExecutionSurface(surface as LegacyExecutionSurface)
 		),
@@ -1402,7 +1728,7 @@ function normalizeControlPlaneData(parsed: Partial<ControlPlaneData>): ControlPl
 		decisions
 	});
 
-	return syncGovernanceQueues(syncTaskExecutionState(normalized));
+	return syncGovernanceQueues(syncWorkflowParentTaskStatuses(syncTaskExecutionState(normalized)));
 }
 
 function parseControlPlaneData(raw: string) {
@@ -1509,7 +1835,9 @@ async function runQueuedControlPlaneUpdate(
 		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
 			const snapshot = await loadControlPlaneSnapshot();
 			const plan = await updater(snapshot.data);
-			const next = syncGovernanceQueues(syncTaskExecutionState(plan.data));
+			const next = syncGovernanceQueues(
+				syncWorkflowParentTaskStatuses(syncTaskExecutionState(plan.data))
+			);
 			const changedCollections = plan.changedCollections
 				? [...new Set(plan.changedCollections)]
 				: undefined;
@@ -1638,6 +1966,14 @@ export function createProjectId() {
 
 export function createWorkflowId() {
 	return `workflow_${randomUUID()}`;
+}
+
+export function createWorkflowStepId() {
+	return `workflow_step_${randomUUID()}`;
+}
+
+export function createTaskTemplateId() {
+	return `task_template_${randomUUID()}`;
 }
 
 export function createTaskId() {
@@ -1850,11 +2186,8 @@ export function createWorkflow(input: {
 	name: string;
 	summary: string;
 	projectId: string;
-	goalId?: string | null;
-	kind?: WorkflowKind;
 	status?: WorkflowStatus;
 	templateKey?: string | null;
-	targetDate?: string | null;
 	createdAt?: string;
 	updatedAt?: string;
 }): Workflow {
@@ -1865,11 +2198,93 @@ export function createWorkflow(input: {
 		name: input.name,
 		summary: input.summary,
 		projectId: input.projectId,
-		goalId: input.goalId ?? null,
-		kind: input.kind ?? 'ad_hoc',
 		status: input.status ?? 'draft',
 		templateKey: input.templateKey?.trim() ? input.templateKey.trim() : null,
-		targetDate: input.targetDate ?? null,
+		createdAt: input.createdAt ?? now,
+		updatedAt: input.updatedAt ?? input.createdAt ?? now
+	};
+}
+
+export function createWorkflowStep(input: {
+	workflowId: string;
+	title: string;
+	summary?: string;
+	desiredRoleId?: string;
+	dependsOnStepIds?: string[];
+	position: number;
+	createdAt?: string;
+	updatedAt?: string;
+}): WorkflowStep {
+	const now = new Date().toISOString();
+
+	return {
+		id: createWorkflowStepId(),
+		workflowId: input.workflowId,
+		title: input.title.trim(),
+		summary: input.summary?.trim() ?? '',
+		desiredRoleId: input.desiredRoleId?.trim() ?? '',
+		dependsOnStepIds:
+			input.dependsOnStepIds && input.dependsOnStepIds.length > 0
+				? [...new Set(input.dependsOnStepIds.map((value) => value.trim()).filter(Boolean))]
+				: [],
+		position: input.position,
+		createdAt: input.createdAt ?? now,
+		updatedAt: input.updatedAt ?? input.createdAt ?? now
+	};
+}
+
+export function createTaskTemplate(input: {
+	name: string;
+	summary?: string;
+	projectId: string;
+	goalId?: string | null;
+	workflowId?: string | null;
+	taskTitle?: string;
+	taskSummary?: string;
+	successCriteria?: string;
+	readyCondition?: string;
+	expectedOutcome?: string;
+	area?: Area;
+	priority?: Priority;
+	riskLevel?: TaskRiskLevel;
+	approvalMode?: TaskApprovalMode;
+	requiredThreadSandbox?: AgentSandbox | null;
+	requiresReview?: boolean;
+	desiredRoleId?: string;
+	assigneeExecutionSurfaceId?: string | null;
+	requiredPromptSkillNames?: string[];
+	requiredCapabilityNames?: string[];
+	requiredToolNames?: string[];
+	createdAt?: string;
+	updatedAt?: string;
+}): TaskTemplate {
+	const now = new Date().toISOString();
+
+	return {
+		id: createTaskTemplateId(),
+		name: input.name.trim(),
+		summary: input.summary?.trim() ?? '',
+		projectId: input.projectId.trim(),
+		goalId: input.goalId?.trim() ? input.goalId.trim() : null,
+		workflowId: input.workflowId?.trim() ? input.workflowId.trim() : null,
+		taskTitle: input.taskTitle?.trim() ?? '',
+		taskSummary: input.taskSummary?.trim() ?? '',
+		successCriteria: input.successCriteria?.trim() ?? '',
+		readyCondition: input.readyCondition?.trim() ?? '',
+		expectedOutcome: input.expectedOutcome?.trim() ?? '',
+		area: input.area ?? 'product',
+		priority: input.priority ?? 'medium',
+		riskLevel: input.riskLevel ?? 'medium',
+		approvalMode: input.approvalMode ?? 'none',
+		requiredThreadSandbox: input.requiredThreadSandbox ?? null,
+		requiresReview: input.requiresReview ?? true,
+		desiredRoleId: input.desiredRoleId?.trim() ?? '',
+		assigneeExecutionSurfaceId: input.assigneeExecutionSurfaceId?.trim()
+			? input.assigneeExecutionSurfaceId.trim()
+			: null,
+		requiredPromptSkillNames: normalizeStringList(input.requiredPromptSkillNames),
+		requiredCapabilityNames: normalizeStringList(input.requiredCapabilityNames),
+		requiredToolNames: normalizeStringList(input.requiredToolNames),
 		createdAt: input.createdAt ?? now,
 		updatedAt: input.updatedAt ?? input.createdAt ?? now
 	};

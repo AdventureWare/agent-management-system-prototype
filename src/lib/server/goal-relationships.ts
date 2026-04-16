@@ -199,6 +199,48 @@ export function applyGoalRelationships(args: {
 	};
 }
 
+export function appendGoalTaskRelationships(args: {
+	data: ControlPlaneData;
+	goalId: string;
+	projectIds: string[];
+	taskIds: string[];
+}) {
+	const taskIds = uniqueIds(args.taskIds);
+	const taskIdSet = new Set(taskIds);
+	const selectedTasks = args.data.tasks.filter((task) => taskIdSet.has(task.id));
+	const linkedProjectIds = uniqueIds([
+		...args.projectIds,
+		...selectedTasks.map((task) => task.projectId).filter((projectId) => projectId.length > 0)
+	]);
+	const now = new Date().toISOString();
+
+	return {
+		...args.data,
+		goals: args.data.goals.map((goal) => {
+			if (goal.id !== args.goalId) {
+				return goal;
+			}
+
+			return {
+				...goal,
+				projectIds: uniqueIds([...(goal.projectIds ?? []), ...linkedProjectIds]),
+				taskIds: uniqueIds([...(goal.taskIds ?? []), ...taskIds])
+			};
+		}),
+		tasks: args.data.tasks.map((task) => {
+			if (taskIdSet.has(task.id) && task.goalId !== args.goalId) {
+				return {
+					...task,
+					goalId: args.goalId,
+					updatedAt: now
+				};
+			}
+
+			return task;
+		})
+	};
+}
+
 export function sortProjectsByName(projects: Project[]) {
 	return [...projects].sort((left, right) => left.name.localeCompare(right.name));
 }

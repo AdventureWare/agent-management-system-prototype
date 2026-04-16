@@ -105,11 +105,45 @@ function renderPage(
 					name: 'Release flow',
 					summary: 'Coordinate release work',
 					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
 					goalId: 'goal_1',
-					kind: 'repeatable',
 					status: 'active',
+					stepCount: 3,
 					templateKey: null,
 					targetDate: null,
+					createdAt: '2026-04-01T09:00:00.000Z',
+					updatedAt: '2026-04-01T09:00:00.000Z'
+				}
+			],
+			taskTemplates: [
+				{
+					id: 'task_template_research',
+					name: 'Research brief',
+					summary: 'Reusable defaults for research requests.',
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					goalId: 'goal_1',
+					goalLabel: 'Reduce task intake friction',
+					workflowId: null,
+					workflowName: 'No workflow',
+					taskTitle: 'Run research brief',
+					taskSummary: 'Investigate the topic and produce a concise report.',
+					successCriteria: 'A reviewer can reuse the findings.',
+					readyCondition: 'Research question is defined.',
+					expectedOutcome: 'Clear research memo.',
+					area: 'product',
+					priority: 'high',
+					riskLevel: 'medium',
+					approvalMode: 'before_complete',
+					requiredThreadSandbox: 'workspace-write',
+					requiresReview: true,
+					desiredRoleId: 'role_2',
+					desiredRoleName: 'Reviewer',
+					assigneeExecutionSurfaceId: null,
+					assigneeExecutionSurfaceName: 'Leave unassigned',
+					requiredPromptSkillNames: ['web-design-guidelines'],
+					requiredCapabilityNames: ['planning'],
+					requiredToolNames: ['codex'],
 					createdAt: '2026-04-01T09:00:00.000Z',
 					updatedAt: '2026-04-01T09:00:00.000Z'
 				}
@@ -288,7 +322,7 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(toolbar?.className).toContain('z-20');
 	});
 
-	it('renders the project selector before the task name in the create form', async () => {
+	it('renders the template selector ahead of project and task name in the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
 
@@ -296,7 +330,7 @@ describe('/app/tasks/+page.svelte', () => {
 			document.querySelectorAll('form[action="?/createTask"] label > span:first-child')
 		).map((label) => label.textContent?.trim());
 
-		expect(createFormLabels.slice(0, 2)).toEqual(['Project', 'Name']);
+		expect(createFormLabels.slice(0, 3)).toEqual(['Use task template', 'Project', 'Name']);
 	});
 
 	it('includes a required sandbox control in the advanced create task intake', async () => {
@@ -331,6 +365,27 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(assistButton?.textContent?.trim()).toBe('Improve with AI');
 	});
 
+	it('switches the main create form into workflow mode when a workflow is selected', async () => {
+		renderPage([], {}, { open: true, workflowId: 'workflow_1' });
+
+		const createForm = document.querySelector(
+			'form[action="?/createTask"]'
+		) as HTMLFormElement | null;
+		const formButtons = Array.from(createForm?.querySelectorAll('button') ?? []).map((button) =>
+			button.textContent?.trim()
+		);
+
+		expect(formButtons).toContain('Create task set');
+		expect(formButtons).not.toContain('Create and run');
+		await expect
+			.element(
+				page.getByText(
+					'Selecting a workflow turns this into a parent task plus generated child tasks.'
+				)
+			)
+			.toBeInTheDocument();
+	});
+
 	it('renders a goal selector and removes the queue snapshot pane from the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
@@ -356,6 +411,48 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(workflowSelect).not.toBeNull();
 		expect(workflowSelect?.value).toBe('');
 		await expect.element(page.getByText('Release flow')).toBeInTheDocument();
+	});
+
+	it('applies a saved task template to the create form', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+
+		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
+		await templateSelect.selectOptions('task_template_research');
+
+		const nameInput = document.querySelector(
+			'form[action="?/createTask"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const goalSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="goalId"]'
+		) as HTMLSelectElement | null;
+		const instructions = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(nameInput?.value).toBe('Run research brief');
+		expect(goalSelect?.value).toBe('goal_1');
+		expect(instructions?.value).toBe('Investigate the topic and produce a concise report.');
+		await expect
+			.element(
+				page.getByText(
+					'Applying a task template fills the form once. You can still edit any field before creating the task.'
+				)
+			)
+			.toBeInTheDocument();
+	});
+
+	it('links selected task templates to the template library for management', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+
+		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
+		await templateSelect.selectOptions('task_template_research');
+
+		await expect
+			.element(page.getByText('Manage template details in the task template library.'))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Open library' })).toBeInTheDocument();
 	});
 
 	it('renders the linked workflow in queue rows', () => {

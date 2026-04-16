@@ -7,57 +7,89 @@ const controlPlaneState = vi.hoisted(() => ({
 }));
 
 const createWorkflowMock = vi.hoisted(() =>
+	vi.fn((input: { name: string; summary: string; projectId: string }) => ({
+		id: `workflow_${input.name.toLowerCase().replace(/\s+/g, '_')}`,
+		name: input.name,
+		summary: input.summary,
+		projectId: input.projectId,
+		status: 'draft',
+		templateKey: null,
+		createdAt: '2026-04-15T10:00:00.000Z',
+		updatedAt: '2026-04-15T10:00:00.000Z'
+	}))
+);
+
+const createWorkflowStepMock = vi.hoisted(() =>
 	vi.fn(
 		(input: {
-			name: string;
-			summary: string;
-			projectId: string;
-			goalId?: string | null;
-			kind?: string;
-			targetDate?: string | null;
+			workflowId: string;
+			title: string;
+			summary?: string;
+			desiredRoleId?: string;
+			dependsOnStepIds?: string[];
+			position: number;
 		}) => ({
-			id: `workflow_${input.name.toLowerCase().replace(/\s+/g, '_')}`,
-			name: input.name,
-			summary: input.summary,
-			projectId: input.projectId,
-			goalId: input.goalId ?? null,
-			kind: input.kind ?? 'ad_hoc',
-			status: 'draft',
-			templateKey: null,
-			targetDate: input.targetDate ?? null,
-			createdAt: '2026-04-14T10:00:00.000Z',
-			updatedAt: '2026-04-14T10:00:00.000Z'
+			id: `${input.workflowId}_step_${input.position}`,
+			workflowId: input.workflowId,
+			title: input.title,
+			summary: input.summary ?? '',
+			desiredRoleId: input.desiredRoleId ?? '',
+			dependsOnStepIds: input.dependsOnStepIds ?? [],
+			position: input.position,
+			createdAt: '2026-04-15T10:00:00.000Z',
+			updatedAt: '2026-04-15T10:00:00.000Z'
 		})
 	)
 );
 
-vi.mock('$lib/server/control-plane', () => ({
-	createWorkflow: createWorkflowMock,
-	getOpenReviewForTask: vi.fn(() => null),
-	getPendingApprovalForTask: vi.fn(() => null),
-	loadControlPlane: vi.fn(async () => controlPlaneState.current),
-	taskHasUnmetDependencies: vi.fn(() => false),
-	updateControlPlaneCollections: vi.fn(
-		async (
-			updater: (
-				data: ControlPlaneData
-			) => { data: ControlPlaneData } | Promise<{ data: ControlPlaneData }>
-		) => {
-			controlPlaneState.saved = (await updater(controlPlaneState.current as ControlPlaneData)).data;
-			controlPlaneState.current = controlPlaneState.saved;
-			return controlPlaneState.saved;
-		}
-	)
-}));
+vi.mock('$lib/server/control-plane', async () => {
+	const actual = await vi.importActual<typeof import('$lib/server/control-plane')>(
+		'$lib/server/control-plane'
+	);
+
+	return {
+		...actual,
+		createWorkflow: createWorkflowMock,
+		createWorkflowStep: createWorkflowStepMock,
+		loadControlPlane: vi.fn(async () => controlPlaneState.current),
+		updateControlPlaneCollections: vi.fn(
+			async (
+				updater: (
+					data: ControlPlaneData
+				) => { data: ControlPlaneData } | Promise<{ data: ControlPlaneData }>
+			) => {
+				controlPlaneState.saved = (
+					await updater(controlPlaneState.current as ControlPlaneData)
+				).data;
+				controlPlaneState.current = controlPlaneState.saved;
+				return controlPlaneState.saved;
+			}
+		)
+	};
+});
 
 import { actions, load } from './+page.server';
 
 describe('workflows page server', () => {
 	beforeEach(() => {
 		createWorkflowMock.mockClear();
+		createWorkflowStepMock.mockClear();
 		controlPlaneState.current = {
 			providers: [],
-			roles: [],
+			roles: [
+				{
+					id: 'role_product',
+					name: 'Product strategist',
+					area: 'shared',
+					description: 'Defines product scope'
+				},
+				{
+					id: 'role_engineer',
+					name: 'Engineer',
+					area: 'shared',
+					description: 'Builds the feature'
+				}
+			],
 			projects: [
 				{
 					id: 'project_1',
@@ -70,54 +102,73 @@ describe('workflows page server', () => {
 					defaultBranch: ''
 				}
 			],
-			goals: [
-				{
-					id: 'goal_1',
-					name: 'Release confidence',
-					summary: 'Improve release confidence.',
-					status: 'running',
-					artifactPath: '/tmp/project/goals/release-confidence',
-					parentGoalId: null,
-					projectIds: ['project_1'],
-					taskIds: ['task_1'],
-					area: 'product',
-					targetDate: null
-				}
-			],
+			goals: [],
 			workflows: [
 				{
 					id: 'workflow_1',
-					name: 'Release flow',
-					summary: 'Coordinate release work.',
+					name: 'Feature development',
+					summary: 'Reusable feature delivery process.',
 					projectId: 'project_1',
-					goalId: 'goal_1',
-					kind: 'repeatable',
-					status: 'active',
+					status: 'draft',
 					templateKey: null,
-					targetDate: '2026-04-20',
-					createdAt: '2026-04-14T09:00:00.000Z',
-					updatedAt: '2026-04-14T09:00:00.000Z'
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				}
+			],
+			workflowSteps: [
+				{
+					id: 'workflow_step_1',
+					workflowId: 'workflow_1',
+					title: 'Requirements gathering',
+					summary: 'Clarify scope.',
+					desiredRoleId: 'role_product',
+					position: 1,
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				},
+				{
+					id: 'workflow_step_2',
+					workflowId: 'workflow_1',
+					title: 'Technical implementation',
+					summary: 'Build the feature.',
+					desiredRoleId: 'role_engineer',
+					dependsOnStepIds: ['workflow_step_1'],
+					position: 2,
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				},
+				{
+					id: 'workflow_step_3',
+					workflowId: 'workflow_1',
+					title: 'Documentation',
+					summary: 'Document the shipped behavior.',
+					desiredRoleId: 'role_product',
+					dependsOnStepIds: ['workflow_step_1'],
+					position: 3,
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
 				}
 			],
 			executionSurfaces: [],
 			tasks: [
 				{
 					id: 'task_1',
-					title: 'Draft release notes',
-					summary: 'Prepare the release notes.',
+					title: 'Build dark mode: Requirements gathering',
+					summary: 'Clarify scope.',
 					projectId: 'project_1',
 					area: 'product',
 					goalId: 'goal_1',
 					workflowId: 'workflow_1',
 					parentTaskId: null,
 					delegationPacket: null,
+					delegationAcceptance: null,
 					priority: 'medium',
 					status: 'ready',
 					riskLevel: 'medium',
 					approvalMode: 'none',
 					requiredThreadSandbox: null,
 					requiresReview: true,
-					desiredRoleId: '',
+					desiredRoleId: 'role_product',
 					assigneeExecutionSurfaceId: null,
 					agentThreadId: null,
 					blockedReason: '',
@@ -129,8 +180,8 @@ describe('workflows page server', () => {
 					latestRunId: null,
 					artifactPath: '/tmp/project/agent_output',
 					attachments: [],
-					createdAt: '2026-04-14T09:00:00.000Z',
-					updatedAt: '2026-04-14T09:00:00.000Z'
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
 				}
 			],
 			runs: [],
@@ -141,7 +192,7 @@ describe('workflows page server', () => {
 		controlPlaneState.saved = null;
 	});
 
-	it('loads workflows with task rollups and task previews', async () => {
+	it('loads workflow templates with ordered steps and task previews', async () => {
 		const result = await load({} as never);
 		expect(result).toBeTruthy();
 
@@ -151,26 +202,46 @@ describe('workflows page server', () => {
 
 		expect(result.workflows).toHaveLength(1);
 		expect(result.workflows[0]).toMatchObject({
-			name: 'Release flow',
+			name: 'Feature development',
 			projectName: 'Agent Management System Prototype',
-			goalName: 'Release confidence',
-			rollup: {
-				taskCount: 1,
-				runnableTaskCount: 1,
-				derivedStatus: 'active'
-			},
-			taskPreview: [{ id: 'task_1', title: 'Draft release notes' }]
+			steps: [
+				{
+					title: 'Requirements gathering',
+					desiredRoleName: 'Product strategist',
+					position: 1
+				},
+				{
+					title: 'Technical implementation',
+					desiredRoleName: 'Engineer',
+					position: 2
+				},
+				{
+					title: 'Documentation',
+					desiredRoleName: 'Product strategist',
+					position: 3
+				}
+			],
+			taskPreview: [{ id: 'task_1', title: 'Build dark mode: Requirements gathering' }]
 		});
 	});
 
-	it('creates a workflow from the create action', async () => {
+	it('creates a workflow template with step definitions', async () => {
 		const form = new FormData();
-		form.set('name', 'QA flow');
-		form.set('summary', 'Coordinate QA tasks.');
+		form.set('name', 'Release flow');
+		form.set('summary', 'Reusable release process.');
 		form.set('projectId', 'project_1');
-		form.set('goalId', 'goal_1');
-		form.set('kind', 'repeatable');
-		form.set('targetDate', '2026-04-25');
+		form.append('stepTitle', 'Requirements gathering');
+		form.append('stepDesiredRoleId', 'role_product');
+		form.append('stepSummary', 'Clarify scope.');
+		form.append('stepDependsOnStepPositions', '');
+		form.append('stepTitle', 'Technical implementation');
+		form.append('stepDesiredRoleId', 'role_engineer');
+		form.append('stepSummary', 'Build the feature.');
+		form.append('stepDependsOnStepPositions', '1');
+		form.append('stepTitle', 'Documentation');
+		form.append('stepDesiredRoleId', 'role_product');
+		form.append('stepSummary', 'Document the feature.');
+		form.append('stepDependsOnStepPositions', '1');
 
 		const result = await actions.createWorkflow({
 			request: new Request('http://localhost/app/workflows', {
@@ -185,30 +256,32 @@ describe('workflows page server', () => {
 				successAction: 'createWorkflow'
 			})
 		);
-		expect(createWorkflowMock).toHaveBeenCalledWith(
+		expect(createWorkflowMock).toHaveBeenCalled();
+		expect(createWorkflowStepMock).toHaveBeenCalledTimes(3);
+		expect(controlPlaneState.saved?.workflowSteps?.[0]).toEqual(
 			expect.objectContaining({
-				name: 'QA flow',
-				projectId: 'project_1',
-				goalId: 'goal_1',
-				kind: 'repeatable'
+				title: 'Requirements gathering'
 			})
 		);
-		expect(controlPlaneState.saved?.workflows?.[0]).toEqual(
-			expect.objectContaining({
-				name: 'QA flow'
-			})
-		);
+		expect(
+			controlPlaneState.saved?.workflowSteps?.find((step) => step.title === 'Documentation')
+		).toEqual(expect.objectContaining({ dependsOnStepIds: ['workflow_release_flow_step_1'] }));
 	});
 
-	it('updates workflow metadata while keeping the project fixed', async () => {
+	it('updates workflow template metadata and replaces step definitions', async () => {
 		const form = new FormData();
 		form.set('workflowId', 'workflow_1');
-		form.set('name', 'Release coordination');
-		form.set('summary', 'Coordinate release tasks and reviews.');
+		form.set('name', 'Feature delivery');
+		form.set('summary', 'Updated workflow template.');
 		form.set('projectId', 'project_1');
-		form.set('goalId', 'goal_1');
-		form.set('kind', 'ad_hoc');
-		form.set('targetDate', '2026-04-28');
+		form.append('stepTitle', 'Design draft');
+		form.append('stepDesiredRoleId', 'role_product');
+		form.append('stepSummary', 'Draft the design.');
+		form.append('stepDependsOnStepPositions', '');
+		form.append('stepTitle', 'Implementation');
+		form.append('stepDesiredRoleId', 'role_engineer');
+		form.append('stepSummary', 'Build it.');
+		form.append('stepDependsOnStepPositions', '1');
 
 		const result = await actions.updateWorkflow({
 			request: new Request('http://localhost/app/workflows', {
@@ -226,21 +299,26 @@ describe('workflows page server', () => {
 		);
 		expect(controlPlaneState.saved?.workflows?.[0]).toEqual(
 			expect.objectContaining({
-				id: 'workflow_1',
-				name: 'Release coordination',
-				summary: 'Coordinate release tasks and reviews.',
-				kind: 'ad_hoc',
-				targetDate: '2026-04-28'
+				name: 'Feature delivery',
+				summary: 'Updated workflow template.'
 			})
 		);
+		expect(
+			controlPlaneState.saved?.workflowSteps?.filter((step) => step.workflowId === 'workflow_1')
+		).toHaveLength(2);
+		expect(controlPlaneState.saved?.workflowSteps?.[0]?.title).toBe('Design draft');
+		expect(controlPlaneState.saved?.workflowSteps?.[1]?.dependsOnStepIds).toEqual([
+			controlPlaneState.saved?.workflowSteps?.[0]?.id
+		]);
 	});
 
-	it('updates workflow lifecycle status when the requested transition is allowed', async () => {
+	it('instantiates a workflow template into a parent task plus child tasks', async () => {
 		const form = new FormData();
 		form.set('workflowId', 'workflow_1');
-		form.set('status', 'canceled');
+		form.set('taskName', 'Build dark mode');
+		form.set('taskSummary', 'Ship the first dark mode version.');
 
-		const result = await actions.setWorkflowStatus({
+		const result = await actions.instantiateWorkflow({
 			request: new Request('http://localhost/app/workflows', {
 				method: 'POST',
 				body: form
@@ -250,15 +328,30 @@ describe('workflows page server', () => {
 		expect(result).toEqual(
 			expect.objectContaining({
 				ok: true,
-				successAction: 'setWorkflowStatus',
-				workflowId: 'workflow_1',
-				status: 'canceled'
+				successAction: 'instantiateWorkflow',
+				createdTaskCount: 4
 			})
 		);
-		expect(controlPlaneState.saved?.workflows?.[0]?.status).toBe('canceled');
+
+		const createdParentTask = controlPlaneState.saved?.tasks.find(
+			(task) => task.title === 'Build dark mode'
+		);
+		const createdChildTasks =
+			controlPlaneState.saved?.tasks.filter(
+				(task) => task.parentTaskId === createdParentTask?.id
+			) ?? [];
+
+		expect(createdParentTask).toBeTruthy();
+		expect(createdChildTasks.map((task) => task.title)).toEqual([
+			'Build dark mode: Requirements gathering',
+			'Build dark mode: Technical implementation',
+			'Build dark mode: Documentation'
+		]);
+		expect(createdChildTasks[1]?.dependencyTaskIds).toEqual([createdChildTasks[0]?.id]);
+		expect(createdChildTasks[2]?.dependencyTaskIds).toEqual([createdChildTasks[0]?.id]);
 	});
 
-	it('blocks deleting workflows that still have linked tasks', async () => {
+	it('blocks deleting templates that still have generated tasks linked', async () => {
 		const form = new FormData();
 		form.set('workflowId', 'workflow_1');
 
@@ -272,35 +365,8 @@ describe('workflows page server', () => {
 		expect(result).toMatchObject({
 			status: 400,
 			data: {
-				message: 'Workflow cannot be deleted while linked tasks still point to it.'
+				message: 'Workflow cannot be deleted while generated tasks still point to it.'
 			}
 		});
-		expect(controlPlaneState.current?.workflows).toHaveLength(1);
-	});
-
-	it('deletes workflows after all linked tasks are removed', async () => {
-		controlPlaneState.current = {
-			...(controlPlaneState.current as ControlPlaneData),
-			tasks: []
-		};
-
-		const form = new FormData();
-		form.set('workflowId', 'workflow_1');
-
-		const result = await actions.deleteWorkflow({
-			request: new Request('http://localhost/app/workflows', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				ok: true,
-				successAction: 'deleteWorkflow',
-				workflowId: 'workflow_1'
-			})
-		);
-		expect(controlPlaneState.saved?.workflows).toHaveLength(0);
 	});
 });

@@ -79,6 +79,7 @@
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
 	let createTaskDraftReady = $state(false);
 	let createTaskAdvancedOpen = $state(false);
+	let isSaveTaskTemplateDialogOpen = $state(false);
 	let taskDetailPanelCache = $state.raw<Record<string, TaskDetailPageData>>({});
 	let taskDetailPanelData = $state.raw<TaskDetailPageData | null>(null);
 	let taskDetailPanelLoadError = $state<string | null>(null);
@@ -112,7 +113,11 @@
 	] as const;
 
 	let createSuccess = $derived(form?.ok && form?.successAction === 'createTask');
+	let createTaskWithWorkflowSuccess = $derived(
+		form?.ok && form?.successAction === 'createTaskWithWorkflow'
+	);
 	let createAndRunSuccess = $derived(form?.ok && form?.successAction === 'createTaskAndRun');
+	let saveTaskTemplateSuccess = $derived(form?.ok && form?.successAction === 'saveTaskTemplate');
 	let taskWritingAssistSuccess = $derived(form?.ok && form?.successAction === 'assistTaskWriting');
 	let taskWritingAssistChangeSummary = $derived(
 		taskWritingAssistSuccess ? (form?.assistChangeSummary?.toString() ?? '') : ''
@@ -136,9 +141,20 @@
 		}
 	});
 	let createdAttachmentCount = $derived(
-		form?.ok && (form?.successAction === 'createTask' || form?.successAction === 'createTaskAndRun')
+		form?.ok &&
+			(form?.successAction === 'createTask' ||
+				form?.successAction === 'createTaskAndRun' ||
+				form?.successAction === 'createTaskWithWorkflow')
 			? Number(form.attachmentCount ?? 0)
 			: 0
+	);
+	let instantiatedWorkflowTaskCount = $derived(
+		createTaskWithWorkflowSuccess ? Number(form?.createdTaskCount ?? 0) : 0
+	);
+	let instantiatedWorkflowTaskHref = $derived(
+		createTaskWithWorkflowSuccess && form?.parentTaskId
+			? resolve(`/app/tasks/${form.parentTaskId}`)
+			: ''
 	);
 	let deleteCount = $derived.by(() => {
 		if (form?.ok && form?.successAction === 'deleteTasks') {
@@ -748,6 +764,7 @@
 					assigneeExecutionSurfaceId: form.assigneeExecutionSurfaceId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
+					taskTemplateId: '',
 					workflowId: form.workflowId?.toString() ?? '',
 					area: ('area' in form ? form.area?.toString() : undefined) ?? 'product',
 					priority: form.priority?.toString() ?? 'medium',
@@ -795,6 +812,7 @@
 					assigneeExecutionSurfaceId: '',
 					targetDate: '',
 					goalId: '',
+					taskTemplateId: '',
 					workflowId: '',
 					area: 'product',
 					priority: 'medium',
@@ -826,6 +844,7 @@
 	let createTaskAssigneeExecutionSurfaceId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
+	let createTaskTemplateId = $state('');
 	let createTaskWorkflowId = $state('');
 	let createTaskArea = $state('product');
 	let createTaskPriority = $state('medium');
@@ -839,8 +858,14 @@
 	let createTaskRequiredPromptSkillNames = $state('');
 	let createTaskRequiredCapabilityNames = $state('');
 	let createTaskRequiredToolNames = $state('');
+	let saveTaskTemplateName = $state('');
+	let saveTaskTemplateSummary = $state('');
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
+	);
+	let availableTaskTemplates = $derived(data.taskTemplates);
+	let selectedCreateTaskTemplate = $derived(
+		data.taskTemplates.find((taskTemplate) => taskTemplate.id === createTaskTemplateId) ?? null
 	);
 	let availableCreateTaskWorkflows = $derived(
 		data.workflows.filter(
@@ -850,13 +875,7 @@
 	let selectedCreateWorkflow = $derived(
 		data.workflows.find((workflow) => workflow.id === createTaskWorkflowId) ?? null
 	);
-	let createTaskWorkflowGoalMismatch = $derived(
-		Boolean(
-			selectedCreateWorkflow?.goalId &&
-			createTaskGoalId &&
-			selectedCreateWorkflow.goalId !== createTaskGoalId
-		)
-	);
+	let createTaskUsesWorkflowTemplate = $derived(Boolean(selectedCreateWorkflow));
 	let selectedProjectInstalledSkillNames = $derived(
 		selectedProjectSkillSummary?.installedSkills.map((skill) => skill.id) ?? []
 	);
@@ -1008,6 +1027,55 @@
 		createTaskAdvancedOpen = shouldOpenCreateTaskAdvancedIntake(input);
 	}
 
+	function applyCreateTaskTemplateById(taskTemplateId: string) {
+		const taskTemplate =
+			data.taskTemplates.find((candidateTemplate) => candidateTemplate.id === taskTemplateId) ??
+			null;
+
+		createTaskTemplateId = taskTemplateId;
+
+		if (!taskTemplate) {
+			return;
+		}
+
+		createTaskProjectId = taskTemplate.projectId;
+		createTaskName = taskTemplate.taskTitle;
+		createTaskInstructions = taskTemplate.taskSummary;
+		createTaskSuccessCriteria = taskTemplate.successCriteria;
+		createTaskReadyCondition = taskTemplate.readyCondition;
+		createTaskExpectedOutcome = taskTemplate.expectedOutcome;
+		createTaskAssigneeExecutionSurfaceId = taskTemplate.assigneeExecutionSurfaceId ?? '';
+		createTaskGoalId = taskTemplate.goalId ?? '';
+		createTaskWorkflowId = createTaskParentTaskId ? '' : (taskTemplate.workflowId ?? '');
+		createTaskArea = taskTemplate.area;
+		createTaskPriority = taskTemplate.priority;
+		createTaskRiskLevel = taskTemplate.riskLevel;
+		createTaskApprovalMode = taskTemplate.approvalMode;
+		createTaskRequiredThreadSandbox = normalizeSandboxValue(taskTemplate.requiredThreadSandbox);
+		createTaskRequiresReview = taskTemplate.requiresReview;
+		createTaskDesiredRoleId = taskTemplate.desiredRoleId;
+		createTaskRequiredPromptSkillNames = taskTemplate.requiredPromptSkillNames.join(', ');
+		createTaskRequiredCapabilityNames = taskTemplate.requiredCapabilityNames.join(', ');
+		createTaskRequiredToolNames = taskTemplate.requiredToolNames.join(', ');
+		syncCreateTaskAdvancedOpen({
+			successCriteria: taskTemplate.successCriteria,
+			readyCondition: taskTemplate.readyCondition,
+			expectedOutcome: taskTemplate.expectedOutcome,
+			priority: taskTemplate.priority,
+			riskLevel: taskTemplate.riskLevel,
+			approvalMode: taskTemplate.approvalMode,
+			requiredThreadSandbox: taskTemplate.requiredThreadSandbox ?? '',
+			requiresReview: taskTemplate.requiresReview,
+			desiredRoleId: taskTemplate.desiredRoleId
+		});
+	}
+
+	function openSaveTaskTemplateDialogForCreate() {
+		saveTaskTemplateName = createTaskName.trim() || 'New task template';
+		saveTaskTemplateSummary = '';
+		isSaveTaskTemplateDialogOpen = true;
+	}
+
 	function toggleCreateTaskDependency(taskId: string, checked: boolean) {
 		createTaskDependencyTaskIds = checked
 			? [...new Set([...createTaskDependencyTaskIds, taskId])]
@@ -1032,6 +1100,7 @@
 					assigneeExecutionSurfaceId?: string;
 					targetDate?: string;
 					goalId?: string;
+					taskTemplateId?: string;
 					workflowId?: string;
 					area?: string;
 					priority?: string;
@@ -1069,6 +1138,7 @@
 			Boolean(draft.assigneeExecutionSurfaceId?.trim()) ||
 			Boolean(draft.targetDate?.trim()) ||
 			Boolean(draft.goalId?.trim()) ||
+			Boolean(draft.taskTemplateId?.trim()) ||
 			Boolean(draft.workflowId?.trim()) ||
 			Boolean(draft.requiredPromptSkillNames?.trim()) ||
 			Boolean(draft.requiredCapabilityNames?.trim()) ||
@@ -1104,6 +1174,7 @@
 		createTaskAssigneeExecutionSurfaceId = prefill?.assigneeExecutionSurfaceId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
+		createTaskTemplateId = '';
 		createTaskWorkflowId = prefill?.workflowId ?? '';
 		createTaskArea = (prefill as { area?: string } | null | undefined)?.area ?? 'product';
 		createTaskPriority = prefill?.priority ?? 'medium';
@@ -1140,6 +1211,7 @@
 		createTaskDelegationDoneCondition = '';
 		createTaskDelegationIntegrationNotes = '';
 		createTaskGoalId = '';
+		createTaskTemplateId = '';
 		createTaskWorkflowId = '';
 		createTaskArea = 'product';
 		createTaskSuccessCriteria = '';
@@ -1208,6 +1280,30 @@
 		}
 	});
 
+	$effect(() => {
+		if (!createTaskTemplateId) {
+			return;
+		}
+
+		if (!data.taskTemplates.some((taskTemplate) => taskTemplate.id === createTaskTemplateId)) {
+			createTaskTemplateId = '';
+		}
+	});
+
+	$effect(() => {
+		if (!saveTaskTemplateSuccess) {
+			return;
+		}
+
+		isSaveTaskTemplateDialogOpen = false;
+		saveTaskTemplateName = '';
+		saveTaskTemplateSummary = '';
+
+		if (typeof form?.taskTemplateId === 'string') {
+			createTaskTemplateId = form.taskTemplateId;
+		}
+	});
+
 	onMount(() => {
 		const mediaQuery = window.matchMedia('(min-width: 1024px)');
 		const syncTaskLayoutMode = () => {
@@ -1220,7 +1316,7 @@
 		syncTaskLayoutMode();
 		mediaQuery.addEventListener('change', syncTaskLayoutMode);
 
-		if (createSuccess || createAndRunSuccess) {
+		if (createSuccess || createAndRunSuccess || createTaskWithWorkflowSuccess) {
 			clearFormDraft(CREATE_TASK_DRAFT_KEY);
 			createTaskDraftReady = true;
 			return cleanup;
@@ -1254,6 +1350,7 @@
 			assigneeExecutionSurfaceId: string;
 			targetDate: string;
 			goalId: string;
+			taskTemplateId: string;
 			workflowId: string;
 			area: string;
 			priority: string;
@@ -1285,6 +1382,7 @@
 			createTaskAssigneeExecutionSurfaceId = savedDraft.assigneeExecutionSurfaceId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
+			createTaskTemplateId = savedDraft.taskTemplateId ?? '';
 			createTaskWorkflowId = savedDraft.workflowId ?? '';
 			createTaskArea = savedDraft.area ?? 'product';
 			createTaskPriority = savedDraft.priority ?? 'medium';
@@ -1344,6 +1442,7 @@
 			assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
+			taskTemplateId: createTaskTemplateId,
 			workflowId: createTaskWorkflowId,
 			area: createTaskArea === 'product' ? '' : createTaskArea,
 			priority: createTaskPriority === 'medium' ? '' : createTaskPriority,
@@ -2062,6 +2161,27 @@
 						: ` ${createdAttachmentCount} attachments saved with it.`}
 				{/if}
 			</p>
+		{:else if createTaskWithWorkflowSuccess}
+			<p
+				aria-live="polite"
+				class="card border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+			>
+				Created {instantiatedWorkflowTaskCount} task{instantiatedWorkflowTaskCount === 1 ? '' : 's'} from
+				the selected workflow template.
+				{#if createdAttachmentCount > 0}
+					{createdAttachmentCount === 1
+						? ' 1 attachment saved on the parent task.'
+						: ` ${createdAttachmentCount} attachments saved on the parent task.`}
+				{/if}
+				{#if instantiatedWorkflowTaskHref}
+					<a
+						class="ml-2 font-medium text-emerald-100 underline"
+						href={instantiatedWorkflowTaskHref}
+					>
+						Open parent task
+					</a>
+				{/if}
+			</p>
 		{:else if deleteSuccess}
 			<p
 				aria-live="polite"
@@ -2414,6 +2534,94 @@
 							</div>
 						{/if}
 
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+							<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">
+										Use task template
+									</span>
+									<select
+										bind:value={createTaskTemplateId}
+										class="select text-white"
+										name="taskTemplateSelection"
+										onchange={(event) => {
+											applyCreateTaskTemplateById((event.currentTarget as HTMLSelectElement).value);
+										}}
+									>
+										<option value="">No task template</option>
+										{#each availableTaskTemplates as taskTemplate (taskTemplate.id)}
+											<option value={taskTemplate.id}>
+												{taskTemplate.name} · {taskTemplate.projectName}
+											</option>
+										{/each}
+									</select>
+									<span class="mt-2 block text-xs text-slate-500">
+										Optional. Task templates prefill repeated task defaults like project, goal,
+										role, workflow, instructions, review settings, and execution requirements.
+									</span>
+									{#if data.taskTemplates.length === 0}
+										<span class="mt-2 block text-xs text-slate-500">
+											No task templates are saved yet.
+										</span>
+									{/if}
+								</label>
+
+								<button
+									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+									type="button"
+									onclick={openSaveTaskTemplateDialogForCreate}
+								>
+									Save current as template
+								</button>
+							</div>
+
+							{#if selectedCreateTaskTemplate}
+								<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+									<div class="flex flex-wrap items-center gap-2">
+										<p class="text-sm font-medium text-white">{selectedCreateTaskTemplate.name}</p>
+										<span
+											class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[11px] text-slate-300 uppercase"
+										>
+											{selectedCreateTaskTemplate.projectName}
+										</span>
+										{#if selectedCreateTaskTemplate.workflowId}
+											<span
+												class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
+											>
+												Workflow linked
+											</span>
+										{/if}
+									</div>
+									{#if selectedCreateTaskTemplate.summary}
+										<p class="mt-2 text-sm text-slate-300">
+											{selectedCreateTaskTemplate.summary}
+										</p>
+									{/if}
+									<p class="mt-2 text-xs text-slate-400">
+										Applying a task template fills the form once. You can still edit any field
+										before creating the task.
+									</p>
+									<p class="mt-3 text-xs text-slate-500">
+										Manage template details in the task template library.
+										<a
+											class="ml-1 font-medium text-sky-300 underline"
+											href={resolve('/app/task-templates')}
+										>
+											Open library
+										</a>
+									</p>
+								</div>
+							{/if}
+
+							{#if saveTaskTemplateSuccess}
+								<p
+									class="mt-4 rounded-2xl border border-emerald-900/70 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
+								>
+									Saved task template {form?.taskTemplateName?.toString() ?? 'template'}.
+								</p>
+							{/if}
+						</div>
+
 						<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 							<label class="block">
 								<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
@@ -2455,33 +2663,29 @@
 							</label>
 
 							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Workflow</span>
+								<span class="mb-2 block text-sm font-medium text-slate-200"> Apply workflow </span>
 								<select
 									bind:value={createTaskWorkflowId}
 									class="select text-white"
+									disabled={Boolean(createTaskParentTaskId)}
 									name="workflowId"
 								>
-									<option value="">No workflow linked</option>
+									<option value="">No workflow</option>
 									{#each availableCreateTaskWorkflows as workflow (workflow.id)}
 										<option value={workflow.id}>{workflow.name}</option>
 									{/each}
 								</select>
 								<span class="mt-2 block text-xs text-slate-500">
-									Optional. Use a workflow to group this task into a broader process without
-									changing task-level routing.
+									Optional. Choose a workflow template when this new task should expand into a
+									parent task plus the standard child tasks for that kind of work.
 								</span>
-								{#if createTaskProjectId && availableCreateTaskWorkflows.length === 0}
+								{#if createTaskParentTaskId}
+									<span class="mt-2 block text-xs text-slate-500">
+										Delegated child tasks cannot apply workflow templates.
+									</span>
+								{:else if createTaskProjectId && availableCreateTaskWorkflows.length === 0}
 									<span class="mt-2 block text-xs text-slate-500">
 										No workflows are linked to the selected project yet.
-									</span>
-								{:else if createTaskWorkflowGoalMismatch}
-									<span class="mt-2 block text-xs text-amber-300">
-										The selected workflow is linked to a different goal than the one currently
-										selected for this task.
-									</span>
-								{:else if selectedCreateWorkflow?.goalId && !createTaskGoalId}
-									<span class="mt-2 block text-xs text-slate-500">
-										If you leave Goal blank, task creation will inherit this workflow's linked goal.
 									</span>
 								{/if}
 							</label>
@@ -2496,6 +2700,29 @@
 								/>
 							</label>
 						</div>
+
+						{#if selectedCreateWorkflow}
+							<div class="rounded-2xl border border-sky-900/40 bg-sky-950/15 p-4">
+								<div class="flex flex-wrap items-center gap-2">
+									<p class="text-sm font-medium text-white">{selectedCreateWorkflow.name}</p>
+									<span
+										class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
+									>
+										{selectedCreateWorkflow.stepCount} step{selectedCreateWorkflow.stepCount === 1
+											? ''
+											: 's'}
+									</span>
+								</div>
+								<p class="mt-2 text-sm text-slate-300">
+									Selecting a workflow turns this into a parent task plus generated child tasks. The
+									child tasks carry the actual execution sequence, roles, and internal dependencies.
+								</p>
+								<p class="mt-2 text-xs text-slate-400">
+									The parent task stays as the umbrella for the work and will complete when the
+									generated child tasks are complete.
+								</p>
+							</div>
+						{/if}
 
 						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 							<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
@@ -3159,23 +3386,161 @@
 								type="submit"
 								value="create"
 							>
-								Create task
+								{createTaskUsesWorkflowTemplate ? 'Create task set' : 'Create task'}
 							</button>
-							<button
-								class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
-								disabled={Boolean(createTaskLaunchContractBlocker)}
-								name="submitMode"
-								type="submit"
-								value="createAndRun"
-							>
-								Create and run
-							</button>
+							{#if !createTaskUsesWorkflowTemplate}
+								<button
+									class="btn border border-sky-800/70 bg-sky-950/40 font-semibold text-sky-100 transition hover:border-sky-700 hover:text-white"
+									disabled={Boolean(createTaskLaunchContractBlocker)}
+									name="submitMode"
+									type="submit"
+									value="createAndRun"
+								>
+									Create and run
+								</button>
+							{/if}
 							<p class="text-sm text-slate-400">
-								{createTaskLaunchContractBlocker
-									? `${createTaskLaunchContractBlocker} Use Advanced intake to finish the launch contract.`
-									: 'Choose a project, name the work clearly, then create a queued task or launch it immediately.'}
+								{createTaskUsesWorkflowTemplate
+									? 'This will create the parent task first, then generate the workflow child tasks underneath it.'
+									: createTaskLaunchContractBlocker
+										? `${createTaskLaunchContractBlocker} Use Advanced intake to finish the launch contract.`
+										: 'Choose a project, name the work clearly, then create a queued task or launch it immediately.'}
 							</p>
 						</div>
+					</div>
+				</form>
+			</AppDialog>
+		{/if}
+
+		{#if isSaveTaskTemplateDialogOpen}
+			<AppDialog
+				bind:open={isSaveTaskTemplateDialogOpen}
+				title="Save task template"
+				description="Store the current task defaults so you can reapply them later without re-entering the same fields."
+				closeLabel="Close save task template dialog"
+			>
+				<form
+					class="space-y-4"
+					method="POST"
+					action="?/saveTaskTemplate"
+					data-persist-scope="manual"
+				>
+					<input type="hidden" name="projectId" value={createTaskProjectId} />
+					<input type="hidden" name="parentTaskId" value={createTaskParentTaskId} />
+					<input type="hidden" name="delegationObjective" value={createTaskDelegationObjective} />
+					<input
+						type="hidden"
+						name="delegationInputContext"
+						value={createTaskDelegationInputContext}
+					/>
+					<input
+						type="hidden"
+						name="delegationExpectedDeliverable"
+						value={createTaskDelegationExpectedDeliverable}
+					/>
+					<input
+						type="hidden"
+						name="delegationDoneCondition"
+						value={createTaskDelegationDoneCondition}
+					/>
+					<input
+						type="hidden"
+						name="delegationIntegrationNotes"
+						value={createTaskDelegationIntegrationNotes}
+					/>
+					<input type="hidden" name="name" value={createTaskName} />
+					<input type="hidden" name="instructions" value={createTaskInstructions} />
+					<input type="hidden" name="successCriteria" value={createTaskSuccessCriteria} />
+					<input type="hidden" name="readyCondition" value={createTaskReadyCondition} />
+					<input type="hidden" name="expectedOutcome" value={createTaskExpectedOutcome} />
+					<input
+						type="hidden"
+						name="assigneeExecutionSurfaceId"
+						value={createTaskAssigneeExecutionSurfaceId}
+					/>
+					<input type="hidden" name="targetDate" value={createTaskTargetDate} />
+					<input type="hidden" name="goalId" value={createTaskGoalId} />
+					<input type="hidden" name="workflowId" value={createTaskWorkflowId} />
+					<input type="hidden" name="area" value={createTaskArea} />
+					<input type="hidden" name="priority" value={createTaskPriority} />
+					<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
+					<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />
+					<input
+						type="hidden"
+						name="requiredThreadSandbox"
+						value={createTaskRequiredThreadSandbox}
+					/>
+					<input
+						type="hidden"
+						name="requiresReview"
+						value={createTaskRequiresReview ? 'true' : 'false'}
+					/>
+					<input type="hidden" name="desiredRoleId" value={createTaskDesiredRoleId} />
+					<input type="hidden" name="blockedReason" value={createTaskBlockedReason} />
+					<input
+						type="hidden"
+						name="requiredPromptSkillNames"
+						value={createTaskRequiredPromptSkillNames}
+					/>
+					<input
+						type="hidden"
+						name="requiredCapabilityNames"
+						value={createTaskRequiredCapabilityNames}
+					/>
+					<input type="hidden" name="requiredToolNames" value={createTaskRequiredToolNames} />
+					<input type="hidden" name="submitMode" value="create" />
+					{#each createTaskDependencyTaskIds as dependencyTaskId (dependencyTaskId)}
+						<input type="hidden" name="dependencyTaskIds" value={dependencyTaskId} />
+					{/each}
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200">Template name</span>
+						<input
+							bind:value={saveTaskTemplateName}
+							class="input text-white placeholder:text-slate-500"
+							name="taskTemplateName"
+							placeholder="Research brief"
+							required
+						/>
+					</label>
+
+					<label class="block">
+						<span class="mb-2 block text-sm font-medium text-slate-200"> Template summary </span>
+						<textarea
+							bind:value={saveTaskTemplateSummary}
+							class="textarea min-h-24 text-white placeholder:text-slate-500"
+							name="taskTemplateSummary"
+							placeholder="Use this for repeated research requests in the AMS prototype project."
+						></textarea>
+					</label>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							What gets saved
+						</p>
+						<p class="mt-2 text-sm text-slate-300">
+							Project, goal, workflow, title, instructions, review settings, role defaults,
+							execution surface, and execution requirements.
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Runtime details like target date, dependencies, and delegation context stay editable
+							per task instance.
+						</p>
+					</div>
+
+					<div class="flex flex-wrap items-center gap-3">
+						<button class="btn preset-filled-primary-500 font-semibold" type="submit">
+							Save template
+						</button>
+						<button
+							class="btn border border-slate-700 font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white"
+							type="button"
+							onclick={() => {
+								isSaveTaskTemplateDialogOpen = false;
+							}}
+						>
+							Cancel
+						</button>
 					</div>
 				</form>
 			</AppDialog>

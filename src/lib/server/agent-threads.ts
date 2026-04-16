@@ -12,7 +12,6 @@ import { deriveThreadCategorization } from '$lib/server/task-thread-topics';
 import { listCodexStateThreadRows } from '$lib/server/codex-state-db';
 import {
 	isAgentThreadsSqliteEmpty,
-	loadAgentThreadsFromSqlite,
 	loadAgentThreadsSnapshotFromSqlite,
 	saveAgentThreadsToSqlite
 } from '$lib/server/db/agent-threads-store';
