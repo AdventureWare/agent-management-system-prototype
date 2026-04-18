@@ -1091,8 +1091,8 @@ export const actions: Actions = {
 		const compatibleAssignedThread = threadContext.assignedThread;
 		const compatibleLatestRunThread = threadContext.latestRunThread;
 		let agentThreadId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
-		let agentThreadRunId: string | null = null;
-		let codexThreadId!: string | null;
+		let agentThreadRunId: string | null;
+		let codexThreadId: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 		if (compatibleAssignedThread?.hasActiveRun) {

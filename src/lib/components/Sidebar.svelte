@@ -9,7 +9,6 @@
 		CpuIcon,
 		FolderOpenIcon,
 		LayoutDashboardIcon,
-		LightbulbIcon,
 		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
@@ -25,10 +24,8 @@
 	}>();
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
-		home: LayoutDashboardIcon,
 		governance: ArrowLeftRightIcon,
 		access: ShieldCheckIcon,
-		improvements: LightbulbIcon,
 		tasks: ListTodoIcon,
 		threads: MessagesSquareIcon,
 		runs: ActivityIcon,

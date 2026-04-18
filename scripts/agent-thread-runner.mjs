@@ -235,14 +235,9 @@ child.on('close', async (code, signal) => {
 		exitCode: code,
 		signal: signal ?? null
 	});
-	let lastMessage = null;
-
-	try {
-		const rawMessage = await readFile(config.messagePath, 'utf8');
-		lastMessage = rawMessage.trim() || null;
-	} catch {
-		lastMessage = null;
-	}
+	const lastMessage = await readFile(config.messagePath, 'utf8')
+		.then((rawMessage) => rawMessage.trim() || null)
+		.catch(() => null);
 
 	currentSummary = {
 		...currentSummary,

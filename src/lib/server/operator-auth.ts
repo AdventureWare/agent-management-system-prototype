@@ -4,7 +4,7 @@ export const OPERATOR_SESSION_COOKIE = 'ams_operator_session';
 export const OPERATOR_LOGIN_PATH = '/auth/login';
 export const OPERATOR_LOGOUT_PATH = '/auth/logout';
 
-const DEFAULT_REDIRECT_PATH = '/app/home';
+const DEFAULT_REDIRECT_PATH = '/app/tasks';
 
 export type OperatorAuthConfig = {
 	password: string;

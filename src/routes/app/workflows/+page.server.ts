@@ -14,10 +14,6 @@ import {
 } from '$lib/server/workflows';
 import { instantiateWorkflowTemplate } from '$lib/server/workflow-template-instantiation';
 
-function isValidDate(value: string) {
-	return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 function parseDependencyPositions(value: string) {
 	return [
 		...new Set(

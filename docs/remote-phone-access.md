@@ -72,7 +72,7 @@ npm run remote:phone:stop
 
 1. Open the tunnel URL reported by the helper.
 2. Log in with `AMS_OPERATOR_PASSWORD`.
-3. Open `Home` or `Tasks`.
+3. Open `Tasks` or `Threads`.
 4. Review the queue, open the task, run or resume work, open the thread, and send a follow-up.
 
 ## Tunnel overrides

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Role Advisor'
+  short_description: 'Advise on role routing and gaps'
+  default_prompt: 'Use $role-advisor to determine the best existing role for this work and whether a real role gap exists.'

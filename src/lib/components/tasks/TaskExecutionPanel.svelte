@@ -737,8 +737,8 @@
 
 			{#if retrievedKnowledgeItems.length === 0}
 				<p class="mt-5 text-sm text-slate-500">
-					No published knowledge currently matches this task. Publish a knowledge item from the
-					improvements queue when you identify a reusable lesson.
+					No published knowledge currently matches this task. Publish a knowledge item when you
+					identify a reusable lesson.
 				</p>
 			{:else}
 				<div class="mt-5 space-y-3">

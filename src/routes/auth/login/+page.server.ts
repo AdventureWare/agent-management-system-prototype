@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	const authConfig = getOperatorAuthConfig();
 
 	if (!authConfig) {
-		throw redirect(303, '/app/home');
+		throw redirect(303, '/app/tasks');
 	}
 
 	if (isValidOperatorSession(cookies.get(OPERATOR_SESSION_COOKIE), authConfig)) {
@@ -30,7 +30,7 @@ export const actions: Actions = {
 		const authConfig = getOperatorAuthConfig();
 
 		if (!authConfig) {
-			throw redirect(303, '/app/home');
+			throw redirect(303, '/app/tasks');
 		}
 
 		const formData = await request.formData();

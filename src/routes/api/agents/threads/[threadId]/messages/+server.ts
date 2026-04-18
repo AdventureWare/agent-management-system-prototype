@@ -21,7 +21,7 @@ function isAgentThreadContactContextItem(value: unknown): value is AgentThreadCo
 export const POST = async ({ params, request }) => {
 	const contentType = request.headers.get('content-type') ?? '';
 	let attachments: File[] = [];
-	let attachmentPaths: string[] = [];
+	let attachmentPaths: string[];
 	let prompt: string;
 	let sourceThreadId: string;
 	let contactType: string;

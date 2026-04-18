@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import {
 	type ControlPlaneCollection,
 	isControlPlaneSqliteEmpty,
-	loadControlPlaneFromSqlite,
 	loadControlPlaneSnapshotFromSqlite,
 	saveControlPlaneCollectionsToSqlite,
 	saveControlPlaneToSqlite

@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadControlPlane, updateControlPlaneCollections } from '$lib/server/control-plane';
-import type { RunSpendRollupItem, RunUsageCostSummary } from '$lib/types/home-dashboard';
 import type {
 	ControlPlaneData,
 	Provider,
@@ -11,6 +10,38 @@ import type {
 	RunCostSource,
 	RunUsageSource
 } from '$lib/types/control-plane';
+
+type RunSpendRollupItem = {
+	key: string;
+	label: string;
+	runCount: number;
+	totalCostUsd: number;
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	attentionRunCount: number;
+};
+
+type RunUsageCostSummary = {
+	spendLast24hUsd: number;
+	spendLast7dUsd: number;
+	failedOrCanceledSpendLast7dRatio: number | null;
+	highCostRuns: Array<{
+		runId: string;
+		taskId: string;
+		taskTitle: string;
+		providerName: string;
+		modelUsed: string | null;
+		status: string;
+		estimatedCostUsd: number;
+	}>;
+	rollups: {
+		byProvider: RunSpendRollupItem[];
+		byActor: RunSpendRollupItem[];
+		byProject: RunSpendRollupItem[];
+		byGoal: RunSpendRollupItem[];
+	};
+};
 
 type ManagedRunTelemetrySnapshot = {
 	modelUsed: string | null;

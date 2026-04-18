@@ -34,14 +34,14 @@ describe('operator auth', () => {
 		expect(operatorLoginRedirect('/app/tasks/task_1')).toBe(
 			'/auth/login?next=%2Fapp%2Ftasks%2Ftask_1'
 		);
-		expect(sanitizeNextPath('//evil.example')).toBe('/app/home');
-		expect(sanitizeNextPath('/auth/login?next=%2Fapp%2Fhome')).toBe('/app/home');
+		expect(sanitizeNextPath('//evil.example')).toBe('/app/tasks');
+		expect(sanitizeNextPath('/auth/login?next=%2Fapp%2Ftasks')).toBe('/app/tasks');
 	});
 
 	it('only exposes auth and static assets without login', () => {
 		expect(isOperatorAuthPublicPath('/auth/login')).toBe(true);
 		expect(isOperatorAuthPublicPath('/_app/immutable/app.js')).toBe(true);
-		expect(isOperatorAuthPublicPath('/app/home')).toBe(false);
+		expect(isOperatorAuthPublicPath('/app/tasks')).toBe(false);
 	});
 
 	it('accepts the configured agent api bearer token', () => {

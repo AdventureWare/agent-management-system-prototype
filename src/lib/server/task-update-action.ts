@@ -99,8 +99,6 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		);
 	}
 
-	const effectiveGoalId = goal?.id ?? existingTask.goalId;
-
 	const invalidDependencyTaskIds = dependencyTaskIds.filter(
 		(dependencyTaskId) =>
 			dependencyTaskId === taskId ||

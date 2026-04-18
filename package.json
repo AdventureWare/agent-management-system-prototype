@@ -38,7 +38,8 @@
 		"test:unit": "vitest --project server",
 		"test:unit:browser": "VITEST_BROWSER=1 vitest --project client",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"knip": "knip"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.2",
@@ -54,12 +55,13 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.18",
 		"@types/better-sqlite3": "^7.6.13",
-		"@types/node": "^22",
+		"@types/node": "^22.19.17",
 		"@vitest/browser-playwright": "^4.0.18",
 		"eslint": "^10.2.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.14.0",
 		"globals": "^17.3.0",
+		"knip": "^6.4.1",
 		"playwright": "^1.58.1",
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.4.1",

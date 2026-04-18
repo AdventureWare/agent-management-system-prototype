@@ -4,12 +4,11 @@ This prototype is the start of a small remote-work control plane for Codex.
 
 Current scope:
 
-- server-backed task, run, thread, and self-improvement data in `data/app.sqlite`, with JSON mirrors kept for fallback/export
+- server-backed task, run, thread, and supporting control-plane data in `data/app.sqlite`, with JSON mirrors kept for fallback/export
 - a task-first operator UI under `/app/*`
 - background Codex thread launching, reuse, and follow-up prompts
 - run history, prompt digests, logs, artifacts, and last-message capture
 - supporting control-plane directories for projects, goals, planning windows, execution surfaces, roles, and providers
-- self-improvement opportunity analysis from tasks, runs, reviews, and thread state
 - thread APIs under `/api/agents/threads/*` with session aliases kept for compatibility
 
 ## Why this slice exists
@@ -38,9 +37,7 @@ The rest of the top-level surfaces are real, but mostly play supporting roles to
 - `Goals`: outcome grouping and relationship mapping
 - `Planning`: date-window review over the existing goals/tasks/execution-surface model
 - `Execution surfaces`, `Roles`, `Providers`: routing and capacity metadata
-- `Home`: a cross-cutting operator dashboard
-
-See `docs/README.md` for the current documentation index and surviving design notes.
+  See `docs/README.md` for the current documentation index and surviving design notes.
 
 ## Run locally
 
@@ -63,7 +60,7 @@ Legacy JSON files:
 npm run db:export-json
 ```
 
-The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store, app-managed agent threads, and self-improvement data. The JSON files under `data/` are for explicit export/import and recovery workflows, not normal runtime persistence.
+The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store and app-managed agent threads. The JSON files under `data/` are for explicit export/import and recovery workflows, not normal runtime persistence.
 
 Database helpers:
 
@@ -129,7 +126,6 @@ API:
 - `GET /api/agents/threads/:threadId`
 - `POST /api/agents/threads/:threadId/messages`
 - `POST /api/agents/threads/:threadId/cancel`
-- `GET /api/improvement/opportunities`
 
 Environment:
 

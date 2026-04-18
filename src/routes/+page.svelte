@@ -26,9 +26,9 @@
 		<div class="flex flex-wrap gap-3">
 			<a
 				class="rounded-lg bg-sky-500 px-4 py-2 font-medium text-slate-950"
-				href={resolve('/app/home')}
+				href={resolve('/app/tasks')}
 			>
-				Open operator home
+				Open task queue
 			</a>
 			<a
 				class="rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-100"

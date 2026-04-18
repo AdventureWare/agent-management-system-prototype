@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ChevronDownIcon } from '@lucide/svelte';
-	import { Accordion, Progress } from '@skeletonlabs/skeleton-svelte';
+	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	let { data, form } = $props();
+	let selectedRoleId = $state('');
 
 	let staffedRoleCount = $derived(
 		data.roles.filter((role) => role.executionSurfaceCount > 0).length
@@ -18,6 +18,24 @@
 	let maxTaskCount = $derived(Math.max(1, ...data.roles.map((role) => role.taskCount)));
 	let createRoleSuccess = $derived(form?.ok && form?.successAction === 'createRole');
 	let updateRoleSuccess = $derived(form?.ok && form?.successAction === 'updateRole');
+	let selectedRole = $derived(
+		data.roles.find((role) => role.id === selectedRoleId) ?? data.roles[0] ?? null
+	);
+
+	$effect(() => {
+		const submittedRoleId = form?.roleId ?? '';
+		const fallbackRoleId = data.roles[0]?.id ?? '';
+		const hasSelectedRole = data.roles.some((role) => role.id === selectedRoleId);
+
+		if (submittedRoleId && submittedRoleId !== selectedRoleId) {
+			selectedRoleId = submittedRoleId;
+			return;
+		}
+
+		if (!selectedRoleId || !hasSelectedRole) {
+			selectedRoleId = fallbackRoleId;
+		}
+	});
 
 	function formatAreaLabel(value: string) {
 		if (value === 'shared') {
@@ -199,199 +217,216 @@
 			</p>
 		</div>
 
-		<Accordion multiple class="mt-6 space-y-4">
-			{#each data.roles as role (role.id)}
-				<Accordion.Item
-					value={role.id}
-					class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/55"
-				>
-					<Accordion.ItemTrigger class="flex w-full items-start gap-4 px-5 py-4 text-left">
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-center gap-3">
-								<h2 class="text-xl font-semibold text-white">{role.name}</h2>
-								<span
-									class="badge border border-slate-700 bg-slate-900/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
-								>
-									Area · {formatAreaLabel(role.area)}
-								</span>
-							</div>
-							<p class="mt-3 max-w-3xl text-sm text-slate-300">{role.description}</p>
+		<div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+			<div class="space-y-3">
+				{#each data.roles as role (role.id)}
+					<button
+						type="button"
+						class={[
+							'w-full rounded-2xl border px-4 py-4 text-left transition',
+							selectedRole?.id === role.id
+								? 'border-sky-400/60 bg-sky-500/10 shadow-[0_0_0_1px_rgba(56,189,248,0.15)]'
+								: 'border-slate-800 bg-slate-950/55 hover:border-slate-700 hover:bg-slate-900/70'
+						]}
+						aria-pressed={selectedRole?.id === role.id}
+						onclick={() => {
+							selectedRoleId = role.id;
+						}}
+					>
+						<div class="flex flex-wrap items-center gap-3">
+							<h2 class="text-lg font-semibold text-white">{role.name}</h2>
+							<span
+								class="badge border border-slate-700 bg-slate-900/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+							>
+								Area · {formatAreaLabel(role.area)}
+							</span>
 						</div>
+						<p class="mt-3 text-sm text-slate-300">{role.description}</p>
+						<div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+							<span class="rounded-full border border-slate-800 px-2.5 py-1">
+								{role.executionSurfaceCount} surfaces
+							</span>
+							<span class="rounded-full border border-slate-800 px-2.5 py-1">
+								{role.taskCount} tasks
+							</span>
+							<span class="rounded-full border border-slate-800 px-2.5 py-1">
+								{role.skillIds?.length ?? 0} skills
+							</span>
+						</div>
+					</button>
+				{/each}
+			</div>
 
-						<Accordion.ItemIndicator
-							class="mt-1 text-slate-400 transition-transform duration-200 data-[state=open]:rotate-180"
+			{#if selectedRole}
+				<div class="space-y-4 rounded-3xl border border-slate-800 bg-slate-950/55 p-5">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<p class="text-[11px] tracking-[0.24em] text-slate-500 uppercase">Selected role</p>
+							<h3 class="mt-2 text-2xl font-semibold text-white">{selectedRole.name}</h3>
+							<p class="mt-2 max-w-3xl text-sm text-slate-300">{selectedRole.description}</p>
+						</div>
+						<span
+							class="badge border border-slate-700 bg-slate-900/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
 						>
-							<ChevronDownIcon class="size-4" />
-						</Accordion.ItemIndicator>
-					</Accordion.ItemTrigger>
+							Area · {formatAreaLabel(selectedRole.area)}
+						</span>
+					</div>
 
-					<Accordion.ItemContent class="border-t border-slate-800 px-5 py-5">
-						<div class="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-							<div class="space-y-4">
-								<div class="grid gap-4 lg:grid-cols-2">
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-										<div class="flex items-center justify-between gap-3">
-											<p class="text-sm font-medium text-slate-200">Execution-surface coverage</p>
-											<p class="text-sm text-slate-400">
-												{role.executionSurfaceCount} execution surfaces
-											</p>
-										</div>
-										<Progress
-											max={maxExecutionSurfaceCount}
-											value={role.executionSurfaceCount}
-											class="mt-3 space-y-2"
-										>
-											<Progress.Track class="h-2 overflow-hidden rounded-full bg-slate-800">
-												<Progress.Range class="h-full rounded-full bg-sky-400" />
-											</Progress.Track>
-											<Progress.ValueText class="text-xs text-slate-500">
-												{role.executionSurfaceCount} of {maxExecutionSurfaceCount} currently registered
-											</Progress.ValueText>
-										</Progress>
-									</div>
-
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-										<div class="flex items-center justify-between gap-3">
-											<p class="text-sm font-medium text-slate-200">Task demand</p>
-											<p class="text-sm text-slate-400">{role.taskCount} tasks</p>
-										</div>
-										<Progress max={maxTaskCount} value={role.taskCount} class="mt-3 space-y-2">
-											<Progress.Track class="h-2 overflow-hidden rounded-full bg-slate-800">
-												<Progress.Range class="h-full rounded-full bg-fuchsia-400" />
-											</Progress.Track>
-											<Progress.ValueText class="text-xs text-slate-500">
-												{role.taskCount} of {maxTaskCount} queued against this role
-											</Progress.ValueText>
-										</Progress>
-									</div>
-								</div>
-
-								<div class="grid gap-4 md:grid-cols-3">
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Skills</p>
-										<p class="mt-2 text-sm text-white">{role.skillIds?.length ?? 0}</p>
-									</div>
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Tools</p>
-										<p class="mt-2 text-sm text-white">{role.toolIds?.length ?? 0}</p>
-									</div>
-									<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">MCPs</p>
-										<p class="mt-2 text-sm text-white">{role.mcpIds?.length ?? 0}</p>
-									</div>
-								</div>
+					<div class="grid gap-4 lg:grid-cols-2">
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<div class="flex items-center justify-between gap-3">
+								<p class="text-sm font-medium text-slate-200">Execution-surface coverage</p>
+								<p class="text-sm text-slate-400">
+									{selectedRole.executionSurfaceCount} execution surfaces
+								</p>
 							</div>
-
-							<form class="space-y-4" method="POST" action="?/updateRole">
-								<input type="hidden" name="roleId" value={role.id} />
-
-								<div
-									class="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,200px)_minmax(0,1fr)]"
-								>
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-										<input class="input text-white" name="name" required value={role.name} />
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Area</span>
-										<select class="select text-white" name="area">
-											{#each data.roleAreaOptions as area (area)}
-												<option selected={role.area === area} value={area}>
-													{formatAreaLabel(area)}
-												</option>
-											{/each}
-										</select>
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
-										<input
-											class="input text-white"
-											name="description"
-											required
-											value={role.description}
-										/>
-									</label>
-								</div>
-
-								<div class="grid gap-4 lg:grid-cols-3">
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Skills</span>
-										<input
-											class="input text-white"
-											name="skillIds"
-											value={formatListField(role.skillIds)}
-										/>
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Tools</span>
-										<input
-											class="input text-white"
-											name="toolIds"
-											value={formatListField(role.toolIds)}
-										/>
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">MCPs</span>
-										<input
-											class="input text-white"
-											name="mcpIds"
-											value={formatListField(role.mcpIds)}
-										/>
-									</label>
-								</div>
-
-								<div class="grid gap-4 lg:grid-cols-2">
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">
-											System prompt
-										</span>
-										<textarea class="textarea min-h-32 text-white" name="systemPrompt"
-											>{role.systemPrompt ?? ''}</textarea
-										>
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">
-											Quality checklist
-										</span>
-										<textarea class="textarea min-h-32 text-white" name="qualityChecklist"
-											>{formatListField(role.qualityChecklist)}</textarea
-										>
-									</label>
-								</div>
-
-								<div class="grid gap-4 lg:grid-cols-2">
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">
-											Approval policy
-										</span>
-										<textarea class="textarea min-h-28 text-white" name="approvalPolicy"
-											>{role.approvalPolicy ?? ''}</textarea
-										>
-									</label>
-
-									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">
-											Escalation policy
-										</span>
-										<textarea class="textarea min-h-28 text-white" name="escalationPolicy"
-											>{role.escalationPolicy ?? ''}</textarea
-										>
-									</label>
-								</div>
-
-								<div class="flex flex-wrap gap-3">
-									<AppButton type="submit" variant="primary">Save role</AppButton>
-								</div>
-							</form>
+							<Progress
+								max={maxExecutionSurfaceCount}
+								value={selectedRole.executionSurfaceCount}
+								class="mt-3 space-y-2"
+							>
+								<Progress.Track class="h-2 overflow-hidden rounded-full bg-slate-800">
+									<Progress.Range class="h-full rounded-full bg-sky-400" />
+								</Progress.Track>
+								<Progress.ValueText class="text-xs text-slate-500">
+									{selectedRole.executionSurfaceCount} of {maxExecutionSurfaceCount} currently registered
+								</Progress.ValueText>
+							</Progress>
 						</div>
-					</Accordion.ItemContent>
-				</Accordion.Item>
-			{/each}
-		</Accordion>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<div class="flex items-center justify-between gap-3">
+								<p class="text-sm font-medium text-slate-200">Task demand</p>
+								<p class="text-sm text-slate-400">{selectedRole.taskCount} tasks</p>
+							</div>
+							<Progress max={maxTaskCount} value={selectedRole.taskCount} class="mt-3 space-y-2">
+								<Progress.Track class="h-2 overflow-hidden rounded-full bg-slate-800">
+									<Progress.Range class="h-full rounded-full bg-fuchsia-400" />
+								</Progress.Track>
+								<Progress.ValueText class="text-xs text-slate-500">
+									{selectedRole.taskCount} of {maxTaskCount} queued against this role
+								</Progress.ValueText>
+							</Progress>
+						</div>
+					</div>
+
+					<div class="grid gap-4 md:grid-cols-3">
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Skills</p>
+							<p class="mt-2 text-sm text-white">{selectedRole.skillIds?.length ?? 0}</p>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Tools</p>
+							<p class="mt-2 text-sm text-white">{selectedRole.toolIds?.length ?? 0}</p>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">MCPs</p>
+							<p class="mt-2 text-sm text-white">{selectedRole.mcpIds?.length ?? 0}</p>
+						</div>
+					</div>
+
+					<form class="space-y-4" method="POST" action="?/updateRole">
+						<input type="hidden" name="roleId" value={selectedRole.id} />
+
+						<div class="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,200px)_minmax(0,1fr)]">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
+								<input class="input text-white" name="name" required value={selectedRole.name} />
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Area</span>
+								<select class="select text-white" name="area">
+									{#each data.roleAreaOptions as area (area)}
+										<option selected={selectedRole.area === area} value={area}>
+											{formatAreaLabel(area)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
+								<input
+									class="input text-white"
+									name="description"
+									required
+									value={selectedRole.description}
+								/>
+							</label>
+						</div>
+
+						<div class="grid gap-4 lg:grid-cols-3">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Skills</span>
+								<input
+									class="input text-white"
+									name="skillIds"
+									value={formatListField(selectedRole.skillIds)}
+								/>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Tools</span>
+								<input
+									class="input text-white"
+									name="toolIds"
+									value={formatListField(selectedRole.toolIds)}
+								/>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">MCPs</span>
+								<input
+									class="input text-white"
+									name="mcpIds"
+									value={formatListField(selectedRole.mcpIds)}
+								/>
+							</label>
+						</div>
+
+						<div class="grid gap-4 lg:grid-cols-2">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">System prompt</span>
+								<textarea class="textarea min-h-32 text-white" name="systemPrompt"
+									>{selectedRole.systemPrompt ?? ''}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Quality checklist
+								</span>
+								<textarea class="textarea min-h-32 text-white" name="qualityChecklist"
+									>{formatListField(selectedRole.qualityChecklist)}</textarea
+								>
+							</label>
+						</div>
+
+						<div class="grid gap-4 lg:grid-cols-2">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Approval policy</span>
+								<textarea class="textarea min-h-28 text-white" name="approvalPolicy"
+									>{selectedRole.approvalPolicy ?? ''}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Escalation policy
+								</span>
+								<textarea class="textarea min-h-28 text-white" name="escalationPolicy"
+									>{selectedRole.escalationPolicy ?? ''}</textarea
+								>
+							</label>
+						</div>
+
+						<div class="flex flex-wrap gap-3">
+							<AppButton type="submit" variant="primary">Save role</AppButton>
+						</div>
+					</form>
+				</div>
+			{/if}
+		</div>
 	</section>
 </AppPage>

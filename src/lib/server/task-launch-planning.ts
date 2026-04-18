@@ -500,8 +500,8 @@ export async function launchTaskFromPlan(
 ): Promise<{ threadId: string | null }> {
 	let agentThreadId =
 		plan.compatibleAssignedThread?.id ?? plan.compatibleLatestRunThread?.id ?? null;
-	let agentThreadRunId: string | null = null;
-	let codexThreadId!: string | null;
+	let agentThreadRunId: string | null;
+	let codexThreadId: string | null;
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 	if (plan.compatibleAssignedThread?.canResume) {

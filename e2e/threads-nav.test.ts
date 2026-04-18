@@ -6,7 +6,7 @@ async function unlockOperatorApp(page: import('@playwright/test').Page) {
 }
 
 test('sidebar threads link opens the threads index', async ({ page }) => {
-	await page.goto('/app/home');
+	await page.goto('/app/tasks');
 
 	await unlockOperatorApp(page);
 

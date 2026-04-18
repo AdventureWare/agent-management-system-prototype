@@ -318,27 +318,17 @@ function buildBacklogItem(input: {
 		reasons.push('Risk: no matching execution surface can run this yet.');
 	}
 
-	let bucket: PlanningBacklogBucketId = 'later';
-
-	if (isBlocked || lacksExecutableSurface) {
-		bucket = 'later';
-	} else if (
-		task.status === 'in_progress' ||
-		task.status === 'review' ||
-		(targetDate !== null && targetDate <= dueSoonCutoff) ||
-		score >= 15
-	) {
-		bucket = 'now';
-	} else if (
-		score >= 7 ||
-		targetDate !== null ||
-		task.priority !== 'low' ||
-		dependentTaskCount > 0
-	) {
-		bucket = 'next';
-	} else {
-		bucket = 'later';
-	}
+	const bucket: PlanningBacklogBucketId =
+		isBlocked || lacksExecutableSurface
+			? 'later'
+			: task.status === 'in_progress' ||
+				  task.status === 'review' ||
+				  (targetDate !== null && targetDate <= dueSoonCutoff) ||
+				  score >= 15
+				? 'now'
+				: score >= 7 || targetDate !== null || task.priority !== 'low' || dependentTaskCount > 0
+					? 'next'
+					: 'later';
 
 	if (bucket === 'next' && reasons.every((reason) => !reason.startsWith('Deferral:'))) {
 		reasons.push('Deferral: important, but it follows the current now commitments.');
