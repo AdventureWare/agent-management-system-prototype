@@ -1,12 +1,5 @@
-import type { PageServerLoad } from './$types';
-import { loadControlPlane, summarizeControlPlane } from '$lib/server/control-plane';
+import { redirect } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async () => {
-	const data = await loadControlPlane();
-
-	return {
-		summary: summarizeControlPlane(data),
-		goals: data.goals.slice(0, 3),
-		tasks: data.tasks.slice(0, 5)
-	};
+export const load = async () => {
+	redirect(307, '/app/tasks');
 };
