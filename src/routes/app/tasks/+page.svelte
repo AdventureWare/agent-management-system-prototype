@@ -67,6 +67,7 @@
 		detailId: string;
 	};
 	type TaskLayoutMode = 'mobile' | 'desktop';
+	type CreateTaskFlowMode = 'quick' | 'full';
 
 	let query = $state('');
 	let selectedStatus = $state('all');
@@ -79,6 +80,7 @@
 	let createTaskAttachmentInput = $state<HTMLInputElement | null>(null);
 	let createTaskDraftReady = $state(false);
 	let createTaskAdvancedOpen = $state(false);
+	let createTaskFlowMode = $state<CreateTaskFlowMode>('quick');
 	let isSaveTaskTemplateDialogOpen = $state(false);
 	let taskDetailPanelCache = $state.raw<Record<string, TaskDetailPageData>>({});
 	let taskDetailPanelData = $state.raw<TaskDetailPageData | null>(null);
@@ -867,11 +869,7 @@
 	let selectedCreateTaskTemplate = $derived(
 		data.taskTemplates.find((taskTemplate) => taskTemplate.id === createTaskTemplateId) ?? null
 	);
-	let availableCreateTaskWorkflows = $derived(
-		data.workflows.filter(
-			(workflow) => !createTaskProjectId || workflow.projectId === createTaskProjectId
-		)
-	);
+	let availableCreateTaskWorkflows = $derived(data.workflows);
 	let selectedCreateWorkflow = $derived(
 		data.workflows.find((workflow) => workflow.id === createTaskWorkflowId) ?? null
 	);
@@ -897,6 +895,14 @@
 	);
 	let createTaskSelectedRole = $derived(
 		data.roles.find((role) => role.id === createTaskDesiredRoleId) ?? null
+	);
+	let createTaskSelectedGoal = $derived(
+		data.goals.find((goal) => goal.id === createTaskGoalId) ?? null
+	);
+	let createTaskSelectedExecutionSurface = $derived(
+		data.executionSurfaces.find(
+			(executionSurface) => executionSurface.id === createTaskAssigneeExecutionSurfaceId
+		) ?? null
 	);
 	let createTaskUnknownCapabilityNames = $derived(
 		findUnknownExecutionRequirementNames(
@@ -992,6 +998,61 @@
 	let createTaskReviewContractGap = $derived(
 		getTaskReviewContractGapMessage(createTaskExecutionContract)
 	);
+	let createTaskFullFlowSummary = $derived.by(() => {
+		const parts: string[] = [];
+
+		if (selectedCreateTaskTemplate) {
+			parts.push(`Template ${selectedCreateTaskTemplate.name}`);
+		}
+
+		if (createTaskSelectedGoal) {
+			parts.push(`Goal ${createTaskSelectedGoal.label}`);
+		}
+
+		if (selectedCreateWorkflow) {
+			parts.push(`Workflow ${selectedCreateWorkflow.name}`);
+		}
+
+		if (createTaskTargetDate) {
+			parts.push(`Target ${formatDateLabel(createTaskTargetDate)}`);
+		}
+
+		if (createTaskSelectedExecutionSurface) {
+			parts.push(`Assigned to ${createTaskSelectedExecutionSurface.name}`);
+		}
+
+		if (createTaskRequiredPromptSkillNames.trim()) {
+			parts.push('Prompt skills requested');
+		}
+
+		if (createTaskRequiredCapabilityNames.trim()) {
+			parts.push('Capabilities set');
+		}
+
+		if (createTaskRequiredToolNames.trim()) {
+			parts.push('Tools set');
+		}
+
+		if (
+			shouldOpenCreateTaskAdvancedIntake({
+				successCriteria: createTaskSuccessCriteria,
+				readyCondition: createTaskReadyCondition,
+				expectedOutcome: createTaskExpectedOutcome,
+				priority: createTaskPriority,
+				riskLevel: createTaskRiskLevel,
+				approvalMode: createTaskApprovalMode,
+				requiredThreadSandbox: createTaskRequiredThreadSandbox,
+				requiresReview: createTaskRequiresReview,
+				desiredRoleId: createTaskDesiredRoleId,
+				blockedReason: createTaskBlockedReason,
+				dependencyTaskIds: createTaskDependencyTaskIds
+			})
+		) {
+			parts.push('Routing and governance configured');
+		}
+
+		return parts.join(' · ');
+	});
 
 	function shouldOpenCreateTaskAdvancedIntake(input: {
 		successCriteria?: string;
@@ -1027,6 +1088,46 @@
 		createTaskAdvancedOpen = shouldOpenCreateTaskAdvancedIntake(input);
 	}
 
+	function shouldUseFullCreateFlow(input: {
+		parentTaskId?: string;
+		taskTemplateId?: string;
+		goalId?: string;
+		workflowId?: string;
+		assigneeExecutionSurfaceId?: string;
+		targetDate?: string;
+		requiredPromptSkillNames?: string;
+		requiredCapabilityNames?: string;
+		requiredToolNames?: string;
+		successCriteria?: string;
+		readyCondition?: string;
+		expectedOutcome?: string;
+		priority?: string;
+		riskLevel?: string;
+		approvalMode?: string;
+		requiredThreadSandbox?: string;
+		requiresReview?: boolean;
+		desiredRoleId?: string;
+		blockedReason?: string;
+		dependencyTaskIds?: string[];
+	}) {
+		return (
+			Boolean(input.parentTaskId?.trim()) ||
+			Boolean(input.taskTemplateId?.trim()) ||
+			Boolean(input.goalId?.trim()) ||
+			Boolean(input.workflowId?.trim()) ||
+			Boolean(input.assigneeExecutionSurfaceId?.trim()) ||
+			Boolean(input.targetDate?.trim()) ||
+			Boolean(input.requiredPromptSkillNames?.trim()) ||
+			Boolean(input.requiredCapabilityNames?.trim()) ||
+			Boolean(input.requiredToolNames?.trim()) ||
+			shouldOpenCreateTaskAdvancedIntake(input)
+		);
+	}
+
+	function syncCreateTaskFlowMode(input: Parameters<typeof shouldUseFullCreateFlow>[0]) {
+		createTaskFlowMode = shouldUseFullCreateFlow(input) ? 'full' : 'quick';
+	}
+
 	function applyCreateTaskTemplateById(taskTemplateId: string) {
 		const taskTemplate =
 			data.taskTemplates.find((candidateTemplate) => candidateTemplate.id === taskTemplateId) ??
@@ -1057,6 +1158,7 @@
 		createTaskRequiredPromptSkillNames = taskTemplate.requiredPromptSkillNames.join(', ');
 		createTaskRequiredCapabilityNames = taskTemplate.requiredCapabilityNames.join(', ');
 		createTaskRequiredToolNames = taskTemplate.requiredToolNames.join(', ');
+		createTaskFlowMode = 'full';
 		syncCreateTaskAdvancedOpen({
 			successCriteria: taskTemplate.successCriteria,
 			readyCondition: taskTemplate.readyCondition,
@@ -1201,6 +1303,27 @@
 			blockedReason: createTaskBlockedReason,
 			dependencyTaskIds: createTaskDependencyTaskIds
 		});
+		syncCreateTaskFlowMode({
+			parentTaskId: createTaskParentTaskId,
+			goalId: createTaskGoalId,
+			workflowId: createTaskWorkflowId,
+			assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
+			targetDate: createTaskTargetDate,
+			requiredPromptSkillNames: createTaskRequiredPromptSkillNames,
+			requiredCapabilityNames: createTaskRequiredCapabilityNames,
+			requiredToolNames: createTaskRequiredToolNames,
+			successCriteria: createTaskSuccessCriteria,
+			readyCondition: createTaskReadyCondition,
+			expectedOutcome: createTaskExpectedOutcome,
+			priority: createTaskPriority,
+			riskLevel: createTaskRiskLevel,
+			approvalMode: createTaskApprovalMode,
+			requiredThreadSandbox: createTaskRequiredThreadSandbox,
+			requiresReview: createTaskRequiresReview,
+			desiredRoleId: createTaskDesiredRoleId,
+			blockedReason: createTaskBlockedReason,
+			dependencyTaskIds: createTaskDependencyTaskIds
+		});
 	}
 
 	function resetCreateTaskMetadata() {
@@ -1226,7 +1349,10 @@
 		createTaskBlockedReason = '';
 		createTaskDependencyTaskIds = [];
 		createTaskRequiredPromptSkillNames = '';
+		createTaskRequiredCapabilityNames = '';
+		createTaskRequiredToolNames = '';
 		createTaskAdvancedOpen = false;
+		createTaskFlowMode = 'quick';
 	}
 
 	$effect(() => {
@@ -1262,6 +1388,7 @@
 			createTaskRequiredCapabilityNames = createTaskFormValues.requiredCapabilityNames;
 			createTaskRequiredToolNames = createTaskFormValues.requiredToolNames;
 			syncCreateTaskAdvancedOpen(createTaskFormValues);
+			syncCreateTaskFlowMode(createTaskFormValues);
 			return;
 		}
 
@@ -1397,6 +1524,28 @@
 			createTaskRequiredCapabilityNames = savedDraft.requiredCapabilityNames ?? '';
 			createTaskRequiredToolNames = savedDraft.requiredToolNames ?? '';
 			syncCreateTaskAdvancedOpen({
+				successCriteria: createTaskSuccessCriteria,
+				readyCondition: createTaskReadyCondition,
+				expectedOutcome: createTaskExpectedOutcome,
+				priority: createTaskPriority,
+				riskLevel: createTaskRiskLevel,
+				approvalMode: createTaskApprovalMode,
+				requiredThreadSandbox: createTaskRequiredThreadSandbox,
+				requiresReview: createTaskRequiresReview,
+				desiredRoleId: createTaskDesiredRoleId,
+				blockedReason: createTaskBlockedReason,
+				dependencyTaskIds: createTaskDependencyTaskIds
+			});
+			syncCreateTaskFlowMode({
+				parentTaskId: createTaskParentTaskId,
+				taskTemplateId: createTaskTemplateId,
+				goalId: createTaskGoalId,
+				workflowId: createTaskWorkflowId,
+				assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
+				targetDate: createTaskTargetDate,
+				requiredPromptSkillNames: createTaskRequiredPromptSkillNames,
+				requiredCapabilityNames: createTaskRequiredCapabilityNames,
+				requiredToolNames: createTaskRequiredToolNames,
 				successCriteria: createTaskSuccessCriteria,
 				readyCondition: createTaskReadyCondition,
 				expectedOutcome: createTaskExpectedOutcome,
@@ -2444,6 +2593,106 @@
 				>
 					<input type="hidden" name="parentTaskId" value={createTaskParentTaskId} />
 					<div class="min-w-0 space-y-4">
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+								Create mode
+							</p>
+							<div class="mt-3 grid gap-3 sm:grid-cols-2">
+								<button
+									aria-pressed={createTaskFlowMode === 'quick'}
+									class={[
+										'rounded-2xl border px-4 py-4 text-left transition',
+										createTaskFlowMode === 'quick'
+											? 'border-sky-500/60 bg-sky-500/10 text-white'
+											: 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:text-white'
+									]}
+									type="button"
+									onclick={() => {
+										createTaskFlowMode = 'quick';
+									}}
+								>
+									<span class="block text-sm font-medium">Quick task</span>
+									<span class="mt-2 block text-sm text-slate-400">
+										Just the essentials: project, task name, instructions, and any files that need
+										to travel with the work.
+									</span>
+								</button>
+								<button
+									aria-pressed={createTaskFlowMode === 'full'}
+									class={[
+										'rounded-2xl border px-4 py-4 text-left transition',
+										createTaskFlowMode === 'full'
+											? 'border-sky-500/60 bg-sky-500/10 text-white'
+											: 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:text-white'
+									]}
+									type="button"
+									onclick={() => {
+										createTaskFlowMode = 'full';
+									}}
+								>
+									<span class="block text-sm font-medium">Full task</span>
+									<span class="mt-2 block text-sm text-slate-400">
+										Add workflow, routing, approvals, execution requirements, and coordination
+										details before creating the task.
+									</span>
+								</button>
+							</div>
+							{#if createTaskFlowMode === 'quick'}
+								<p class="mt-3 text-sm text-slate-400">
+									Quick task keeps intake low-noise. Switch to Full task when this work needs
+									workflow, assignment, review, or execution setup.
+								</p>
+								{#if createTaskFullFlowSummary}
+									<p
+										class="mt-3 rounded-2xl border border-sky-900/40 bg-sky-950/15 px-4 py-3 text-sm text-sky-100"
+									>
+										Full-task settings retained: {createTaskFullFlowSummary}
+									</p>
+								{/if}
+								<input type="hidden" name="goalId" value={createTaskGoalId} />
+								<input type="hidden" name="workflowId" value={createTaskWorkflowId} />
+								<input
+									type="hidden"
+									name="assigneeExecutionSurfaceId"
+									value={createTaskAssigneeExecutionSurfaceId}
+								/>
+								<input type="hidden" name="targetDate" value={createTaskTargetDate} />
+								<input type="hidden" name="area" value={createTaskArea} />
+								<input type="hidden" name="priority" value={createTaskPriority} />
+								<input type="hidden" name="riskLevel" value={createTaskRiskLevel} />
+								<input type="hidden" name="approvalMode" value={createTaskApprovalMode} />
+								<input
+									type="hidden"
+									name="requiredThreadSandbox"
+									value={createTaskRequiredThreadSandbox}
+								/>
+								<input
+									type="hidden"
+									name="requiresReview"
+									value={createTaskRequiresReview ? 'true' : 'false'}
+								/>
+								<input type="hidden" name="desiredRoleId" value={createTaskDesiredRoleId} />
+								<input type="hidden" name="blockedReason" value={createTaskBlockedReason} />
+								<input
+									type="hidden"
+									name="requiredPromptSkillNames"
+									value={createTaskRequiredPromptSkillNames}
+								/>
+								<input
+									type="hidden"
+									name="requiredCapabilityNames"
+									value={createTaskRequiredCapabilityNames}
+								/>
+								<input type="hidden" name="requiredToolNames" value={createTaskRequiredToolNames} />
+								<input type="hidden" name="successCriteria" value={createTaskSuccessCriteria} />
+								<input type="hidden" name="readyCondition" value={createTaskReadyCondition} />
+								<input type="hidden" name="expectedOutcome" value={createTaskExpectedOutcome} />
+								{#each createTaskDependencyTaskIds as dependencyTaskId (dependencyTaskId)}
+									<input type="hidden" name="dependencyTaskIds" value={dependencyTaskId} />
+								{/each}
+							{/if}
+						</div>
+
 						{#if createTaskParentTaskId}
 							<div class="rounded-2xl border border-sky-900/60 bg-sky-950/20 p-4">
 								<p class="text-xs font-semibold tracking-[0.16em] text-sky-300 uppercase">
@@ -2534,95 +2783,101 @@
 							</div>
 						{/if}
 
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-							<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-								<label class="block">
-									<span class="mb-2 block text-sm font-medium text-slate-200">
-										Use task template
-									</span>
-									<select
-										bind:value={createTaskTemplateId}
-										class="select text-white"
-										name="taskTemplateSelection"
-										onchange={(event) => {
-											applyCreateTaskTemplateById((event.currentTarget as HTMLSelectElement).value);
-										}}
-									>
-										<option value="">No task template</option>
-										{#each availableTaskTemplates as taskTemplate (taskTemplate.id)}
-											<option value={taskTemplate.id}>
-												{taskTemplate.name} · {taskTemplate.projectName}
-											</option>
-										{/each}
-									</select>
-									<span class="mt-2 block text-xs text-slate-500">
-										Optional. Task templates prefill repeated task defaults like project, goal,
-										role, workflow, instructions, review settings, and execution requirements.
-									</span>
-									{#if data.taskTemplates.length === 0}
-										<span class="mt-2 block text-xs text-slate-500">
-											No task templates are saved yet.
+						{#if createTaskFlowMode === 'full'}
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Use task template
 										</span>
-									{/if}
-								</label>
-
-								<button
-									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
-									type="button"
-									onclick={openSaveTaskTemplateDialogForCreate}
-								>
-									Save current as template
-								</button>
-							</div>
-
-							{#if selectedCreateTaskTemplate}
-								<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-									<div class="flex flex-wrap items-center gap-2">
-										<p class="text-sm font-medium text-white">{selectedCreateTaskTemplate.name}</p>
-										<span
-											class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[11px] text-slate-300 uppercase"
+										<select
+											bind:value={createTaskTemplateId}
+											class="select text-white"
+											name="taskTemplateSelection"
+											onchange={(event) => {
+												applyCreateTaskTemplateById(
+													(event.currentTarget as HTMLSelectElement).value
+												);
+											}}
 										>
-											{selectedCreateTaskTemplate.projectName}
+											<option value="">No task template</option>
+											{#each availableTaskTemplates as taskTemplate (taskTemplate.id)}
+												<option value={taskTemplate.id}>
+													{taskTemplate.name} · {taskTemplate.projectName}
+												</option>
+											{/each}
+										</select>
+										<span class="mt-2 block text-xs text-slate-500">
+											Optional. Task templates prefill repeated task defaults like project, goal,
+											role, workflow, instructions, review settings, and execution requirements.
 										</span>
-										{#if selectedCreateTaskTemplate.workflowId}
-											<span
-												class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
-											>
-												Workflow linked
+										{#if data.taskTemplates.length === 0}
+											<span class="mt-2 block text-xs text-slate-500">
+												No task templates are saved yet.
 											</span>
 										{/if}
-									</div>
-									{#if selectedCreateTaskTemplate.summary}
-										<p class="mt-2 text-sm text-slate-300">
-											{selectedCreateTaskTemplate.summary}
-										</p>
-									{/if}
-									<p class="mt-2 text-xs text-slate-400">
-										Applying a task template fills the form once. You can still edit any field
-										before creating the task.
-									</p>
-									<p class="mt-3 text-xs text-slate-500">
-										Manage template details in the task template library.
-										<a
-											class="ml-1 font-medium text-sky-300 underline"
-											href={resolve('/app/task-templates')}
-										>
-											Open library
-										</a>
-									</p>
+									</label>
+
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+										type="button"
+										onclick={openSaveTaskTemplateDialogForCreate}
+									>
+										Save current as template
+									</button>
 								</div>
-							{/if}
 
-							{#if saveTaskTemplateSuccess}
-								<p
-									class="mt-4 rounded-2xl border border-emerald-900/70 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
-								>
-									Saved task template {form?.taskTemplateName?.toString() ?? 'template'}.
-								</p>
-							{/if}
-						</div>
+								{#if selectedCreateTaskTemplate}
+									<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+										<div class="flex flex-wrap items-center gap-2">
+											<p class="text-sm font-medium text-white">
+												{selectedCreateTaskTemplate.name}
+											</p>
+											<span
+												class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[11px] text-slate-300 uppercase"
+											>
+												{selectedCreateTaskTemplate.projectName}
+											</span>
+											{#if selectedCreateTaskTemplate.workflowId}
+												<span
+													class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
+												>
+													Workflow linked
+												</span>
+											{/if}
+										</div>
+										{#if selectedCreateTaskTemplate.summary}
+											<p class="mt-2 text-sm text-slate-300">
+												{selectedCreateTaskTemplate.summary}
+											</p>
+										{/if}
+										<p class="mt-2 text-xs text-slate-400">
+											Applying a task template fills the form once. You can still edit any field
+											before creating the task.
+										</p>
+										<p class="mt-3 text-xs text-slate-500">
+											Manage template details in the task template library.
+											<a
+												class="ml-1 font-medium text-sky-300 underline"
+												href={resolve('/app/task-templates')}
+											>
+												Open library
+											</a>
+										</p>
+									</div>
+								{/if}
 
-						<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+								{#if saveTaskTemplateSuccess}
+									<p
+										class="mt-4 rounded-2xl border border-emerald-900/70 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
+									>
+										Saved task template {form?.taskTemplateName?.toString() ?? 'template'}.
+									</p>
+								{/if}
+							</div>
+						{/if}
+
+						<div class="grid gap-4 md:grid-cols-2">
 							<label class="block">
 								<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
 								<select
@@ -2648,643 +2903,677 @@
 									required
 								/>
 							</label>
-
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Goal</span>
-								<select bind:value={createTaskGoalId} class="select text-white" name="goalId">
-									<option value="">No goal linked</option>
-									{#each data.goals as goal (goal.id)}
-										<option value={goal.id}>{goal.label}</option>
-									{/each}
-								</select>
-								<span class="mt-2 block text-xs text-slate-500">
-									Optional. Link the task to the outcome it advances.
-								</span>
-							</label>
-
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200"> Apply workflow </span>
-								<select
-									bind:value={createTaskWorkflowId}
-									class="select text-white"
-									disabled={Boolean(createTaskParentTaskId)}
-									name="workflowId"
-								>
-									<option value="">No workflow</option>
-									{#each availableCreateTaskWorkflows as workflow (workflow.id)}
-										<option value={workflow.id}>{workflow.name}</option>
-									{/each}
-								</select>
-								<span class="mt-2 block text-xs text-slate-500">
-									Optional. Choose a workflow template when this new task should expand into a
-									parent task plus the standard child tasks for that kind of work.
-								</span>
-								{#if createTaskParentTaskId}
-									<span class="mt-2 block text-xs text-slate-500">
-										Delegated child tasks cannot apply workflow templates.
-									</span>
-								{:else if createTaskProjectId && availableCreateTaskWorkflows.length === 0}
-									<span class="mt-2 block text-xs text-slate-500">
-										No workflows are linked to the selected project yet.
-									</span>
-								{/if}
-							</label>
-
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Target date</span>
-								<input
-									class="input text-white"
-									bind:value={createTaskTargetDate}
-									name="targetDate"
-									type="date"
-								/>
-							</label>
 						</div>
 
-						{#if selectedCreateWorkflow}
-							<div class="rounded-2xl border border-sky-900/40 bg-sky-950/15 p-4">
-								<div class="flex flex-wrap items-center gap-2">
-									<p class="text-sm font-medium text-white">{selectedCreateWorkflow.name}</p>
-									<span
-										class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
-									>
-										{selectedCreateWorkflow.stepCount} step{selectedCreateWorkflow.stepCount === 1
-											? ''
-											: 's'}
-									</span>
+						{#if createTaskFlowMode === 'full'}
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div>
+										<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+											Planning and routing
+										</p>
+										<p class="mt-2 text-sm text-slate-400">
+											Connect this task to broader work, timing, and where it should launch.
+										</p>
+									</div>
+									{#if createTaskFullFlowSummary}
+										<p class="max-w-xl text-sm text-slate-400">{createTaskFullFlowSummary}</p>
+									{/if}
 								</div>
-								<p class="mt-2 text-sm text-slate-300">
-									Selecting a workflow turns this into a parent task plus generated child tasks. The
-									child tasks carry the actual execution sequence, roles, and internal dependencies.
+								<div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Goal</span>
+										<select bind:value={createTaskGoalId} class="select text-white" name="goalId">
+											<option value="">No goal linked</option>
+											{#each data.goals as goal (goal.id)}
+												<option value={goal.id}>{goal.label}</option>
+											{/each}
+										</select>
+										<span class="mt-2 block text-xs text-slate-500">
+											Optional. Link the task to the outcome it advances.
+										</span>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Apply workflow
+										</span>
+										<select
+											bind:value={createTaskWorkflowId}
+											class="select text-white"
+											disabled={Boolean(createTaskParentTaskId)}
+											name="workflowId"
+										>
+											<option value="">No workflow</option>
+											{#each availableCreateTaskWorkflows as workflow (workflow.id)}
+												<option value={workflow.id}>{workflow.name}</option>
+											{/each}
+										</select>
+										<span class="mt-2 block text-xs text-slate-500">
+											Optional. Expand this into a parent task plus standard child tasks for that
+											flow.
+										</span>
+										{#if createTaskParentTaskId}
+											<span class="mt-2 block text-xs text-slate-500">
+												Delegated child tasks cannot apply workflow templates.
+											</span>
+										{:else if availableCreateTaskWorkflows.length === 0}
+											<span class="mt-2 block text-xs text-slate-500">
+												No workflows are available yet.
+											</span>
+										{/if}
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Target date</span>
+										<input
+											class="input text-white"
+											bind:value={createTaskTargetDate}
+											name="targetDate"
+											type="date"
+										/>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											Assign to execution surface
+										</span>
+										<select
+											bind:value={createTaskAssigneeExecutionSurfaceId}
+											class="select text-white"
+											name="assigneeExecutionSurfaceId"
+										>
+											<option value="">Leave unassigned</option>
+											{#each data.executionSurfaces as executionSurface (executionSurface.id)}
+												<option value={executionSurface.id}>{executionSurface.name}</option>
+											{/each}
+										</select>
+									</label>
+								</div>
+							</div>
+
+							{#if selectedCreateWorkflow}
+								<div class="rounded-2xl border border-sky-900/40 bg-sky-950/15 p-4">
+									<div class="flex flex-wrap items-center gap-2">
+										<p class="text-sm font-medium text-white">{selectedCreateWorkflow.name}</p>
+										<span
+											class="rounded-full border border-sky-800/60 bg-slate-950/80 px-2 py-1 text-[11px] text-sky-200 uppercase"
+										>
+											{selectedCreateWorkflow.stepCount} step{selectedCreateWorkflow.stepCount === 1
+												? ''
+												: 's'}
+										</span>
+									</div>
+									<p class="mt-2 text-sm text-slate-300">
+										Selecting a workflow turns this into a parent task plus generated child tasks.
+										The child tasks carry the actual execution sequence, roles, and internal
+										dependencies.
+									</p>
+									{#if createTaskProjectId && selectedCreateWorkflow.projectId !== createTaskProjectId}
+										<p class="mt-2 text-xs text-slate-400">
+											This workflow belongs to {selectedCreateWorkflow.projectName}, but the created
+											tasks will stay linked to the selected project.
+										</p>
+									{/if}
+									<p class="mt-2 text-xs text-slate-400">
+										The parent task stays as the umbrella for the work and will complete when the
+										generated child tasks are complete.
+									</p>
+								</div>
+							{/if}
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+									Skill coverage
 								</p>
-								<p class="mt-2 text-xs text-slate-400">
-									The parent task stays as the umbrella for the work and will complete when the
-									generated child tasks are complete.
-								</p>
+								{#if selectedProjectSkillSummary}
+									<p class="mt-2 text-sm text-white">
+										{selectedProjectSkillSummary.totalCount === 0
+											? 'No installed Codex skills were found for this project workspace yet.'
+											: `${selectedProjectSkillSummary.totalCount} installed skill${selectedProjectSkillSummary.totalCount === 1 ? '' : 's'} will be available when this task launches.`}
+									</p>
+									<p class="mt-2 text-sm text-slate-400">
+										{selectedProjectSkillSummary.projectCount} project-local ·
+										{selectedProjectSkillSummary.globalCount} global
+									</p>
+									{#if selectedProjectSkillSummary.previewSkills.length > 0}
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#each selectedProjectSkillSummary.previewSkills as skill (skill.id)}
+												<span
+													class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-xs text-slate-200"
+													title={skill.description || undefined}
+												>
+													{skill.id}
+													<span class="text-slate-500"> · {skill.sourceLabel}</span>
+												</span>
+											{/each}
+										</div>
+									{/if}
+								{:else}
+									<p class="mt-2 text-sm text-slate-400">
+										Select a project to preview the skills available to its future task threads.
+									</p>
+								{/if}
 							</div>
 						{/if}
 
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-							<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
-								Skill coverage
-							</p>
-							{#if selectedProjectSkillSummary}
-								<p class="mt-2 text-sm text-white">
-									{selectedProjectSkillSummary.totalCount === 0
-										? 'No installed Codex skills were found for this project workspace yet.'
-										: `${selectedProjectSkillSummary.totalCount} installed skill${selectedProjectSkillSummary.totalCount === 1 ? '' : 's'} will be available when this task launches.`}
-								</p>
-								<p class="mt-2 text-sm text-slate-400">
-									{selectedProjectSkillSummary.projectCount} project-local ·
-									{selectedProjectSkillSummary.globalCount} global
-								</p>
-								{#if selectedProjectSkillSummary.previewSkills.length > 0}
+						{#if createTaskFlowMode === 'full'}
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Requested prompt skills
+								</span>
+								<input
+									bind:value={createTaskRequiredPromptSkillNames}
+									class="input text-white placeholder:text-slate-500"
+									name="requiredPromptSkillNames"
+									placeholder="frontend-sveltekit, docs-writer"
+									list="task-create-prompt-skill-inventory"
+								/>
+								<span class="mt-2 block text-xs text-slate-500">
+									Comma-separated installed Codex skills this task should explicitly request in its
+									first thread prompt.
+								</span>
+								{#if !selectedProjectSkillSummary}
+									<span class="mt-2 block text-xs text-slate-500">
+										Select a project first to validate against its installed skill inventory.
+									</span>
+								{:else if selectedProjectInstalledSkillNames.length === 0}
+									<span class="mt-2 block text-xs text-slate-500">
+										This project does not currently expose any installed prompt skills.
+									</span>
+								{:else}
 									<div class="mt-3 flex flex-wrap gap-2">
-										{#each selectedProjectSkillSummary.previewSkills as skill (skill.id)}
-											<span
-												class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-xs text-slate-200"
-												title={skill.description || undefined}
+										{#each selectedProjectSkillSummary.installedSkills as skill (skill.id)}
+											<button
+												type="button"
+												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+												title={skill.description || skill.sourceLabel}
+												onclick={() => {
+													createTaskRequiredPromptSkillNames = appendExecutionRequirementName(
+														createTaskRequiredPromptSkillNames,
+														skill.id
+													);
+												}}
 											>
 												{skill.id}
-												<span class="text-slate-500"> · {skill.sourceLabel}</span>
-											</span>
+											</button>
 										{/each}
 									</div>
+									<span class="mt-2 block text-xs text-slate-500">
+										Select a known installed skill to append it from the current project workspace.
+									</span>
 								{/if}
-							{:else}
-								<p class="mt-2 text-sm text-slate-400">
-									Select a project to preview the skills available to its future task threads.
-								</p>
-							{/if}
-						</div>
-
-						<label class="block">
-							<span class="mb-2 block text-sm font-medium text-slate-200">
-								Requested prompt skills
-							</span>
-							<input
-								bind:value={createTaskRequiredPromptSkillNames}
-								class="input text-white placeholder:text-slate-500"
-								name="requiredPromptSkillNames"
-								placeholder="frontend-sveltekit, docs-writer"
-								list="task-create-prompt-skill-inventory"
-							/>
-							<span class="mt-2 block text-xs text-slate-500">
-								Comma-separated installed Codex skills this task should explicitly request in its
-								first thread prompt.
-							</span>
-							{#if !selectedProjectSkillSummary}
-								<span class="mt-2 block text-xs text-slate-500">
-									Select a project first to validate against its installed skill inventory.
-								</span>
-							{:else if selectedProjectInstalledSkillNames.length === 0}
-								<span class="mt-2 block text-xs text-slate-500">
-									This project does not currently expose any installed prompt skills.
-								</span>
-							{:else}
-								<div class="mt-3 flex flex-wrap gap-2">
-									{#each selectedProjectSkillSummary.installedSkills as skill (skill.id)}
-										<button
-											type="button"
-											class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
-											title={skill.description || skill.sourceLabel}
-											onclick={() => {
-												createTaskRequiredPromptSkillNames = appendExecutionRequirementName(
-													createTaskRequiredPromptSkillNames,
-													skill.id
-												);
-											}}
-										>
-											{skill.id}
-										</button>
-									{/each}
-								</div>
-								<span class="mt-2 block text-xs text-slate-500">
-									Select a known installed skill to append it from the current project workspace.
-								</span>
-							{/if}
-							{#if selectedProjectInstalledSkillNames.length > 0 && createTaskUnknownPromptSkillNames.length > 0}
-								<span class="mt-2 block text-xs text-amber-300">
-									Not installed in this project workspace: {createTaskUnknownPromptSkillNames.join(
-										', '
-									)}
-								</span>
-							{/if}
-						</label>
-
-						<div class="grid gap-4 md:grid-cols-1">
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">
-									Assign to execution surface
-								</span>
-								<select
-									bind:value={createTaskAssigneeExecutionSurfaceId}
-									class="select text-white"
-									name="assigneeExecutionSurfaceId"
-								>
-									<option value="">Leave unassigned</option>
-									{#each data.executionSurfaces as executionSurface (executionSurface.id)}
-										<option value={executionSurface.id}>{executionSurface.name}</option>
-									{/each}
-								</select>
+								{#if selectedProjectInstalledSkillNames.length > 0 && createTaskUnknownPromptSkillNames.length > 0}
+									<span class="mt-2 block text-xs text-amber-300">
+										Not installed in this project workspace: {createTaskUnknownPromptSkillNames.join(
+											', '
+										)}
+									</span>
+								{/if}
 							</label>
-						</div>
 
-						<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-							<div class="flex flex-wrap items-start justify-between gap-3">
-								<div class="max-w-2xl">
-									<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
-										Advanced intake
-									</p>
-									<p class="mt-2 text-sm text-white">
-										Set routing, approvals, blockers, and dependencies when this task needs more
-										than the default quick-create path.
-									</p>
-									<p class="mt-2 text-sm text-slate-400">{createTaskAdvancedSummary}</p>
-								</div>
-								<button
-									class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
-									type="button"
-									onclick={() => {
-										createTaskAdvancedOpen = !createTaskAdvancedOpen;
-									}}
-								>
-									{createTaskAdvancedOpen ? 'Hide advanced' : 'Show advanced'}
-								</button>
-							</div>
-
-							{#if createTaskAdvancedOpen}
-								<div class="mt-5 space-y-4">
-									<input type="hidden" name="area" value={createTaskArea} />
-
-									<div class="grid gap-4 lg:grid-cols-3">
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Success criteria
-											</span>
-											<textarea
-												bind:value={createTaskSuccessCriteria}
-												class="textarea min-h-28 text-white placeholder:text-slate-500"
-												name="successCriteria"
-												placeholder="Describe how a reviewer should judge this task as complete."
-											></textarea>
-										</label>
-
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Ready condition
-											</span>
-											<textarea
-												bind:value={createTaskReadyCondition}
-												class="textarea min-h-28 text-white placeholder:text-slate-500"
-												name="readyCondition"
-												placeholder="Describe what must already be true before this task should run."
-											></textarea>
-										</label>
-
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Expected outcome
-											</span>
-											<textarea
-												bind:value={createTaskExpectedOutcome}
-												class="textarea min-h-28 text-white placeholder:text-slate-500"
-												name="expectedOutcome"
-												placeholder="Describe the desired end state or deliverable."
-											></textarea>
-										</label>
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div class="max-w-2xl">
+										<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+											Advanced intake
+										</p>
+										<p class="mt-2 text-sm text-white">
+											Set routing, approvals, blockers, and dependencies when this task needs more
+											than the default quick-create path.
+										</p>
+										<p class="mt-2 text-sm text-slate-400">{createTaskAdvancedSummary}</p>
 									</div>
-
-									<div
-										class={`rounded-2xl border p-4 ${createTaskLaunchContractBlocker ? 'border-amber-900/50 bg-amber-950/15' : 'border-emerald-900/40 bg-emerald-950/15'}`}
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+										type="button"
+										onclick={() => {
+											createTaskAdvancedOpen = !createTaskAdvancedOpen;
+										}}
 									>
-										<p
-											class={`text-xs font-semibold tracking-[0.16em] uppercase ${createTaskLaunchContractBlocker ? 'text-amber-300' : 'text-emerald-300'}`}
-										>
-											Execution contract
-										</p>
-										<p
-											class={`mt-2 text-sm ${createTaskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}
-										>
-											{createTaskLaunchContractBlocker ||
-												'Create and run can start immediately once this contract is saved.'}
-										</p>
-										<p class="mt-2 text-sm text-slate-300">
-											{createTaskReviewContractGap ||
-												'Reviewers will have an explicit outcome and acceptance standard for this task.'}
-										</p>
-									</div>
+										{createTaskAdvancedOpen ? 'Hide advanced' : 'Show advanced'}
+									</button>
+								</div>
 
-									<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
-											<select
-												bind:value={createTaskPriority}
-												class="select text-white"
-												name="priority"
-											>
-												{#each PRIORITY_OPTIONS as priority (priority)}
-													<option value={priority}>{formatPriorityLabel(priority)}</option>
-												{/each}
-											</select>
-										</label>
+								{#if createTaskAdvancedOpen}
+									<div class="mt-5 space-y-4">
+										<input type="hidden" name="area" value={createTaskArea} />
 
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span>
-											<select
-												bind:value={createTaskRiskLevel}
-												class="select text-white"
-												name="riskLevel"
-											>
-												{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
-													<option value={riskLevel}>
-														{formatTaskRiskLevelLabel(riskLevel)}
-													</option>
-												{/each}
-											</select>
-										</label>
+										<div class="grid gap-4 lg:grid-cols-3">
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Success criteria
+												</span>
+												<textarea
+													bind:value={createTaskSuccessCriteria}
+													class="textarea min-h-28 text-white placeholder:text-slate-500"
+													name="successCriteria"
+													placeholder="Describe how a reviewer should judge this task as complete."
+												></textarea>
+											</label>
 
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200"
-												>Approval mode</span
-											>
-											<select
-												bind:value={createTaskApprovalMode}
-												class="select text-white"
-												name="approvalMode"
-											>
-												{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
-													<option value={approvalMode}>
-														{formatTaskApprovalModeLabel(approvalMode)}
-													</option>
-												{/each}
-											</select>
-										</label>
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Ready condition
+												</span>
+												<textarea
+													bind:value={createTaskReadyCondition}
+													class="textarea min-h-28 text-white placeholder:text-slate-500"
+													name="readyCondition"
+													placeholder="Describe what must already be true before this task should run."
+												></textarea>
+											</label>
 
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">
-												Required sandbox
-											</span>
-											<select
-												bind:value={createTaskRequiredThreadSandbox}
-												class="select text-white"
-												name="requiredThreadSandbox"
-											>
-												<option value="">Inherit execution-surface and project defaults</option>
-												{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
-													<option value={sandbox}>{formatAgentSandboxLabel(sandbox)}</option>
-												{/each}
-											</select>
-											<span class="mt-2 block text-xs text-slate-500">
-												Use this when the task needs a specific sandbox for its first work thread.
-											</span>
-										</label>
-
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200"
-												>Requires review</span
-											>
-											<select
-												bind:value={createTaskRequiresReview}
-												class="select text-white"
-												name="requiresReview"
-											>
-												<option value={true}>Yes</option>
-												<option value={false}>No</option>
-											</select>
-										</label>
-									</div>
-
-									<div class="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span
-											>
-											<select
-												bind:value={createTaskDesiredRoleId}
-												class="select text-white"
-												name="desiredRoleId"
-											>
-												<option value="">No role preference</option>
-												{#if createTaskDesiredRoleId && !data.roles.some((role) => role.id === createTaskDesiredRoleId)}
-													<option value={createTaskDesiredRoleId}>
-														{createTaskDesiredRoleName} (missing role)
-													</option>
-												{/if}
-												{#each data.roles as role (role.id)}
-													<option value={role.id}>{role.name}</option>
-												{/each}
-											</select>
-											<span class="mt-2 block text-xs text-slate-500">
-												Optional. When set, launch uses the role for routing, prompt instructions,
-												and any role-declared skills.
-											</span>
-										</label>
-
-										<label class="block">
-											<span class="mb-2 block text-sm font-medium text-slate-200"
-												>Blocker notes</span
-											>
-											<textarea
-												bind:value={createTaskBlockedReason}
-												class="textarea min-h-28 text-white placeholder:text-slate-500"
-												name="blockedReason"
-												placeholder="Document the blocker, missing approval, or dependency holding this task."
-											></textarea>
-											<span class="mt-2 block text-xs text-slate-500">
-												Record the current blocker explicitly instead of relying on status alone.
-											</span>
-										</label>
-									</div>
-
-									<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-										<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-											Role preview
-										</p>
-										{#if !createTaskDesiredRoleId}
-											<p class="mt-2 text-sm text-slate-400">
-												No role preference is set. The task can still launch and route by assignee
-												and declared requirements alone.
-											</p>
-										{:else if createTaskSelectedRole}
-											<div class="mt-3 space-y-3">
-												<div>
-													<p class="text-sm font-medium text-white">
-														{createTaskSelectedRole.name}
-													</p>
-													<p class="mt-1 text-sm text-slate-400">
-														{createTaskSelectedRole.description || 'No role description recorded.'}
-													</p>
-												</div>
-												<div class="grid gap-3 lg:grid-cols-3">
-													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p
-															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
-														>
-															Role skills
-														</p>
-														<p class="mt-2 text-sm text-slate-300">
-															{createTaskSelectedRole.skillIds?.length
-																? createTaskSelectedRole.skillIds.join(', ')
-																: 'No role skills declared.'}
-														</p>
-													</div>
-													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p
-															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
-														>
-															Role tools
-														</p>
-														<p class="mt-2 text-sm text-slate-300">
-															{createTaskSelectedRole.toolIds?.length
-																? createTaskSelectedRole.toolIds.join(', ')
-																: 'No role tools declared.'}
-														</p>
-													</div>
-													<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-														<p
-															class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
-														>
-															Role MCPs
-														</p>
-														<p class="mt-2 text-sm text-slate-300">
-															{createTaskSelectedRole.mcpIds?.length
-																? createTaskSelectedRole.mcpIds.join(', ')
-																: 'No role MCPs declared.'}
-														</p>
-													</div>
-												</div>
-												<p class="text-xs text-slate-500">
-													{createTaskSelectedRole.systemPrompt?.trim()
-														? 'This role also contributes dedicated prompt instructions at launch.'
-														: 'This role does not add dedicated prompt instructions.'}
-												</p>
-											</div>
-										{:else}
-											<p class="mt-2 text-sm text-amber-300">
-												This task references a role that is no longer available.
-											</p>
-										{/if}
-									</div>
-
-									<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-										<div class="flex flex-wrap items-center justify-between gap-3">
-											<div>
-												<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-													Dependencies
-												</p>
-												<p class="mt-2 text-sm text-slate-400">
-													Select tasks that must be cleared before this one should move.
-												</p>
-											</div>
-											<span
-												class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
-											>
-												{createTaskDependencyCount} selected
-											</span>
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Expected outcome
+												</span>
+												<textarea
+													bind:value={createTaskExpectedOutcome}
+													class="textarea min-h-28 text-white placeholder:text-slate-500"
+													name="expectedOutcome"
+													placeholder="Describe the desired end state or deliverable."
+												></textarea>
+											</label>
 										</div>
 
-										{#if data.availableDependencyTasks.length === 0}
-											<p class="mt-4 text-sm text-slate-500">
-												No other tasks are available to use as dependencies yet.
+										<div
+											class={`rounded-2xl border p-4 ${createTaskLaunchContractBlocker ? 'border-amber-900/50 bg-amber-950/15' : 'border-emerald-900/40 bg-emerald-950/15'}`}
+										>
+											<p
+												class={`text-xs font-semibold tracking-[0.16em] uppercase ${createTaskLaunchContractBlocker ? 'text-amber-300' : 'text-emerald-300'}`}
+											>
+												Execution contract
 											</p>
-										{:else}
-											<div class="mt-4 grid gap-3 xl:grid-cols-2">
-												{#each data.availableDependencyTasks as dependency (dependency.id)}
-													<label
-														class={`rounded-2xl border p-3 transition ${
-															createTaskDependencyTaskIds.includes(dependency.id)
-																? 'border-sky-800/70 bg-sky-950/20'
-																: 'border-slate-800 bg-slate-900/60'
-														}`}
-													>
-														<div class="flex items-start gap-3">
-															<input
-																checked={createTaskDependencyTaskIds.includes(dependency.id)}
-																class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-																name="dependencyTaskIds"
-																type="checkbox"
-																value={dependency.id}
-																onchange={(event) => {
-																	toggleCreateTaskDependency(
-																		dependency.id,
-																		event.currentTarget.checked
-																	);
-																}}
-															/>
-															<div class="min-w-0">
-																<p class="ui-wrap-anywhere text-sm font-medium text-white">
-																	{dependency.title}
-																</p>
-																<p class="mt-1 text-xs text-slate-400">
-																	{dependency.projectName} · {formatTaskStatusLabel(
-																		dependency.status
-																	)}
-																</p>
-															</div>
+											<p
+												class={`mt-2 text-sm ${createTaskLaunchContractBlocker ? 'text-amber-100' : 'text-emerald-100'}`}
+											>
+												{createTaskLaunchContractBlocker ||
+													'Create and run can start immediately once this contract is saved.'}
+											</p>
+											<p class="mt-2 text-sm text-slate-300">
+												{createTaskReviewContractGap ||
+													'Reviewers will have an explicit outcome and acceptance standard for this task.'}
+											</p>
+										</div>
+
+										<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
+												<select
+													bind:value={createTaskPriority}
+													class="select text-white"
+													name="priority"
+												>
+													{#each PRIORITY_OPTIONS as priority (priority)}
+														<option value={priority}>{formatPriorityLabel(priority)}</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span
+												>
+												<select
+													bind:value={createTaskRiskLevel}
+													class="select text-white"
+													name="riskLevel"
+												>
+													{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
+														<option value={riskLevel}>
+															{formatTaskRiskLevelLabel(riskLevel)}
+														</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200"
+													>Approval mode</span
+												>
+												<select
+													bind:value={createTaskApprovalMode}
+													class="select text-white"
+													name="approvalMode"
+												>
+													{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
+														<option value={approvalMode}>
+															{formatTaskApprovalModeLabel(approvalMode)}
+														</option>
+													{/each}
+												</select>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200">
+													Required sandbox
+												</span>
+												<select
+													bind:value={createTaskRequiredThreadSandbox}
+													class="select text-white"
+													name="requiredThreadSandbox"
+												>
+													<option value="">Inherit execution-surface and project defaults</option>
+													{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
+														<option value={sandbox}>{formatAgentSandboxLabel(sandbox)}</option>
+													{/each}
+												</select>
+												<span class="mt-2 block text-xs text-slate-500">
+													Use this when the task needs a specific sandbox for its first work thread.
+												</span>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200"
+													>Requires review</span
+												>
+												<select
+													bind:value={createTaskRequiresReview}
+													class="select text-white"
+													name="requiresReview"
+												>
+													<option value={true}>Yes</option>
+													<option value={false}>No</option>
+												</select>
+											</label>
+										</div>
+
+										<div class="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200"
+													>Desired role</span
+												>
+												<select
+													bind:value={createTaskDesiredRoleId}
+													class="select text-white"
+													name="desiredRoleId"
+												>
+													<option value="">No role preference</option>
+													{#if createTaskDesiredRoleId && !data.roles.some((role) => role.id === createTaskDesiredRoleId)}
+														<option value={createTaskDesiredRoleId}>
+															{createTaskDesiredRoleName} (missing role)
+														</option>
+													{/if}
+													{#each data.roles as role (role.id)}
+														<option value={role.id}>{role.name}</option>
+													{/each}
+												</select>
+												<span class="mt-2 block text-xs text-slate-500">
+													Optional. When set, launch uses the role for routing, prompt instructions,
+													and any role-declared skills.
+												</span>
+											</label>
+
+											<label class="block">
+												<span class="mb-2 block text-sm font-medium text-slate-200"
+													>Blocker notes</span
+												>
+												<textarea
+													bind:value={createTaskBlockedReason}
+													class="textarea min-h-28 text-white placeholder:text-slate-500"
+													name="blockedReason"
+													placeholder="Document the blocker, missing approval, or dependency holding this task."
+												></textarea>
+												<span class="mt-2 block text-xs text-slate-500">
+													Record the current blocker explicitly instead of relying on status alone.
+												</span>
+											</label>
+										</div>
+
+										<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+												Role preview
+											</p>
+											{#if !createTaskDesiredRoleId}
+												<p class="mt-2 text-sm text-slate-400">
+													No role preference is set. The task can still launch and route by assignee
+													and declared requirements alone.
+												</p>
+											{:else if createTaskSelectedRole}
+												<div class="mt-3 space-y-3">
+													<div>
+														<p class="text-sm font-medium text-white">
+															{createTaskSelectedRole.name}
+														</p>
+														<p class="mt-1 text-sm text-slate-400">
+															{createTaskSelectedRole.description ||
+																'No role description recorded.'}
+														</p>
+													</div>
+													<div class="grid gap-3 lg:grid-cols-3">
+														<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+															<p
+																class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+															>
+																Role skills
+															</p>
+															<p class="mt-2 text-sm text-slate-300">
+																{createTaskSelectedRole.skillIds?.length
+																	? createTaskSelectedRole.skillIds.join(', ')
+																	: 'No role skills declared.'}
+															</p>
 														</div>
-													</label>
-												{/each}
+														<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+															<p
+																class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+															>
+																Role tools
+															</p>
+															<p class="mt-2 text-sm text-slate-300">
+																{createTaskSelectedRole.toolIds?.length
+																	? createTaskSelectedRole.toolIds.join(', ')
+																	: 'No role tools declared.'}
+															</p>
+														</div>
+														<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+															<p
+																class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+															>
+																Role MCPs
+															</p>
+															<p class="mt-2 text-sm text-slate-300">
+																{createTaskSelectedRole.mcpIds?.length
+																	? createTaskSelectedRole.mcpIds.join(', ')
+																	: 'No role MCPs declared.'}
+															</p>
+														</div>
+													</div>
+													<p class="text-xs text-slate-500">
+														{createTaskSelectedRole.systemPrompt?.trim()
+															? 'This role also contributes dedicated prompt instructions at launch.'
+															: 'This role does not add dedicated prompt instructions.'}
+													</p>
+												</div>
+											{:else}
+												<p class="mt-2 text-sm text-amber-300">
+													This task references a role that is no longer available.
+												</p>
+											{/if}
+										</div>
+
+										<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+											<div class="flex flex-wrap items-center justify-between gap-3">
+												<div>
+													<p
+														class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase"
+													>
+														Dependencies
+													</p>
+													<p class="mt-2 text-sm text-slate-400">
+														Select tasks that must be cleared before this one should move.
+													</p>
+												</div>
+												<span
+													class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+												>
+													{createTaskDependencyCount} selected
+												</span>
 											</div>
-										{/if}
+
+											{#if data.availableDependencyTasks.length === 0}
+												<p class="mt-4 text-sm text-slate-500">
+													No other tasks are available to use as dependencies yet.
+												</p>
+											{:else}
+												<div class="mt-4 grid gap-3 xl:grid-cols-2">
+													{#each data.availableDependencyTasks as dependency (dependency.id)}
+														<label
+															class={`rounded-2xl border p-3 transition ${
+																createTaskDependencyTaskIds.includes(dependency.id)
+																	? 'border-sky-800/70 bg-sky-950/20'
+																	: 'border-slate-800 bg-slate-900/60'
+															}`}
+														>
+															<div class="flex items-start gap-3">
+																<input
+																	checked={createTaskDependencyTaskIds.includes(dependency.id)}
+																	class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+																	name="dependencyTaskIds"
+																	type="checkbox"
+																	value={dependency.id}
+																	onchange={(event) => {
+																		toggleCreateTaskDependency(
+																			dependency.id,
+																			event.currentTarget.checked
+																		);
+																	}}
+																/>
+																<div class="min-w-0">
+																	<p class="ui-wrap-anywhere text-sm font-medium text-white">
+																		{dependency.title}
+																	</p>
+																	<p class="mt-1 text-xs text-slate-400">
+																		{dependency.projectName} · {formatTaskStatusLabel(
+																			dependency.status
+																		)}
+																	</p>
+																</div>
+															</div>
+														</label>
+													{/each}
+												</div>
+											{/if}
+										</div>
 									</div>
-								</div>
-							{/if}
-						</div>
-
-						<div class="grid gap-4 md:grid-cols-2">
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">
-									Required capabilities
-								</span>
-								<input
-									bind:value={createTaskRequiredCapabilityNames}
-									class="input text-white placeholder:text-slate-500"
-									name="requiredCapabilityNames"
-									placeholder="planning, citations, svelte"
-									list="task-create-capability-inventory"
-								/>
-								<span class="mt-2 block text-xs text-slate-500">
-									Comma-separated abilities the task needs, regardless of who does it.
-								</span>
-								{#if data.executionRequirementInventory.capabilities.length === 0}
-									<span class="mt-2 block text-xs text-slate-500">
-										No execution-surface or provider capability inventory is registered yet. These
-										labels stay free-form for now.
-									</span>
-								{:else}
-									<div class="mt-3 flex flex-wrap gap-2">
-										{#each data.executionRequirementInventory.capabilities as capability (capability.name)}
-											<button
-												type="button"
-												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
-												title={formatInventoryCoverageLabel(capability)}
-												onclick={() => {
-													createTaskRequiredCapabilityNames = appendExecutionRequirementName(
-														createTaskRequiredCapabilityNames,
-														capability.name
-													);
-												}}
-											>
-												{capability.name}
-											</button>
-										{/each}
-									</div>
-									<span class="mt-2 block text-xs text-slate-500">
-										Select a known label to append it from the current execution-surface and
-										provider inventory.
-									</span>
 								{/if}
-								{#if data.executionRequirementInventory.capabilities.length > 0 && createTaskUnknownCapabilityNames.length > 0}
-									<span class="mt-2 block text-xs text-amber-300">
-										Not in the current inventory: {createTaskUnknownCapabilityNames.join(', ')}
-									</span>
-								{/if}
-							</label>
+							</div>
 
-							<label class="block">
-								<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
-								<input
-									bind:value={createTaskRequiredToolNames}
-									class="input text-white placeholder:text-slate-500"
-									name="requiredToolNames"
-									placeholder="codex, playwright"
-									list="task-create-tool-inventory"
-								/>
-								<span class="mt-2 block text-xs text-slate-500">
-									Comma-separated tools or execution surfaces needed for this work.
-								</span>
-								{#if data.executionRequirementInventory.tools.length === 0}
+							<div class="grid gap-4 md:grid-cols-2">
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">
+										Required capabilities
+									</span>
+									<input
+										bind:value={createTaskRequiredCapabilityNames}
+										class="input text-white placeholder:text-slate-500"
+										name="requiredCapabilityNames"
+										placeholder="planning, citations, svelte"
+										list="task-create-capability-inventory"
+									/>
 									<span class="mt-2 block text-xs text-slate-500">
-										No provider launcher inventory is registered yet. These labels stay free-form
-										for now.
+										Comma-separated abilities the task needs, regardless of who does it.
 									</span>
-								{:else}
-									<div class="mt-3 flex flex-wrap gap-2">
-										{#each data.executionRequirementInventory.tools as tool (tool.name)}
-											<button
-												type="button"
-												class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
-												title={formatInventoryCoverageLabel(tool)}
-												onclick={() => {
-													createTaskRequiredToolNames = appendExecutionRequirementName(
-														createTaskRequiredToolNames,
-														tool.name
-													);
-												}}
-											>
-												{tool.name}
-											</button>
-										{/each}
-									</div>
+									{#if data.executionRequirementInventory.capabilities.length === 0}
+										<span class="mt-2 block text-xs text-slate-500">
+											No execution-surface or provider capability inventory is registered yet. These
+											labels stay free-form for now.
+										</span>
+									{:else}
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#each data.executionRequirementInventory.capabilities as capability (capability.name)}
+												<button
+													type="button"
+													class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+													title={formatInventoryCoverageLabel(capability)}
+													onclick={() => {
+														createTaskRequiredCapabilityNames = appendExecutionRequirementName(
+															createTaskRequiredCapabilityNames,
+															capability.name
+														);
+													}}
+												>
+													{capability.name}
+												</button>
+											{/each}
+										</div>
+										<span class="mt-2 block text-xs text-slate-500">
+											Select a known label to append it from the current execution-surface and
+											provider inventory.
+										</span>
+									{/if}
+									{#if data.executionRequirementInventory.capabilities.length > 0 && createTaskUnknownCapabilityNames.length > 0}
+										<span class="mt-2 block text-xs text-amber-300">
+											Not in the current inventory: {createTaskUnknownCapabilityNames.join(', ')}
+										</span>
+									{/if}
+								</label>
+
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
+									<input
+										bind:value={createTaskRequiredToolNames}
+										class="input text-white placeholder:text-slate-500"
+										name="requiredToolNames"
+										placeholder="codex, playwright"
+										list="task-create-tool-inventory"
+									/>
 									<span class="mt-2 block text-xs text-slate-500">
-										Select a known launcher label to append it from the current provider inventory.
+										Comma-separated tools or execution surfaces needed for this work.
 									</span>
-								{/if}
-								{#if data.executionRequirementInventory.tools.length > 0 && createTaskUnknownToolNames.length > 0}
-									<span class="mt-2 block text-xs text-amber-300">
-										Not in the current inventory: {createTaskUnknownToolNames.join(', ')}
-									</span>
-								{/if}
-							</label>
-						</div>
+									{#if data.executionRequirementInventory.tools.length === 0}
+										<span class="mt-2 block text-xs text-slate-500">
+											No provider launcher inventory is registered yet. These labels stay free-form
+											for now.
+										</span>
+									{:else}
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#each data.executionRequirementInventory.tools as tool (tool.name)}
+												<button
+													type="button"
+													class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
+													title={formatInventoryCoverageLabel(tool)}
+													onclick={() => {
+														createTaskRequiredToolNames = appendExecutionRequirementName(
+															createTaskRequiredToolNames,
+															tool.name
+														);
+													}}
+												>
+													{tool.name}
+												</button>
+											{/each}
+										</div>
+										<span class="mt-2 block text-xs text-slate-500">
+											Select a known launcher label to append it from the current provider
+											inventory.
+										</span>
+									{/if}
+									{#if data.executionRequirementInventory.tools.length > 0 && createTaskUnknownToolNames.length > 0}
+										<span class="mt-2 block text-xs text-amber-300">
+											Not in the current inventory: {createTaskUnknownToolNames.join(', ')}
+										</span>
+									{/if}
+								</label>
+							</div>
 
-						<datalist id="task-create-capability-inventory">
-							{#each data.executionRequirementInventory.capabilityNames as capabilityName (capabilityName)}
-								<option value={capabilityName}></option>
-							{/each}
-						</datalist>
+							<datalist id="task-create-capability-inventory">
+								{#each data.executionRequirementInventory.capabilityNames as capabilityName (capabilityName)}
+									<option value={capabilityName}></option>
+								{/each}
+							</datalist>
 
-						<datalist id="task-create-prompt-skill-inventory">
-							{#each selectedProjectSkillSummary?.installedSkills ?? [] as skill (skill.id)}
-								<option value={skill.id}></option>
-							{/each}
-						</datalist>
+							<datalist id="task-create-prompt-skill-inventory">
+								{#each selectedProjectSkillSummary?.installedSkills ?? [] as skill (skill.id)}
+									<option value={skill.id}></option>
+								{/each}
+							</datalist>
 
-						<datalist id="task-create-tool-inventory">
-							{#each data.executionRequirementInventory.toolNames as toolName (toolName)}
-								<option value={toolName}></option>
-							{/each}
-						</datalist>
+							<datalist id="task-create-tool-inventory">
+								{#each data.executionRequirementInventory.toolNames as toolName (toolName)}
+									<option value={toolName}></option>
+								{/each}
+							</datalist>
+						{/if}
 
 						<label class="block">
 							<span class="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -3386,7 +3675,11 @@
 								type="submit"
 								value="create"
 							>
-								{createTaskUsesWorkflowTemplate ? 'Create task set' : 'Create task'}
+								{createTaskUsesWorkflowTemplate
+									? 'Create task set'
+									: createTaskFlowMode === 'quick'
+										? 'Create quick task'
+										: 'Create task'}
 							</button>
 							{#if !createTaskUsesWorkflowTemplate}
 								<button
@@ -3400,11 +3693,17 @@
 								</button>
 							{/if}
 							<p class="text-sm text-slate-400">
-								{createTaskUsesWorkflowTemplate
-									? 'This will create the parent task first, then generate the workflow child tasks underneath it.'
-									: createTaskLaunchContractBlocker
-										? `${createTaskLaunchContractBlocker} Use Advanced intake to finish the launch contract.`
-										: 'Choose a project, name the work clearly, then create a queued task or launch it immediately.'}
+								{createTaskFlowMode === 'quick'
+									? createTaskUsesWorkflowTemplate
+										? 'This will create the parent task first, then generate the workflow child tasks underneath it.'
+										: createTaskLaunchContractBlocker
+											? `${createTaskLaunchContractBlocker} Switch to Full task if you need to add routing, approvals, assignment, or execution setup.`
+											: 'Quick task keeps the form minimal while still letting you queue work or launch it immediately.'
+									: createTaskUsesWorkflowTemplate
+										? 'This will create the parent task first, then generate the workflow child tasks underneath it.'
+										: createTaskLaunchContractBlocker
+											? `${createTaskLaunchContractBlocker} Use Advanced intake to finish the launch contract.`
+											: 'Choose a project, name the work clearly, then create a queued task or launch it immediately.'}
 							</p>
 						</div>
 					</div>

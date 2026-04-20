@@ -127,11 +127,7 @@
 		data.projectSkillSummaries.find((summary) => summary.projectId === editorValues.projectId) ??
 			null
 	);
-	let availableWorkflows = $derived(
-		data.workflows.filter(
-			(workflow) => !editorValues.projectId || workflow.projectId === editorValues.projectId
-		)
-	);
+	let availableWorkflows = $derived(data.workflows);
 	let selectedProjectInstalledSkillNames = $derived(
 		selectedProjectSkillSummary?.installedSkills.map((skill) => skill.id) ?? []
 	);
@@ -502,10 +498,8 @@
 							<option value={workflow.id}>{workflow.name}</option>
 						{/each}
 					</select>
-					{#if editorValues.projectId && availableWorkflows.length === 0}
-						<span class="mt-2 block text-xs text-slate-500">
-							No workflows are linked to the selected project yet.
-						</span>
+					{#if availableWorkflows.length === 0}
+						<span class="mt-2 block text-xs text-slate-500"> No workflows are available yet. </span>
 					{/if}
 				</label>
 			</div>

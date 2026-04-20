@@ -83,14 +83,6 @@ export async function buildTaskTemplateDraft(
 		return { ok: false as const, status: 400, message: 'Execution surface not found.' };
 	}
 
-	if (workflow && workflow.projectId !== project.id) {
-		return {
-			ok: false as const,
-			status: 400,
-			message: 'Workflow project does not match the selected task project.'
-		};
-	}
-
 	if (input.desiredRoleId && !current.roles.some((role) => role.id === input.desiredRoleId)) {
 		return { ok: false as const, status: 400, message: 'Desired role not found.' };
 	}

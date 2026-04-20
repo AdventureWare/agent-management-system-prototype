@@ -452,6 +452,16 @@ describe('tasks page server actions', () => {
 					defaultRepoPath: '',
 					defaultRepoUrl: '',
 					defaultBranch: ''
+				},
+				{
+					id: 'project_docs',
+					name: 'Documentation Site',
+					summary: 'docs',
+					projectRootFolder: '/tmp/docs',
+					defaultArtifactRoot: '/tmp/docs/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
 				}
 			],
 			goals: [
@@ -478,6 +488,16 @@ describe('tasks page server actions', () => {
 					templateKey: null,
 					createdAt: '2026-03-30T12:00:00.000Z',
 					updatedAt: '2026-03-30T12:00:00.000Z'
+				},
+				{
+					id: 'workflow_docs_review',
+					name: 'Docs review flow',
+					summary: 'Coordinate documentation review work.',
+					projectId: 'project_docs',
+					status: 'active',
+					templateKey: null,
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
 				}
 			],
 			workflowSteps: [
@@ -500,6 +520,17 @@ describe('tasks page server actions', () => {
 					desiredRoleId: 'role_reviewer',
 					dependsOnStepIds: ['workflow_step_requirements'],
 					position: 2,
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				},
+				{
+					id: 'workflow_step_docs_review',
+					workflowId: 'workflow_docs_review',
+					title: 'Editorial review',
+					summary: 'Review the draft for clarity and accuracy.',
+					desiredRoleId: 'role_reviewer',
+					dependsOnStepIds: [],
+					position: 1,
 					createdAt: '2026-03-30T12:00:00.000Z',
 					updatedAt: '2026-03-30T12:00:00.000Z'
 				}
@@ -626,6 +657,43 @@ describe('tasks page server actions', () => {
 				workflowId: 'workflow_release',
 				desiredRoleId: 'role_reviewer',
 				dependencyTaskIds: ['task_prepare_release_notes:_requirements_gathering']
+			})
+		]);
+	});
+
+	it('allows creating a task from a workflow owned by another project', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('workflowId', 'workflow_docs_review');
+		form.set('name', 'Review operator docs');
+		form.set('instructions', 'Run the standard docs review sequence for the operator guide.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTaskWithWorkflow',
+				createdTaskCount: 2,
+				parentTaskId: 'task_review_operator_docs'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks.slice(0, 2)).toEqual([
+			expect.objectContaining({
+				id: 'task_review_operator_docs',
+				projectId: 'project_ams',
+				workflowId: 'workflow_docs_review'
+			}),
+			expect.objectContaining({
+				title: 'Review operator docs: Editorial review',
+				projectId: 'project_ams',
+				parentTaskId: 'task_review_operator_docs',
+				workflowId: 'workflow_docs_review'
 			})
 		]);
 	});

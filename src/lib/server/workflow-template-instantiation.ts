@@ -39,13 +39,15 @@ export function instantiateWorkflowTemplate(
 		workflowId: string;
 		taskName: string;
 		taskSummary: string;
+		targetProjectId?: string;
 	}
 ): WorkflowTemplateInstantiationResult {
 	const workflow =
 		(data.workflows ?? []).find((candidate) => candidate.id === input.workflowId) ?? null;
 	const workflowSteps = getWorkflowSteps(data, input.workflowId);
+	const targetProjectId = input.targetProjectId?.trim() || workflow?.projectId || '';
 	const project = workflow
-		? (data.projects.find((candidate) => candidate.id === workflow.projectId) ?? null)
+		? (data.projects.find((candidate) => candidate.id === targetProjectId) ?? null)
 		: null;
 
 	if (!workflow || !project) {
@@ -68,7 +70,7 @@ export function instantiateWorkflowTemplate(
 	const parentTask = createTask({
 		title: input.taskName,
 		summary: input.taskSummary || `Instantiated from workflow template "${workflow.name}".`,
-		projectId: workflow.projectId,
+		projectId: project.id,
 		area: 'product',
 		goalId: '',
 		workflowId: workflow.id,
@@ -85,7 +87,7 @@ export function instantiateWorkflowTemplate(
 		createTask({
 			title: `${input.taskName}: ${step.title}`,
 			summary: buildGeneratedStepSummary(input.taskName, workflow.name, step),
-			projectId: workflow.projectId,
+			projectId: project.id,
 			area: 'product',
 			goalId: '',
 			workflowId: workflow.id,

@@ -113,6 +113,20 @@ function renderPage(
 					targetDate: null,
 					createdAt: '2026-04-01T09:00:00.000Z',
 					updatedAt: '2026-04-01T09:00:00.000Z'
+				},
+				{
+					id: 'workflow_2',
+					name: 'Docs review flow',
+					summary: 'Review documentation changes',
+					projectId: 'project_2',
+					projectName: 'Documentation Site',
+					goalId: null,
+					status: 'active',
+					stepCount: 2,
+					templateKey: null,
+					targetDate: null,
+					createdAt: '2026-04-01T09:00:00.000Z',
+					updatedAt: '2026-04-01T09:00:00.000Z'
 				}
 			],
 			taskTemplates: [
@@ -157,6 +171,16 @@ function renderPage(
 					summary: 'Primary app project',
 					projectRootFolder: '/tmp/project',
 					defaultArtifactRoot: '/tmp/project/out',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
+				},
+				{
+					id: 'project_2',
+					name: 'Documentation Site',
+					summary: 'Docs project',
+					projectRootFolder: '/tmp/docs',
+					defaultArtifactRoot: '/tmp/docs/out',
 					defaultRepoPath: '',
 					defaultRepoUrl: '',
 					defaultBranch: ''
@@ -322,7 +346,7 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(toolbar?.className).toContain('z-20');
 	});
 
-	it('renders the template selector ahead of project and task name in the create form', async () => {
+	it('defaults the create form to quick task mode and hides full-task controls', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
 
@@ -330,12 +354,24 @@ describe('/app/tasks/+page.svelte', () => {
 			document.querySelectorAll('form[action="?/createTask"] label > span:first-child')
 		).map((label) => label.textContent?.trim());
 
-		expect(createFormLabels.slice(0, 3)).toEqual(['Use task template', 'Project', 'Name']);
+		expect(createFormLabels.slice(0, 2)).toEqual(['Project', 'Name']);
+		expect(createFormLabels[2]).toContain('Instructions');
+		expect(
+			Array.from(
+				document.querySelectorAll('form[action="?/createTask"] button[aria-pressed="true"]')
+			).some((button) => button.textContent?.includes('Quick task'))
+		).toBe(true);
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="workflowId"]')
+		).toBeNull();
+		expect(document.querySelector('form[action="?/createTask"] select[name="goalId"]')).toBeNull();
+		expect(document.body.textContent).not.toContain('Use task template');
 	});
 
 	it('includes a required sandbox control in the advanced create task intake', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 		await page.getByRole('button', { name: 'Show advanced' }).click();
 
 		await expect
@@ -343,7 +379,7 @@ describe('/app/tasks/+page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('renders create and run controls in the quick create form', async () => {
+	it('keeps the quick task footer minimal while still allowing create and run', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
 
@@ -354,7 +390,7 @@ describe('/app/tasks/+page.svelte', () => {
 			button.textContent?.trim()
 		);
 
-		expect(formButtons).toContain('Create task');
+		expect(formButtons).toContain('Create quick task');
 		expect(formButtons).toContain('Create and run');
 
 		const assistButton = document.querySelector(
@@ -363,6 +399,23 @@ describe('/app/tasks/+page.svelte', () => {
 
 		expect(assistButton).not.toBeNull();
 		expect(assistButton?.textContent?.trim()).toBe('Improve with AI');
+	});
+
+	it('reveals full-task setup and launch controls when requested', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
+
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="taskTemplateSelection"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="goalId"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('form[action="?/createTask"] select[name="workflowId"]')
+		).not.toBeNull();
+		await expect.element(page.getByRole('button', { name: 'Create and run' })).toBeInTheDocument();
 	});
 
 	it('switches the main create form into workflow mode when a workflow is selected', async () => {
@@ -389,6 +442,7 @@ describe('/app/tasks/+page.svelte', () => {
 	it('renders a goal selector and removes the queue snapshot pane from the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const goalSelect = document.querySelector(
 			'form[action="?/createTask"] select[name="goalId"]'
@@ -403,6 +457,7 @@ describe('/app/tasks/+page.svelte', () => {
 	it('renders a workflow selector in the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const workflowSelect = document.querySelector(
 			'form[action="?/createTask"] select[name="workflowId"]'
@@ -413,9 +468,34 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect.element(page.getByText('Release flow')).toBeInTheDocument();
 	});
 
+	it('keeps cross-project workflows available after selecting a project', async () => {
+		renderPage();
+		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
+
+		const projectSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="projectId"]'
+		) as HTMLSelectElement | null;
+
+		expect(projectSelect).not.toBeNull();
+		projectSelect!.value = 'project_1';
+		projectSelect!.dispatchEvent(new Event('change', { bubbles: true }));
+
+		const workflowSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="workflowId"]'
+		) as HTMLSelectElement | null;
+		const workflowOptionValues = Array.from(workflowSelect?.options ?? []).map(
+			(option) => option.value
+		);
+
+		expect(workflowOptionValues).toContain('workflow_1');
+		expect(workflowOptionValues).toContain('workflow_2');
+	});
+
 	it('applies a saved task template to the create form', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
 		await templateSelect.selectOptions('task_template_research');
@@ -445,6 +525,7 @@ describe('/app/tasks/+page.svelte', () => {
 	it('links selected task templates to the template library for management', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
 		await templateSelect.selectOptions('task_template_research');
@@ -542,6 +623,14 @@ describe('/app/tasks/+page.svelte', () => {
 	it('shows project skill coverage inside the create dialog', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
+		const projectSelect = document.querySelector(
+			'form[action="?/createTask"] select[name="projectId"]'
+		) as HTMLSelectElement | null;
+
+		expect(projectSelect).not.toBeNull();
+		projectSelect!.value = 'project_1';
+		projectSelect!.dispatchEvent(new Event('change', { bubbles: true }));
 
 		await expect.element(page.getByText('Skill coverage')).toBeInTheDocument();
 		await expect
@@ -554,6 +643,7 @@ describe('/app/tasks/+page.svelte', () => {
 	it('keeps advanced routing fields collapsed until requested', async () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const createForm = document.querySelector(
 			'form[action="?/createTask"]'

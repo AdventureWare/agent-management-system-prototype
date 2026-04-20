@@ -109,6 +109,16 @@ describe('task templates page server', () => {
 					defaultRepoPath: '',
 					defaultRepoUrl: '',
 					defaultBranch: ''
+				},
+				{
+					id: 'project_2',
+					name: 'Documentation Site',
+					summary: 'Docs project',
+					projectRootFolder: '/tmp/docs',
+					defaultArtifactRoot: '/tmp/docs/agent_output',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: ''
 				}
 			],
 			goals: [
@@ -131,6 +141,16 @@ describe('task templates page server', () => {
 					name: 'Feature development',
 					summary: 'Reusable feature delivery process.',
 					projectId: 'project_1',
+					status: 'active',
+					templateKey: null,
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				},
+				{
+					id: 'workflow_2',
+					name: 'Docs review',
+					summary: 'Reusable documentation review process.',
+					projectId: 'project_2',
 					status: 'active',
 					templateKey: null,
 					createdAt: '2026-04-15T09:00:00.000Z',
@@ -229,6 +249,37 @@ describe('task templates page server', () => {
 				taskTitle: 'Draft report for [topic]',
 				desiredRoleId: 'role_research',
 				requiredCapabilityNames: ['planning', 'citations']
+			})
+		);
+	});
+
+	it('allows task templates to reference workflows from another project', async () => {
+		const form = new FormData();
+		form.set('taskTemplateName', 'Docs review request');
+		form.set('taskTemplateSummary', 'Reusable documentation review defaults.');
+		form.set('projectId', 'project_1');
+		form.set('workflowId', 'workflow_2');
+		form.set('name', 'Review docs for [topic]');
+		form.set('instructions', 'Review the documentation draft and leave revision notes.');
+
+		const result = await actions.createTaskTemplate({
+			request: new Request('http://localhost/app/task-templates', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTaskTemplate',
+				taskTemplateName: 'Docs review request'
+			})
+		);
+		expect(createTaskTemplateMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				projectId: 'project_1',
+				workflowId: 'workflow_2'
 			})
 		);
 	});

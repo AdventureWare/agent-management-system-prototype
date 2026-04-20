@@ -404,13 +404,6 @@ export const actions: Actions = {
 			});
 		}
 
-		if (workflow && workflow.projectId !== project.id) {
-			return failTaskCreate(400, {
-				message: 'Workflow project does not match the selected task project.',
-				...failureContext
-			});
-		}
-
 		if (workflow && submitMode === 'createAndRun') {
 			return failTaskCreate(400, {
 				message:
@@ -480,7 +473,8 @@ export const actions: Actions = {
 			const plan = instantiateWorkflowTemplate(current, {
 				workflowId: workflow.id,
 				taskName: name,
-				taskSummary: instructions
+				taskSummary: instructions,
+				targetProjectId: project.id
 			});
 
 			if (!plan.ok) {
@@ -542,7 +536,7 @@ export const actions: Actions = {
 					nextData = appendGoalTaskRelationships({
 						data: nextData,
 						goalId: nextGoalId,
-						projectIds: [workflow.projectId],
+						projectIds: [project.id],
 						taskIds: [createdParentTask.id, ...linkedTasks.map((task) => task.id)]
 					});
 					changedCollections.push('goals');

@@ -1428,19 +1428,6 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 			);
 		}
 
-		if (taskTemplate.workflowId) {
-			const workflow =
-				(data.workflows ?? []).find(
-					(candidateWorkflow) => candidateWorkflow.id === taskTemplate.workflowId
-				) ?? null;
-
-			if (workflow && workflow.projectId !== taskTemplate.projectId) {
-				issues.push(
-					`Task template ${taskTemplate.id} references workflow ${taskTemplate.workflowId} from a different project.`
-				);
-			}
-		}
-
 		if (taskTemplate.desiredRoleId && !roleIds.has(taskTemplate.desiredRoleId)) {
 			issues.push(
 				`Task template ${taskTemplate.id} references missing role ${taskTemplate.desiredRoleId}.`
@@ -1556,17 +1543,12 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 		.map((template) => {
 			const workflowId =
 				template.workflowId && workflowIds.has(template.workflowId) ? template.workflowId : null;
-			const workflow = workflowId
-				? (workflows.find((candidateWorkflow) => candidateWorkflow.id === workflowId) ?? null)
-				: null;
-			const nextWorkflowId =
-				workflow && workflow.projectId === template.projectId ? workflow.id : null;
 			const goalId = template.goalId && goalIds.has(template.goalId) ? template.goalId : null;
 
 			return {
 				...template,
 				goalId,
-				workflowId: nextWorkflowId,
+				workflowId,
 				desiredRoleId:
 					template.desiredRoleId && roleIds.has(template.desiredRoleId)
 						? template.desiredRoleId

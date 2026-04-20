@@ -458,6 +458,60 @@ describe('control-plane helpers', () => {
 				defaultBranch: '',
 				additionalWritableRoots: [],
 				defaultThreadSandbox: null
+			},
+			{
+				id: 'project_2',
+				name: 'Documentation project',
+				summary: 'Docs summary',
+				parentProjectId: null,
+				projectRootFolder: '/tmp/docs',
+				defaultArtifactRoot: '/tmp/docs/agent_output',
+				defaultRepoPath: '',
+				defaultRepoUrl: '',
+				defaultBranch: '',
+				additionalWritableRoots: [],
+				defaultThreadSandbox: null
+			}
+		];
+		data.workflows = [
+			{
+				id: 'workflow_docs',
+				name: 'Docs review',
+				summary: 'Review docs',
+				projectId: 'project_2',
+				status: 'active',
+				templateKey: null,
+				createdAt: '2026-03-26T00:00:00.000Z',
+				updatedAt: '2026-03-26T00:00:00.000Z'
+			}
+		];
+		data.workflowSteps = [];
+		data.taskTemplates = [
+			{
+				id: 'task_template_docs',
+				name: 'Docs template',
+				summary: 'Template summary',
+				projectId: 'project_1',
+				goalId: null,
+				workflowId: 'workflow_docs',
+				taskTitle: 'Review docs',
+				taskSummary: 'Review documentation.',
+				successCriteria: '',
+				readyCondition: '',
+				expectedOutcome: '',
+				area: 'product',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiredThreadSandbox: null,
+				requiresReview: true,
+				desiredRoleId: '',
+				assigneeExecutionSurfaceId: null,
+				requiredPromptSkillNames: [],
+				requiredCapabilityNames: [],
+				requiredToolNames: [],
+				createdAt: '2026-03-26T00:00:00.000Z',
+				updatedAt: '2026-03-26T00:00:00.000Z'
 			}
 		];
 		data.goals = [
@@ -545,6 +599,11 @@ describe('control-plane helpers', () => {
 			goalIds: ['goal_1'],
 			taskIds: ['task_done'],
 			decisionIds: []
+		});
+		expect(repaired.taskTemplates?.[0]).toMatchObject({
+			id: 'task_template_docs',
+			projectId: 'project_1',
+			workflowId: 'workflow_docs'
 		});
 	});
 

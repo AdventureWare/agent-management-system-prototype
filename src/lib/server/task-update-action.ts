@@ -92,13 +92,6 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 
 	const nextWorkflowId = hasWorkflowId ? (workflow?.id ?? null) : (existingTask.workflowId ?? null);
 
-	if (workflow && workflow.projectId !== project.id) {
-		throw new TaskUpdateActionError(
-			400,
-			'Workflow project does not match the selected task project.'
-		);
-	}
-
 	const invalidDependencyTaskIds = dependencyTaskIds.filter(
 		(dependencyTaskId) =>
 			dependencyTaskId === taskId ||
