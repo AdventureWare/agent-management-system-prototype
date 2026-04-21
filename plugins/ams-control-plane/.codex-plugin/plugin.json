@@ -1,0 +1,27 @@
+{
+	"name": "ams-control-plane",
+	"version": "0.1.0",
+	"description": "Repo-local MCP surface for AMS task, goal, project, and capability operations.",
+	"author": {
+		"name": "Agent Management System Prototype",
+		"email": "local-only@example.invalid",
+		"url": "https://example.invalid/ams-control-plane"
+	},
+	"license": "UNLICENSED",
+	"keywords": ["ams", "mcp", "agents", "tasks"],
+	"mcpServers": "./.mcp.json",
+	"interface": {
+		"displayName": "AMS Control Plane",
+		"shortDescription": "Use AMS task, goal, and project operations through MCP.",
+		"longDescription": "Local MCP bridge for the Agent Management System control plane. Exposes task, goal, project, and capability discovery tools backed by the existing bearer-token API.",
+		"developerName": "Agent Management System Prototype",
+		"category": "Developer Tools",
+		"capabilities": ["Read", "Write"],
+		"defaultPrompt": [
+			"Inspect AMS tasks and projects.",
+			"Create or update AMS tasks from MCP.",
+			"Discover supported AMS operations."
+		],
+		"brandColor": "#0f172a"
+	}
+}

@@ -1,20 +1,48 @@
 import { json } from '@sveltejs/kit';
-import { AgentControlPlaneApiError, updateAgentApiTask } from '$lib/server/agent-control-plane-api';
-import { load as loadTaskDetailPageData } from '../../../app/tasks/[taskId]/+page.server';
+import {
+	AgentControlPlaneApiError,
+	createAgentApiTask,
+	listAgentApiTasks
+} from '$lib/server/agent-control-plane-api';
+import { loadControlPlane } from '$lib/server/control-plane';
 
-export const GET = async ({ params }) => {
-	return json(await loadTaskDetailPageData({ params } as never));
+export const GET = async ({ url }) => {
+	const limitValue = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
+	const data = await loadControlPlane();
+
+	return json({
+		tasks: listAgentApiTasks(data, {
+			q: url.searchParams.get('q'),
+			projectId: url.searchParams.get('projectId'),
+			goalId: url.searchParams.get('goalId'),
+			status: url.searchParams.get('status'),
+			limit: Number.isFinite(limitValue) ? limitValue : null
+		})
+	});
 };
 
-export const PATCH = async ({ params, request }) => {
+export const POST = async ({ request }) => {
 	try {
 		const body = (await request.json()) as Record<string, unknown>;
-		const task = await updateAgentApiTask(params.taskId, {
+		const task = await createAgentApiTask({
 			title: typeof body.title === 'string' ? body.title : undefined,
 			summary: typeof body.summary === 'string' ? body.summary : undefined,
 			successCriteria: typeof body.successCriteria === 'string' ? body.successCriteria : undefined,
 			readyCondition: typeof body.readyCondition === 'string' ? body.readyCondition : undefined,
 			expectedOutcome: typeof body.expectedOutcome === 'string' ? body.expectedOutcome : undefined,
+			projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
+			goalId:
+				typeof body.goalId === 'string' || body.goalId === null
+					? (body.goalId as string | null)
+					: undefined,
+			workflowId:
+				typeof body.workflowId === 'string' || body.workflowId === null
+					? (body.workflowId as string | null)
+					: undefined,
+			parentTaskId:
+				typeof body.parentTaskId === 'string' || body.parentTaskId === null
+					? (body.parentTaskId as string | null)
+					: undefined,
 			priority: typeof body.priority === 'string' ? body.priority : undefined,
 			status: typeof body.status === 'string' ? body.status : undefined,
 			area: typeof body.area === 'string' ? body.area : undefined,
@@ -67,7 +95,7 @@ export const PATCH = async ({ params, request }) => {
 					: undefined
 		});
 
-		return json({ task });
+		return json({ task }, { status: 201 });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
 			return json({ error: error.message }, { status: error.status });

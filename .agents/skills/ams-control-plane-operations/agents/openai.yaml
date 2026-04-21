@@ -1,0 +1,4 @@
+interface:
+  display_name: "AMS Control Plane Operations"
+  short_description: "Use AMS via CLI, API, or MCP instead of guessing"
+  default_prompt: "Use $ams-control-plane-operations to inspect or update Agent Management System state through the AMS CLI, bearer-token API, or repo-local MCP plugin."

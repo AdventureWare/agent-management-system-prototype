@@ -19,9 +19,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isThreadApiPath =
 		event.url.pathname === '/api/agents/threads' ||
 		event.url.pathname.startsWith('/api/agents/threads/');
+	const isAgentControlPlaneApiPath =
+		event.url.pathname === '/api/agent-capabilities' ||
+		event.url.pathname === '/api/tasks' ||
+		event.url.pathname.startsWith('/api/tasks/') ||
+		event.url.pathname === '/api/goals' ||
+		event.url.pathname.startsWith('/api/goals/') ||
+		event.url.pathname === '/api/projects' ||
+		event.url.pathname.startsWith('/api/projects/');
 	const bearerToken = readBearerToken(event.request.headers.get('authorization'));
 
-	if (isThreadApiPath && isValidAgentApiToken(bearerToken)) {
+	if ((isThreadApiPath || isAgentControlPlaneApiPath) && isValidAgentApiToken(bearerToken)) {
 		return resolve(event);
 	}
 

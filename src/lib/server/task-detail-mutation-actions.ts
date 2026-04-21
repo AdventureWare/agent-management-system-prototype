@@ -1,7 +1,11 @@
 import { createDecision, loadControlPlane } from '$lib/server/control-plane';
 import { updateTaskRecord } from '$lib/server/control-plane-repository';
 import { getAgentThread } from '$lib/server/agent-threads';
-import { getTaskAttachmentRoot, persistTaskAttachments } from '$lib/server/task-attachments';
+import {
+	getTaskAttachmentRoot,
+	persistTaskAttachmentPath,
+	persistTaskAttachments
+} from '$lib/server/task-attachments';
 
 export class TaskDetailMutationActionError extends Error {
 	constructor(
@@ -11,6 +15,76 @@ export class TaskDetailMutationActionError extends Error {
 		super(message);
 		this.name = 'TaskDetailMutationActionError';
 	}
+}
+
+export async function attachTaskFileFromPath(input: {
+	taskId: string;
+	sourcePath: string;
+	name?: string;
+	contentType?: string;
+}) {
+	const sourcePath = input.sourcePath.trim();
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === input.taskId);
+
+	if (!task) {
+		throw new TaskDetailMutationActionError(404, 'Task not found.');
+	}
+
+	if (!sourcePath) {
+		throw new TaskDetailMutationActionError(400, 'Attachment source path is required.');
+	}
+
+	const project = current.projects.find((candidate) => candidate.id === task.projectId) ?? null;
+	const attachmentRoot = getTaskAttachmentRoot(task, project);
+
+	if (!attachmentRoot) {
+		throw new TaskDetailMutationActionError(
+			400,
+			'This task needs an artifact root before files can be attached.'
+		);
+	}
+
+	let nextAttachment;
+
+	try {
+		nextAttachment = await persistTaskAttachmentPath({
+			taskId: task.id,
+			attachmentRoot,
+			sourcePath,
+			name: input.name,
+			contentType: input.contentType
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error && error.message.trim()
+				? error.message
+				: 'Could not attach the requested file.';
+		throw new TaskDetailMutationActionError(400, message);
+	}
+
+	const now = new Date().toISOString();
+
+	const updatedTaskAfterAttach = await updateTaskRecord({
+		taskId: input.taskId,
+		update: (candidate) => ({
+			...candidate,
+			attachments: [nextAttachment, ...candidate.attachments],
+			updatedAt: now
+		})
+	});
+
+	if (!updatedTaskAfterAttach) {
+		throw new TaskDetailMutationActionError(404, 'Task not found.');
+	}
+
+	return {
+		ok: true,
+		successAction: 'attachTaskFile' as const,
+		taskId: input.taskId,
+		attachmentId: nextAttachment.id,
+		attachment: nextAttachment
+	};
 }
 
 export async function attachTaskFile(taskId: string, form: FormData) {
@@ -60,12 +134,17 @@ export async function attachTaskFile(taskId: string, form: FormData) {
 		ok: true,
 		successAction: 'attachTaskFile' as const,
 		taskId,
-		attachmentId: nextAttachment.id
+		attachmentId: nextAttachment.id,
+		attachment: nextAttachment
 	};
 }
 
 export async function removeTaskAttachment(taskId: string, form: FormData) {
 	const attachmentId = form.get('attachmentId')?.toString().trim() ?? '';
+	return removeTaskAttachmentById(taskId, attachmentId);
+}
+
+export async function removeTaskAttachmentById(taskId: string, attachmentId: string) {
 	const current = await loadControlPlane();
 	const task = current.tasks.find((candidate) => candidate.id === taskId);
 

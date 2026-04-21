@@ -1,9 +1,12 @@
 import { listAgentThreads } from '$lib/server/agent-threads';
 import {
 	createDecision,
+	createApproval,
+	createReview,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
-	loadControlPlane
+	loadControlPlane,
+	parseTaskApprovalMode
 } from '$lib/server/control-plane';
 import { mutateTaskCollections } from '$lib/server/control-plane-repository';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
@@ -47,6 +50,215 @@ export class TaskGovernanceActionError extends Error {
 		super(message);
 		this.status = status;
 	}
+}
+
+export async function requestTaskReview(input: {
+	taskId: string;
+	sourceLabel: string;
+	summary?: string;
+	requestedByExecutionSurfaceId?: string | null;
+	reviewerExecutionSurfaceId?: string | null;
+}) {
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === input.taskId) ?? null;
+
+	if (!task) {
+		throw new TaskGovernanceActionError(404, 'Task not found.');
+	}
+
+	if (getOpenReviewForTask(current, input.taskId)) {
+		throw new TaskGovernanceActionError(409, 'An open review already exists for this task.');
+	}
+
+	const requestedByExecutionSurfaceId = input.requestedByExecutionSurfaceId?.trim() || null;
+	const reviewerExecutionSurfaceId = input.reviewerExecutionSurfaceId?.trim() || null;
+
+	if (
+		requestedByExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === requestedByExecutionSurfaceId)
+	) {
+		throw new TaskGovernanceActionError(400, 'Requesting execution surface was not found.');
+	}
+
+	if (
+		reviewerExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === reviewerExecutionSurfaceId)
+	) {
+		throw new TaskGovernanceActionError(400, 'Reviewer execution surface was not found.');
+	}
+
+	const now = new Date().toISOString();
+	const reviewSummary = input.summary?.trim() || `Review requested from the ${input.sourceLabel}.`;
+	let reviewId: string | null = null;
+
+	const updatedTask = await mutateTaskCollections({
+		taskId: input.taskId,
+		mutate: (taskFromData, data) => {
+			if (getOpenReviewForTask(data, input.taskId)) {
+				throw new TaskGovernanceActionError(409, 'An open review already exists for this task.');
+			}
+
+			const review = createReview({
+				taskId: input.taskId,
+				runId: taskFromData.latestRunId,
+				requestedByExecutionSurfaceId,
+				reviewerExecutionSurfaceId,
+				summary: reviewSummary
+			});
+			reviewId = review.id;
+
+			return {
+				data: {
+					...data,
+					reviews: [review, ...data.reviews],
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === input.taskId
+							? {
+									...candidate,
+									status: candidate.status === 'done' ? 'done' : 'review',
+									blockedReason: '',
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId: input.taskId,
+							runId: taskFromData.latestRunId,
+							reviewId: review.id,
+							decisionType: 'task_plan_updated',
+							summary: reviewSummary,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['reviews', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask || !reviewId) {
+		throw new TaskGovernanceActionError(404, 'Task not found.');
+	}
+
+	return {
+		ok: true,
+		successAction: 'requestReview' as const,
+		taskId: input.taskId,
+		reviewId
+	};
+}
+
+export async function requestTaskApproval(input: {
+	taskId: string;
+	sourceLabel: string;
+	mode?: string | null;
+	summary?: string;
+	requestedByExecutionSurfaceId?: string | null;
+	approverExecutionSurfaceId?: string | null;
+}) {
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === input.taskId) ?? null;
+
+	if (!task) {
+		throw new TaskGovernanceActionError(404, 'Task not found.');
+	}
+
+	if (getPendingApprovalForTask(current, input.taskId)) {
+		throw new TaskGovernanceActionError(409, 'A pending approval already exists for this task.');
+	}
+
+	const requestedByExecutionSurfaceId = input.requestedByExecutionSurfaceId?.trim() || null;
+	const approverExecutionSurfaceId = input.approverExecutionSurfaceId?.trim() || null;
+
+	if (
+		requestedByExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === requestedByExecutionSurfaceId)
+	) {
+		throw new TaskGovernanceActionError(400, 'Requesting execution surface was not found.');
+	}
+
+	if (
+		approverExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === approverExecutionSurfaceId)
+	) {
+		throw new TaskGovernanceActionError(400, 'Approver execution surface was not found.');
+	}
+
+	const mode = parseTaskApprovalMode(input.mode?.trim() ?? '', task.approvalMode);
+
+	if (mode === 'none') {
+		throw new TaskGovernanceActionError(
+			400,
+			'Task approval mode must be set before requesting approval.'
+		);
+	}
+
+	const now = new Date().toISOString();
+	const approvalSummary =
+		input.summary?.trim() || `Approval requested from the ${input.sourceLabel}.`;
+	let approvalId: string | null = null;
+
+	const updatedTask = await mutateTaskCollections({
+		taskId: input.taskId,
+		mutate: (taskFromData, data) => {
+			if (getPendingApprovalForTask(data, input.taskId)) {
+				throw new TaskGovernanceActionError(
+					409,
+					'A pending approval already exists for this task.'
+				);
+			}
+
+			const approval = createApproval({
+				taskId: input.taskId,
+				runId: taskFromData.latestRunId,
+				mode,
+				requestedByExecutionSurfaceId,
+				approverExecutionSurfaceId,
+				summary: approvalSummary
+			});
+			approvalId = approval.id;
+
+			return {
+				data: {
+					...data,
+					approvals: [approval, ...data.approvals],
+					tasks: data.tasks.map((candidate) =>
+						candidate.id === input.taskId
+							? {
+									...candidate,
+									updatedAt: now
+								}
+							: candidate
+					),
+					decisions: [
+						createDecision({
+							taskId: input.taskId,
+							runId: taskFromData.latestRunId,
+							approvalId: approval.id,
+							decisionType: 'task_plan_updated',
+							summary: approvalSummary,
+							createdAt: now
+						}),
+						...(data.decisions ?? [])
+					]
+				},
+				changedCollections: ['approvals', 'tasks', 'decisions']
+			};
+		}
+	});
+
+	if (!updatedTask || !approvalId) {
+		throw new TaskGovernanceActionError(404, 'Task not found.');
+	}
+
+	return {
+		ok: true,
+		successAction: 'requestApproval' as const,
+		taskId: input.taskId,
+		approvalId
+	};
 }
 
 function updateLatestRunForTask(

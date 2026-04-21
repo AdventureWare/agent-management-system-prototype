@@ -14,7 +14,7 @@ import { formatTaskStatusLabel, type ControlPlaneData } from '$lib/types/control
 const MAX_DECOMPOSED_CHILD_TASKS = 3;
 const DECOMPOSITION_TEMPLATE_SLOT_COUNT = 3;
 
-type DecompositionTemplate = {
+export type TaskDecompositionTemplateInput = {
 	title: string;
 	instructions: string;
 	desiredRoleId: string;
@@ -41,7 +41,7 @@ function readTemplateToggle(form: FormData, index: number) {
 	return form.get(`decompositionEnabled${index}`)?.toString() === 'true';
 }
 
-function readTemplate(form: FormData, index: number): DecompositionTemplate {
+function readTemplate(form: FormData, index: number): TaskDecompositionTemplateInput {
 	return {
 		title: readTrimmedValue(form.get(`decompositionTitle${index}`)),
 		instructions: readTrimmedValue(form.get(`decompositionInstructions${index}`)),
@@ -98,8 +98,15 @@ function buildDecompositionDecisionSummary(parentTaskTitle: string, childTitles:
 }
 
 export async function decomposeTaskFromParent(taskId: string, form: FormData) {
-	const templates = readDecompositionTemplates(form);
+	const templates = readDecompositionTemplates(form).map(({ template }) => template);
 
+	return decomposeTaskFromTemplates(taskId, templates);
+}
+
+export async function decomposeTaskFromTemplates(
+	taskId: string,
+	templates: TaskDecompositionTemplateInput[]
+) {
 	if (templates.length === 0) {
 		throw new TaskDecompositionActionError(
 			400,
@@ -152,7 +159,7 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 	const delegationIntegrationNotes = buildDelegationIntegrationNotes(parentTask);
 	const readyCondition = buildReadyCondition(parentTask);
 
-	for (const { index, template } of templates) {
+	for (const [index, template] of templates.entries()) {
 		if (!template.title || !template.instructions) {
 			throw new TaskDecompositionActionError(
 				400,
@@ -186,7 +193,7 @@ export async function decomposeTaskFromParent(taskId: string, form: FormData) {
 	}
 
 	const now = new Date().toISOString();
-	const createdTasks = templates.map(({ template }) =>
+	const createdTasks = templates.map((template) =>
 		createTask({
 			title: template.title,
 			summary: template.instructions,

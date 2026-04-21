@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTaskAttachmentId } from '$lib/server/control-plane';
 import type { Project, Task, TaskAttachment } from '$lib/types/control-plane';
@@ -49,4 +49,37 @@ export async function persistTaskAttachments(input: {
 			};
 		})
 	);
+}
+
+export async function persistTaskAttachmentPath(input: {
+	taskId: string;
+	attachmentRoot: string;
+	sourcePath: string;
+	name?: string;
+	contentType?: string;
+}) {
+	const attachmentFolder = join(input.attachmentRoot, 'task-attachments', input.taskId);
+
+	await mkdir(attachmentFolder, { recursive: true });
+
+	const sourceFile = await stat(input.sourcePath);
+
+	if (!sourceFile.isFile()) {
+		throw new Error('Attachment source path must point to a file.');
+	}
+
+	const attachmentId = createTaskAttachmentId();
+	const safeName = sanitizeTaskAttachmentName(input.name || input.sourcePath);
+	const attachmentPath = join(attachmentFolder, `${attachmentId}-${safeName}`);
+
+	await copyFile(input.sourcePath, attachmentPath);
+
+	return {
+		id: attachmentId,
+		name: input.name?.trim() || safeName,
+		path: attachmentPath,
+		contentType: input.contentType?.trim() || 'application/octet-stream',
+		sizeBytes: sourceFile.size,
+		attachedAt: new Date().toISOString()
+	} satisfies TaskAttachment;
 }

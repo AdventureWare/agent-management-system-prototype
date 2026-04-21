@@ -1,0 +1,10 @@
+{
+	"mcpServers": {
+		"ams-control-plane": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["../../scripts/ams-control-plane-mcp.mjs"],
+			"note": "Local AMS MCP server for task, goal, project, and manifest operations. Requires AMS_AGENT_API_TOKEN."
+		}
+	}
+}
