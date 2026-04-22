@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
 	updateAgentApiProject
@@ -47,7 +48,7 @@ export const PATCH = async ({ params, request }) => {
 		return json({ project });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

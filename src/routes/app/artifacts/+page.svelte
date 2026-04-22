@@ -21,5 +21,7 @@
 	<ArtifactBrowser
 		browser={data.artifactBrowser}
 		emptyLabel="No files or folders were found at this artifact location."
+		focusLine={data.line}
+		focusColumn={data.column}
 	/>
 </AppPage>

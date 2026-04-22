@@ -98,5 +98,15 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 		);
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1/log.txt');
 		expect(document.body.textContent).toContain('Recorded output');
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) => link.getAttribute('href') === '/app/agent-use?run=run_1'
+			)
+		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) => link.getAttribute('href') === '/app/agent-use?task=task_1'
+			)
+		).toBe(true);
 	});
 });

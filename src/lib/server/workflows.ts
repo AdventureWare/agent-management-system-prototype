@@ -19,6 +19,30 @@ export type WorkflowRollup = {
 	derivedStatus: Workflow['status'];
 };
 
+export type WorkflowStepDisplay = WorkflowStep & {
+	desiredRoleName: string;
+	dependsOnStepTitles: string[];
+	dependsOnStepPositions: number[];
+	canRunInParallel: boolean;
+};
+
+export type WorkflowTaskPreview = {
+	id: string;
+	title: string;
+	status: Task['status'];
+	projectName: string;
+	updatedAt: string;
+};
+
+export type WorkflowDisplayRecord = Workflow & {
+	projectName: string;
+	rollup: WorkflowRollup;
+	steps: WorkflowStepDisplay[];
+	taskPreview: WorkflowTaskPreview[];
+	parallelizableStepCount: number;
+	defaultRoleCount: number;
+};
+
 export function sortWorkflowsByName<T extends { name: string }>(workflows: T[]) {
 	return [...workflows].sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -117,4 +141,63 @@ export function getWorkflowRollup(
 		runnableTaskCount,
 		derivedStatus
 	};
+}
+
+export function buildWorkflowDisplayRecords(data: ControlPlaneData): WorkflowDisplayRecord[] {
+	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
+	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
+
+	return sortWorkflowsByName(data.workflows ?? []).map((workflow) => {
+		const workflowTasks = getWorkflowTasks(data, workflow.id)
+			.map((task) => ({
+				id: task.id,
+				title: task.title,
+				status: task.status,
+				projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project',
+				updatedAt: task.updatedAt
+			}))
+			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+		const orderedWorkflowSteps = getWorkflowSteps(data, workflow.id);
+		const workflowStepMap = new Map(orderedWorkflowSteps.map((step) => [step.id, step]));
+		const workflowSteps = orderedWorkflowSteps.map((step) => {
+			const dependsOnStepPositions = (step.dependsOnStepIds ?? [])
+				.map((dependencyStepId) => workflowStepMap.get(dependencyStepId)?.position ?? 0)
+				.filter((position) => position > 0);
+
+			return {
+				...step,
+				desiredRoleName: step.desiredRoleId
+					? (roleMap.get(step.desiredRoleId)?.name ?? step.desiredRoleId)
+					: '',
+				dependsOnStepTitles: (step.dependsOnStepIds ?? [])
+					.map((dependencyStepId) => {
+						const dependencyStep = workflowStepMap.get(dependencyStepId);
+
+						return dependencyStep
+							? `Step ${dependencyStep.position} · ${dependencyStep.title}`
+							: '';
+					})
+					.filter(Boolean),
+				dependsOnStepPositions,
+				canRunInParallel: step.position > 1 && dependsOnStepPositions.length === 0
+			} satisfies WorkflowStepDisplay;
+		});
+
+		return {
+			...workflow,
+			projectName: projectMap.get(workflow.projectId)?.name ?? 'Unknown project',
+			rollup: getWorkflowRollup(data, workflow),
+			steps: workflowSteps,
+			taskPreview: workflowTasks.slice(0, 5),
+			parallelizableStepCount: workflowSteps.filter((step) => step.canRunInParallel).length,
+			defaultRoleCount: workflowSteps.filter((step) => Boolean(step.desiredRoleId)).length
+		} satisfies WorkflowDisplayRecord;
+	});
+}
+
+export function getWorkflowDisplayRecord(
+	data: ControlPlaneData,
+	workflowId: string
+): WorkflowDisplayRecord | null {
+	return buildWorkflowDisplayRecords(data).find((workflow) => workflow.id === workflowId) ?? null;
 }

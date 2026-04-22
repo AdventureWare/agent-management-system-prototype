@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { ActionData, PageData } from './$types';
+	import { resolve } from '$app/paths';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import {
 		collectTaskLinkedThreads,
@@ -209,6 +211,18 @@
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 	}
 
+	function buildAgentUseHref(filters: Record<string, string | null | undefined>) {
+		const params = new URLSearchParams();
+
+		for (const [key, value] of Object.entries(filters)) {
+			if (typeof value === 'string' && value.trim()) {
+				params.set(key, value);
+			}
+		}
+
+		return `/app/agent-use${params.size > 0 ? `?${params.toString()}` : ''}`;
+	}
+
 	function formatActiveRunStateLabel(status: string | null | undefined) {
 		switch (status) {
 			case 'queued':
@@ -397,6 +411,28 @@
 		delegatedSubtaskInstructions={createDelegatedSubtaskInstructions()}
 		followUpTaskInstructions={createFollowUpTaskInstructions()}
 	/>
+
+	<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">Agent use</p>
+				<p class="mt-1 text-sm text-slate-400">
+					Jump straight into filtered MCP telemetry for this task{#if data.task.latestRunId}, or for
+						its latest run{/if}.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-3">
+				<AppButton href={buildAgentUseHref({ task: data.task.id })} variant="neutral">
+					View task agent use
+				</AppButton>
+				{#if data.task.latestRunId}
+					<AppButton href={buildAgentUseHref({ run: data.task.latestRunId })} variant="ghost">
+						View latest run agent use
+					</AppButton>
+				{/if}
+			</div>
+		</div>
+	</section>
 
 	<TaskDetailOverview
 		onRefresh={() => {

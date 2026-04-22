@@ -21,6 +21,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.url.pathname.startsWith('/api/agents/threads/');
 	const isAgentControlPlaneApiPath =
 		event.url.pathname === '/api/agent-capabilities' ||
+		event.url.pathname === '/api/agent-context/current' ||
+		event.url.pathname.startsWith('/api/agent-intents/') ||
 		event.url.pathname === '/api/tasks' ||
 		event.url.pathname.startsWith('/api/tasks/') ||
 		event.url.pathname === '/api/goals' ||

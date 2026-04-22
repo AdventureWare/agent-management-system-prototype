@@ -4,11 +4,224 @@ import { render } from 'vitest-browser-svelte';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import Page from './+page.svelte';
 
+function normalizeText(value: string | null | undefined) {
+	return (value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
+	const base = {
+		availableSkills: {
+			totalCount: 0,
+			globalCount: 0,
+			projectCount: 0,
+			previewSkills: []
+		},
+		projectInstalledSkills: [],
+		attachmentRoot: '/tmp/project/agent_output',
+		artifactBrowser: {
+			rootPath: '/tmp/project/agent_output',
+			rootKind: 'directory',
+			browsePath: '/tmp/project/agent_output',
+			inspectingParentDirectory: false,
+			directoryEntries: [],
+			directoryEntriesTruncated: false,
+			knownOutputs: [],
+			errorMessage: ''
+		},
+		project: {
+			id: 'project_1',
+			name: 'Agent Management System Prototype',
+			summary: 'Primary app project',
+			projectRootFolder: '/tmp/project',
+			defaultArtifactRoot: '/tmp/project/agent_output',
+			defaultRepoPath: '',
+			defaultRepoUrl: '',
+			defaultBranch: ''
+		},
+		projects: [],
+		goals: [],
+		workflows: [],
+		roles: [],
+		executionSurfaces: [],
+		assignmentSuggestions: [],
+		executionPreflight: {
+			hasDeclaredRequirements: false,
+			registeredExecutionSurfaceCount: 0,
+			eligibleExecutionSurfaceCount: 0,
+			fullCoverageExecutionSurfaceCount: 0,
+			uncoveredCapabilityNames: [],
+			uncoveredToolNames: [],
+			directProvider: null,
+			currentAssignee: null
+		},
+		executionRequirementInventory: {
+			capabilities: [],
+			tools: [],
+			capabilityNames: [],
+			toolNames: []
+		},
+		launchContext: {
+			role: null,
+			assignedExecutionSurface: null,
+			provider: null,
+			sandbox: {
+				effective: 'danger-full-access',
+				taskRequirement: null,
+				executionSurfaceOverride: null,
+				projectDefault: null,
+				providerDefault: null
+			},
+			project: {
+				rootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output',
+				additionalWritableRoots: [],
+				totalInstalledSkillCount: 0,
+				promptSkillNames: []
+			},
+			contract: {
+				canLaunch: true,
+				canReviewAgainstContract: true,
+				missingLaunchFieldLabels: [],
+				missingReviewFieldLabels: [],
+				launchBlockerMessage: null,
+				reviewGapMessage: null
+			},
+			promptInputs: {
+				includesSuccessCriteria: false,
+				includesReadyCondition: false,
+				includesExpectedOutcome: false,
+				includesDelegationPacket: false,
+				publishedKnowledgeCount: 0,
+				requiredPromptSkillNames: [],
+				missingPromptSkillNames: []
+			},
+			requirements: {
+				capabilityNames: [],
+				toolNames: []
+			}
+		},
+		retrievedKnowledgeItems: [],
+		recentDecisions: [],
+		statusOptions: TASK_STATUS_OPTIONS,
+		relatedRuns: [],
+		dependencyTasks: [],
+		availableDependencyTasks: [],
+		candidateThreads: [],
+		suggestedThread: null,
+		parentTask: null,
+		childTasks: [],
+		childTaskRollup: null,
+		stalledRecovery: null,
+		task: {
+			id: 'task_1',
+			title: 'Task title',
+			summary: 'Task summary',
+			projectId: 'project_1',
+			projectName: 'Agent Management System Prototype',
+			area: 'product',
+			goalId: '',
+			priority: 'medium',
+			status: 'ready',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiredThreadSandbox: 'danger-full-access',
+			requiresReview: false,
+			desiredRoleId: '',
+			assigneeExecutionSurfaceId: null,
+			assigneeName: 'Unassigned',
+			agentThreadId: null,
+			blockedReason: '',
+			dependencyTaskIds: [],
+			runCount: 0,
+			latestRunId: null,
+			latestRun: null,
+			artifactPath: '/tmp/project/agent_output',
+			attachments: [],
+			createdAt: '2026-03-30T11:00:00.000Z',
+			updatedAt: '2026-03-30T12:00:00.000Z',
+			updatedAtLabel: 'just now',
+			openReview: null,
+			pendingApproval: null,
+			linkThread: null,
+			linkThreadKind: 'assigned',
+			statusThread: null,
+			hasActiveRun: false,
+			activeRun: null
+		}
+	};
+
+	const typedOverrides = overrides as Record<string, unknown>;
+
+	return {
+		...base,
+		...typedOverrides,
+		availableSkills: {
+			...base.availableSkills,
+			...((typedOverrides.availableSkills as Record<string, unknown> | undefined) ?? {})
+		},
+		artifactBrowser: {
+			...base.artifactBrowser,
+			...((typedOverrides.artifactBrowser as Record<string, unknown> | undefined) ?? {})
+		},
+		project: {
+			...base.project,
+			...((typedOverrides.project as Record<string, unknown> | undefined) ?? {})
+		},
+		launchContext: {
+			...base.launchContext,
+			...((typedOverrides.launchContext as Record<string, unknown> | undefined) ?? {}),
+			sandbox: {
+				...base.launchContext.sandbox,
+				...(((typedOverrides.launchContext as Record<string, unknown> | undefined)?.sandbox as
+					| Record<string, unknown>
+					| undefined) ?? {})
+			},
+			project: {
+				...base.launchContext.project,
+				...(((typedOverrides.launchContext as Record<string, unknown> | undefined)?.project as
+					| Record<string, unknown>
+					| undefined) ?? {})
+			},
+			contract: {
+				...base.launchContext.contract,
+				...(((typedOverrides.launchContext as Record<string, unknown> | undefined)?.contract as
+					| Record<string, unknown>
+					| undefined) ?? {})
+			},
+			promptInputs: {
+				...base.launchContext.promptInputs,
+				...(((typedOverrides.launchContext as Record<string, unknown> | undefined)?.promptInputs as
+					| Record<string, unknown>
+					| undefined) ?? {})
+			},
+			requirements: {
+				...base.launchContext.requirements,
+				...(((typedOverrides.launchContext as Record<string, unknown> | undefined)?.requirements as
+					| Record<string, unknown>
+					| undefined) ?? {})
+			}
+		},
+		executionPreflight: {
+			...base.executionPreflight,
+			...((typedOverrides.executionPreflight as Record<string, unknown> | undefined) ?? {})
+		},
+		executionRequirementInventory: {
+			...base.executionRequirementInventory,
+			...((typedOverrides.executionRequirementInventory as Record<string, unknown> | undefined) ??
+				{})
+		},
+		task: {
+			...base.task,
+			...((typedOverrides.task as Record<string, unknown> | undefined) ?? {})
+		}
+	};
+}
+
 describe('/app/tasks/[taskId]/+page.svelte', () => {
-	it('renders attached files with download and detach controls', async () => {
+	it('renders attached files with open, download, and detach controls', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 2,
 					globalCount: 1,
@@ -141,7 +354,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		expect(document.body.textContent).toContain('Attached files');
@@ -155,13 +368,34 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('/tmp/project/agent_output');
 		expect(document.body.textContent).toContain('Target date');
 		expect(document.body.textContent).toContain('Apr 22, 2026');
-		expect(document.body.textContent).toContain('Required sandbox: Danger Full Access');
+		expect(normalizeText(document.body.textContent)).toContain(
+			'Required sandbox: Danger Full Access'
+		);
 		expect(
 			(document.querySelector('input[name="targetDate"]') as HTMLInputElement | null)?.value
 		).toBe('2026-04-22');
 		expect(
 			Array.from(document.querySelectorAll('a')).some(
-				(link) => link.textContent?.trim() === 'Download'
+				(link) => link.textContent?.trim() === 'Open page'
+			)
+		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('button')).some(
+				(button) => button.textContent?.trim() === 'Quick preview'
+			)
+		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) =>
+					link.getAttribute('href') ===
+					'/app/artifacts?path=%2Ftmp%2Fproject%2Fagent_output%2Ftask-attachments%2Ftask_1%2Fbrief.md'
+			)
+		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) =>
+					link.getAttribute('href') ===
+					'/api/artifacts/file?path=%2Ftmp%2Fproject%2Fagent_output%2Ftask-attachments%2Ftask_1%2Fbrief.md'
 			)
 		).toBe(true);
 		expect(
@@ -188,12 +422,22 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain(
 			'Set the task status to Ready before running it. Current status: In Progress.'
 		);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) => link.getAttribute('href') === '/app/agent-use?task=task_1'
+			)
+		).toBe(true);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) => link.getAttribute('href') === '/app/agent-use?run=run_1'
+			)
+		).toBe(true);
 	});
 
 	it('renders a goal selector with hierarchical options on the task detail form', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -271,7 +515,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					latestRun: null,
 					artifactPath: '/tmp/project/agent_output',
 					attachments: [],
-					createdAt: '2026-03-30T11:00:00.000Z',
+					createdAt: '2026-03-31T11:00:00.000Z',
 					updatedAt: '2026-03-30T12:00:00.000Z',
 					updatedAtLabel: 'just now',
 					openReview: null,
@@ -282,7 +526,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		const goalSelect = document.querySelector('select[name="goalId"]') as HTMLSelectElement | null;
@@ -299,7 +543,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 	it('renders the full routing and governance editor on the detail form', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -409,7 +653,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		expect(document.body.textContent).toContain('Queue priority, gates, and blockers');
@@ -445,7 +689,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 	it('clamps long title and instructions at the top of the page until expanded', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -516,7 +760,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		const heading = document.querySelector('h1');
@@ -539,7 +783,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 	it('shows a suggested available thread while keeping the new-thread option', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -632,7 +876,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					isSuggested: true,
 					suggestionReason: 'Matches this task topic and is available for follow-up.'
 				}
-			} as never
+			}) as never
 		});
 
 		await page.getByRole('tab', { name: /Execution 0/i }).click();
@@ -647,7 +891,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 	it('disables the run button and explains why while a run is active', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -752,7 +996,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		const runButton = Array.from(document.querySelectorAll('button')).find((button) =>
@@ -770,7 +1014,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 	it('shows a stalled recovery call to action for stuck active runs', async () => {
 		render(Page, {
 			form: {} as never,
-			data: {
+			data: buildTaskDetailPageData({
 				availableSkills: {
 					totalCount: 0,
 					globalCount: 0,
@@ -848,19 +1092,58 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 					linkThread: {
 						id: 'session_1',
 						name: 'Thread continuity',
-						threadState: 'working'
+						cwd: '/tmp/project',
+						sandbox: 'danger-full-access',
+						model: null,
+						threadId: 'thread_1',
+						archivedAt: null,
+						createdAt: '2026-03-30T10:00:00.000Z',
+						updatedAt: '2026-03-30T12:00:00.000Z',
+						origin: 'managed',
+						threadState: 'working',
+						latestRunStatus: 'running',
+						hasActiveRun: true,
+						canResume: false,
+						runCount: 2,
+						lastActivityAt: '2026-03-30T12:00:00.000Z',
+						lastActivityLabel: 'just now',
+						threadSummary: 'Thread continuity',
+						lastExitCode: null,
+						runTimeline: [],
+						relatedTasks: [],
+						latestRun: null,
+						runs: []
 					},
 					linkThreadKind: 'assigned',
 					statusThread: {
 						id: 'session_1',
 						name: 'Thread continuity',
 						threadState: 'working',
-						lastActivityAt: '2026-03-30T12:00:00.000Z'
+						cwd: '/tmp/project',
+						sandbox: 'danger-full-access',
+						model: null,
+						threadId: 'thread_1',
+						archivedAt: null,
+						createdAt: '2026-03-30T10:00:00.000Z',
+						updatedAt: '2026-03-30T12:00:00.000Z',
+						origin: 'managed',
+						latestRunStatus: 'running',
+						hasActiveRun: true,
+						canResume: false,
+						runCount: 2,
+						lastActivityAt: '2026-03-30T12:00:00.000Z',
+						lastActivityLabel: 'just now',
+						threadSummary: 'Thread continuity',
+						lastExitCode: null,
+						runTimeline: [],
+						relatedTasks: [],
+						latestRun: null,
+						runs: []
 					}
 				},
 				candidateThreads: [],
 				suggestedThread: null
-			} as never
+			}) as never
 		});
 
 		expect(document.body.textContent).toContain('Stalled recovery');

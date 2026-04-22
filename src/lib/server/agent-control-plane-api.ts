@@ -1,5 +1,6 @@
 import { parseExecutionRequirementNames } from '$lib/execution-requirements';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 import {
 	applyGoalRelationships,
 	suggestGoalArtifactPath,
@@ -20,6 +21,8 @@ import {
 	createGoal,
 	createProject,
 	createTask,
+	getOpenReviewForTask,
+	getPendingApprovalForTask,
 	goalLinksProject,
 	loadControlPlane,
 	parseArea,
@@ -57,16 +60,7 @@ import {
 import { isValidTaskDate } from '$lib/server/task-form';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 import type { ControlPlaneData, Goal, Project, Task } from '$lib/types/control-plane';
-
-export class AgentControlPlaneApiError extends Error {
-	constructor(
-		readonly status: number,
-		message: string
-	) {
-		super(message);
-		this.name = 'AgentControlPlaneApiError';
-	}
-}
+export { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 
 export type AgentTaskListFilters = {
 	q?: string | null;
@@ -293,6 +287,170 @@ function clampLimit(value: number | null | undefined, fallback: number) {
 	return Math.min(Math.max(1, value), 200);
 }
 
+function missingIdError(label: 'task' | 'goal' | 'project') {
+	return new AgentControlPlaneApiError(
+		400,
+		`${label[0].toUpperCase()}${label.slice(1)} id is required.`,
+		{
+			code: `missing_${label}_id`,
+			suggestedNextCommands: [`${label}:list`, 'context:current']
+		}
+	);
+}
+
+function notFoundError(
+	label: 'task' | 'goal' | 'project' | 'agent_thread',
+	options: {
+		id?: string | null;
+		suggestedNextCommands?: string[];
+	} = {}
+) {
+	const labelText =
+		label === 'agent_thread' ? 'Agent thread' : label[0].toUpperCase() + label.slice(1);
+	return new AgentControlPlaneApiError(404, `${labelText} not found.`, {
+		code: `${label}_not_found`,
+		suggestedNextCommands: options.suggestedNextCommands ?? [
+			label === 'agent_thread' ? 'thread:list' : `${label}:list`,
+			'context:current'
+		],
+		details: options.id ? { [`${label}Id`]: options.id } : undefined
+	});
+}
+
+function translateTaskGovernanceError(taskId: string, error: TaskGovernanceActionError) {
+	const normalizedMessage = error.message.toLowerCase();
+
+	if (normalizedMessage.includes('open review already exists')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'review_already_open',
+			suggestedNextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+			details: { taskId }
+		});
+	}
+
+	if (normalizedMessage.includes('pending approval already exists')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'approval_already_pending',
+			suggestedNextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval'],
+			details: { taskId }
+		});
+	}
+
+	if (normalizedMessage.includes('no open review found')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'review_not_found',
+			suggestedNextCommands: ['task:get', 'task:request-review'],
+			details: { taskId }
+		});
+	}
+
+	if (normalizedMessage.includes('no pending approval found')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'approval_not_found',
+			suggestedNextCommands: ['task:get', 'task:request-approval'],
+			details: { taskId }
+		});
+	}
+
+	if (normalizedMessage.includes('approval mode must be set')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'approval_mode_not_configured',
+			suggestedNextCommands: ['task:get', 'task:update'],
+			details: { taskId }
+		});
+	}
+
+	if (normalizedMessage.includes('task not found')) {
+		return notFoundError('task', {
+			id: taskId,
+			suggestedNextCommands: ['task:list', 'context:current']
+		});
+	}
+
+	return new AgentControlPlaneApiError(error.status, error.message, {
+		code: 'task_governance_error',
+		suggestedNextCommands: ['task:get', 'context:current'],
+		details: { taskId }
+	});
+}
+
+function translateTaskChildHandoffError(taskId: string, error: TaskChildHandoffActionError) {
+	const normalizedMessage = error.message.toLowerCase();
+
+	if (normalizedMessage.includes('task not found')) {
+		return notFoundError('task', {
+			id: taskId,
+			suggestedNextCommands: ['task:list', 'context:current']
+		});
+	}
+
+	if (normalizedMessage.includes('child task')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'child_handoff_invalid_child_task',
+			suggestedNextCommands: ['task:get', 'task:decompose'],
+			details: { taskId }
+		});
+	}
+
+	return new AgentControlPlaneApiError(error.status, error.message, {
+		code: 'child_handoff_error',
+		suggestedNextCommands: ['task:get', 'context:current'],
+		details: { taskId }
+	});
+}
+
+function translateTaskSessionError(taskId: string, error: TaskSessionActionError) {
+	const normalizedMessage = error.message.toLowerCase();
+
+	if (normalizedMessage.includes('task not found')) {
+		return notFoundError('task', {
+			id: taskId,
+			suggestedNextCommands: ['task:list', 'context:current']
+		});
+	}
+
+	return new AgentControlPlaneApiError(error.status, error.message, {
+		code: normalizedMessage.includes('recover')
+			? 'task_session_recover_error'
+			: 'task_session_launch_error',
+		suggestedNextCommands: ['task:get', 'context:current'],
+		details: { taskId }
+	});
+}
+
+function translateTaskDetailMutationError(taskId: string, error: TaskDetailMutationActionError) {
+	const normalizedMessage = error.message.toLowerCase();
+
+	if (normalizedMessage.includes('task not found')) {
+		return notFoundError('task', {
+			id: taskId,
+			suggestedNextCommands: ['task:list', 'context:current']
+		});
+	}
+
+	if (normalizedMessage.includes('attachment')) {
+		return new AgentControlPlaneApiError(error.status, error.message, {
+			code: 'task_attachment_error',
+			suggestedNextCommands: ['task:get'],
+			details: { taskId }
+		});
+	}
+
+	return new AgentControlPlaneApiError(error.status, error.message, {
+		code: 'task_detail_mutation_error',
+		suggestedNextCommands: ['task:get'],
+		details: { taskId }
+	});
+}
+
+function translateTaskDecompositionError(taskId: string, error: TaskDecompositionActionError) {
+	return new AgentControlPlaneApiError(error.status, error.message, {
+		code: 'task_decomposition_error',
+		suggestedNextCommands: ['task:get', 'context:current'],
+		details: { taskId }
+	});
+}
+
 function normalizeGoalTargetDate(value: string | null | undefined) {
 	if (value === undefined) {
 		return undefined;
@@ -473,7 +631,10 @@ export async function createAgentApiGoal(input: AgentCreateGoalInput): Promise<G
 	const targetDate = normalizeGoalTargetDate(input.targetDate);
 
 	if (!name || !summary) {
-		throw new AgentControlPlaneApiError(400, 'name and summary are required.');
+		throw new AgentControlPlaneApiError(400, 'name and summary are required.', {
+			code: 'missing_goal_fields',
+			suggestedNextCommands: ['goal:list', 'goal:create']
+		});
 	}
 
 	validateGoalReferences({
@@ -538,14 +699,14 @@ export async function updateAgentApiGoal(
 	const normalizedGoalId = readTrimmedString(goalId);
 
 	if (!normalizedGoalId) {
-		throw new AgentControlPlaneApiError(400, 'Goal id is required.');
+		throw missingIdError('goal');
 	}
 
 	const current = await loadControlPlane();
 	const existingGoal = current.goals.find((candidate) => candidate.id === normalizedGoalId) ?? null;
 
 	if (!existingGoal) {
-		throw new AgentControlPlaneApiError(404, 'Goal not found.');
+		throw notFoundError('goal', { id: normalizedGoalId });
 	}
 
 	const name = input.name === undefined ? existingGoal.name : readTrimmedString(input.name);
@@ -553,7 +714,10 @@ export async function updateAgentApiGoal(
 		input.summary === undefined ? existingGoal.summary : readTrimmedString(input.summary);
 
 	if (!name || !summary) {
-		throw new AgentControlPlaneApiError(400, 'name and summary are required.');
+		throw new AgentControlPlaneApiError(400, 'name and summary are required.', {
+			code: 'missing_goal_fields',
+			suggestedNextCommands: ['goal:get', 'goal:update']
+		});
 	}
 
 	const parentGoalId =
@@ -671,7 +835,7 @@ export async function updateAgentApiGoal(
 	});
 
 	if (!updatedGoal) {
-		throw new AgentControlPlaneApiError(404, 'Goal not found.');
+		throw notFoundError('goal', { id: normalizedGoalId });
 	}
 
 	return updatedGoal;
@@ -684,11 +848,17 @@ export async function createAgentApiProject(input: AgentCreateProjectInput): Pro
 	const parentProjectId = readNullableString(input.parentProjectId ?? null);
 
 	if (!name || !summary) {
-		throw new AgentControlPlaneApiError(400, 'name and summary are required.');
+		throw new AgentControlPlaneApiError(400, 'name and summary are required.', {
+			code: 'missing_project_fields',
+			suggestedNextCommands: ['project:list', 'project:create']
+		});
 	}
 
 	if (parentProjectId && !current.projects.some((project) => project.id === parentProjectId)) {
-		throw new AgentControlPlaneApiError(400, 'Parent project not found.');
+		throw new AgentControlPlaneApiError(400, 'Parent project not found.', {
+			code: 'parent_project_not_found',
+			suggestedNextCommands: ['project:list', 'project:get']
+		});
 	}
 
 	const project = createProject({
@@ -722,7 +892,7 @@ export async function updateAgentApiProject(
 	const normalizedProjectId = readTrimmedString(projectId);
 
 	if (!normalizedProjectId) {
-		throw new AgentControlPlaneApiError(400, 'Project id is required.');
+		throw missingIdError('project');
 	}
 
 	const current = await loadControlPlane();
@@ -730,7 +900,7 @@ export async function updateAgentApiProject(
 		current.projects.find((candidate) => candidate.id === normalizedProjectId) ?? null;
 
 	if (!existingProject) {
-		throw new AgentControlPlaneApiError(404, 'Project not found.');
+		throw notFoundError('project', { id: normalizedProjectId });
 	}
 
 	const name = input.name === undefined ? existingProject.name : readTrimmedString(input.name);
@@ -738,7 +908,10 @@ export async function updateAgentApiProject(
 		input.summary === undefined ? existingProject.summary : readTrimmedString(input.summary);
 
 	if (!name || !summary) {
-		throw new AgentControlPlaneApiError(400, 'name and summary are required.');
+		throw new AgentControlPlaneApiError(400, 'name and summary are required.', {
+			code: 'missing_project_fields',
+			suggestedNextCommands: ['project:get', 'project:update']
+		});
 	}
 
 	const parentProjectId =
@@ -747,7 +920,10 @@ export async function updateAgentApiProject(
 			: readNullableString(input.parentProjectId ?? null);
 
 	if (parentProjectId && !current.projects.some((project) => project.id === parentProjectId)) {
-		throw new AgentControlPlaneApiError(400, 'Parent project not found.');
+		throw new AgentControlPlaneApiError(400, 'Parent project not found.', {
+			code: 'parent_project_not_found',
+			suggestedNextCommands: ['project:list', 'project:get']
+		});
 	}
 
 	if (wouldCreateProjectCycle(current.projects, normalizedProjectId, parentProjectId)) {
@@ -806,7 +982,7 @@ export async function updateAgentApiProject(
 	}));
 
 	if (!updatedProject) {
-		throw new AgentControlPlaneApiError(404, 'Project not found.');
+		throw notFoundError('project', { id: normalizedProjectId });
 	}
 
 	return updatedProject;
@@ -816,7 +992,7 @@ export async function attachAgentApiTaskFile(taskId: string, input: AgentTaskAtt
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	const sourcePath = readTrimmedString(input.path);
@@ -834,7 +1010,7 @@ export async function attachAgentApiTaskFile(taskId: string, input: AgentTaskAtt
 		});
 	} catch (error) {
 		if (error instanceof TaskDetailMutationActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskDetailMutationError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -853,7 +1029,7 @@ export async function removeAgentApiTaskAttachment(taskId: string, attachmentId:
 		return await removeTaskAttachmentById(normalizedTaskId, normalizedAttachmentId);
 	} catch (error) {
 		if (error instanceof TaskDetailMutationActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskDetailMutationError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -867,7 +1043,7 @@ export async function requestAgentApiTaskReview(
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
@@ -882,7 +1058,7 @@ export async function requestAgentApiTaskReview(
 		});
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -896,7 +1072,7 @@ export async function requestAgentApiTaskApproval(
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
@@ -912,7 +1088,7 @@ export async function requestAgentApiTaskApproval(
 		});
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -923,14 +1099,14 @@ export async function approveAgentApiTaskReview(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await approveTaskReview(normalizedTaskId, 'agent API');
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -941,14 +1117,14 @@ export async function requestAgentApiTaskReviewChanges(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await requestTaskReviewChanges(normalizedTaskId, 'agent API');
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -959,14 +1135,14 @@ export async function approveAgentApiTaskApproval(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await approveTaskApproval(normalizedTaskId, 'agent API');
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -977,14 +1153,14 @@ export async function rejectAgentApiTaskApproval(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await rejectTaskApproval(normalizedTaskId);
 	} catch (error) {
 		if (error instanceof TaskGovernanceActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskGovernanceError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1014,14 +1190,14 @@ export async function acceptAgentApiTaskChildHandoff(
 	const normalizedTaskId = readTrimmedString(parentTaskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await acceptTaskChildHandoff(normalizedTaskId, buildChildHandoffForm(input));
 	} catch (error) {
 		if (error instanceof TaskChildHandoffActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskChildHandoffError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1035,14 +1211,14 @@ export async function requestAgentApiTaskChildHandoffChanges(
 	const normalizedTaskId = readTrimmedString(parentTaskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await requestTaskChildHandoffChanges(normalizedTaskId, buildChildHandoffForm(input));
 	} catch (error) {
 		if (error instanceof TaskChildHandoffActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskChildHandoffError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1053,14 +1229,14 @@ export async function launchAgentApiTaskSession(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await launchTaskSession(normalizedTaskId, new FormData());
 	} catch (error) {
 		if (error instanceof TaskSessionActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskSessionError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1071,14 +1247,14 @@ export async function recoverAgentApiTaskSession(taskId: string) {
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	try {
 		return await recoverTaskSession(normalizedTaskId, new FormData());
 	} catch (error) {
 		if (error instanceof TaskSessionActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskSessionError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1089,7 +1265,7 @@ export async function decomposeAgentApiTask(taskId: string, input: AgentTaskDeco
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	const children: TaskDecompositionTemplateInput[] = Array.isArray(input.children)
@@ -1107,7 +1283,7 @@ export async function decomposeAgentApiTask(taskId: string, input: AgentTaskDeco
 		return await decomposeTaskFromTemplates(normalizedTaskId, children);
 	} catch (error) {
 		if (error instanceof TaskDecompositionActionError) {
-			throw new AgentControlPlaneApiError(error.status, error.message);
+			throw translateTaskDecompositionError(normalizedTaskId, error);
 		}
 
 		throw error;
@@ -1178,17 +1354,26 @@ export async function createAgentApiTask(input: AgentCreateTaskInput) {
 	const targetDate = readNullableString(input.targetDate ?? null);
 
 	if (!title || !summary || !projectId) {
-		throw new AgentControlPlaneApiError(400, 'title, summary, and projectId are required.');
+		throw new AgentControlPlaneApiError(400, 'title, summary, and projectId are required.', {
+			code: 'missing_task_fields',
+			suggestedNextCommands: ['project:list', 'context:current']
+		});
 	}
 
 	const project = current.projects.find((candidate) => candidate.id === projectId) ?? null;
 
 	if (!project) {
-		throw new AgentControlPlaneApiError(400, 'Project not found.');
+		throw notFoundError('project', {
+			id: projectId,
+			suggestedNextCommands: ['project:list', 'context:current']
+		});
 	}
 
 	if (goalId && !current.goals.some((candidate) => candidate.id === goalId)) {
-		throw new AgentControlPlaneApiError(400, 'Goal not found.');
+		throw notFoundError('goal', {
+			id: goalId,
+			suggestedNextCommands: ['goal:list', 'context:current']
+		});
 	}
 
 	if (workflowId && !(current.workflows ?? []).some((candidate) => candidate.id === workflowId)) {
@@ -1265,14 +1450,14 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 	const normalizedTaskId = readTrimmedString(taskId);
 
 	if (!normalizedTaskId) {
-		throw new AgentControlPlaneApiError(400, 'Task id is required.');
+		throw missingIdError('task');
 	}
 
 	const current = await loadControlPlane();
 	const existingTask = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
 
 	if (!existingTask) {
-		throw new AgentControlPlaneApiError(404, 'Task not found.');
+		throw notFoundError('task', { id: normalizedTaskId });
 	}
 
 	const desiredRoleId = input.desiredRoleId === null ? '' : readTrimmedString(input.desiredRoleId);
@@ -1451,7 +1636,7 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 	});
 
 	if (!updatedTask) {
-		throw new AgentControlPlaneApiError(404, 'Task not found.');
+		throw notFoundError('task', { id: normalizedTaskId });
 	}
 
 	return updatedTask;

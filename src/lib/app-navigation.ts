@@ -4,6 +4,7 @@ export type AppNavigationLinkId =
 	| 'tasks'
 	| 'threads'
 	| 'runs'
+	| 'agentUse'
 	| 'projects'
 	| 'goals'
 	| 'taskTemplates'
@@ -19,6 +20,7 @@ export type AppNavigationRoute =
 	| '/app/tasks'
 	| '/app/threads'
 	| '/app/runs'
+	| '/app/agent-use'
 	| '/app/projects'
 	| '/app/goals'
 	| '/app/task-templates'
@@ -35,7 +37,7 @@ export type AppNavigationLink = {
 };
 
 export type AppNavigationSection = {
-	id: 'overview' | 'work' | 'context' | 'capacity';
+	id: 'work' | 'context' | 'capacity' | 'governance';
 	title: string;
 	description: string;
 	links: AppNavigationLink[];
@@ -43,12 +45,12 @@ export type AppNavigationSection = {
 
 export const appNavigationSections: AppNavigationSection[] = [
 	{
-		id: 'overview',
-		title: 'Overview',
-		description: 'Cross-cutting system state',
+		id: 'context',
+		title: 'Context',
+		description: 'Project, outcome, and planning structure',
 		links: [
-			{ id: 'governance', label: 'Governance', href: '/app/governance' },
-			{ id: 'access', label: 'Access', href: '/app/access' }
+			{ id: 'projects', label: 'Projects', href: '/app/projects' },
+			{ id: 'goals', label: 'Goals', href: '/app/goals' }
 		]
 	},
 	{
@@ -57,20 +59,12 @@ export const appNavigationSections: AppNavigationSection[] = [
 		description: 'Queue, continuity, and execution',
 		links: [
 			{ id: 'tasks', label: 'Tasks', href: '/app/tasks' },
-			{ id: 'threads', label: 'Threads', href: '/app/threads' },
-			{ id: 'runs', label: 'Runs', href: '/app/runs' }
-		]
-	},
-	{
-		id: 'context',
-		title: 'Context',
-		description: 'Project, outcome, and planning structure',
-		links: [
-			{ id: 'projects', label: 'Projects', href: '/app/projects' },
-			{ id: 'goals', label: 'Goals', href: '/app/goals' },
 			{ id: 'taskTemplates', label: 'Task templates', href: '/app/task-templates' },
 			{ id: 'workflows', label: 'Workflows', href: '/app/workflows' },
-			{ id: 'planning', label: 'Planning', href: '/app/planning' }
+			{ id: 'planning', label: 'Planning', href: '/app/planning' },
+			{ id: 'threads', label: 'Threads', href: '/app/threads' },
+			{ id: 'runs', label: 'Runs', href: '/app/runs' },
+			{ id: 'agentUse', label: 'Agent use', href: '/app/agent-use' }
 		]
 	},
 	{
@@ -81,6 +75,15 @@ export const appNavigationSections: AppNavigationSection[] = [
 			{ id: 'executionSurfaces', label: 'Surfaces', href: '/app/execution-surfaces' },
 			{ id: 'roles', label: 'Roles', href: '/app/roles' },
 			{ id: 'providers', label: 'Providers', href: '/app/providers' }
+		]
+	},
+	{
+		id: 'governance',
+		title: 'Governance',
+		description: 'Review, approval, and escalation flow',
+		links: [
+			{ id: 'governance', label: 'Governance', href: '/app/governance' },
+			{ id: 'access', label: 'Access', href: '/app/access' }
 		]
 	}
 ];

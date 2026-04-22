@@ -166,6 +166,24 @@ describe('task thread naming', () => {
 				projectRootFolder: '/tmp/project',
 				defaultArtifactRoot: '/tmp/project/agent_output'
 			})
+		).toContain('AMS_AGENT_TASK_ID');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('AMS_AGENT_RUN_ID');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
 		).toContain('node scripts/agent-thread-cli.mjs best-target');
 		expect(
 			buildTaskThreadPrompt({

@@ -90,13 +90,27 @@ function requireThreadId(threadId) {
 
 async function request(path, init = {}) {
 	requireApiToken();
-	const response = await fetch(new URL(path, apiBaseUrl), {
-		...init,
-		headers: {
-			authorization: `Bearer ${apiToken}`,
-			...(init.headers ?? {})
+	const requestUrl = new URL(path, apiBaseUrl);
+	let response;
+
+	try {
+		response = await fetch(requestUrl, {
+			...init,
+			headers: {
+				authorization: `Bearer ${apiToken}`,
+				...(init.headers ?? {})
+			}
+		});
+	} catch (error) {
+		if (error instanceof Error) {
+			throw new Error(
+				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`
+			);
 		}
-	});
+
+		throw error;
+	}
+
 	const payload = await response.json().catch(() => ({}));
 
 	if (!response.ok) {

@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
 	createAgentApiGoal,
@@ -54,7 +55,7 @@ export const POST = async ({ request }) => {
 		return json({ goal }, { status: 201 });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

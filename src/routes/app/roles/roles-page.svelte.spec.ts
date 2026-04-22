@@ -7,6 +7,7 @@ function renderPage() {
 	render(Page, {
 		form: {} as never,
 		data: {
+			initialSelectedRoleId: 'role_app_worker',
 			roleAreaOptions: ['shared', 'product', 'growth', 'ops'],
 			roles: [
 				{
@@ -22,7 +23,14 @@ function renderPage() {
 					approvalPolicy: 'Require review for sensitive changes.',
 					escalationPolicy: 'Escalate when requirements are unclear.',
 					taskCount: 5,
-					executionSurfaceCount: 2
+					executionSurfaceCount: 2,
+					workflowCount: 1,
+					templateCount: 2,
+					taskExampleTitles: ['Fix task detail layout', 'Improve roles page'],
+					executionSurfaceNames: ['Local Codex Worker', 'Cloud UI Worker'],
+					workflowNames: ['UI audit workflow'],
+					templateNames: ['UI polish template', 'Task detail cleanup'],
+					configuredDefaultsCount: 6
 				},
 				{
 					id: 'role_reviewer',
@@ -37,7 +45,14 @@ function renderPage() {
 					approvalPolicy: 'Require sign-off before closing.',
 					escalationPolicy: 'Escalate blocking defects.',
 					taskCount: 1,
-					executionSurfaceCount: 1
+					executionSurfaceCount: 1,
+					workflowCount: 0,
+					templateCount: 1,
+					taskExampleTitles: ['Review role changes'],
+					executionSurfaceNames: ['Review surface'],
+					workflowNames: [],
+					templateNames: ['Review template'],
+					configuredDefaultsCount: 5
 				}
 			]
 		} as never
@@ -50,11 +65,18 @@ describe('/app/roles/+page.svelte', () => {
 
 		expect(document.querySelectorAll('form[action="?/updateRole"]')).toHaveLength(1);
 		expect(document.querySelectorAll('textarea[name="systemPrompt"]')).toHaveLength(2);
-		expect(document.body.textContent).toContain('Selected role');
+		expect(document.body.textContent).toContain('Role purpose and fit');
 		expect(document.body.textContent).toContain('App Worker');
-		expect(document.body.textContent).toContain('5 tasks');
+		expect(document.body.textContent).toContain('5 task references');
+		expect(window.location.search).toContain('role=role_app_worker');
+		const dedicatedDetailLink = Array.from(document.querySelectorAll('a')).find((link) =>
+			link.textContent?.includes('Open dedicated detail')
+		) as HTMLAnchorElement | undefined;
+		expect(dedicatedDetailLink?.getAttribute('href')).toBe('/app/roles/role_app_worker');
 
-		await page.getByRole('button', { name: /Reviewer Area/i }).click();
+		const roleButtons = document.querySelectorAll('button[aria-pressed]');
+		(roleButtons[1] as HTMLButtonElement | undefined)?.click();
+		await new Promise((resolve) => window.setTimeout(resolve, 0));
 
 		const roleIdField = document.querySelector(
 			'form[action="?/updateRole"] input[name="roleId"]'
@@ -65,6 +87,42 @@ describe('/app/roles/+page.svelte', () => {
 
 		expect(roleIdField?.value).toBe('role_reviewer');
 		expect(nameField?.value).toBe('Reviewer');
-		expect(document.body.textContent).toContain('1 tasks');
+		expect(document.body.textContent).toContain('Review role changes');
+		expect(window.location.search).toContain('role=role_reviewer');
+		const reviewerDetailLink = Array.from(document.querySelectorAll('a')).find((link) =>
+			link.textContent?.includes('Open dedicated detail')
+		) as HTMLAnchorElement | undefined;
+		expect(reviewerDetailLink?.getAttribute('href')).toBe('/app/roles/role_reviewer');
+
+		const createFromSelectedRoleButton = Array.from(document.querySelectorAll('button')).find(
+			(button) => button.textContent?.includes('Create from selected role')
+		) as HTMLButtonElement | undefined;
+
+		createFromSelectedRoleButton?.click();
+		await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+		const createNameField = document.querySelector(
+			'form[action="?/createRole"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const createDescriptionField = document.querySelector(
+			'form[action="?/createRole"] input[name="description"]'
+		) as HTMLInputElement | null;
+		const createAreaField = document.querySelector(
+			'form[action="?/createRole"] select[name="area"]'
+		) as HTMLSelectElement | null;
+		const createSkillIdsField = document.querySelector(
+			'form[action="?/createRole"] input[type="hidden"][name="skillIds"]'
+		) as HTMLInputElement | null;
+		const createAdvancedDetails = document.querySelector(
+			'form[action="?/createRole"] details'
+		) as HTMLDetailsElement | null;
+
+		expect(createNameField?.value).toBe('Reviewer Copy');
+		expect(createDescriptionField?.value).toBe(
+			'Checks completeness, provenance, duplicates, and handoff quality.'
+		);
+		expect(createAreaField?.value).toBe('ops');
+		expect(createSkillIdsField?.value).toBe('writing');
+		expect(createAdvancedDetails?.open).toBe(true);
 	});
 });

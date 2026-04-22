@@ -1,5 +1,6 @@
 import {
 	createRun,
+	createRunId,
 	getPendingApprovalForTask,
 	resolveThreadSandbox,
 	selectExecutionProvider
@@ -498,6 +499,7 @@ export async function launchTaskFromPlan(
 	taskId: string,
 	plan: TaskLaunchPlan
 ): Promise<{ threadId: string | null }> {
+	const controlPlaneRunId = createRunId();
 	let agentThreadId =
 		plan.compatibleAssignedThread?.id ?? plan.compatibleLatestRunThread?.id ?? null;
 	let agentThreadRunId: string | null;
@@ -505,13 +507,25 @@ export async function launchTaskFromPlan(
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 
 	if (plan.compatibleAssignedThread?.canResume) {
-		const sendResult = await sendAgentThreadMessage(plan.compatibleAssignedThread.id, plan.prompt);
+		const sendResult = await sendAgentThreadMessage(plan.compatibleAssignedThread.id, {
+			prompt: plan.prompt,
+			launchContext: {
+				taskId,
+				controlPlaneRunId
+			}
+		});
 		agentThreadId = plan.compatibleAssignedThread.id;
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
-		const sendResult = await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, plan.prompt);
+		const sendResult = await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, {
+			prompt: plan.prompt,
+			launchContext: {
+				taskId,
+				controlPlaneRunId
+			}
+		});
 		agentThreadId = plan.compatibleLatestRunThread.id;
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleLatestRunThread.threadId;
@@ -532,7 +546,11 @@ export async function launchTaskFromPlan(
 				project: plan.project,
 				provider: plan.provider
 			}),
-			model: null
+			model: null,
+			launchContext: {
+				taskId,
+				controlPlaneRunId
+			}
 		});
 
 		agentThreadId = session.agentThreadId;
@@ -543,6 +561,7 @@ export async function launchTaskFromPlan(
 	const now = new Date().toISOString();
 	const providerId = plan.provider?.id ?? null;
 	const run = createRun({
+		id: controlPlaneRunId,
 		taskId,
 		executionSurfaceId: plan.effectiveExecutionSurface?.id ?? null,
 		assumedRoleId: plan.effectiveDesiredRoleId || null,

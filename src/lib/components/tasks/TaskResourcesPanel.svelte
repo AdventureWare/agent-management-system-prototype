@@ -1,12 +1,17 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import {
+		artifactDownloadHref,
+		artifactFileHref,
+		artifactFolderHref,
+		artifactPreviewKind
+	} from '$lib/artifact-links';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
+	import ArtifactQuickPreviewDialog from '$lib/components/ArtifactQuickPreviewDialog.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import type { ArtifactBrowserData } from '$lib/types/artifacts';
 	import type { TaskAttachment } from '$lib/types/control-plane';
 
 	let {
-		taskId,
 		attachments,
 		attachmentRoot,
 		artifactBrowser,
@@ -20,6 +25,11 @@
 		actionBasePath?: string;
 		readOnly?: boolean;
 	}>();
+	let copiedPath = $state<string | null>(null);
+	let copiedLink = $state<string | null>(null);
+	let quickPreviewOpen = $state(false);
+	let quickPreviewPath = $state('');
+	let quickPreviewLabel = $state('');
 
 	function formatAttachmentSize(sizeBytes: number) {
 		if (sizeBytes < 1024) {
@@ -35,6 +45,57 @@
 
 	function taskAction(actionName: string) {
 		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
+
+	function attachmentActionLabel(path: string) {
+		return artifactPreviewKind(path) ? 'Open page' : 'Open';
+	}
+
+	function canWriteClipboard() {
+		return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+	}
+
+	async function copyPath(path: string) {
+		if (!canWriteClipboard()) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(path);
+			copiedPath = path;
+			window.setTimeout(() => {
+				if (copiedPath === path) {
+					copiedPath = null;
+				}
+			}, 1400);
+		} catch {
+			copiedPath = null;
+		}
+	}
+
+	async function copyLink(path: string) {
+		if (!canWriteClipboard() || typeof window === 'undefined') {
+			return;
+		}
+
+		try {
+			const href = new URL(artifactFileHref(path), window.location.origin).toString();
+			await navigator.clipboard.writeText(href);
+			copiedLink = path;
+			window.setTimeout(() => {
+				if (copiedLink === path) {
+					copiedLink = null;
+				}
+			}, 1400);
+		} catch {
+			copiedLink = null;
+		}
+	}
+
+	function openQuickPreview(path: string, label: string) {
+		quickPreviewOpen = true;
+		quickPreviewPath = path;
+		quickPreviewLabel = label;
 	}
 </script>
 
@@ -114,15 +175,67 @@
 										{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType ||
 											'Unknown type'}
 									</p>
-									<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">{attachment.path}</p>
+									<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
+										<a
+											class="underline decoration-slate-600 underline-offset-4 transition hover:text-slate-300"
+											href={artifactFileHref(attachment.path)}
+											rel="external"
+										>
+											{attachment.path}
+										</a>
+									</p>
 									<p class="mt-2 text-xs text-slate-500">
 										Attached {new Date(attachment.attachedAt).toLocaleString()}
 									</p>
 								</div>
 								<div class="flex flex-col gap-2 sm:items-end">
+									{#if artifactPreviewKind(attachment.path)}
+										<button
+											class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-500/50 hover:text-violet-100"
+											type="button"
+											onclick={() => {
+												openQuickPreview(attachment.path, attachment.name);
+											}}
+										>
+											Quick preview
+										</button>
+									{/if}
 									<a
 										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-										href={resolve(`/api/tasks/${taskId}/attachments/${attachment.id}`)}
+										href={artifactFileHref(attachment.path)}
+										rel="external"
+									>
+										{attachmentActionLabel(attachment.path)}
+									</a>
+									<a
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+										href={artifactFolderHref(attachment.path)}
+										rel="external"
+									>
+										Open folder
+									</a>
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+										type="button"
+										onclick={() => {
+											void copyLink(attachment.path);
+										}}
+									>
+										{copiedLink === attachment.path ? 'Copied link' : 'Copy link'}
+									</button>
+									<button
+										class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+										type="button"
+										onclick={() => {
+											void copyPath(attachment.path);
+										}}
+									>
+										{copiedPath === attachment.path ? 'Copied' : 'Copy path'}
+									</button>
+									<a
+										class="rounded-full border border-emerald-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-700/90 hover:text-emerald-100"
+										href={artifactDownloadHref(attachment.path)}
+										rel="external"
 									>
 										Download
 									</a>
@@ -162,3 +275,9 @@
 		</div>
 	</DetailSection>
 </div>
+
+<ArtifactQuickPreviewDialog
+	bind:open={quickPreviewOpen}
+	path={quickPreviewPath}
+	label={quickPreviewLabel}
+/>

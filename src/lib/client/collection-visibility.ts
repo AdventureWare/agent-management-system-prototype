@@ -28,8 +28,8 @@ export function getHiddenTaskViewNotice(input: {
 		return {
 			count: input.completedCount,
 			targetView: 'completed',
-			label: 'Completed work',
-			description: 'Matching tasks are currently in the completed queue.'
+			label: 'Completed',
+			description: 'Matching tasks are currently in completed tasks.'
 		};
 	}
 
@@ -41,8 +41,8 @@ export function getHiddenTaskViewNotice(input: {
 		return {
 			count: input.activeCount,
 			targetView: 'active',
-			label: 'Active queue',
-			description: 'Matching tasks are currently in the active queue.'
+			label: 'Open tasks',
+			description: 'Matching tasks are currently in open tasks.'
 		};
 	}
 

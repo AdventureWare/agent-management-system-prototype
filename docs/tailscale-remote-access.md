@@ -30,6 +30,8 @@ Start the local server manually:
 npm run app:server:start
 ```
 
+The start helper validates the production build first and runs `npm run build` automatically if the checked-in `build/` output is missing or stale.
+
 Check status:
 
 ```sh

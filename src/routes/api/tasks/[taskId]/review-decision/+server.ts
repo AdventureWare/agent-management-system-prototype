@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
 	approveAgentApiTaskReview,
@@ -18,10 +19,19 @@ export const POST = async ({ params, request }) => {
 			return json(await requestAgentApiTaskReviewChanges(params.taskId));
 		}
 
-		return json({ error: 'decision must be approve or changes_requested.' }, { status: 400 });
+		return jsonAgentApiError(
+			new AgentControlPlaneApiError(400, 'decision must be approve or changes_requested.', {
+				code: 'invalid_review_decision',
+				suggestedNextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+				details: {
+					taskId: params.taskId,
+					allowedDecisions: ['approve', 'changes_requested']
+				}
+			})
+		);
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

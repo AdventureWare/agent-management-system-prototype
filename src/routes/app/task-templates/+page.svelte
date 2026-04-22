@@ -5,6 +5,7 @@
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import RolePicker from '$lib/components/RolePicker.svelte';
 	import {
 		appendExecutionRequirementName,
 		findUnknownExecutionRequirementNames
@@ -545,19 +546,14 @@
 			</label>
 
 			<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span>
-					<select
-						bind:value={editorValues.desiredRoleId}
-						class="select text-white"
-						name="desiredRoleId"
-					>
-						<option value="">No role preference</option>
-						{#each data.roles as role (role.id)}
-							<option value={role.id}>{role.name}</option>
-						{/each}
-					</select>
-				</label>
+				<RolePicker
+					label="Desired role"
+					name="desiredRoleId"
+					inputId="task-template-desired-role"
+					bind:value={editorValues.desiredRoleId}
+					helperText="Optional. Sets the default specialization bundle this template should ask for."
+					roles={data.roles}
+				/>
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>

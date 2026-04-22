@@ -1,612 +1,633 @@
 <script lang="ts">
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
+	import CollectionToolbar from '$lib/components/CollectionToolbar.svelte';
+	import DataTableSection from '$lib/components/DataTableSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import WorkflowStepEditor from '$lib/components/workflows/WorkflowStepEditor.svelte';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import {
+		formatTaskStatusLabel,
+		formatWorkflowStatusLabel,
+		taskStatusToneClass,
+		workflowStatusToneClass
+	} from '$lib/types/control-plane';
+	import type { ControlPlaneData } from '$lib/types/control-plane';
+	import type { WorkflowDisplayRecord } from '$lib/server/workflows';
 
-	let { data, form } = $props();
-	type StepDraft = {
-		clientId: string;
-		title: string;
-		desiredRoleId: string;
-		summary: string;
-		dependsOnStepPositions: number[];
+	type WorkflowsPageData = {
+		deleteSuccess: boolean;
+		projects: ControlPlaneData['projects'];
+		roles: ControlPlaneData['roles'];
+		workflows: WorkflowDisplayRecord[];
 	};
-	type StepEditableField = 'title' | 'desiredRoleId' | 'summary';
-	let stepDraftSequence = 0;
+
+	let { data }: { data: WorkflowsPageData } = $props();
+
+	type DirectoryState = {
+		query: string;
+		projectId: string;
+		status: string;
+		workflowId: string;
+	};
+
+	let routerReady = $state(false);
+	let initialDirectoryState = readDirectoryState(page.url);
+	let query = $state(initialDirectoryState.query);
+	let selectedProjectId = $state(initialDirectoryState.projectId);
+	let selectedStatus = $state(initialDirectoryState.status);
+	let selectedWorkflowId = $state(initialDirectoryState.workflowId);
 
 	let totalStepCount = $derived(
-		data.workflows.reduce((count, workflow) => count + workflow.steps.length, 0)
+		data.workflows.reduce(
+			(count: number, workflow: WorkflowDisplayRecord) => count + workflow.steps.length,
+			0
+		)
 	);
 	let totalGeneratedTaskCount = $derived(
-		data.workflows.reduce((count, workflow) => count + workflow.rollup.taskCount, 0)
+		data.workflows.reduce(
+			(count: number, workflow: WorkflowDisplayRecord) => count + workflow.rollup.taskCount,
+			0
+		)
 	);
-	let createWorkflowSuccess = $derived(form?.ok && form?.successAction === 'createWorkflow');
-	let updateWorkflowSuccess = $derived(form?.ok && form?.successAction === 'updateWorkflow');
-	let instantiateWorkflowSuccess = $derived(
-		form?.ok && form?.successAction === 'instantiateWorkflow'
+	let activeWorkflowCount = $derived(
+		data.workflows.filter(
+			(workflow: WorkflowDisplayRecord) => workflow.rollup.derivedStatus === 'active'
+		).length
 	);
-	let deleteWorkflowSuccess = $derived(form?.ok && form?.successAction === 'deleteWorkflow');
-	let instantiatedTaskCount = $derived(
-		instantiateWorkflowSuccess ? Number(form?.createdTaskCount ?? 0) : 0
-	);
-	let formValues = $derived(
-		form?.values ?? {
-			name: '',
-			summary: '',
-			projectId: '',
-			stepFields: []
-		}
-	);
-	let instantiatedTaskHref = $derived(
-		instantiateWorkflowSuccess && form?.parentTaskId
-			? resolve(`/app/tasks/${form.parentTaskId}`)
-			: ''
-	);
-	let createStepDrafts = $state.raw<StepDraft[]>([]);
-	let workflowStepDrafts = $state.raw<Record<string, StepDraft[]>>({});
+	let filteredWorkflows = $derived.by(() => {
+		const normalizedQuery = query.trim().toLowerCase();
 
-	function createStepDraft(input?: Partial<Omit<StepDraft, 'clientId'>>) {
-		stepDraftSequence += 1;
+		return data.workflows.filter((workflow: WorkflowDisplayRecord) => {
+			const matchesQuery =
+				!normalizedQuery ||
+				[
+					workflow.name,
+					workflow.summary,
+					workflow.projectName,
+					...workflow.steps.map((step: WorkflowDisplayRecord['steps'][number]) => step.title),
+					...workflow.taskPreview.map(
+						(task: WorkflowDisplayRecord['taskPreview'][number]) => task.title
+					)
+				].some((value) => value.toLowerCase().includes(normalizedQuery));
+			const matchesProject =
+				selectedProjectId === 'all' || workflow.projectId === selectedProjectId;
+			const matchesStatus =
+				selectedStatus === 'all' || workflow.rollup.derivedStatus === selectedStatus;
 
+			return matchesQuery && matchesProject && matchesStatus;
+		});
+	});
+	let selectedWorkflow = $derived(
+		filteredWorkflows.find(
+			(workflow: WorkflowDisplayRecord) => workflow.id === selectedWorkflowId
+		) ??
+			filteredWorkflows[0] ??
+			null
+	);
+
+	function readDirectoryState(url: URL): DirectoryState {
 		return {
-			clientId: `step_draft_${stepDraftSequence}`,
-			title: input?.title ?? '',
-			desiredRoleId: input?.desiredRoleId ?? '',
-			summary: input?.summary ?? '',
-			dependsOnStepPositions: input?.dependsOnStepPositions ?? []
-		} satisfies StepDraft;
+			query: url.searchParams.get('q')?.trim() ?? '',
+			projectId: url.searchParams.get('project')?.trim() || 'all',
+			status: url.searchParams.get('status')?.trim() || 'all',
+			workflowId: url.searchParams.get('workflow')?.trim() ?? ''
+		};
 	}
 
-	function normalizeStepDrafts(
-		steps:
-			| Array<{
-					title?: string;
-					desiredRoleId?: string;
-					summary?: string;
-					dependsOnStepPositions?: number[];
-			  }>
-			| null
-			| undefined
-	) {
-		const normalized = (steps ?? []).map((step) =>
-			createStepDraft({
-				title: step.title ?? '',
-				desiredRoleId: step.desiredRoleId ?? '',
-				summary: step.summary ?? '',
-				dependsOnStepPositions: step.dependsOnStepPositions ?? []
-			})
-		);
+	function setParam(url: URL, key: string, value: string) {
+		if (value) {
+			url.searchParams.set(key, value);
+			return;
+		}
 
-		return normalized.length > 0 ? normalized : [createStepDraft()];
-	}
-
-	function buildWorkflowStepDraftMap() {
-		return Object.fromEntries(
-			data.workflows.map((workflow) => {
-				const pendingValues =
-					form?.workflowId === workflow.id && Array.isArray(form?.values?.stepFields)
-						? form.values.stepFields
-						: workflow.steps;
-
-				return [workflow.id, normalizeStepDrafts(pendingValues)];
-			})
-		) as Record<string, StepDraft[]>;
+		url.searchParams.delete(key);
 	}
 
 	$effect(() => {
-		createStepDrafts = normalizeStepDrafts(
-			Array.isArray(formValues.stepFields) ? formValues.stepFields : []
-		);
-		workflowStepDrafts = buildWorkflowStepDraftMap();
+		if (!selectedWorkflowId) {
+			selectedWorkflowId = data.workflows[0]?.id ?? '';
+		}
 	});
 
-	function canDeleteWorkflow(workflow: (typeof data.workflows)[number]) {
-		return workflow.rollup.taskCount === 0;
-	}
-
-	function reindexStepDependencies(steps: StepDraft[], removedPosition: number) {
-		return steps.map((step, index) => ({
-			...step,
-			dependsOnStepPositions: step.dependsOnStepPositions
-				.filter((position) => position !== removedPosition)
-				.map((position) => (position > removedPosition ? position - 1 : position))
-				.filter((position) => position < index + 1)
-		}));
-	}
-
-	function updateCreateStepField(clientId: string, field: StepEditableField, value: string) {
-		createStepDrafts = createStepDrafts.map((step) =>
-			step.clientId === clientId ? { ...step, [field]: value } : step
-		);
-	}
-
-	function addCreateStep() {
-		createStepDrafts = [
-			...createStepDrafts,
-			createStepDraft({
-				dependsOnStepPositions: createStepDrafts.length > 0 ? [createStepDrafts.length] : []
-			})
-		];
-	}
-
-	function removeCreateStep(clientId: string) {
-		if (createStepDrafts.length === 1) {
+	$effect(() => {
+		if (
+			filteredWorkflows.some(
+				(workflow: WorkflowDisplayRecord) => workflow.id === selectedWorkflowId
+			)
+		) {
 			return;
 		}
 
-		const removedPosition = createStepDrafts.findIndex((step) => step.clientId === clientId) + 1;
-		createStepDrafts = reindexStepDependencies(
-			createStepDrafts.filter((step) => step.clientId !== clientId),
-			removedPosition
-		);
-	}
+		selectedWorkflowId = filteredWorkflows[0]?.id ?? '';
+	});
 
-	function updateWorkflowStepField(
-		workflowId: string,
-		clientId: string,
-		field: StepEditableField,
-		value: string
-	) {
-		const currentDrafts = workflowStepDrafts[workflowId] ?? [createStepDraft()];
-		workflowStepDrafts = {
-			...workflowStepDrafts,
-			[workflowId]: currentDrafts.map((step) =>
-				step.clientId === clientId ? { ...step, [field]: value } : step
-			)
-		};
-	}
-
-	function addWorkflowStep(workflowId: string) {
-		const currentDrafts = workflowStepDrafts[workflowId] ?? [createStepDraft()];
-		workflowStepDrafts = {
-			...workflowStepDrafts,
-			[workflowId]: [
-				...currentDrafts,
-				createStepDraft({
-					dependsOnStepPositions: currentDrafts.length > 0 ? [currentDrafts.length] : []
-				})
-			]
-		};
-	}
-
-	function removeWorkflowStep(workflowId: string, clientId: string) {
-		const currentDrafts = workflowStepDrafts[workflowId] ?? [createStepDraft()];
-
-		if (currentDrafts.length === 1) {
+	$effect(() => {
+		if (typeof window === 'undefined') {
 			return;
 		}
 
-		const removedPosition =
-			currentDrafts.findIndex((candidate) => candidate.clientId === clientId) + 1;
-		workflowStepDrafts = {
-			...workflowStepDrafts,
-			[workflowId]: reindexStepDependencies(
-				currentDrafts.filter((step) => step.clientId !== clientId),
-				removedPosition
-			)
+		const syncFromLocation = () => {
+			const nextState = readDirectoryState(new URL(window.location.href));
+			query = nextState.query;
+			selectedProjectId = nextState.projectId;
+			selectedStatus = nextState.status;
+			selectedWorkflowId = nextState.workflowId;
 		};
-	}
 
-	function updateCreateStepDependencies(clientId: string, positions: number[]) {
-		createStepDrafts = createStepDrafts.map((step, index) =>
-			step.clientId === clientId
-				? {
-						...step,
-						dependsOnStepPositions: positions.filter((position) => position < index + 1)
-					}
-				: step
-		);
-	}
+		window.addEventListener('popstate', syncFromLocation);
 
-	function updateWorkflowStepDependencies(
-		workflowId: string,
-		clientId: string,
-		positions: number[]
-	) {
-		const currentDrafts = workflowStepDrafts[workflowId] ?? [createStepDraft()];
-		workflowStepDrafts = {
-			...workflowStepDrafts,
-			[workflowId]: currentDrafts.map((step, index) =>
-				step.clientId === clientId
-					? {
-							...step,
-							dependsOnStepPositions: positions.filter((position) => position < index + 1)
-						}
-					: step
-			)
+		return () => {
+			window.removeEventListener('popstate', syncFromLocation);
 		};
-	}
+	});
+
+	afterNavigate(() => {
+		routerReady = true;
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined' || !routerReady) {
+			return;
+		}
+
+		const currentUrl = new URL(window.location.href);
+		const nextUrl = new URL(currentUrl);
+		setParam(nextUrl, 'q', query.trim());
+		setParam(nextUrl, 'project', selectedProjectId !== 'all' ? selectedProjectId : '');
+		setParam(nextUrl, 'status', selectedStatus !== 'all' ? selectedStatus : '');
+		setParam(nextUrl, 'workflow', selectedWorkflowId);
+		nextUrl.searchParams.delete('deleted');
+
+		const currentPath = `${currentUrl.pathname}${currentUrl.search}`;
+		const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
+
+		if (currentPath === nextPath) {
+			return;
+		}
+
+		replaceState(nextUrl, page.state);
+	});
 </script>
 
 <AppPage width="full">
 	<PageHeader
 		eyebrow="Workflows"
 		title="Workflow templates"
-		description="Define reusable, ordered task sequences with default roles, then instantiate them into normal tasks when a feature or larger effort needs structure."
+		description="Browse reusable workflows as a directory first, then open a template to edit sequencing, defaults, and instantiation details."
 	>
 		{#snippet actions()}
 			<AppButton href={resolve('/app/tasks')} variant="neutral">Open tasks</AppButton>
 		{/snippet}
 	</PageHeader>
 
-	{#if form?.message}
-		<p class="ui-notice border border-rose-900/70 bg-rose-950/40 text-rose-200">
-			{form.message}
-		</p>
-	{/if}
-
-	{#if createWorkflowSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Workflow template created.
-		</p>
-	{/if}
-
-	{#if updateWorkflowSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Workflow template updated.
-		</p>
-	{/if}
-
-	{#if instantiateWorkflowSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
-			Created {instantiatedTaskCount} task{instantiatedTaskCount === 1 ? '' : 's'} from the workflow template.
-			{#if instantiatedTaskHref}
-				<a class="ml-2 font-medium text-emerald-100 underline" href={instantiatedTaskHref}>
-					Open parent task
-				</a>
-			{/if}
-		</p>
-	{/if}
-
-	{#if deleteWorkflowSuccess}
-		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+	{#if data.deleteSuccess}
+		<p
+			aria-live="polite"
+			class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200"
+		>
 			Workflow template deleted.
 		</p>
 	{/if}
 
 	<div class="grid gap-4 md:grid-cols-3">
 		<MetricCard
-			label="Template library"
+			label="Templates"
 			value={data.workflows.length}
-			detail="Reusable workflow definitions available for larger work."
+			detail="Reusable workflow definitions available across the workspace."
 		/>
 		<MetricCard
-			label="Template steps"
-			value={totalStepCount}
-			detail="Ordered steps saved across all workflow templates."
+			label="Active templates"
+			value={activeWorkflowCount}
+			detail="Templates that currently have runnable or in-progress generated work."
 		/>
 		<MetricCard
 			label="Generated tasks"
 			value={totalGeneratedTaskCount}
-			detail="Tasks created from workflow templates across the library."
+			detail={`Across ${totalStepCount} saved step${totalStepCount === 1 ? '' : 's'} in the library.`}
 		/>
 	</div>
 
-	<section class="ui-panel space-y-5">
-		<div class="max-w-3xl">
-			<h2 class="text-xl font-semibold text-white">Create workflow template</h2>
-			<p class="mt-2 text-sm text-slate-400">
-				Use workflow templates only when work is big enough to benefit from repeatable structure.
-				Simple changes should still stay as ordinary tasks.
-			</p>
-		</div>
+	<CollectionToolbar
+		title="Workflow directory"
+		description="Search templates, preview the structure, and open one only when you need to edit or instantiate it."
+	>
+		{#snippet controls()}
+			<div class="flex flex-col gap-3 xl:w-[54rem]">
+				<div class="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+					<label class="block">
+						<span class="sr-only">Search workflows</span>
+						<input
+							bind:value={query}
+							class="input text-white placeholder:text-slate-500"
+							data-persist-off
+							placeholder="Search workflows, steps, or generated tasks…"
+						/>
+					</label>
 
-		<form class="space-y-4" method="POST" action="?/createWorkflow">
-			<div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Template name</span>
-					<input
-						class="input text-white"
-						name="name"
-						placeholder="Feature development"
-						required
-						value={formValues.name}
-					/>
-				</label>
+					<label class="block">
+						<span class="sr-only">Filter workflows by project</span>
+						<select bind:value={selectedProjectId} class="select text-white" data-persist-off>
+							<option value="all">All projects</option>
+							{#each data.projects as project (project.id)}
+								<option value={project.id}>{project.name}</option>
+							{/each}
+						</select>
+					</label>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
-					<select class="select text-white" name="projectId" required>
-						<option value="" disabled selected={!formValues.projectId}>Select a project</option>
-						{#each data.projects as project (project.id)}
-							<option value={project.id} selected={formValues.projectId === project.id}>
-								{project.name}
-							</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-
-			<label class="block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Template summary</span>
-				<textarea
-					class="textarea min-h-24 text-white placeholder:text-slate-500"
-					name="summary"
-					placeholder="Reusable process for turning an idea into a shipped feature."
-					required>{formValues.summary}</textarea
-				>
-			</label>
-
-			<div class="space-y-3">
-				<div>
-					<span class="block text-sm font-medium text-slate-200">Workflow steps</span>
-					<span class="mt-2 block text-xs text-slate-500">
-						Define the ordered steps that should be generated when this template is instantiated.
-					</span>
+					<label class="block">
+						<span class="sr-only">Filter workflows by status</span>
+						<select bind:value={selectedStatus} class="select text-white" data-persist-off>
+							<option value="all">All statuses</option>
+							<option value="draft">Draft</option>
+							<option value="active">Active</option>
+							<option value="review">Review</option>
+							<option value="blocked">Blocked</option>
+							<option value="done">Done</option>
+							<option value="canceled">Canceled</option>
+						</select>
+					</label>
 				</div>
-				<WorkflowStepEditor
-					steps={createStepDrafts}
-					roles={data.roles}
-					onupdate={(clientId, field, value) => updateCreateStepField(clientId, field, value)}
-					onupdateDependencies={(clientId, positions) =>
-						updateCreateStepDependencies(clientId, positions)}
-					onadd={addCreateStep}
-					onremove={removeCreateStep}
-				/>
-			</div>
 
-			<div class="rounded-2xl border border-slate-800 bg-slate-950/35 p-4">
-				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-					Available roles
-				</p>
-				<div class="mt-3 flex flex-wrap gap-2">
-					{#each data.roles as role (role.id)}
-						<span
-							class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs text-slate-300"
+				<div class="flex flex-wrap justify-end gap-3">
+					{#if selectedWorkflow}
+						<AppButton href={resolve(`/app/workflows/${selectedWorkflow.id}`)} variant="neutral">
+							Open selected workflow
+						</AppButton>
+					{/if}
+					<AppButton href={resolve('/app/workflows/new')} variant="primary">
+						Create workflow
+					</AppButton>
+				</div>
+			</div>
+		{/snippet}
+	</CollectionToolbar>
+
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(22rem,0.9fr)]">
+		<DataTableSection
+			title="Templates"
+			description="Preview a workflow from the directory, then open its detail page when you need the full editor."
+			summary={`${filteredWorkflows.length} matching template${filteredWorkflows.length === 1 ? '' : 's'}`}
+			empty={filteredWorkflows.length === 0}
+			emptyMessage="No workflow templates match the current search or filters."
+		>
+			<div class="space-y-3 xl:hidden">
+				{#each filteredWorkflows as workflow (workflow.id)}
+					<article
+						class={[
+							'rounded-2xl border border-slate-800 bg-slate-950/45 p-4 transition',
+							selectedWorkflow?.id === workflow.id ? 'border-sky-500/50 bg-slate-900/80' : ''
+						]}
+					>
+						<button
+							class="block w-full rounded-xl text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
+							type="button"
+							onclick={() => {
+								selectedWorkflowId = workflow.id;
+							}}
 						>
-							{role.id} · {role.name}
-						</span>
-					{/each}
-				</div>
-			</div>
-
-			<div class="flex flex-wrap gap-3">
-				<AppButton type="submit" variant="primary">Create workflow template</AppButton>
-			</div>
-		</form>
-	</section>
-
-	<section class="ui-panel">
-		<div class="flex flex-col gap-2">
-			<h2 class="text-xl font-semibold text-white">Template library</h2>
-			<p class="max-w-3xl text-sm text-slate-400">
-				Instantiate a workflow template only when work is large enough to justify several tasks. The
-				generated work still becomes ordinary tasks that can be edited manually.
-			</p>
-		</div>
-
-		{#if data.workflows.length === 0}
-			<div class="mt-6 rounded-2xl border border-dashed border-slate-800 bg-slate-950/35 p-6">
-				<p class="text-sm text-slate-300">
-					No workflow templates exist yet. Create one once you see a repeatable multi-step pattern.
-				</p>
-			</div>
-		{:else}
-			<div class="mt-6 space-y-4">
-				{#each data.workflows as workflow (workflow.id)}
-					<article class="rounded-2xl border border-slate-800 bg-slate-950/55 p-5">
-						<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-							<div class="min-w-0 flex-1">
-								<div class="flex flex-wrap items-center gap-3">
-									<h3 class="text-xl font-semibold text-white">{workflow.name}</h3>
-									<span class="badge border border-sky-900/70 bg-sky-950/40 text-sky-200">
-										{workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}
-									</span>
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="ui-wrap-anywhere text-sm font-semibold text-white">{workflow.name}</p>
+									<p class="ui-clamp-3 mt-2 text-sm text-slate-400">{workflow.summary}</p>
 								</div>
-								<p class="mt-3 max-w-3xl text-sm text-slate-300">{workflow.summary}</p>
-								<div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
-									<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
-										Project · {workflow.projectName}
-									</span>
-									<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
-										Generated tasks · {workflow.rollup.taskCount}
-									</span>
-								</div>
+								<span
+									class={`badge shrink-0 border text-[0.7rem] tracking-[0.2em] uppercase ${workflowStatusToneClass(workflow.rollup.derivedStatus)}`}
+								>
+									{formatWorkflowStatusLabel(workflow.rollup.derivedStatus)}
+								</span>
 							</div>
+						</button>
+
+						<div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+							<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+								Project · {workflow.projectName}
+							</span>
+							<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+								{workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}
+							</span>
+							<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+								Generated · {workflow.rollup.taskCount}
+							</span>
 						</div>
 
-						<div class="mt-5 rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
-							<div class="flex items-center justify-between gap-3">
-								<p class="text-sm font-medium text-white">Template steps</p>
-								<p class="text-xs text-slate-500">
-									Instantiates into normal tasks with dependency links between steps.
-								</p>
-							</div>
-							<div class="mt-4 space-y-3">
-								{#each workflow.steps as step (step.id)}
-									<div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-										<div class="flex flex-wrap items-center justify-between gap-3">
-											<div class="min-w-0">
+						{#if selectedWorkflow?.id === workflow.id}
+							<div class="mt-4 space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+								<div class="flex items-center justify-between gap-3">
+									<p class="text-sm font-medium text-white">Quick preview</p>
+									<p class="text-xs text-slate-500">Top steps and current usage</p>
+								</div>
+
+								<div class="grid gap-3 sm:grid-cols-2">
+									<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Execution</p>
+										<p class="mt-2 text-sm text-white">
+											{workflow.rollup.runnableTaskCount} runnable task{workflow.rollup
+												.runnableTaskCount === 1
+												? ''
+												: 's'}
+										</p>
+										<p class="mt-1 text-xs text-slate-500">
+											{workflow.parallelizableStepCount} parallel-ready step{workflow.parallelizableStepCount ===
+											1
+												? ''
+												: 's'}
+										</p>
+									</div>
+									<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+										<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Defaults</p>
+										<p class="mt-2 text-sm text-white">
+											{workflow.defaultRoleCount} step{workflow.defaultRoleCount === 1 ? '' : 's'} with
+											role defaults
+										</p>
+										<p class="mt-1 text-xs text-slate-500">
+											{workflow.rollup.inProgressCount} in progress · {workflow.rollup.reviewCount}
+											{' '}in review
+										</p>
+									</div>
+								</div>
+
+								<div class="space-y-2">
+									<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
+										First steps
+									</p>
+									<div class="space-y-2">
+										{#each workflow.steps.slice(0, 2) as step (step.id)}
+											<div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2">
 												<p class="ui-wrap-anywhere text-sm font-medium text-white">
 													Step {step.position} · {step.title}
 												</p>
-												{#if step.summary}
-													<p class="mt-1 text-xs text-slate-400">{step.summary}</p>
-												{/if}
-												{#if step.dependsOnStepTitles?.length > 0}
-													<p class="mt-2 text-xs text-slate-500">
+												{#if step.dependsOnStepTitles.length > 0}
+													<p class="mt-1 text-xs text-slate-500">
 														Depends on {step.dependsOnStepTitles.join(', ')}
 													</p>
-												{:else if step.position > 1}
-													<p class="mt-2 text-xs text-slate-500">Can start in parallel.</p>
+												{:else if step.canRunInParallel}
+													<p class="mt-1 text-xs text-slate-500">Can start in parallel.</p>
 												{/if}
 											</div>
-											<span
-												class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs text-slate-300"
-											>
-												{step.desiredRoleName
-													? `Role · ${step.desiredRoleName}`
-													: 'No default role'}
-											</span>
-										</div>
+										{/each}
 									</div>
-								{/each}
+									{#if workflow.steps.length > 2}
+										<p class="text-xs text-slate-500">
+											{workflow.steps.length - 2} more step{workflow.steps.length - 2 === 1
+												? ''
+												: 's'} on the detail page.
+										</p>
+									{/if}
+								</div>
+
+								<div class="flex flex-wrap gap-3">
+									<AppButton href={resolve(`/app/workflows/${workflow.id}`)} variant="primary">
+										Open workflow detail
+									</AppButton>
+									<a
+										class="inline-flex items-center rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.16em] text-slate-300 uppercase transition hover:border-slate-500 hover:text-white"
+										href={resolve(`/app/tasks?workflowId=${workflow.id}`)}
+									>
+										View generated tasks
+									</a>
+								</div>
 							</div>
+						{/if}
+					</article>
+				{/each}
+			</div>
+
+			<table class="hidden min-w-full divide-y divide-slate-800 text-left xl:table">
+				<thead class="bg-slate-900/70">
+					<tr class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">
+						<th class="px-4 py-3">Workflow</th>
+						<th class="px-4 py-3">Status</th>
+						<th class="px-4 py-3">Project</th>
+						<th class="px-4 py-3">Steps</th>
+						<th class="px-4 py-3">Generated</th>
+						<th class="px-4 py-3">Open</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-800 bg-slate-950/40">
+					{#each filteredWorkflows as workflow (workflow.id)}
+						<tr
+							class={[
+								'align-top transition hover:bg-slate-900/60',
+								selectedWorkflow?.id === workflow.id ? 'bg-slate-900/80' : ''
+							]}
+						>
+							<td class="px-4 py-4">
+								<button
+									class="block w-full rounded-lg text-left transition outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-400"
+									type="button"
+									onclick={() => {
+										selectedWorkflowId = workflow.id;
+									}}
+								>
+									<p class="ui-wrap-anywhere text-sm font-semibold text-white">{workflow.name}</p>
+									<p class="ui-clamp-2 mt-2 text-sm text-slate-400">{workflow.summary}</p>
+								</button>
+							</td>
+							<td class="px-4 py-4">
+								<span
+									class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workflowStatusToneClass(workflow.rollup.derivedStatus)}`}
+								>
+									{formatWorkflowStatusLabel(workflow.rollup.derivedStatus)}
+								</span>
+							</td>
+							<td class="px-4 py-4 text-sm text-slate-300">{workflow.projectName}</td>
+							<td class="px-4 py-4 text-sm text-slate-300">
+								{workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}
+								{#if workflow.parallelizableStepCount > 0}
+									<p class="mt-1 text-xs text-slate-500">
+										{workflow.parallelizableStepCount} parallel-ready
+									</p>
+								{/if}
+							</td>
+							<td class="px-4 py-4 text-sm text-slate-300">
+								{workflow.rollup.taskCount}
+								{#if workflow.rollup.runnableTaskCount > 0}
+									<p class="mt-1 text-xs text-slate-500">
+										{workflow.rollup.runnableTaskCount} runnable now
+									</p>
+								{/if}
+							</td>
+							<td class="px-4 py-4">
+								<a
+									class="inline-flex rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.16em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+									href={resolve(`/app/workflows/${workflow.id}`)}
+								>
+									Open
+								</a>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</DataTableSection>
+
+		<section class="xl:ui-panel hidden space-y-5 xl:block">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<p class="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">Preview</p>
+					<h2 class="mt-2 text-xl font-semibold text-white">
+						{selectedWorkflow ? selectedWorkflow.name : 'Select a workflow'}
+					</h2>
+					<p class="mt-2 text-sm text-slate-400">
+						{selectedWorkflow
+							? 'Keep this view lightweight, then open the detail page for editing, instantiation, and deeper history.'
+							: 'Choose a workflow row to inspect the high-level structure before drilling in.'}
+					</p>
+				</div>
+
+				{#if selectedWorkflow}
+					<span
+						class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${workflowStatusToneClass(selectedWorkflow.rollup.derivedStatus)}`}
+					>
+						{formatWorkflowStatusLabel(selectedWorkflow.rollup.derivedStatus)}
+					</span>
+				{/if}
+			</div>
+
+			{#if selectedWorkflow}
+				<div class="space-y-4">
+					<p class="text-sm text-slate-300">{selectedWorkflow.summary}</p>
+
+					<div class="flex flex-wrap gap-2 text-xs text-slate-400">
+						<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+							Project · {selectedWorkflow.projectName}
+						</span>
+						<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+							{selectedWorkflow.steps.length} step{selectedWorkflow.steps.length === 1 ? '' : 's'}
+						</span>
+						<span class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1">
+							Generated tasks · {selectedWorkflow.rollup.taskCount}
+						</span>
+					</div>
+
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Defaults</p>
+							<p class="mt-2 text-sm text-white">
+								{selectedWorkflow.defaultRoleCount} step{selectedWorkflow.defaultRoleCount === 1
+									? ''
+									: 's'} with default roles
+							</p>
+							<p class="mt-1 text-xs text-slate-500">
+								{selectedWorkflow.parallelizableStepCount > 0
+									? `${selectedWorkflow.parallelizableStepCount} step${selectedWorkflow.parallelizableStepCount === 1 ? '' : 's'} can start in parallel.`
+									: 'Every later step currently waits on at least one dependency.'}
+							</p>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+							<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Current usage</p>
+							<p class="mt-2 text-sm text-white">
+								{selectedWorkflow.rollup.runnableTaskCount} runnable task{selectedWorkflow.rollup
+									.runnableTaskCount === 1
+									? ''
+									: 's'}
+							</p>
+							<p class="mt-1 text-xs text-slate-500">
+								{selectedWorkflow.rollup.inProgressCount} in progress · {selectedWorkflow.rollup
+									.reviewCount}
+								{' '}in review
+							</p>
+						</div>
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+						<div class="flex items-center justify-between gap-3">
+							<p class="text-sm font-medium text-white">Step outline</p>
+							<p class="text-xs text-slate-500">Previewing the first few steps only</p>
 						</div>
 
-						<form
-							class="mt-5 space-y-4 border-t border-slate-800 pt-5"
-							method="POST"
-							action="?/instantiateWorkflow"
-						>
-							<input type="hidden" name="workflowId" value={workflow.id} />
-
-							<div class="flex flex-col gap-2">
-								<h4 class="text-sm font-medium text-white">Instantiate template</h4>
-								<p class="text-xs text-slate-500">
-									Create a parent task plus one child task per workflow step.
-								</p>
-							</div>
-
-							<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto]">
-								<label class="block">
-									<span class="mb-2 block text-sm font-medium text-slate-200">Parent task name</span
-									>
-									<input
-										class="input text-white"
-										name="taskName"
-										placeholder="Build dark mode"
-										required
-									/>
-								</label>
-
-								<label class="block">
-									<span class="mb-2 block text-sm font-medium text-slate-200"
-										>Parent task summary</span
-									>
-									<input
-										class="input text-white"
-										name="taskSummary"
-										placeholder="Ship the first dark mode version across the product."
-									/>
-								</label>
-
-								<div class="flex items-end">
-									<AppButton type="submit" variant="primary">Create task set</AppButton>
-								</div>
-							</div>
-						</form>
-
-						{#if workflow.taskPreview.length > 0}
-							<div class="mt-5 rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
-								<div class="flex items-center justify-between gap-3">
-									<p class="text-sm font-medium text-white">Recent generated tasks</p>
-									<p class="text-xs text-slate-500">
-										Showing {workflow.taskPreview.length} of {workflow.rollup.taskCount}
-									</p>
-								</div>
-								<div class="mt-4 space-y-3">
-									{#each workflow.taskPreview as task (task.id)}
-										<div
-											class="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+						<div class="mt-4 space-y-3">
+							{#each selectedWorkflow.steps.slice(0, 3) as step (step.id)}
+								<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div class="min-w-0">
+											<p class="ui-wrap-anywhere text-sm font-medium text-white">
+												Step {step.position} · {step.title}
+											</p>
+											{#if step.summary}
+												<p class="mt-1 text-xs text-slate-400">{step.summary}</p>
+											{/if}
+											{#if step.dependsOnStepTitles.length > 0}
+												<p class="mt-2 text-xs text-slate-500">
+													Depends on {step.dependsOnStepTitles.join(', ')}
+												</p>
+											{:else if step.canRunInParallel}
+												<p class="mt-2 text-xs text-slate-500">Can start in parallel.</p>
+											{/if}
+										</div>
+										<span
+											class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs text-slate-300"
 										>
-											<div class="min-w-0">
-												<a
-													class="ui-wrap-anywhere text-sm font-medium text-white transition hover:text-sky-300"
-													href={resolve(`/app/tasks/${task.id}`)}
-												>
-													{task.title}
-												</a>
-												<p class="mt-1 text-xs text-slate-500">{task.projectName}</p>
-											</div>
+											{step.desiredRoleName ? step.desiredRoleName : 'No default role'}
+										</span>
+									</div>
+								</div>
+							{/each}
+
+							{#if selectedWorkflow.steps.length > 3}
+								<p class="text-xs text-slate-500">
+									{selectedWorkflow.steps.length - 3} more step{selectedWorkflow.steps.length -
+										3 ===
+									1
+										? ''
+										: 's'} available on the detail page.
+								</p>
+							{/if}
+						</div>
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+						<div class="flex items-center justify-between gap-3">
+							<p class="text-sm font-medium text-white">Recent generated tasks</p>
+							<p class="text-xs text-slate-500">
+								{selectedWorkflow.taskPreview.length} of {selectedWorkflow.rollup.taskCount}
+							</p>
+						</div>
+
+						{#if selectedWorkflow.taskPreview.length === 0}
+							<p class="mt-4 text-sm text-slate-400">
+								This template has not been instantiated yet.
+							</p>
+						{:else}
+							<div class="mt-4 space-y-3">
+								{#each selectedWorkflow.taskPreview.slice(0, 3) as task (task.id)}
+									<div
+										class="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
+									>
+										<div class="flex flex-wrap items-center justify-between gap-3">
+											<a
+												class="ui-wrap-anywhere text-sm font-medium text-white transition hover:text-sky-300"
+												href={resolve(`/app/tasks/${task.id}`)}
+											>
+												{task.title}
+											</a>
 											<span
-												class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+												class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${taskStatusToneClass(task.status)}`}
 											>
 												{formatTaskStatusLabel(task.status)}
 											</span>
 										</div>
-									{/each}
-								</div>
+										<p class="text-xs text-slate-500">{task.projectName}</p>
+									</div>
+								{/each}
 							</div>
 						{/if}
+					</div>
 
-						<form
-							class="mt-5 space-y-4 border-t border-slate-800 pt-5"
-							method="POST"
-							action="?/updateWorkflow"
-						>
-							<input type="hidden" name="workflowId" value={workflow.id} />
-							<input type="hidden" name="projectId" value={workflow.projectId} />
-
-							<div class="flex flex-col gap-2">
-								<h4 class="text-sm font-medium text-white">Edit template</h4>
-								<p class="text-xs text-slate-500">
-									Keep the template reusable. Generated tasks stay normal tasks after instantiation.
-								</p>
-							</div>
-
-							<div class="grid gap-4">
-								<label class="block">
-									<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
-									<input
-										class="input text-white"
-										name="name"
-										required
-										value={form?.workflowId === workflow.id
-											? (form?.values?.name ?? workflow.name)
-											: workflow.name}
-									/>
-								</label>
-							</div>
-
-							<div class="grid gap-4">
-								<label class="block">
-									<span class="mb-2 block text-sm font-medium text-slate-200">Summary</span>
-									<textarea class="textarea min-h-24 text-white" name="summary" required
-										>{form?.workflowId === workflow.id
-											? (form?.values?.summary ?? workflow.summary)
-											: workflow.summary}</textarea
-									>
-								</label>
-							</div>
-
-							<div class="space-y-3">
-								<div>
-									<span class="block text-sm font-medium text-slate-200">Workflow steps</span>
-									<span class="mt-2 block text-xs text-slate-500">
-										Update the ordered task sequence and default roles for this template.
-									</span>
-								</div>
-								<WorkflowStepEditor
-									steps={workflowStepDrafts[workflow.id] ?? []}
-									roles={data.roles}
-									onupdate={(clientId, field, value) =>
-										updateWorkflowStepField(workflow.id, clientId, field, value)}
-									onupdateDependencies={(clientId, positions) =>
-										updateWorkflowStepDependencies(workflow.id, clientId, positions)}
-									onadd={() => addWorkflowStep(workflow.id)}
-									onremove={(clientId) => removeWorkflowStep(workflow.id, clientId)}
-								/>
-							</div>
-
-							<div class="flex flex-wrap gap-3">
-								<AppButton type="submit" variant="neutral">Save template</AppButton>
-								<AppButton
-									type="submit"
-									form={`delete-workflow-${workflow.id}`}
-									variant="danger"
-									disabled={!canDeleteWorkflow(workflow)}
-								>
-									Delete template
-								</AppButton>
-							</div>
-
-							{#if !canDeleteWorkflow(workflow)}
-								<p class="text-xs text-slate-500">
-									Delete stays disabled until generated tasks are moved out or removed.
-								</p>
-							{/if}
-						</form>
-						<form id={`delete-workflow-${workflow.id}`} method="POST" action="?/deleteWorkflow">
-							<input type="hidden" name="workflowId" value={workflow.id} />
-						</form>
-					</article>
-				{/each}
-			</div>
-		{/if}
-	</section>
+					<AppButton href={resolve(`/app/workflows/${selectedWorkflow.id}`)} variant="primary">
+						Open workflow detail
+					</AppButton>
+				</div>
+			{:else}
+				<div class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/35 p-6">
+					<p class="text-sm text-slate-300">
+						No workflow is selected yet because nothing matches the current search or filters.
+					</p>
+				</div>
+			{/if}
+		</section>
+	</div>
 </AppPage>

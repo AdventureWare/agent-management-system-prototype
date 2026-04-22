@@ -4,10 +4,10 @@ import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
 describe('/app/workflows/+page.svelte', () => {
-	it('renders workflow templates with steps and instantiation controls', async () => {
+	it('renders a workflow directory with preview-first navigation', async () => {
 		render(Page, {
-			form: {} as never,
 			data: {
+				deleteSuccess: false,
 				projects: [
 					{
 						id: 'project_1',
@@ -35,6 +35,8 @@ describe('/app/workflows/+page.svelte', () => {
 						templateKey: null,
 						createdAt: '2026-04-15T09:00:00.000Z',
 						updatedAt: '2026-04-15T09:00:00.000Z',
+						parallelizableStepCount: 1,
+						defaultRoleCount: 2,
 						rollup: {
 							taskCount: 2,
 							inDraftCount: 0,
@@ -57,6 +59,7 @@ describe('/app/workflows/+page.svelte', () => {
 								desiredRoleName: 'Product strategist',
 								dependsOnStepTitles: [],
 								dependsOnStepPositions: [],
+								canRunInParallel: false,
 								position: 1
 							},
 							{
@@ -65,8 +68,9 @@ describe('/app/workflows/+page.svelte', () => {
 								summary: 'Build the feature.',
 								desiredRoleId: 'role_engineer',
 								desiredRoleName: 'Engineer',
-								dependsOnStepTitles: ['Step 1 · Requirements gathering'],
-								dependsOnStepPositions: [1],
+								dependsOnStepTitles: [],
+								dependsOnStepPositions: [],
+								canRunInParallel: true,
 								position: 2
 							}
 						],
@@ -75,7 +79,8 @@ describe('/app/workflows/+page.svelte', () => {
 								id: 'task_1',
 								title: 'Build dark mode: Requirements gathering',
 								status: 'ready',
-								projectName: 'Agent Management System Prototype'
+								projectName: 'Agent Management System Prototype',
+								updatedAt: '2026-04-15T09:30:00.000Z'
 							}
 						]
 					}
@@ -84,20 +89,22 @@ describe('/app/workflows/+page.svelte', () => {
 		});
 
 		await expect
-			.element(page.getByRole('heading', { name: 'Create workflow template' }))
+			.element(page.getByRole('heading', { name: 'Workflow directory' }))
 			.toBeInTheDocument();
 		await expect
-			.element(page.getByRole('heading', { name: 'Template library' }))
+			.element(page.getByRole('heading', { name: 'Feature development' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Feature development')).toBeInTheDocument();
+		await expect.element(page.getByText('Preview', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByText('Quick preview')).toBeInTheDocument();
+		await expect.element(page.getByText('Step outline')).toBeInTheDocument();
 		await expect
-			.element(page.getByText('Step 1 · Requirements gathering', { exact: true }))
+			.element(page.getByRole('link', { name: 'Open workflow detail' }).first())
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Role · Product strategist')).toBeInTheDocument();
 		await expect
-			.element(page.getByText('Depends on Step 1 · Requirements gathering', { exact: true }))
+			.element(page.getByRole('link', { name: 'View generated tasks' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Create task set' })).toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Save template' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Create workflow' }))
+			.toHaveAttribute('href', '/app/workflows/new');
 	});
 });

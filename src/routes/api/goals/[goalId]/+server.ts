@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import { AgentControlPlaneApiError, updateAgentApiGoal } from '$lib/server/agent-control-plane-api';
 import { load as loadGoalDetailPageData } from '../../../app/goals/[goalId]/+page.server';
 
@@ -40,7 +41,7 @@ export const PATCH = async ({ params, request }) => {
 		return json({ goal });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

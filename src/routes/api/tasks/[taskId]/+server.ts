@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import { AgentControlPlaneApiError, updateAgentApiTask } from '$lib/server/agent-control-plane-api';
 import { load as loadTaskDetailPageData } from '../../../app/tasks/[taskId]/+page.server';
 
@@ -70,7 +71,7 @@ export const PATCH = async ({ params, request }) => {
 		return json({ task });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

@@ -3,6 +3,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { summarizeAgentToolUse } from '../src/lib/server/agent-use-telemetry.js';
+import { formatAgentApiErrorMessage } from '../src/lib/server/agent-api-errors';
 
 const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
 const apiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
@@ -18,7 +20,14 @@ function printHelp() {
 			'Usage: node scripts/ams-cli.mjs <resource> <command> [options]',
 			'',
 			'Discovery:',
-			'  manifest [--resource <task|goal|project|thread>] [--command <name>]',
+			'  manifest [--resource <context|intent|task|goal|project|thread>] [--command <name>]',
+			'  context current [--thread <threadId>] [--task <taskId>] [--run <runId>]',
+			'  telemetry summary [--thread <threadId>] [--task <taskId>] [--run <runId>] [--tool <toolName>] [--outcome <success|error>] [--since <1h|24h|7d|30d>]',
+			'  intent prepare_task_for_review --json <payload> | --file <path>',
+			'  intent prepare_task_for_approval --json <payload> | --file <path>',
+			'  intent reject_task_approval --json <payload> | --file <path>',
+			'  intent accept_child_handoff --json <payload> | --file <path>',
+			'  intent request_child_handoff_changes --json <payload> | --file <path>',
 			'',
 			'Resources:',
 			'  task list [--q <text>] [--project <projectId>] [--goal <goalId>] [--status <status>] [--limit <n>]',
@@ -88,17 +97,37 @@ function requireApiToken() {
 
 async function request(path, init = {}) {
 	requireApiToken();
-	const response = await fetch(new URL(path, apiBaseUrl), {
-		...init,
-		headers: {
-			authorization: `Bearer ${apiToken}`,
-			...(init.headers ?? {})
+	const requestUrl = new URL(path, apiBaseUrl);
+	let response;
+
+	try {
+		response = await fetch(requestUrl, {
+			...init,
+			headers: {
+				authorization: `Bearer ${apiToken}`,
+				...(init.headers ?? {})
+			}
+		});
+	} catch (error) {
+		if (error instanceof Error) {
+			throw new Error(
+				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`
+			);
 		}
-	});
+
+		throw error;
+	}
+
 	const payload = await response.json().catch(() => ({}));
 
 	if (!response.ok) {
-		throw new Error(payload.error ?? `Request failed: ${response.status} ${response.statusText}`);
+		throw new Error(
+			formatAgentApiErrorMessage({
+				error: payload.error ?? `Request failed: ${response.status} ${response.statusText}`,
+				errorCode: payload.errorCode,
+				suggestedNextCommands: payload.suggestedNextCommands
+			})
+		);
 	}
 
 	return payload;
@@ -201,6 +230,78 @@ async function run() {
 
 		printJson(
 			await request(`/api/agent-capabilities${params.size > 0 ? `?${params.toString()}` : ''}`)
+		);
+		return;
+	}
+
+	if (resource === 'telemetry') {
+		if (command !== 'summary') {
+			throw new Error(`Unknown telemetry command: ${command ?? '<missing>'}`);
+		}
+
+		const { options } = parseArgs(argv);
+		printJson(
+			await summarizeAgentToolUse({
+				threadId: options.thread?.trim() || undefined,
+				taskId: options.task?.trim() || undefined,
+				runId: options.run?.trim() || undefined,
+				toolName: options.tool?.trim() || undefined,
+				outcome: options.outcome?.trim() || undefined,
+				since: options.since?.trim() || undefined
+			})
+		);
+		return;
+	}
+
+	if (resource === 'context') {
+		if (command !== 'current') {
+			throw new Error(`Unknown context command: ${command ?? '<missing>'}`);
+		}
+
+		const { options } = parseArgs(argv);
+		const params = new URLSearchParams();
+		const threadId = options.thread?.trim() || process.env.AMS_AGENT_THREAD_ID?.trim() || '';
+		const taskId = options.task?.trim() || process.env.AMS_AGENT_TASK_ID?.trim() || '';
+		const runId = options.run?.trim() || process.env.AMS_AGENT_RUN_ID?.trim() || '';
+
+		if (threadId) {
+			params.set('threadId', threadId);
+		}
+
+		if (taskId) {
+			params.set('taskId', taskId);
+		}
+
+		if (runId) {
+			params.set('runId', runId);
+		}
+
+		printJson(
+			await request(`/api/agent-context/current${params.size > 0 ? `?${params.toString()}` : ''}`)
+		);
+		return;
+	}
+
+	if (resource === 'intent') {
+		const supportedIntents = new Set([
+			'prepare_task_for_review',
+			'prepare_task_for_approval',
+			'reject_task_approval',
+			'accept_child_handoff',
+			'request_child_handoff_changes'
+		]);
+
+		if (!supportedIntents.has(command)) {
+			throw new Error(`Unknown intent command: ${command ?? '<missing>'}`);
+		}
+
+		const payload = await readPayload(parseArgs(argv).options);
+		printJson(
+			await request(`/api/agent-intents/${encodeURIComponent(command)}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			})
 		);
 		return;
 	}

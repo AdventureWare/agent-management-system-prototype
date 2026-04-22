@@ -82,6 +82,8 @@ npm run build
 npm run app:server:start
 ```
 
+`npm run app:server:start` now validates the production build and automatically rebuilds it if the existing `build/` output is missing or internally inconsistent.
+
 Enable remote access through the vendor-neutral wrapper:
 
 ```sh

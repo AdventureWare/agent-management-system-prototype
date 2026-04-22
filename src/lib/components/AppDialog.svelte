@@ -8,6 +8,7 @@
 		description = '',
 		children,
 		panelClass = '',
+		surfaceClass = '',
 		bodyClass = '',
 		closeLabel = 'Close dialog'
 	} = $props<{
@@ -16,6 +17,7 @@
 		description?: string;
 		children?: Snippet;
 		panelClass?: string;
+		surfaceClass?: string;
 		bodyClass?: string;
 		closeLabel?: string;
 	}>();
@@ -34,7 +36,10 @@
 			class={['mx-auto flex min-h-full w-full max-w-5xl items-center justify-center', panelClass]}
 		>
 			<div
-				class="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl shadow-black/40"
+				class={[
+					'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl shadow-black/40',
+					surfaceClass
+				]}
 			>
 				<div
 					class="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-5 sm:px-8"

@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	acceptAgentApiTaskChildHandoff,
 	AgentControlPlaneApiError,
@@ -22,10 +23,23 @@ export const POST = async ({ params, request }) => {
 			return json(await requestAgentApiTaskChildHandoffChanges(params.taskId, payload));
 		}
 
-		return json({ error: 'decision must be accept or changes_requested.' }, { status: 400 });
+		return jsonAgentApiError(
+			new AgentControlPlaneApiError(400, 'decision must be accept or changes_requested.', {
+				code: 'invalid_child_handoff_decision',
+				suggestedNextCommands: [
+					'task:get',
+					'task:accept-child-handoff',
+					'task:request-child-handoff-changes'
+				],
+				details: {
+					taskId: params.taskId,
+					allowedDecisions: ['accept', 'changes_requested']
+				}
+			})
+		);
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
-			return json({ error: error.message }, { status: error.status });
+			return jsonAgentApiError(error);
 		}
 
 		throw error;

@@ -75,6 +75,59 @@ describe('roles page server', () => {
 			],
 			projects: [],
 			goals: [],
+			workflows: [
+				{
+					id: 'workflow_docs',
+					name: 'Documentation workflow',
+					summary: 'Ships docs work',
+					projectId: 'project_docs',
+					status: 'draft',
+					templateKey: null,
+					createdAt: '2026-04-08T10:00:00.000Z',
+					updatedAt: '2026-04-08T10:00:00.000Z'
+				}
+			],
+			workflowSteps: [
+				{
+					id: 'workflow_step_docs',
+					workflowId: 'workflow_docs',
+					title: 'Write draft',
+					summary: 'Draft the document.',
+					desiredRoleId: 'role_writer',
+					dependsOnStepIds: [],
+					position: 0,
+					createdAt: '2026-04-08T10:00:00.000Z',
+					updatedAt: '2026-04-08T10:00:00.000Z'
+				}
+			],
+			taskTemplates: [
+				{
+					id: 'task_template_docs',
+					name: 'Docs template',
+					summary: 'Creates a docs task.',
+					projectId: 'project_docs',
+					goalId: null,
+					workflowId: null,
+					taskTitle: 'Write release notes',
+					taskSummary: 'Summarize changes.',
+					successCriteria: '',
+					readyCondition: '',
+					expectedOutcome: '',
+					area: 'product',
+					priority: 'medium',
+					riskLevel: 'low',
+					approvalMode: 'none',
+					requiredThreadSandbox: null,
+					requiresReview: true,
+					desiredRoleId: 'role_writer',
+					assigneeExecutionSurfaceId: null,
+					requiredPromptSkillNames: [],
+					requiredCapabilityNames: [],
+					requiredToolNames: [],
+					createdAt: '2026-04-08T10:00:00.000Z',
+					updatedAt: '2026-04-08T10:00:00.000Z'
+				}
+			],
 			executionSurfaces: [
 				{
 					id: 'worker_local',
@@ -128,17 +181,30 @@ describe('roles page server', () => {
 	});
 
 	it('loads role demand and staffing counts', async () => {
-		const result = (await load({} as never)) as {
+		const url = new URL('http://localhost/app/roles?role=role_writer');
+		const result = (await load({ url } as never)) as {
+			initialSelectedRoleId: string;
 			roleAreaOptions: string[];
-			roles: Array<{ id: string; taskCount: number; executionSurfaceCount: number }>;
+			roles: Array<{
+				id: string;
+				taskCount: number;
+				executionSurfaceCount: number;
+				workflowCount: number;
+				templateCount: number;
+				taskExampleTitles: string[];
+			}>;
 		};
 
+		expect(result.initialSelectedRoleId).toBe('role_writer');
 		expect(result.roleAreaOptions).toEqual(['shared', 'product', 'growth', 'ops']);
 		expect(result.roles).toEqual([
 			expect.objectContaining({
 				id: 'role_writer',
 				taskCount: 1,
-				executionSurfaceCount: 1
+				executionSurfaceCount: 1,
+				workflowCount: 1,
+				templateCount: 1,
+				taskExampleTitles: ['Write release notes']
 			})
 		]);
 	});

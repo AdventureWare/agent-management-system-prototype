@@ -7,6 +7,17 @@ Run all commands from the project root.
 ```bash
 node scripts/ams-cli.mjs manifest
 node scripts/ams-cli.mjs manifest --resource task
+node scripts/ams-cli.mjs context current
+node scripts/ams-cli.mjs context current --task <taskId>
+node scripts/ams-cli.mjs context current --run <runId>
+node scripts/ams-cli.mjs context current --thread <threadId>
+node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}'
+node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","approval":{"summary":"Ready for approval."}}'
+node scripts/ams-cli.mjs telemetry summary
+node scripts/ams-cli.mjs telemetry summary --thread <threadId>
+node scripts/ams-cli.mjs telemetry summary --task <taskId>
+node scripts/ams-cli.mjs telemetry summary --run <runId>
+node scripts/ams-cli.mjs telemetry summary --tool ams_thread_contact --outcome error --since 24h
 node scripts/ams-cli.mjs project list
 node scripts/ams-cli.mjs project get <projectId>
 node scripts/ams-cli.mjs goal list --project <projectId>
@@ -16,6 +27,47 @@ node scripts/ams-cli.mjs task get <taskId>
 ```
 
 The same machine-readable manifest is available over the bearer-token API at `/api/agent-capabilities`.
+The current-context helper is available at `/api/agent-context/current`.
+
+`node scripts/ams-cli.mjs context current` automatically falls back to managed-run env vars when present:
+
+- `AMS_AGENT_THREAD_ID`
+- `AMS_AGENT_TASK_ID`
+- `AMS_AGENT_RUN_ID`
+
+The telemetry summary is local operator data derived from managed-run MCP usage. It lets you compare the manifest playbooks against actual tool sequences seen in managed runs, including guidance gaps such as observed tools with no playbook coverage and playbook tools that never appear in telemetry. By default the local store retains up to 5000 events from the last 30 days, and older events are pruned automatically.
+
+## Reliable usage pattern
+
+Follow this default loop when using AMS as a tool:
+
+1. Discover with `node scripts/ams-cli.mjs manifest`.
+2. If a managed run already has thread, task, or run ids, anchor on canonical state first with `node scripts/ams-cli.mjs context current`.
+3. Prefer a first-class `intent` command when the goal matches a common AMS workflow and you want readback context returned in one call.
+4. Inspect the current project, goal, task, or thread state with `list` or `get` when no intent command fits.
+5. Run the narrowest mutation command that matches the intent.
+6. Read the changed state back with `get`, `list`, or `context current` before treating the operation as complete.
+
+Agent-facing API errors now return structured guidance fields:
+
+- `errorCode`
+- `retryable`
+- `suggestedNextCommands`
+- optional `details`
+
+The manifest also includes compact playbooks for common intents such as `create_task`, `prepare_task_for_review`, `prepare_task_for_approval`, `accept_child_handoff`, `reject_task_approval`, `request_child_handoff_changes`, and `coordinate_with_another_thread`.
+
+## First-class intents
+
+These commands collapse common AMS playbooks into one call and return before/after readback context:
+
+```bash
+node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}'
+node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","approval":{"summary":"Ready for approval.","mode":"before_complete"}}'
+node scripts/ams-cli.mjs intent reject_task_approval --json '{"taskId":"<taskId>"}'
+node scripts/ams-cli.mjs intent accept_child_handoff --json '{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>"}'
+node scripts/ams-cli.mjs intent request_child_handoff_changes --json '{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>","summary":"<follow-up summary>"}'
+```
 
 ## Project and goal mutation
 

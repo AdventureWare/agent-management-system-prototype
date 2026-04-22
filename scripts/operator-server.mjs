@@ -1,8 +1,9 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { closeSync, existsSync, openSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
@@ -10,6 +11,7 @@ const OUTPUT_DIR = resolve(REPO_ROOT, 'agent_output', 'operator-server');
 const STATUS_PATH = resolve(OUTPUT_DIR, 'status.json');
 const LOG_PATH = resolve(OUTPUT_DIR, 'server.log');
 const BUILD_ENTRY_PATH = resolve(REPO_ROOT, 'build', 'index.js');
+const BUILD_MANIFEST_PATH = resolve(REPO_ROOT, 'build', 'server', 'manifest.js');
 const DEFAULT_HOST = process.env.AMS_APP_HOST?.trim() || '127.0.0.1';
 const DEFAULT_PORT = Number.parseInt(process.env.AMS_APP_PORT ?? '3000', 10);
 
@@ -49,6 +51,20 @@ function createLocalUrl(hostname, port) {
 	return `http://${hostname}:${port}`;
 }
 
+function isPortReachable(hostname, port) {
+	return new Promise((resolvePromise) => {
+		const socket = net.createConnection({ host: hostname, port });
+
+		socket.once('connect', () => {
+			socket.destroy();
+			resolvePromise(true);
+		});
+		socket.once('error', () => {
+			resolvePromise(false);
+		});
+	});
+}
+
 function createServerEnv(hostname, port) {
 	const env = {
 		...process.env,
@@ -84,6 +100,10 @@ function createServerEnv(hostname, port) {
 	return env;
 }
 
+function createModuleUrl(path) {
+	return `${pathToFileURL(path).href}?t=${Date.now()}`;
+}
+
 async function ensureOutputDir() {
 	await mkdir(OUTPUT_DIR, { recursive: true });
 }
@@ -114,6 +134,26 @@ async function waitForServer(url, attempts = 40) {
 	return false;
 }
 
+async function runCommand(command, args) {
+	await new Promise((resolvePromise, reject) => {
+		const child = spawn(command, args, {
+			cwd: REPO_ROOT,
+			env: process.env,
+			stdio: 'inherit'
+		});
+
+		child.on('error', reject);
+		child.on('close', (code) => {
+			if ((code ?? 1) === 0) {
+				resolvePromise();
+				return;
+			}
+
+			reject(new Error(`Command exited with code ${code ?? 'null'}: ${command} ${args.join(' ')}`));
+		});
+	});
+}
+
 async function stopProcessGroup(pid) {
 	if (!pid) {
 		return;
@@ -130,18 +170,68 @@ async function stopProcessGroup(pid) {
 	}
 }
 
-function ensureBuildExists() {
-	if (!existsSync(BUILD_ENTRY_PATH)) {
-		failWithMessage(
-			`Missing ${BUILD_ENTRY_PATH}. Run \`npm run build\` before starting the operator server.`
-		);
+async function validateBuildArtifacts() {
+	if (!existsSync(BUILD_ENTRY_PATH) || !existsSync(BUILD_MANIFEST_PATH)) {
+		return {
+			ok: false,
+			reason: `Missing build artifacts at ${BUILD_ENTRY_PATH} or ${BUILD_MANIFEST_PATH}.`
+		};
+	}
+
+	try {
+		const { manifest } = await import(createModuleUrl(BUILD_MANIFEST_PATH));
+		const nodeLoaders = Array.isArray(manifest?._?.nodes) ? manifest._.nodes : [];
+		const endpointLoaders = Array.isArray(manifest?._?.routes)
+			? manifest._.routes
+					.map((route) => route?.endpoint)
+					.filter((loadEndpoint) => typeof loadEndpoint === 'function')
+			: [];
+
+		for (const loadNode of nodeLoaders) {
+			await loadNode();
+		}
+
+		for (const loadEndpoint of endpointLoaders) {
+			await loadEndpoint();
+		}
+
+		return { ok: true };
+	} catch (error) {
+		return {
+			ok: false,
+			reason: error instanceof Error ? error.message : String(error)
+		};
 	}
 }
 
+async function ensureBuildReady() {
+	const validation = await validateBuildArtifacts();
+
+	if (validation.ok) {
+		return;
+	}
+
+	printHeader('Rebuilding operator app');
+	process.stdout.write(`Reason: ${validation.reason}\n`);
+	await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build']);
+
+	const revalidatedBuild = await validateBuildArtifacts();
+
+	if (revalidatedBuild.ok) {
+		return;
+	}
+
+	failWithMessage(`Operator build is still invalid after rebuild: ${revalidatedBuild.reason}`);
+}
+
 async function startServer() {
-	ensureBuildExists();
+	await ensureBuildReady();
 	await ensureOutputDir();
 
+	const hostname = DEFAULT_HOST;
+	const port = DEFAULT_PORT;
+	const probeHost = resolveProbeHost(hostname);
+	const localUrl = createLocalUrl(probeHost, port);
 	const currentStatus = await readJson(STATUS_PATH);
 
 	if (currentStatus && processIsAlive(currentStatus.pid)) {
@@ -155,10 +245,13 @@ async function startServer() {
 		await rm(STATUS_PATH, { force: true });
 	}
 
+	if (await isPortReachable(probeHost, port)) {
+		failWithMessage(
+			`Port ${probeHost}:${port} is already in use by another process. Stop that process before starting the operator server.`
+		);
+	}
+
 	const logFd = openSync(LOG_PATH, 'a');
-	const hostname = DEFAULT_HOST;
-	const port = DEFAULT_PORT;
-	const localUrl = createLocalUrl(resolveProbeHost(hostname), port);
 
 	const child = spawn(process.execPath, [BUILD_ENTRY_PATH], {
 		cwd: REPO_ROOT,
@@ -167,9 +260,21 @@ async function startServer() {
 		stdio: ['ignore', logFd, logFd]
 	});
 	closeSync(logFd);
-	child.unref();
+	let childExitCode = null;
+	let childExitSignal = null;
+
+	child.on('exit', (code, signal) => {
+		childExitCode = code;
+		childExitSignal = signal;
+	});
 
 	const ready = await waitForServer(localUrl);
+
+	if (childExitCode !== null || childExitSignal !== null) {
+		failWithMessage(
+			`Operator server exited before startup completed (code: ${childExitCode ?? 'null'}, signal: ${childExitSignal ?? 'none'}). Check ${LOG_PATH}.`
+		);
+	}
 
 	if (!ready) {
 		await stopProcessGroup(child.pid);
@@ -186,6 +291,7 @@ async function startServer() {
 	};
 
 	await writeFile(STATUS_PATH, `${JSON.stringify(status, null, 2)}\n`);
+	child.unref();
 
 	printHeader('Operator server started');
 	process.stdout.write(`Local: ${localUrl}\n`);
@@ -223,7 +329,7 @@ async function showStatus() {
 }
 
 async function runForegroundServer() {
-	ensureBuildExists();
+	await ensureBuildReady();
 	await ensureOutputDir();
 
 	const child = spawn(process.execPath, [BUILD_ENTRY_PATH], {

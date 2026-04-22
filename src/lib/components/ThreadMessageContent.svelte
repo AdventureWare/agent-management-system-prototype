@@ -1,16 +1,26 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
+	import {
+		artifactDownloadHref,
+		artifactFileHref,
+		artifactPreviewHref,
+		artifactPreviewKind
+	} from '$lib/artifact-links';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 
 	type MessageBlock =
 		| { type: 'heading'; text: string; level: number }
 		| { type: 'paragraph'; text: string }
 		| { type: 'list'; ordered: boolean; items: string[] }
-		| { type: 'quote'; lines: string[] }
+		| { type: 'quote'; paragraphs: string[] }
 		| { type: 'code'; text: string; language: string | null };
 
 	type InlineToken =
 		| { type: 'text'; value: string }
+		| { type: 'strong'; children: InlineToken[] }
+		| { type: 'emphasis'; children: InlineToken[] }
+		| { type: 'strikethrough'; children: InlineToken[] }
+		| { type: 'inlineCode'; value: string }
 		| { type: 'markdownLink'; label: string; href: string }
 		| { type: 'localPath'; path: string; reference: string }
 		| { type: 'url'; value: string };
@@ -23,7 +33,7 @@
 	type ArtifactPreviewState = {
 		path: string;
 		label: string;
-		kind: 'text' | 'image' | null;
+		kind: 'text' | 'image' | 'pdf' | null;
 		status: 'idle' | 'loading' | 'ready' | 'error';
 		content: string;
 		errorMessage: string;
@@ -44,6 +54,10 @@
 			externalLinks: number;
 		};
 	};
+
+	function resolveUncheckedPath(href: string) {
+		return `${base}${href}`;
+	}
 
 	const artifactReferenceStatusCache: Record<string, ArtifactReferenceStatus> = {};
 	const pendingArtifactReferenceRequests: Record<string, Promise<ArtifactReferenceStatus>> = {};
@@ -70,10 +84,14 @@
 	const bulletPattern = /^\s*[-*]\s+(.+?)\s*$/;
 	const orderedPattern = /^\s*\d+\.\s+(.+?)\s*$/;
 	const quotePattern = /^\s*>\s?(.*)$/;
+	const inlineCodePattern = /`([^`\n]+)`/g;
+	const strongPattern = /\*\*(?=\S)(.+?\S)\*\*/g;
+	const emphasisPattern = /(?<!\*)\*(?=\S)(.+?\S)\*(?!\*)/g;
+	const strikethroughPattern = /~~(?=\S)(.+?\S)~~/g;
 	const rawUrlPattern = /https?:\/\/[^\s<>()]+[^\s<>().,!?;:]/g;
 	const localPathPattern = /\/(?:Users|tmp|var|private|home)\/[^\s<>\]]+/g;
 	const blankPattern = /^\s*$/;
-	const continuationPattern = /^\s{2,}\S/;
+	const hardBreakPattern = /(?: {2,}|\\)$/;
 
 	let blocks = $derived.by(() => parseMessageBlocks(text ?? ''));
 	let detectedReferenceSummary = $derived.by<DetectedReferenceSummary>(() => {
@@ -133,6 +151,7 @@
 		)
 	);
 	let copiedArtifactPath = $state<string | null>(null);
+	let copiedCodeBlockKey = $state<string | null>(null);
 	let attachActionState = $state<{
 		path: string;
 		status: 'loading' | 'success' | 'error';
@@ -230,7 +249,7 @@
 
 			const bulletMatch = currentLine.match(bulletPattern);
 			if (bulletMatch) {
-				const items = [bulletMatch[1]];
+				const items = [[bulletMatch[1]]];
 				index += 1;
 
 				while (index < lines.length) {
@@ -242,13 +261,13 @@
 					}
 
 					if (nextBulletMatch) {
-						items.push(nextBulletMatch[1]);
+						items.push([nextBulletMatch[1]]);
 						index += 1;
 						continue;
 					}
 
-					if (continuationPattern.test(nextLine) && !startsStructuredBlock(nextLine)) {
-						items[items.length - 1] = `${items[items.length - 1]}\n${nextLine.trim()}`;
+					if (!startsStructuredBlock(nextLine)) {
+						items[items.length - 1].push(nextLine);
 						index += 1;
 						continue;
 					}
@@ -256,13 +275,17 @@
 					break;
 				}
 
-				parsedBlocks.push({ type: 'list', ordered: false, items });
+				parsedBlocks.push({
+					type: 'list',
+					ordered: false,
+					items: items.map((itemLines) => normalizeFlowContent(itemLines))
+				});
 				continue;
 			}
 
 			const orderedMatch = currentLine.match(orderedPattern);
 			if (orderedMatch) {
-				const items = [orderedMatch[1]];
+				const items = [[orderedMatch[1]]];
 				index += 1;
 
 				while (index < lines.length) {
@@ -274,13 +297,13 @@
 					}
 
 					if (nextOrderedMatch) {
-						items.push(nextOrderedMatch[1]);
+						items.push([nextOrderedMatch[1]]);
 						index += 1;
 						continue;
 					}
 
-					if (continuationPattern.test(nextLine) && !startsStructuredBlock(nextLine)) {
-						items[items.length - 1] = `${items[items.length - 1]}\n${nextLine.trim()}`;
+					if (!startsStructuredBlock(nextLine)) {
+						items[items.length - 1].push(nextLine);
 						index += 1;
 						continue;
 					}
@@ -288,7 +311,11 @@
 					break;
 				}
 
-				parsedBlocks.push({ type: 'list', ordered: true, items });
+				parsedBlocks.push({
+					type: 'list',
+					ordered: true,
+					items: items.map((itemLines) => normalizeFlowContent(itemLines))
+				});
 				continue;
 			}
 
@@ -309,11 +336,11 @@
 					index += 1;
 				}
 
-				parsedBlocks.push({ type: 'quote', lines: quoteLines });
+				parsedBlocks.push({ type: 'quote', paragraphs: normalizeQuotedParagraphs(quoteLines) });
 				continue;
 			}
 
-			const paragraphLines = [currentLine.trimEnd()];
+			const paragraphLines = [currentLine];
 			index += 1;
 
 			while (index < lines.length) {
@@ -323,14 +350,64 @@
 					break;
 				}
 
-				paragraphLines.push(nextLine.trimEnd());
+				paragraphLines.push(nextLine);
 				index += 1;
 			}
 
-			parsedBlocks.push({ type: 'paragraph', text: paragraphLines.join('\n') });
+			parsedBlocks.push({ type: 'paragraph', text: normalizeFlowContent(paragraphLines) });
 		}
 
 		return parsedBlocks;
+	}
+
+	function normalizeFlowContent(lines: string[]) {
+		let content = '';
+		let previousLineHasHardBreak = false;
+
+		for (const line of lines) {
+			const cleanedLine = trimFlowLine(line);
+
+			if (cleanedLine.length === 0) {
+				continue;
+			}
+
+			if (content.length === 0) {
+				content = cleanedLine;
+			} else {
+				content += previousLineHasHardBreak ? `\n${cleanedLine}` : ` ${cleanedLine}`;
+			}
+
+			previousLineHasHardBreak = hardBreakPattern.test(line);
+		}
+
+		return content.trim();
+	}
+
+	function normalizeQuotedParagraphs(lines: string[]) {
+		const paragraphs: string[] = [];
+		let currentParagraph: string[] = [];
+
+		for (const line of lines) {
+			if (blankPattern.test(line)) {
+				if (currentParagraph.length > 0) {
+					paragraphs.push(normalizeFlowContent(currentParagraph));
+					currentParagraph = [];
+				}
+				continue;
+			}
+
+			currentParagraph.push(line);
+		}
+
+		if (currentParagraph.length > 0) {
+			paragraphs.push(normalizeFlowContent(currentParagraph));
+		}
+
+		return paragraphs;
+	}
+
+	function trimFlowLine(line: string) {
+		return line.replace(hardBreakPattern, '').trim();
 	}
 
 	function createHeadingBlock(line: string): MessageBlock | null {
@@ -388,10 +465,14 @@
 
 		for (const block of messageBlocks) {
 			const values =
-				block.type === 'list' ? block.items : block.type === 'quote' ? block.lines : [block.text];
+				block.type === 'list'
+					? block.items
+					: block.type === 'quote'
+						? block.paragraphs
+						: [block.text];
 
 			for (const value of values) {
-				for (const token of parseInlineTokens(value)) {
+				for (const token of collectReferenceTokens(parseInlineTokens(value))) {
 					if (token.type === 'localPath') {
 						referencesByKey[`artifact:${token.path}`] = {
 							key: `artifact:${token.path}`,
@@ -454,6 +535,16 @@
 		return Object.values(referencesByKey);
 	}
 
+	function collectReferenceTokens(tokens: InlineToken[]): InlineToken[] {
+		return tokens.flatMap((token) => {
+			if (token.type === 'strong' || token.type === 'emphasis' || token.type === 'strikethrough') {
+				return collectReferenceTokens(token.children);
+			}
+
+			return [token];
+		});
+	}
+
 	function parseInlineTokens(text: string): InlineToken[] {
 		const tokens: InlineToken[] = [];
 		let cursor = 0;
@@ -461,13 +552,13 @@
 
 		while (linkMatch) {
 			if (linkMatch.index > cursor) {
-				tokens.push(...parseReferenceTokens(text.slice(cursor, linkMatch.index)));
+				tokens.push(...parseStyledReferenceTokens(text.slice(cursor, linkMatch.index)));
 			}
 
 			tokens.push({
 				type: 'markdownLink',
 				label: linkMatch.label,
-				href: linkMatch.href
+				href: normalizeMarkdownHref(linkMatch.href)
 			});
 
 			cursor = linkMatch.index + linkMatch.raw.length;
@@ -475,10 +566,10 @@
 		}
 
 		if (cursor < text.length) {
-			tokens.push(...parseReferenceTokens(text.slice(cursor)));
+			tokens.push(...parseStyledReferenceTokens(text.slice(cursor)));
 		}
 
-		return tokens;
+		return mergeAdjacentTextTokens(tokens);
 	}
 
 	function findNextMarkdownLink(text: string, startIndex: number) {
@@ -528,19 +619,12 @@
 		return null;
 	}
 
-	function parseReferenceTokens(text: string): InlineToken[] {
+	function parseStyledReferenceTokens(text: string): InlineToken[] {
 		const tokens: InlineToken[] = [];
 		let cursor = 0;
-		rawUrlPattern.lastIndex = 0;
-		localPathPattern.lastIndex = 0;
 
 		while (cursor < text.length) {
-			rawUrlPattern.lastIndex = cursor;
-			localPathPattern.lastIndex = cursor;
-
-			const urlMatch = rawUrlPattern.exec(text);
-			const localPathMatch = localPathPattern.exec(text);
-			const nextMatch = nextReferenceMatch(urlMatch, localPathMatch);
+			const nextMatch = nextInlineMatch(text, cursor);
 
 			if (!nextMatch) {
 				break;
@@ -550,14 +634,29 @@
 				tokens.push({ type: 'text', value: text.slice(cursor, nextMatch.index) });
 			}
 
-			if (nextMatch.kind === 'url') {
-				tokens.push({ type: 'url', value: nextMatch.value });
-			} else {
-				tokens.push({
-					type: 'localPath',
-					path: trimLocalPathFragment(nextMatch.value),
-					reference: nextMatch.value
-				});
+			switch (nextMatch.kind) {
+				case 'inlineCode':
+					tokens.push({ type: 'inlineCode', value: nextMatch.value });
+					break;
+				case 'strong':
+					tokens.push({ type: 'strong', children: parseInlineTokens(nextMatch.value) });
+					break;
+				case 'emphasis':
+					tokens.push({ type: 'emphasis', children: parseInlineTokens(nextMatch.value) });
+					break;
+				case 'strikethrough':
+					tokens.push({ type: 'strikethrough', children: parseInlineTokens(nextMatch.value) });
+					break;
+				case 'url':
+					tokens.push({ type: 'url', value: nextMatch.value });
+					break;
+				case 'localPath':
+					tokens.push({
+						type: 'localPath',
+						path: trimLocalPathFragment(nextMatch.value),
+						reference: nextMatch.value
+					});
+					break;
 			}
 
 			cursor = nextMatch.end;
@@ -567,9 +666,7 @@
 			tokens.push({ type: 'text', value: text.slice(cursor) });
 		}
 
-		rawUrlPattern.lastIndex = 0;
-		localPathPattern.lastIndex = 0;
-		return tokens;
+		return mergeAdjacentTextTokens(tokens);
 	}
 
 	function isNavigableHref(href: string) {
@@ -583,32 +680,93 @@
 		);
 	}
 
-	function nextReferenceMatch(
-		urlMatch: RegExpExecArray | null,
-		localPathMatch: RegExpExecArray | null
-	):
-		| { kind: 'url'; index: number; value: string; end: number }
-		| { kind: 'localPath'; index: number; value: string; end: number }
-		| null {
+	function nextInlineMatch(text: string, startIndex: number) {
 		const matches = [
-			urlMatch
-				? {
-						kind: 'url' as const,
-						index: urlMatch.index,
-						value: urlMatch[0],
-						end: urlMatch.index + urlMatch[0].length
-					}
-				: null,
-			localPathMatch ? normalizeLocalPathMatch(localPathMatch[0], localPathMatch.index) : null
+			firstRegexMatch(text, inlineCodePattern, startIndex, 'inlineCode'),
+			firstRegexMatch(text, strongPattern, startIndex, 'strong'),
+			firstRegexMatch(text, emphasisPattern, startIndex, 'emphasis'),
+			firstRegexMatch(text, strikethroughPattern, startIndex, 'strikethrough'),
+			firstReferenceMatch(text, rawUrlPattern, startIndex, 'url', 4),
+			firstReferenceMatch(text, localPathPattern, startIndex, 'localPath', 5)
 		].filter((match): match is NonNullable<typeof match> => match !== null);
 
 		if (matches.length === 0) {
 			return null;
 		}
 
-		return matches.reduce((earliest, candidate) =>
-			candidate.index < earliest.index ? candidate : earliest
-		);
+		return matches.reduce((earliest, candidate) => {
+			if (candidate.index < earliest.index) {
+				return candidate;
+			}
+
+			if (candidate.index === earliest.index && candidate.priority < earliest.priority) {
+				return candidate;
+			}
+
+			return earliest;
+		});
+	}
+
+	function firstRegexMatch(
+		text: string,
+		pattern: RegExp,
+		startIndex: number,
+		kind: 'inlineCode' | 'strong' | 'emphasis' | 'strikethrough'
+	) {
+		pattern.lastIndex = startIndex;
+		const match = pattern.exec(text);
+		pattern.lastIndex = 0;
+
+		if (!match) {
+			return null;
+		}
+
+		const priorityMap = {
+			inlineCode: 0,
+			strong: 1,
+			strikethrough: 2,
+			emphasis: 3
+		} as const;
+
+		return {
+			kind,
+			index: match.index,
+			value: match[1] ?? '',
+			end: match.index + match[0].length,
+			priority: priorityMap[kind]
+		};
+	}
+
+	function firstReferenceMatch(
+		text: string,
+		pattern: RegExp,
+		startIndex: number,
+		kind: 'url' | 'localPath',
+		priority: number
+	) {
+		pattern.lastIndex = startIndex;
+		const match = pattern.exec(text);
+		pattern.lastIndex = 0;
+
+		if (!match) {
+			return null;
+		}
+
+		if (kind === 'localPath') {
+			return normalizeLocalPathMatch(match[0], match.index);
+		}
+
+		const matches = [
+			{
+				kind,
+				index: match.index,
+				value: match[0],
+				end: match.index + match[0].length,
+				priority
+			}
+		];
+
+		return matches[0];
 	}
 
 	function normalizeLocalPathMatch(value: string, index: number) {
@@ -617,7 +775,8 @@
 			kind: 'localPath' as const,
 			index,
 			value: trimmed,
-			end: index + trimmed.length
+			end: index + trimmed.length,
+			priority: 5
 		};
 	}
 
@@ -670,21 +829,64 @@
 		return unmatchedClosers;
 	}
 
+	function normalizeMarkdownHref(href: string) {
+		const trimmedHref = href.trim();
+		return trimmedHref.startsWith('<') && trimmedHref.endsWith('>')
+			? trimmedHref.slice(1, -1)
+			: trimmedHref;
+	}
+
+	function splitLocalPathReference(reference: string) {
+		const normalizedReference = normalizeMarkdownHref(reference);
+		const hashLocationMatch = normalizedReference.match(/#L(\d+)(?:C(\d+))?$/);
+		const referenceWithoutHash = hashLocationMatch
+			? normalizedReference.slice(0, hashLocationMatch.index)
+			: normalizedReference;
+		const colonLocationMatch = referenceWithoutHash.match(/^(.*\/[^:]+):(\d+)(?::(\d+))?$/);
+
+		if (colonLocationMatch) {
+			return {
+				path: colonLocationMatch[1],
+				line: Number.parseInt(colonLocationMatch[2], 10),
+				column: colonLocationMatch[3] ? Number.parseInt(colonLocationMatch[3], 10) : null,
+				location: `L${colonLocationMatch[2]}${colonLocationMatch[3] ? `:${colonLocationMatch[3]}` : ''}`
+			};
+		}
+
+		if (hashLocationMatch) {
+			return {
+				path: referenceWithoutHash,
+				line: Number.parseInt(hashLocationMatch[1], 10),
+				column: hashLocationMatch[2] ? Number.parseInt(hashLocationMatch[2], 10) : null,
+				location: `L${hashLocationMatch[1]}${hashLocationMatch[2] ? `:${hashLocationMatch[2]}` : ''}`
+			};
+		}
+
+		return {
+			path: referenceWithoutHash,
+			line: null,
+			column: null,
+			location: null
+		};
+	}
+
 	function trimLocalPathFragment(reference: string) {
-		return reference.replace(/#L\d+(?:C\d+)?$/, '');
+		return splitLocalPathReference(reference).path;
 	}
 
 	function localPathLabel(reference: string) {
-		const path = trimLocalPathFragment(reference);
+		const { path, location } = splitLocalPathReference(reference);
 		const name = path.split('/').pop() || path;
-		const fragmentMatch = reference.match(/#L\d+(?:C\d+)?$/);
-		return fragmentMatch ? `${name} ${fragmentMatch[0].slice(1)}` : name;
+		return location ? `${name} ${location}` : name;
 	}
 
 	function localPathPreviewHref(reference: string) {
-		return resolve(
-			`/api/artifacts/preview?path=${encodeURIComponent(trimLocalPathFragment(reference))}`
-		);
+		return artifactPreviewHref(trimLocalPathFragment(reference));
+	}
+
+	function localArtifactPageHref(path: string) {
+		const { path: normalizedPath, line, column } = splitLocalPathReference(path);
+		return artifactFileHref(normalizedPath, { line, column });
 	}
 
 	function urlLabel(url: string) {
@@ -713,44 +915,11 @@
 		return artifactReferenceStatus(path) === 'directory';
 	}
 
-	function artifactPreviewKind(path: string) {
-		const extension = path.split('.').pop()?.toLowerCase() ?? '';
-
-		if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) {
-			return 'image' as const;
-		}
-
-		if (
-			[
-				'md',
-				'markdown',
-				'txt',
-				'log',
-				'yml',
-				'yaml',
-				'svelte',
-				'ts',
-				'tsx',
-				'js',
-				'jsx',
-				'json',
-				'css',
-				'html',
-				'xml',
-				'sh'
-			].includes(extension)
-		) {
-			return 'text' as const;
-		}
-
-		return null;
-	}
-
 	function canPreviewArtifactReference(path: string) {
 		return canOpenArtifactReference(path) && artifactPreviewKind(path) !== null;
 	}
 
-	function canCopyArtifactPath() {
+	function canWriteClipboard() {
 		return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
 	}
 
@@ -771,7 +940,7 @@
 	}
 
 	async function copyArtifactPath(path: string) {
-		if (!canCopyArtifactPath()) {
+		if (!canWriteClipboard()) {
 			return;
 		}
 
@@ -786,6 +955,25 @@
 			}, 1600);
 		} catch {
 			copiedArtifactPath = null;
+		}
+	}
+
+	async function copyCodeBlock(text: string, key: string) {
+		if (!canWriteClipboard()) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(text);
+			copiedCodeBlockKey = key;
+
+			window.setTimeout(() => {
+				if (copiedCodeBlockKey === key) {
+					copiedCodeBlockKey = null;
+				}
+			}, 1600);
+		} catch {
+			copiedCodeBlockKey = null;
 		}
 	}
 
@@ -834,7 +1022,7 @@
 			errorMessage: ''
 		};
 
-		if (kind === 'image') {
+		if (kind === 'image' || kind === 'pdf') {
 			previewState = {
 				path,
 				label,
@@ -916,129 +1104,168 @@
 		pendingArtifactReferenceRequests[path] = request;
 		return request;
 	}
+
+	function mergeAdjacentTextTokens(tokens: InlineToken[]) {
+		const mergedTokens: InlineToken[] = [];
+
+		for (const token of tokens) {
+			if (token.type === 'text' && token.value.length === 0) {
+				continue;
+			}
+
+			const previousToken = mergedTokens.at(-1);
+			if (token.type === 'text' && previousToken?.type === 'text') {
+				previousToken.value += token.value;
+				continue;
+			}
+
+			mergedTokens.push(token);
+		}
+
+		return mergedTokens;
+	}
 </script>
 
-{#snippet inlineText(text: string)}
-	{@const lines = text.split('\n')}
-	{#each lines as line, lineIndex (`${lineIndex}-${line}`)}
-		{@const tokens = parseInlineTokens(line)}
-		{#each tokens as token, tokenIndex (`${lineIndex}-${tokenIndex}`)}
-			{#if token.type === 'text'}
+{#snippet inlineTokens(tokens: InlineToken[])}
+	{#each tokens as token, tokenIndex (`${token.type}-${tokenIndex}`)}
+		{#if token.type === 'text'}
+			{token.value}
+		{:else if token.type === 'strong'}
+			<strong class="font-semibold text-white">
+				{@render inlineTokens(token.children)}
+			</strong>
+		{:else if token.type === 'emphasis'}
+			<em class="text-slate-100 italic">
+				{@render inlineTokens(token.children)}
+			</em>
+		{:else if token.type === 'strikethrough'}
+			<span class="text-slate-400 line-through decoration-slate-500/70">
+				{@render inlineTokens(token.children)}
+			</span>
+		{:else if token.type === 'inlineCode'}
+			<code
+				class="rounded-md border border-slate-700/80 bg-slate-950/85 px-1.5 py-0.5 align-baseline font-mono text-[0.84em] text-sky-200"
+			>
 				{token.value}
-			{:else if token.type === 'markdownLink'}
-				{#if isNavigableHref(token.href)}
-					{#if token.href.startsWith('http://') || token.href.startsWith('https://')}
-						<button
-							type="button"
-							title={token.href}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
-							onclick={() => openExternalHref(token.href)}
-						>
-							{token.label}
-						</button>
-					{:else if token.href.startsWith('mailto:') || token.href.startsWith('tel:')}
-						<button
-							type="button"
-							title={token.href}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
-							onclick={() => followDirectHref(token.href)}
-						>
-							{token.label}
-						</button>
-					{:else}
-						<a
-							href={token.href}
-							rel="external"
-							title={token.href}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
-						>
-							{token.label}
-						</a>
-					{/if}
-				{:else if token.href.startsWith('/')}
-					{@const path = trimLocalPathFragment(token.href)}
-					{#if canOpenArtifactReference(path)}
-						<a
-							href={resolve(
-								`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(token.href))}`
-							)}
-							title={token.href}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
-						>
-							{token.label}
-						</a>
-					{:else if canBrowseArtifactReference(path)}
-						<a
-							href={resolve(
-								`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(token.href))}`
-							)}
-							title={token.href}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
-						>
-							{token.label}
-						</a>
-					{:else}
-						<span
-							title={`${token.href}${artifactReferenceStatus(path) === 'missing' ? ' (missing from disk)' : artifactReferenceStatus(path) === 'directory' ? ' (folder reference)' : ''}`}
-							class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700/80 bg-slate-950/50 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-slate-300"
-						>
-							{token.label}
-						</span>
-					{/if}
+			</code>
+		{:else if token.type === 'markdownLink'}
+			{#if isNavigableHref(token.href)}
+				{#if token.href.startsWith('http://') || token.href.startsWith('https://')}
+					<button
+						type="button"
+						title={token.href}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+						onclick={() => openExternalHref(token.href)}
+					>
+						{token.label}
+					</button>
+				{:else if token.href.startsWith('mailto:') || token.href.startsWith('tel:')}
+					<button
+						type="button"
+						title={token.href}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+						onclick={() => followDirectHref(token.href)}
+					>
+						{token.label}
+					</button>
+				{:else}
+					<a
+						href={token.href}
+						rel="external"
+						title={token.href}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/35 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/50 hover:text-sky-100"
+					>
+						{token.label}
+					</a>
+				{/if}
+			{:else if token.href.startsWith('/')}
+				{@const path = trimLocalPathFragment(token.href)}
+				{#if canOpenArtifactReference(path)}
+					<button
+						type="button"
+						title={token.href}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
+						onclick={() => followDirectHref(localArtifactPageHref(path))}
+					>
+						{token.label}
+					</button>
+				{:else if canBrowseArtifactReference(path)}
+					<button
+						type="button"
+						title={token.href}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
+						onclick={() => followDirectHref(localArtifactPageHref(path))}
+					>
+						{token.label}
+					</button>
 				{:else}
 					<span
-						title={token.href}
-						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/60 bg-sky-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200"
+						title={`${token.href}${artifactReferenceStatus(path) === 'missing' ? ' (missing from disk)' : artifactReferenceStatus(path) === 'directory' ? ' (folder reference)' : ''}`}
+						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700/80 bg-slate-950/50 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-slate-300"
 					>
 						{token.label}
 					</span>
 				{/if}
-			{:else if token.type === 'localPath'}
-				{#if canOpenArtifactReference(token.path)}
-					<a
-						href={resolve(
-							`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(token.reference))}`
-						)}
-						title={token.reference}
-						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
-					>
-						{localPathLabel(token.reference)}
-					</a>
-				{:else if canBrowseArtifactReference(token.path)}
-					<a
-						href={resolve(
-							`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(token.reference))}`
-						)}
-						title={token.reference}
-						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
-					>
-						{localPathLabel(token.reference)}
-					</a>
-				{:else}
-					<span
-						title={`${token.reference}${artifactReferenceStatus(token.path) === 'missing' ? ' (missing from disk)' : artifactReferenceStatus(token.path) === 'directory' ? ' (folder reference)' : ''}`}
-						class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700/80 bg-slate-950/50 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-slate-300"
-					>
-						{localPathLabel(token.reference)}
-					</span>
-				{/if}
 			{:else}
+				<span
+					title={token.href}
+					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/60 bg-sky-950/30 px-2 py-0.5 align-baseline text-[0.92em] font-medium text-sky-200"
+				>
+					{token.label}
+				</span>
+			{/if}
+		{:else if token.type === 'localPath'}
+			{#if canOpenArtifactReference(token.path)}
 				<button
 					type="button"
-					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700 bg-slate-950/80 px-1.5 py-0.5 align-baseline font-mono text-[0.84em] text-sky-300 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/80 hover:text-sky-200"
-					onclick={() => openExternalHref(token.value)}
+					title={token.reference}
+					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-emerald-200 underline decoration-emerald-500/60 decoration-1 underline-offset-4 transition hover:border-emerald-700/90 hover:bg-emerald-950/45 hover:text-emerald-100"
+					onclick={() =>
+						followDirectHref(localArtifactPageHref(trimLocalPathFragment(token.reference)))}
 				>
-					{token.value}
+					{localPathLabel(token.reference)}
 				</button>
+			{:else if canBrowseArtifactReference(token.path)}
+				<button
+					type="button"
+					title={token.reference}
+					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-sky-800/70 bg-sky-950/30 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-sky-200 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/90 hover:bg-sky-950/45 hover:text-sky-100"
+					onclick={() =>
+						followDirectHref(localArtifactPageHref(trimLocalPathFragment(token.reference)))}
+				>
+					{localPathLabel(token.reference)}
+				</button>
+			{:else}
+				<span
+					title={`${token.reference}${artifactReferenceStatus(token.path) === 'missing' ? ' (missing from disk)' : artifactReferenceStatus(token.path) === 'directory' ? ' (folder reference)' : ''}`}
+					class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700/80 bg-slate-950/50 px-2 py-0.5 align-baseline font-mono text-[0.84em] text-slate-300"
+				>
+					{localPathLabel(token.reference)}
+				</span>
 			{/if}
-		{/each}
+		{:else if token.type === 'url'}
+			<button
+				type="button"
+				class="ui-wrap-anywhere inline-flex max-w-full items-center rounded-md border border-slate-700 bg-slate-950/80 px-1.5 py-0.5 align-baseline font-mono text-[0.84em] text-sky-300 underline decoration-sky-500/60 decoration-1 underline-offset-4 transition hover:border-sky-700/80 hover:text-sky-200"
+				onclick={() => openExternalHref(token.value)}
+			>
+				{token.value}
+			</button>
+		{/if}
+	{/each}
+{/snippet}
+
+{#snippet inlineText(text: string)}
+	{@const lines = text.split('\n')}
+	{#each lines as line, lineIndex (`${lineIndex}-${line}`)}
+		{@render inlineTokens(parseInlineTokens(line))}
 		{#if lineIndex < lines.length - 1}
 			<br />
 		{/if}
 	{/each}
 {/snippet}
 
-<div class="space-y-3">
+<div class="space-y-3.5">
 	{#if showReferenceSummary && detectedReferences.length > 0}
 		<div class="rounded-lg border border-slate-800/80 bg-slate-950/70">
 			<button
@@ -1137,7 +1364,7 @@
 													{context.actionLabel ?? 'Jump'}
 												</a>
 											{/if}
-											{#if canCopyArtifactPath()}
+											{#if canWriteClipboard()}
 												<button
 													type="button"
 													class="rounded-full border border-slate-700 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-slate-200 uppercase transition hover:border-slate-600 hover:text-white"
@@ -1175,6 +1402,12 @@
 																	: 'Attach'}
 													</button>
 												{/if}
+												<a
+													href={resolveUncheckedPath(localArtifactPageHref(reference.reference))}
+													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
+												>
+													Open page
+												</a>
 												{#if canPreviewArtifactReference(reference.path)}
 													<button
 														type="button"
@@ -1187,8 +1420,8 @@
 													</button>
 												{/if}
 												<a
-													href={resolve(
-														`/api/artifacts/file?path=${encodeURIComponent(trimLocalPathFragment(reference.reference))}`
+													href={resolveUncheckedPath(
+														artifactDownloadHref(trimLocalPathFragment(reference.reference))
 													)}
 													class="rounded-full border border-emerald-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-emerald-200 uppercase transition hover:border-emerald-700/90 hover:text-emerald-100"
 												>
@@ -1196,8 +1429,8 @@
 												</a>
 											{:else if canBrowseArtifactReference(reference.path)}
 												<a
-													href={resolve(
-														`/app/artifacts?path=${encodeURIComponent(trimLocalPathFragment(reference.reference))}`
+													href={resolveUncheckedPath(
+														artifactFileHref(trimLocalPathFragment(reference.reference))
 													)}
 													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 												>
@@ -1247,39 +1480,58 @@
 				{@render inlineText(block.text)}
 			</p>
 		{:else if block.type === 'paragraph'}
-			<p class={`${bodyTextClass()} ui-wrap-anywhere text-sm leading-7 whitespace-pre-wrap`}>
+			<p class={`${bodyTextClass()} ui-wrap-anywhere text-sm leading-7`}>
 				{@render inlineText(block.text)}
 			</p>
 		{:else if block.type === 'list'}
 			<svelte:element
 				this={block.ordered ? 'ol' : 'ul'}
-				class={`${listTextClass()} ui-wrap-anywhere ml-5 space-y-2 text-sm leading-7 ${block.ordered ? 'list-decimal' : 'list-disc'}`}
+				class={`${listTextClass()} ui-wrap-anywhere ml-5 space-y-2.5 text-sm leading-7 marker:font-semibold ${block.ordered ? 'list-decimal' : 'list-disc'}`}
 			>
 				{#each block.items as item, itemIndex (`${index}-${itemIndex}`)}
-					<li class="pl-1 whitespace-pre-wrap">{@render inlineText(item)}</li>
+					<li class="pl-1">{@render inlineText(item)}</li>
 				{/each}
 			</svelte:element>
 		{:else if block.type === 'quote'}
-			<blockquote class="space-y-2 border-l-2 border-slate-700/80 pl-4">
-				{#each block.lines as line, lineIndex (`${index}-${lineIndex}`)}
-					<p
-						class={`${bodyTextClass()} ui-wrap-anywhere text-sm leading-7 whitespace-pre-wrap italic`}
-					>
-						{@render inlineText(line)}
+			<blockquote
+				class="space-y-2 rounded-r-xl border-l-2 border-sky-800/70 bg-slate-950/35 px-4 py-3"
+			>
+				{#each block.paragraphs as paragraph, lineIndex (`${index}-${lineIndex}`)}
+					<p class={`${bodyTextClass()} ui-wrap-anywhere text-sm leading-7 italic`}>
+						{@render inlineText(paragraph)}
 					</p>
 				{/each}
 			</blockquote>
 		{:else}
-			<div class="overflow-hidden rounded-lg border border-slate-800/90 bg-slate-950/90">
-				{#if block.language}
-					<div
-						class="border-b border-slate-800/90 px-4 py-2 text-[11px] tracking-[0.16em] text-slate-500 uppercase"
-					>
-						{block.language}
+			{@const codeBlockKey = `code-${index}`}
+			<div
+				class="overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 shadow-[0_0_0_1px_rgba(15,23,42,0.35)]"
+			>
+				<div
+					class="flex items-center justify-between gap-3 border-b border-slate-800/90 bg-slate-950/80 px-4 py-2.5"
+				>
+					<div class="min-w-0">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+							{block.language ?? 'Code'}
+						</p>
 					</div>
-				{/if}
+					{#if canWriteClipboard()}
+						<button
+							type="button"
+							class="rounded-full border border-slate-700 px-2.5 py-1 text-[10px] font-medium tracking-[0.14em] text-slate-300 uppercase transition hover:border-slate-600 hover:text-white"
+							onclick={() => {
+								void copyCodeBlock(block.text, codeBlockKey);
+							}}
+						>
+							{copiedCodeBlockKey === codeBlockKey ? 'Copied' : 'Copy'}
+						</button>
+					{/if}
+				</div>
 				<pre
-					class="ui-wrap-anywhere overflow-x-auto px-4 py-3 text-xs leading-6 whitespace-pre-wrap text-slate-200">{block.text}</pre>
+					data-testid="thread-message-code-block"
+					class="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-6 whitespace-pre text-slate-200 [tab-size:2]"><code
+						>{block.text}</code
+					></pre>
 			</div>
 		{/if}
 	{/each}
@@ -1304,6 +1556,14 @@
 				alt={previewState.label}
 				class="mx-auto max-h-[70vh] w-auto rounded-xl"
 			/>
+		</div>
+	{:else if previewState.kind === 'pdf' && previewState.content}
+		<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-2">
+			<iframe
+				src={previewState.content}
+				title={previewState.label || previewState.path}
+				class="h-[72vh] w-full rounded-xl bg-white"
+			></iframe>
 		</div>
 	{:else if previewState.kind === 'text'}
 		<pre

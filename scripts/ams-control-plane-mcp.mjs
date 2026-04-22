@@ -3,13 +3,17 @@
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { AGENT_CAPABILITY_COMMANDS } from '../src/lib/server/agent-capability-commands.js';
+import { recordAgentToolUseBestEffort } from '../src/lib/server/agent-use-telemetry.js';
+import { createThreadContactMcpHandlers } from '../src/lib/server/thread-contact-mcp-helpers.js';
+import { formatAgentApiErrorMessage } from '../src/lib/server/agent-api-errors';
 
 const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
 const apiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
 const apiToken = process.env.AMS_AGENT_API_TOKEN?.trim() || '';
 const currentThreadId = process.env.AMS_AGENT_THREAD_ID?.trim() || '';
 
-const TOOLS = [
+const SPECIAL_TOOLS = [
 	{
 		name: 'ams_manifest',
 		description:
@@ -19,7 +23,7 @@ const TOOLS = [
 			properties: {
 				resource: {
 					type: 'string',
-					enum: ['task', 'goal', 'project', 'thread']
+					enum: ['context', 'intent', 'task', 'goal', 'project', 'thread']
 				},
 				command: {
 					type: 'string'
@@ -27,484 +31,225 @@ const TOOLS = [
 			},
 			additionalProperties: false
 		}
-	},
-	{
-		name: 'ams_thread_start',
-		description: 'Start a new agent thread from the AMS thread API.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				payload: { type: 'object' }
-			},
-			required: ['payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_get',
-		description: 'Fetch one thread by exact thread id.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadId: { type: 'string' }
-			},
-			required: ['threadId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_set_handle_alias',
-		description: 'Update a thread handle alias.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadId: { type: 'string' },
-				handleAlias: { type: 'string' }
-			},
-			required: ['threadId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_cancel',
-		description: 'Cancel the active run for a thread.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadId: { type: 'string' }
-			},
-			required: ['threadId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_archive',
-		description: 'Archive or unarchive one or more threads.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadIds: {
-					type: 'array',
-					items: { type: 'string' }
-				},
-				archived: { type: 'boolean' }
-			},
-			required: ['threadIds'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_status',
-		description: 'Fetch managed status rows for one or more thread ids.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadIds: {
-					type: 'array',
-					items: { type: 'string' }
-				}
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_best_target',
-		description:
-			'Find the best contactable thread for the current or provided source thread context.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				q: { type: 'string' },
-				role: { type: 'string' },
-				project: { type: 'string' },
-				taskId: { type: 'string' },
-				sourceThreadId: { type: 'string' },
-				includeUnavailable: { type: 'boolean' },
-				includeArchived: { type: 'boolean' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_list',
-		description: 'List candidate threads for routing or inspection.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				q: { type: 'string' },
-				role: { type: 'string' },
-				project: { type: 'string' },
-				taskId: { type: 'string' },
-				sourceThreadId: { type: 'string' },
-				canContact: { type: 'boolean' },
-				includeArchived: { type: 'boolean' },
-				limit: { type: 'number' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_resolve',
-		description: 'Resolve a fuzzy thread handle or query into ranked thread candidates.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				query: { type: 'string' },
-				sourceThreadId: { type: 'string' },
-				canContact: { type: 'boolean' },
-				includeArchived: { type: 'boolean' },
-				limit: { type: 'number' }
-			},
-			required: ['query'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_contact',
-		description: 'Contact another thread by exact thread id or resolvable handle.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				targetThreadIdOrHandle: { type: 'string' },
-				prompt: { type: 'string' },
-				type: { type: 'string' },
-				context: { type: 'string' },
-				sourceThreadId: { type: 'string' },
-				replyToContactId: { type: 'string' },
-				replyRequested: { type: 'boolean' }
-			},
-			required: ['targetThreadIdOrHandle', 'prompt'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_thread_contacts',
-		description: 'List recent contacts for the current thread or a specific thread id or handle.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				threadIdOrHandle: { type: 'string' },
-				limit: { type: 'number' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_list',
-		description: 'List tasks with optional project, goal, text, status, and limit filters.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				q: { type: 'string' },
-				projectId: { type: 'string' },
-				goalId: { type: 'string' },
-				status: { type: 'string' },
-				limit: { type: 'number' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_get',
-		description: 'Fetch one AMS task by id.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_create',
-		description: 'Create a task in AMS.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				payload: { type: 'object' }
-			},
-			required: ['payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_update',
-		description: 'Update an existing AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['taskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_attach',
-		description: 'Attach a file path to an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['taskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_remove_attachment',
-		description: 'Remove an attachment from an AMS task by attachment id.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				attachmentId: { type: 'string' }
-			},
-			required: ['taskId', 'attachmentId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_request_review',
-		description: 'Open a review request for an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['taskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_approve_review',
-		description: 'Approve the active review on an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_request_review_changes',
-		description: 'Request review changes on an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_request_approval',
-		description: 'Open an approval request for an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['taskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_approve_approval',
-		description: 'Approve the active approval request on an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_reject_approval',
-		description: 'Reject the active approval request on an AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_decompose',
-		description: 'Create child tasks from an AMS task delegation template.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['taskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_accept_child_handoff',
-		description: 'Accept a child handoff back into a parent AMS task.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				parentTaskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['parentTaskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_request_child_handoff_changes',
-		description: 'Request follow-up changes on a child handoff.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				parentTaskId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['parentTaskId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_launch_session',
-		description: 'Launch an AMS task session.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_task_recover_session',
-		description: 'Recover the latest launchable AMS task session.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				taskId: { type: 'string' }
-			},
-			required: ['taskId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_goal_list',
-		description: 'List goals with optional project, text, status, and limit filters.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				q: { type: 'string' },
-				projectId: { type: 'string' },
-				status: { type: 'string' },
-				limit: { type: 'number' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_goal_get',
-		description: 'Fetch one AMS goal by id.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				goalId: { type: 'string' }
-			},
-			required: ['goalId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_goal_create',
-		description: 'Create a goal in AMS.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				payload: { type: 'object' }
-			},
-			required: ['payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_goal_update',
-		description: 'Update an existing AMS goal.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				goalId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['goalId', 'payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_project_list',
-		description: 'List projects with optional text and limit filters.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				q: { type: 'string' },
-				limit: { type: 'number' }
-			},
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_project_get',
-		description: 'Fetch one AMS project by id.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				projectId: { type: 'string' }
-			},
-			required: ['projectId'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_project_create',
-		description: 'Create a project in AMS.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				payload: { type: 'object' }
-			},
-			required: ['payload'],
-			additionalProperties: false
-		}
-	},
-	{
-		name: 'ams_project_update',
-		description: 'Update an existing AMS project.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				projectId: { type: 'string' },
-				payload: { type: 'object' }
-			},
-			required: ['projectId', 'payload'],
-			additionalProperties: false
-		}
 	}
 ];
+
+function buildObjectSchema(properties, required = []) {
+	return {
+		type: 'object',
+		properties,
+		...(required.length > 0 ? { required } : {}),
+		additionalProperties: false
+	};
+}
+
+const MANIFEST_BACKED_TOOL_SCHEMAS = {
+	'context:current': buildObjectSchema({
+		threadId: { type: 'string' },
+		taskId: { type: 'string' },
+		runId: { type: 'string' }
+	}),
+	'intent:prepare_task_for_review': buildObjectSchema({
+		taskId: { type: 'string' },
+		attachment: { type: 'object' },
+		review: { type: 'object' }
+	}),
+	'intent:prepare_task_for_approval': buildObjectSchema({
+		taskId: { type: 'string' },
+		attachment: { type: 'object' },
+		approval: { type: 'object' }
+	}),
+	'intent:reject_task_approval': buildObjectSchema({
+		taskId: { type: 'string' }
+	}),
+	'intent:accept_child_handoff': buildObjectSchema({
+		parentTaskId: { type: 'string' },
+		childTaskId: { type: 'string' }
+	}),
+	'intent:request_child_handoff_changes': buildObjectSchema({
+		parentTaskId: { type: 'string' },
+		childTaskId: { type: 'string' },
+		summary: { type: 'string' }
+	}),
+	'thread:start': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
+	'thread:get': buildObjectSchema({ threadId: { type: 'string' } }, ['threadId']),
+	'thread:panel': buildObjectSchema({ threadId: { type: 'string' } }, ['threadId']),
+	'thread:set-handle-alias': buildObjectSchema(
+		{ threadId: { type: 'string' }, handleAlias: { type: 'string' } },
+		['threadId']
+	),
+	'thread:cancel': buildObjectSchema({ threadId: { type: 'string' } }, ['threadId']),
+	'thread:archive': buildObjectSchema(
+		{
+			threadIds: {
+				type: 'array',
+				items: { type: 'string' }
+			},
+			archived: { type: 'boolean' }
+		},
+		['threadIds']
+	),
+	'thread:status': buildObjectSchema({
+		threadIds: {
+			type: 'array',
+			items: { type: 'string' }
+		}
+	}),
+	'thread:best-target': buildObjectSchema({
+		q: { type: 'string' },
+		role: { type: 'string' },
+		project: { type: 'string' },
+		taskId: { type: 'string' },
+		sourceThreadId: { type: 'string' },
+		includeUnavailable: { type: 'boolean' },
+		includeArchived: { type: 'boolean' }
+	}),
+	'thread:list': buildObjectSchema({
+		q: { type: 'string' },
+		role: { type: 'string' },
+		project: { type: 'string' },
+		taskId: { type: 'string' },
+		sourceThreadId: { type: 'string' },
+		canContact: { type: 'boolean' },
+		includeArchived: { type: 'boolean' },
+		limit: { type: 'number' }
+	}),
+	'thread:resolve': buildObjectSchema(
+		{
+			query: { type: 'string' },
+			sourceThreadId: { type: 'string' },
+			canContact: { type: 'boolean' },
+			includeArchived: { type: 'boolean' },
+			limit: { type: 'number' }
+		},
+		['query']
+	),
+	'thread:contact': buildObjectSchema(
+		{
+			targetThreadIdOrHandle: { type: 'string' },
+			prompt: { type: 'string' },
+			type: { type: 'string' },
+			context: { type: 'string' },
+			sourceThreadId: { type: 'string' },
+			replyToContactId: { type: 'string' },
+			replyRequested: { type: 'boolean' }
+		},
+		['targetThreadIdOrHandle', 'prompt']
+	),
+	'thread:contacts': buildObjectSchema({
+		threadIdOrHandle: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'thread:contact-targets': buildObjectSchema({
+		sourceThreadId: { type: 'string' }
+	}),
+	'thread:attachment-read': buildObjectSchema(
+		{ threadId: { type: 'string' }, attachmentId: { type: 'string' } },
+		['threadId', 'attachmentId']
+	),
+	'task:list': buildObjectSchema({
+		q: { type: 'string' },
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		status: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'task:get': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:create': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
+	'task:update': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
+		'taskId',
+		'payload'
+	]),
+	'task:attach': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
+		'taskId',
+		'payload'
+	]),
+	'task:remove-attachment': buildObjectSchema(
+		{ taskId: { type: 'string' }, attachmentId: { type: 'string' } },
+		['taskId', 'attachmentId']
+	),
+	'task:request-review': buildObjectSchema(
+		{ taskId: { type: 'string' }, payload: { type: 'object' } },
+		['taskId', 'payload']
+	),
+	'task:approve-review': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:request-review-changes': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:request-approval': buildObjectSchema(
+		{ taskId: { type: 'string' }, payload: { type: 'object' } },
+		['taskId', 'payload']
+	),
+	'task:approve-approval': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:reject-approval': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:decompose': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
+		'taskId',
+		'payload'
+	]),
+	'task:accept-child-handoff': buildObjectSchema(
+		{ parentTaskId: { type: 'string' }, payload: { type: 'object' } },
+		['parentTaskId', 'payload']
+	),
+	'task:request-child-handoff-changes': buildObjectSchema(
+		{ parentTaskId: { type: 'string' }, payload: { type: 'object' } },
+		['parentTaskId', 'payload']
+	),
+	'task:launch-session': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:recover-session': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'goal:list': buildObjectSchema({
+		q: { type: 'string' },
+		projectId: { type: 'string' },
+		status: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal:get': buildObjectSchema({ goalId: { type: 'string' } }, ['goalId']),
+	'goal:create': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
+	'goal:update': buildObjectSchema({ goalId: { type: 'string' }, payload: { type: 'object' } }, [
+		'goalId',
+		'payload'
+	]),
+	'project:list': buildObjectSchema({
+		q: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'project:get': buildObjectSchema({ projectId: { type: 'string' } }, ['projectId']),
+	'project:create': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
+	'project:update': buildObjectSchema(
+		{ projectId: { type: 'string' }, payload: { type: 'object' } },
+		['projectId', 'payload']
+	)
+};
+
+function buildManifestToolKey(resource, command) {
+	return `${resource}:${command}`;
+}
+
+function buildManifestToolName(resource, command) {
+	return `ams_${resource}_${command.replaceAll('-', '_')}`;
+}
+
+function buildManifestBackedTools() {
+	return AGENT_CAPABILITY_COMMANDS.map((command) => {
+		const inputSchema =
+			MANIFEST_BACKED_TOOL_SCHEMAS[buildManifestToolKey(command.resource, command.command)];
+
+		if (!inputSchema) {
+			throw new Error(
+				`Missing MCP input schema for manifest-backed tool ${command.resource}:${command.command}`
+			);
+		}
+
+		return {
+			name: buildManifestToolName(command.resource, command.command),
+			description: command.summary,
+			inputSchema
+		};
+	});
+}
+
+const TOOLS = [...SPECIAL_TOOLS, ...buildManifestBackedTools()];
+
+export function getTools() {
+	return TOOLS;
+}
 
 function buildSearchParams(input = {}) {
 	const params = new URLSearchParams();
@@ -520,45 +265,12 @@ function buildSearchParams(input = {}) {
 	return params;
 }
 
-function buildThreadSearchParams(options = {}, input = {}) {
-	const params = new URLSearchParams();
-
-	if (options.q) {
-		params.set('q', options.q);
-	}
-
-	if (options.role) {
-		params.set('role', options.role);
-	}
-
-	if (options.project) {
-		params.set('project', options.project);
-	}
-
-	if (options.taskId) {
-		params.set('taskId', options.taskId);
-	}
-
-	if (options.sourceThreadId ?? input.sourceThreadId) {
-		params.set('sourceThreadId', options.sourceThreadId ?? input.sourceThreadId);
-	}
-
-	if (options.includeArchived) {
-		params.set('includeArchived', '1');
-	}
-
-	if (options.canContact || input.canContact) {
-		params.set('canContact', '1');
-	}
-
-	if (options.limit) {
-		params.set('limit', String(options.limit));
-	}
-
-	return params;
+async function request(path, init = {}) {
+	const response = await requestRaw(path, init);
+	return response.json().catch(() => ({}));
 }
 
-async function request(path, init = {}) {
+async function requestRaw(path, init = {}) {
 	if (!apiToken) {
 		throw new Error('AMS_AGENT_API_TOKEN is required for AMS MCP tools.');
 	}
@@ -570,13 +282,18 @@ async function request(path, init = {}) {
 			...(init.headers ?? {})
 		}
 	});
-	const payload = await response.json().catch(() => ({}));
-
 	if (!response.ok) {
-		throw new Error(payload.error ?? `Request failed: ${response.status} ${response.statusText}`);
+		const payload = await response.json().catch(() => ({}));
+		throw new Error(
+			formatAgentApiErrorMessage({
+				error: payload.error ?? `Request failed: ${response.status} ${response.statusText}`,
+				errorCode: payload.errorCode,
+				suggestedNextCommands: payload.suggestedNextCommands
+			})
+		);
 	}
 
-	return payload;
+	return response;
 }
 
 function requireThreadId(threadId) {
@@ -587,333 +304,252 @@ function requireThreadId(threadId) {
 	}
 }
 
-async function resolveThreadCandidates(identifier, input = {}) {
-	const normalizedIdentifier = identifier?.trim();
-	const params = buildThreadSearchParams(
-		{
-			q: normalizedIdentifier,
-			limit: input.limit ?? '25',
-			...(input.canContact ? { canContact: true } : {}),
-			...(input.includeArchived ? { includeArchived: true } : {})
-		},
-		{
-			sourceThreadId: input.sourceThreadId ?? '',
-			canContact: input.canContact
-		}
-	);
-	const payload = await request(`/api/agents/threads?${params.toString()}`);
-	return Array.isArray(payload.threads) ? payload.threads : [];
+const threadContactHandlers = createThreadContactMcpHandlers({
+	request,
+	currentThreadId,
+	requireThreadId,
+	readRequiredString
+});
+
+const MANUAL_TOOL_HANDLERS = {
+	ams_manifest: async (args) => {
+		const params = buildSearchParams({
+			resource: args.resource,
+			command: args.command
+		});
+		return request(`/api/agent-capabilities${params.size > 0 ? `?${params.toString()}` : ''}`);
+	},
+	...threadContactHandlers,
+	ams_thread_attachment_read: async (args) =>
+		readDownloadedAttachment(
+			`/api/agents/threads/${encodeURIComponent(readRequiredString(args.threadId, 'threadId'))}/attachments/${encodeURIComponent(readRequiredString(args.attachmentId, 'attachmentId'))}`
+		),
+	ams_task_attachment_read: async (args) =>
+		readDownloadedAttachment(
+			`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/attachments/${encodeURIComponent(readRequiredString(args.attachmentId, 'attachmentId'))}`
+		)
+};
+
+const GENERATED_TOOL_COMMANDS = new Map(
+	AGENT_CAPABILITY_COMMANDS.map((command) => [
+		buildManifestToolName(command.resource, command.command),
+		command
+	]).filter(([toolName]) => !(toolName in MANUAL_TOOL_HANDLERS))
+);
+
+function buildCommandKey(resource, command) {
+	return `${resource}:${command}`;
 }
 
-async function resolveThreadIdentifier(identifier, input = {}) {
-	const normalizedIdentifier = identifier?.trim();
+function resolveCommandMetadataValue(spec = {}, args = {}, label = 'value') {
+	const sourceArg = spec.arg ?? label;
+	let value = sourceArg in args ? args[sourceArg] : undefined;
 
-	if (!normalizedIdentifier) {
-		throw new Error('Target thread id or handle is required.');
+	if (value === undefined && spec.fallback === 'currentThreadId') {
+		value = currentThreadId;
 	}
 
-	if (normalizedIdentifier.startsWith('thread_')) {
-		return normalizedIdentifier;
+	if (spec.transform === 'invert_true_missing_true') {
+		value = value === undefined ? true : value !== true;
 	}
 
-	const threads = await resolveThreadCandidates(normalizedIdentifier, input);
-	const exactMatch = threads.find(
-		(thread) => thread?.id === normalizedIdentifier || thread?.handle === normalizedIdentifier
-	);
-
-	if (exactMatch?.id) {
-		return exactMatch.id;
+	if (spec.normalize === 'optionalString') {
+		value = value === undefined ? undefined : normalizeOptionalString(value);
 	}
 
-	if (threads.length === 1 && threads[0]?.id) {
-		return threads[0].id;
+	if (value === undefined && Object.hasOwn(spec, 'default')) {
+		value = spec.default;
 	}
 
-	if (threads.length > 1) {
-		const suggestions = threads
-			.slice(0, 5)
-			.map((thread) => `${thread.handle ?? thread.id} (${thread.name})`)
-			.join(', ');
-
-		throw new Error(`Handle "${normalizedIdentifier}" is ambiguous. Try one of: ${suggestions}`);
+	if (spec.required) {
+		if (Array.isArray(value)) {
+			if (value.length === 0) {
+				throw new Error(`${sourceArg} is required.`);
+			}
+		} else if (typeof value === 'string') {
+			if (!value.trim()) {
+				throw new Error(`${sourceArg} is required.`);
+			}
+		} else if (value === undefined || value === null) {
+			throw new Error(`${sourceArg} is required.`);
+		}
 	}
 
-	throw new Error(
-		`Could not resolve thread handle "${normalizedIdentifier}". Use an exact handle or thread id.`
-	);
+	return value;
+}
+
+function consumePathArgs(pathTemplate, args, command = null) {
+	const remainingArgs = { ...args };
+	const aliases = command?.mcp?.pathArgAliases ?? {};
+	const defaults = command?.mcp?.pathArgDefaults ?? {};
+	const path = pathTemplate.replaceAll(/:([A-Za-z0-9_]+)/g, (_match, rawParamName) => {
+		const paramName = String(rawParamName);
+		const argName = aliases[paramName] ?? paramName;
+		const value =
+			argName in remainingArgs
+				? remainingArgs[argName]
+				: resolveCommandMetadataValue(defaults[paramName] ?? {}, remainingArgs, argName);
+
+		if (typeof value !== 'string' || !value.trim()) {
+			throw new Error(`${argName} is required.`);
+		}
+
+		delete remainingArgs[argName];
+		return encodeURIComponent(value.trim());
+	});
+
+	return { path, remainingArgs };
+}
+
+function appendSearchParam(params, key, value, spec = {}) {
+	if (value === undefined || value === null || value === '') {
+		return;
+	}
+
+	if (Array.isArray(value)) {
+		for (const entry of value) {
+			appendSearchParam(params, key, entry);
+		}
+		return;
+	}
+
+	if (typeof value === 'boolean') {
+		params.append(key, spec.booleanMode === 'one_zero' ? (value ? '1' : '0') : String(value));
+		return;
+	}
+
+	params.append(key, String(value));
+}
+
+function buildQueryString(args, command = null) {
+	const params = new URLSearchParams();
+	const querySpecs = command?.mcp?.query?.params ?? null;
+
+	if (querySpecs) {
+		for (const [queryKey, spec] of Object.entries(querySpecs)) {
+			appendSearchParam(params, queryKey, resolveCommandMetadataValue(spec, args, queryKey), spec);
+		}
+
+		return params;
+	}
+
+	for (const [key, value] of Object.entries(args)) {
+		appendSearchParam(params, key, value);
+	}
+
+	return params;
+}
+
+function buildGeneratedRequestInit(command, args) {
+	const bodyMetadata = command?.mcp?.body ?? null;
+	let body = null;
+
+	if (bodyMetadata?.fields) {
+		body = Object.fromEntries(
+			Object.entries(bodyMetadata.fields).map(([fieldName, spec]) => [
+				fieldName,
+				resolveCommandMetadataValue(spec, args, fieldName)
+			])
+		);
+	} else if (bodyMetadata?.mergePayload) {
+		body = {
+			...readRequiredObject(args.payload),
+			...(bodyMetadata.defaults ?? {})
+		};
+	} else if ('payload' in args) {
+		body = readRequiredObject(args.payload);
+	} else if (bodyMetadata?.defaults || Object.keys(args).length > 0) {
+		body = {
+			...(bodyMetadata?.defaults ?? {}),
+			...args
+		};
+	}
+
+	if (!body) {
+		return { method: command.method };
+	}
+
+	return {
+		method: command.method,
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body)
+	};
+}
+
+function shapeGeneratedResponse(command, payload) {
+	const responseFields = command?.mcp?.responseFields ?? null;
+
+	if (!responseFields || !payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return payload;
+	}
+
+	for (const fieldName of responseFields) {
+		if (fieldName in payload) {
+			return payload[fieldName];
+		}
+	}
+
+	return null;
+}
+
+async function invokeGeneratedTool(command, args = {}) {
+	if (!command.path || !command.method) {
+		throw new Error(
+			`Generated MCP command ${command.resource}:${command.command} is missing path or method metadata.`
+		);
+	}
+
+	const { path, remainingArgs } = consumePathArgs(command.path, args, command);
+	const method = command.method.toUpperCase();
+
+	if (method === 'GET') {
+		const params = buildQueryString(remainingArgs, command);
+		const payload = await request(`${path}${params.size > 0 ? `?${params.toString()}` : ''}`);
+		return shapeGeneratedResponse(command, payload);
+	}
+
+	const payload = await request(path, buildGeneratedRequestInit(command, remainingArgs));
+	return shapeGeneratedResponse(command, payload);
 }
 
 export async function invokeTool(name, args = {}) {
-	switch (name) {
-		case 'ams_manifest': {
-			const params = buildSearchParams({
-				resource: args.resource,
-				command: args.command
-			});
-			return request(`/api/agent-capabilities${params.size > 0 ? `?${params.toString()}` : ''}`);
-		}
-		case 'ams_thread_start':
-			return request('/api/agents/threads', jsonRequest(args.payload));
-		case 'ams_thread_get':
-			return request(
-				`/api/agents/threads/${encodeURIComponent(readRequiredString(args.threadId, 'threadId'))}`
-			);
-		case 'ams_thread_set_handle_alias':
-			return request(
-				`/api/agents/threads/${encodeURIComponent(readRequiredString(args.threadId, 'threadId'))}`,
-				jsonRequest(
-					{
-						handleAlias:
-							args.handleAlias === undefined ? null : normalizeOptionalString(args.handleAlias)
-					},
-					'PATCH'
-				)
-			);
-		case 'ams_thread_cancel':
-			return request(
-				`/api/agents/threads/${encodeURIComponent(readRequiredString(args.threadId, 'threadId'))}/cancel`,
-				{
-					method: 'POST'
-				}
-			);
-		case 'ams_thread_archive':
-			return request(
-				'/api/agents/threads/archive',
-				jsonRequest({
-					threadIds: readRequiredStringList(args.threadIds, 'threadIds'),
-					archived: args.archived !== false
-				})
-			);
-		case 'ams_thread_status': {
-			const params = new URLSearchParams();
+	try {
+		const manualHandler = MANUAL_TOOL_HANDLERS[name];
 
-			for (const threadId of readOptionalStringList(args.threadIds)) {
-				params.append('threadId', threadId);
-			}
+		if (typeof manualHandler === 'function') {
+			const result = await manualHandler(args);
+			await recordAgentToolUseBestEffort({
+				threadId: currentThreadId,
+				toolName: name,
+				args,
+				outcome: 'success'
+			});
+			return result;
+		}
 
-			return request(`/api/agents/threads/status${params.size > 0 ? `?${params.toString()}` : ''}`);
-		}
-		case 'ams_thread_best_target': {
-			const sourceThreadId = args.sourceThreadId ?? currentThreadId;
-			requireThreadId(sourceThreadId);
-			const params = buildThreadSearchParams(
-				{
-					q: args.q,
-					role: args.role,
-					project: args.project,
-					taskId: args.taskId,
-					sourceThreadId,
-					includeArchived: args.includeArchived
-				},
-				{
-					sourceThreadId,
-					canContact: args.includeUnavailable !== true
-				}
-			);
-			const payload = await request(`/api/agents/threads/best-target?${params.toString()}`);
-			return payload.target ?? payload.thread ?? null;
-		}
-		case 'ams_thread_list': {
-			const params = buildThreadSearchParams(
-				{
-					q: args.q,
-					role: args.role,
-					project: args.project,
-					taskId: args.taskId,
-					sourceThreadId: args.sourceThreadId ?? currentThreadId,
-					includeArchived: args.includeArchived,
-					limit: args.limit
-				},
-				{
-					sourceThreadId: args.sourceThreadId ?? currentThreadId,
-					canContact: args.canContact
-				}
-			);
-			const payload = await request(`/api/agents/threads?${params.toString()}`);
-			return payload.targets ?? payload.threads ?? [];
-		}
-		case 'ams_thread_resolve':
-			return resolveThreadCandidates(readRequiredString(args.query, 'query'), {
-				sourceThreadId: args.sourceThreadId ?? currentThreadId,
-				canContact: args.canContact,
-				includeArchived: args.includeArchived,
-				limit: args.limit
-			});
-		case 'ams_thread_contact': {
-			const sourceThreadId = args.sourceThreadId ?? currentThreadId;
-			requireThreadId(sourceThreadId);
-			const targetThreadId = await resolveThreadIdentifier(
-				readRequiredString(args.targetThreadIdOrHandle, 'targetThreadIdOrHandle'),
-				{
-					sourceThreadId,
-					canContact: true
-				}
-			);
-			const payload = await request(
-				`/api/agents/threads/${encodeURIComponent(targetThreadId)}/messages`,
-				{
-					method: 'POST',
-					headers: {
-						'content-type': 'application/json'
-					},
-					body: JSON.stringify({
-						sourceThreadId,
-						prompt: readRequiredString(args.prompt, 'prompt'),
-						contactType: args.type ?? 'question',
-						contextSummary: args.context ?? '',
-						replyRequested: args.replyRequested !== false,
-						replyToContactId: args.replyToContactId ?? null
-					})
-				}
-			);
-			return payload;
-		}
-		case 'ams_thread_contacts': {
-			const threadId = args.threadIdOrHandle
-				? await resolveThreadIdentifier(args.threadIdOrHandle, {
-						includeArchived: true
-					})
-				: currentThreadId;
-			requireThreadId(threadId);
-			const params = new URLSearchParams();
+		const command = GENERATED_TOOL_COMMANDS.get(name);
 
-			if (args.limit) {
-				params.set('limit', String(args.limit));
-			}
+		if (command) {
+			const result = await invokeGeneratedTool(command, args);
+			await recordAgentToolUseBestEffort({
+				threadId: currentThreadId,
+				toolName: name,
+				args,
+				outcome: 'success'
+			});
+			return result;
+		}
 
-			const payload = await request(
-				`/api/agents/threads/${encodeURIComponent(threadId)}/contacts${params.size > 0 ? `?${params.toString()}` : ''}`
-			);
-			return payload.contacts ?? [];
-		}
-		case 'ams_task_list': {
-			const params = buildSearchParams({
-				q: args.q,
-				projectId: args.projectId,
-				goalId: args.goalId,
-				status: args.status,
-				limit: args.limit
-			});
-			return request(`/api/tasks${params.size > 0 ? `?${params.toString()}` : ''}`);
-		}
-		case 'ams_task_get':
-			return request(`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}`);
-		case 'ams_task_create':
-			return request('/api/tasks', jsonRequest(args.payload));
-		case 'ams_task_update':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}`,
-				jsonRequest(args.payload, 'PATCH')
-			);
-		case 'ams_task_attach':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/attachments`,
-				jsonRequest(args.payload)
-			);
-		case 'ams_task_remove_attachment':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/attachments/${encodeURIComponent(readRequiredString(args.attachmentId, 'attachmentId'))}`,
-				{
-					method: 'DELETE'
-				}
-			);
-		case 'ams_task_request_review':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/review-request`,
-				jsonRequest(args.payload)
-			);
-		case 'ams_task_approve_review':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/review-decision`,
-				jsonRequest({ decision: 'approve' })
-			);
-		case 'ams_task_request_review_changes':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/review-decision`,
-				jsonRequest({ decision: 'changes_requested' })
-			);
-		case 'ams_task_request_approval':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/approval-request`,
-				jsonRequest(args.payload)
-			);
-		case 'ams_task_approve_approval':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/approval-decision`,
-				jsonRequest({ decision: 'approve' })
-			);
-		case 'ams_task_reject_approval':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/approval-decision`,
-				jsonRequest({ decision: 'reject' })
-			);
-		case 'ams_task_decompose':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/decompose`,
-				jsonRequest(args.payload)
-			);
-		case 'ams_task_accept_child_handoff':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.parentTaskId, 'parentTaskId'))}/child-handoff`,
-				jsonRequest({ ...readRequiredObject(args.payload), decision: 'accept' })
-			);
-		case 'ams_task_request_child_handoff_changes':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.parentTaskId, 'parentTaskId'))}/child-handoff`,
-				jsonRequest({ ...readRequiredObject(args.payload), decision: 'changes_requested' })
-			);
-		case 'ams_task_launch_session':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/session-launch`,
-				{
-					method: 'POST'
-				}
-			);
-		case 'ams_task_recover_session':
-			return request(
-				`/api/tasks/${encodeURIComponent(readRequiredString(args.taskId, 'taskId'))}/session-recover`,
-				{
-					method: 'POST'
-				}
-			);
-		case 'ams_goal_list': {
-			const params = buildSearchParams({
-				q: args.q,
-				projectId: args.projectId,
-				status: args.status,
-				limit: args.limit
-			});
-			return request(`/api/goals${params.size > 0 ? `?${params.toString()}` : ''}`);
-		}
-		case 'ams_goal_get':
-			return request(`/api/goals/${encodeURIComponent(readRequiredString(args.goalId, 'goalId'))}`);
-		case 'ams_goal_create':
-			return request('/api/goals', jsonRequest(args.payload));
-		case 'ams_goal_update':
-			return request(
-				`/api/goals/${encodeURIComponent(readRequiredString(args.goalId, 'goalId'))}`,
-				jsonRequest(args.payload, 'PATCH')
-			);
-		case 'ams_project_list': {
-			const params = buildSearchParams({
-				q: args.q,
-				limit: args.limit
-			});
-			return request(`/api/projects${params.size > 0 ? `?${params.toString()}` : ''}`);
-		}
-		case 'ams_project_get':
-			return request(
-				`/api/projects/${encodeURIComponent(readRequiredString(args.projectId, 'projectId'))}`
-			);
-		case 'ams_project_create':
-			return request('/api/projects', jsonRequest(args.payload));
-		case 'ams_project_update':
-			return request(
-				`/api/projects/${encodeURIComponent(readRequiredString(args.projectId, 'projectId'))}`,
-				jsonRequest(args.payload, 'PATCH')
-			);
-		default:
-			throw new Error(`Unknown tool: ${name}`);
+		throw new Error(`Unknown tool: ${name}`);
+	} catch (error) {
+		await recordAgentToolUseBestEffort({
+			threadId: currentThreadId,
+			toolName: name,
+			args,
+			outcome: 'error',
+			errorMessage: error instanceof Error ? error.message : String(error)
+		});
+		throw error;
 	}
 }
 
@@ -969,6 +605,51 @@ function normalizeOptionalString(value) {
 
 	const normalized = value.trim();
 	return normalized.length > 0 ? normalized : null;
+}
+
+async function readDownloadedAttachment(pathname) {
+	const response = await requestRaw(pathname);
+	const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+	const name = parseContentDispositionFilename(response.headers.get('content-disposition'));
+
+	if (isTextContentType(contentType)) {
+		return {
+			attachment: {
+				name,
+				contentType,
+				encoding: 'text',
+				content: await response.text()
+			}
+		};
+	}
+
+	return {
+		attachment: {
+			name,
+			contentType,
+			encoding: 'base64',
+			content: Buffer.from(await response.arrayBuffer()).toString('base64')
+		}
+	};
+}
+
+function parseContentDispositionFilename(contentDisposition) {
+	if (!contentDisposition) {
+		return null;
+	}
+
+	const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+	return match?.[1] ?? null;
+}
+
+function isTextContentType(contentType) {
+	return (
+		contentType.startsWith('text/') ||
+		contentType.includes('json') ||
+		contentType.includes('xml') ||
+		contentType.includes('javascript') ||
+		contentType.includes('svg')
+	);
 }
 
 function writeMessage(message) {

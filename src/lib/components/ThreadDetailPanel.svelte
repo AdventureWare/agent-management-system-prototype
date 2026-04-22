@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
+	import {
+		artifactDownloadHref,
+		artifactFileHref,
+		artifactFolderHref,
+		artifactPreviewKind
+	} from '$lib/artifact-links';
 	import { fetchAgentThread, fetchAgentThreadStatuses } from '$lib/client/agent-threads';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
@@ -7,6 +13,7 @@
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
+	import ArtifactQuickPreviewDialog from '$lib/components/ArtifactQuickPreviewDialog.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
 	import ThreadMessageContent from '$lib/components/ThreadMessageContent.svelte';
@@ -107,6 +114,10 @@
 		defaultSelected: boolean;
 	};
 
+	function resolveUncheckedPath(href: string) {
+		return `${base}${href}`;
+	}
+
 	let {
 		thread: sessionProp,
 		sandboxOptions,
@@ -181,6 +192,11 @@
 		null
 	);
 	let pageNotice = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
+	let copiedAttachmentPath = $state<string | null>(null);
+	let copiedAttachmentLink = $state<string | null>(null);
+	let quickPreviewOpen = $state(false);
+	let quickPreviewPath = $state('');
+	let quickPreviewLabel = $state('');
 	let threadDetailRoot = $state<HTMLElement | null>(null);
 	let threadHeaderShrinkProgress = $state(0);
 	let replyEntryRequested = $state(false);
@@ -1311,6 +1327,57 @@
 		}
 
 		return timestampFormatter.format(new Date(iso));
+	}
+
+	function attachmentActionLabel(path: string) {
+		return artifactPreviewKind(path) ? 'Open page' : 'Open';
+	}
+
+	function canWriteClipboard() {
+		return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+	}
+
+	async function copyAttachmentPath(path: string) {
+		if (!canWriteClipboard()) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(path);
+			copiedAttachmentPath = path;
+			window.setTimeout(() => {
+				if (copiedAttachmentPath === path) {
+					copiedAttachmentPath = null;
+				}
+			}, 1400);
+		} catch {
+			copiedAttachmentPath = null;
+		}
+	}
+
+	async function copyAttachmentLink(path: string) {
+		if (!canWriteClipboard() || typeof window === 'undefined') {
+			return;
+		}
+
+		try {
+			const href = new URL(artifactFileHref(path), window.location.origin).toString();
+			await navigator.clipboard.writeText(href);
+			copiedAttachmentLink = path;
+			window.setTimeout(() => {
+				if (copiedAttachmentLink === path) {
+					copiedAttachmentLink = null;
+				}
+			}, 1400);
+		} catch {
+			copiedAttachmentLink = null;
+		}
+	}
+
+	function openAttachmentQuickPreview(path: string, label: string) {
+		quickPreviewOpen = true;
+		quickPreviewPath = path;
+		quickPreviewLabel = label;
 	}
 
 	function sessionStatusClass(state: AgentThreadDetail['threadState']) {
@@ -3620,20 +3687,72 @@
 															{formatAttachmentSize(attachment.sizeBytes)} · {attachment.contentType}
 														</p>
 														<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
-															{attachment.path}
+															<a
+																class="underline decoration-slate-600 underline-offset-4 transition hover:text-slate-300"
+																href={resolveUncheckedPath(artifactFileHref(attachment.path))}
+																rel="external"
+															>
+																{attachment.path}
+															</a>
 														</p>
 														<p class="ui-wrap-anywhere mt-2 text-xs text-slate-500">
 															Attached {formatTimestamp(attachment.attachedAt)}
 														</p>
 													</div>
-													<a
-														class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
-														href={resolve(
-															`/api/agents/threads/${session.id}/attachments/${attachment.id}`
-														)}
-													>
-														Download
-													</a>
+													<div class="flex flex-col gap-2 sm:items-end">
+														{#if artifactPreviewKind(attachment.path)}
+															<button
+																class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-500/50 hover:text-violet-100"
+																type="button"
+																onclick={() => {
+																	openAttachmentQuickPreview(attachment.path, attachment.name);
+																}}
+															>
+																Quick preview
+															</button>
+														{/if}
+														<a
+															class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-300 uppercase transition hover:border-sky-400/40 hover:text-sky-200"
+															href={resolveUncheckedPath(artifactFileHref(attachment.path))}
+															rel="external"
+														>
+															{attachmentActionLabel(attachment.path)}
+														</a>
+														<a
+															class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+															href={resolveUncheckedPath(artifactFolderHref(attachment.path))}
+															rel="external"
+														>
+															Open folder
+														</a>
+														<button
+															class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+															type="button"
+															onclick={() => {
+																void copyAttachmentLink(attachment.path);
+															}}
+														>
+															{copiedAttachmentLink === attachment.path
+																? 'Copied link'
+																: 'Copy link'}
+														</button>
+														<button
+															class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
+															type="button"
+															onclick={() => {
+																void copyAttachmentPath(attachment.path);
+															}}
+														>
+															{copiedAttachmentPath === attachment.path ? 'Copied' : 'Copy path'}
+														</button>
+														<a
+															class="rounded-full border border-emerald-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-emerald-200 uppercase transition hover:border-emerald-700/90 hover:text-emerald-100"
+															href={resolveUncheckedPath(artifactDownloadHref(attachment.path))}
+															rel="external"
+														>
+															Download
+														</a>
+													</div>
 												</div>
 											</article>
 										{/each}
@@ -3654,4 +3773,10 @@
 			{@render panelContent()}
 		</AppPage>
 	{/if}
+
+	<ArtifactQuickPreviewDialog
+		bind:open={quickPreviewOpen}
+		path={quickPreviewPath}
+		label={quickPreviewLabel}
+	/>
 {/if}

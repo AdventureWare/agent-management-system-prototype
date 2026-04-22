@@ -17,6 +17,9 @@ function createTask(overrides: Record<string, unknown> = {}) {
 		status: 'ready',
 		riskLevel: 'medium',
 		approvalMode: 'none',
+		successCriteria: '',
+		readyCondition: '',
+		expectedOutcome: '',
 		requiresReview: true,
 		desiredRoleId: 'role_1',
 		assigneeExecutionSurfaceId: null,
@@ -336,6 +339,80 @@ describe('/app/tasks/+page.svelte', () => {
 		).toBe(true);
 	});
 
+	it('shows a run-task quick action for ready rows with a complete launch contract', () => {
+		renderPage([
+			createTask({
+				id: 'task_launchable',
+				title: 'Launchable queue task',
+				successCriteria: 'Operator can verify the result.',
+				readyCondition: 'The request has enough detail to execute.',
+				expectedOutcome: 'A completed task artifact is attached.'
+			})
+		]);
+
+		const queueRow = document.body.textContent ?? '';
+
+		expect(queueRow).toContain('Run task');
+		expect(queueRow).not.toContain('Recover stalled');
+	});
+
+	it('shows a recover quick action only for stale in-progress rows with an active run', () => {
+		renderPage([
+			createTask({
+				id: 'task_stalled',
+				title: 'Recoverable queue task',
+				status: 'in_progress',
+				latestRunId: 'run_stalled',
+				latestRun: {
+					id: 'run_stalled',
+					taskId: 'task_stalled',
+					executionSurfaceId: null,
+					assumedRoleId: null,
+					providerId: null,
+					agentThreadRunId: null,
+					status: 'running',
+					summary: 'Work appears stalled.',
+					startedAt: '2026-03-31T08:00:00.000Z',
+					completedAt: null,
+					createdAt: '2026-03-31T08:00:00.000Z',
+					updatedAt: '2026-03-31T08:05:00.000Z',
+					agentThreadId: 'thread_stalled',
+					threadId: null,
+					modelUsed: null,
+					promptDigest: null,
+					artifactPaths: [],
+					lastHeartbeatAt: '2026-03-31T08:05:00.000Z'
+				},
+				statusThread: {
+					id: 'thread_stalled',
+					name: 'Stalled worker',
+					threadState: 'working',
+					hasActiveRun: true,
+					canResume: false,
+					lastActivityAt: '2026-03-31T08:00:00.000Z'
+				},
+				freshness: {
+					isStale: true,
+					staleSignals: ['noRecentRunActivity', 'activeThreadNoRecentOutput'],
+					staleInProgress: false,
+					noRecentRunActivity: true,
+					activeThreadNoRecentOutput: true,
+					taskAgeMs: 60 * 60 * 1000,
+					taskAgeLabel: '1h ago',
+					runActivityAgeMs: 20 * 60 * 1000,
+					runActivityAgeLabel: '20m ago',
+					threadActivityAgeMs: 20 * 60 * 1000,
+					threadActivityAgeLabel: '20m ago'
+				}
+			})
+		]);
+
+		const queueRow = document.body.textContent ?? '';
+
+		expect(queueRow).toContain('Recover stalled');
+		expect(queueRow).not.toContain('Run task');
+	});
+
 	it('keeps the task index toolbar sticky while the queue scrolls', () => {
 		renderPage([createTask()]);
 
@@ -348,19 +425,15 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('defaults the create form to quick task mode and hides full-task controls', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Quick task' }).click();
 
 		const createFormLabels = Array.from(
 			document.querySelectorAll('form[action="?/createTask"] label > span:first-child')
 		).map((label) => label.textContent?.trim());
 
-		expect(createFormLabels.slice(0, 2)).toEqual(['Project', 'Name']);
-		expect(createFormLabels[2]).toContain('Instructions');
-		expect(
-			Array.from(
-				document.querySelectorAll('form[action="?/createTask"] button[aria-pressed="true"]')
-			).some((button) => button.textContent?.includes('Quick task'))
-		).toBe(true);
+		await expect.element(page.getByRole('dialog', { name: 'Quick task' })).toBeInTheDocument();
+		expect(createFormLabels.slice(0, 3)).toEqual(['Project', 'Preferred role', 'Name']);
+		expect(createFormLabels[3]).toContain('Instructions');
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="workflowId"]')
 		).toBeNull();
@@ -368,20 +441,18 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(document.body.textContent).not.toContain('Use task template');
 	});
 
-	it('includes a required sandbox control in the advanced create task intake', async () => {
+	it('includes a preferred role selector in the quick task flow', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
-		await page.getByRole('button', { name: 'Full task' }).click();
-		await page.getByRole('button', { name: 'Show advanced' }).click();
+		await page.getByRole('button', { name: 'Quick task' }).click();
 
 		await expect
-			.element(page.getByRole('combobox', { name: 'Required sandbox' }))
+			.element(page.getByRole('combobox', { name: 'Preferred role' }))
 			.toBeInTheDocument();
 	});
 
 	it('keeps the quick task footer minimal while still allowing create and run', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Quick task' }).click();
 
 		const createForm = document.querySelector(
 			'form[action="?/createTask"]'
@@ -403,8 +474,10 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('reveals full-task setup and launch controls when requested', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
+
+		await expect.element(page.getByRole('dialog', { name: 'Full task' })).toBeInTheDocument();
+		await expect.element(page.getByText('Jump to')).toBeInTheDocument();
 
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="taskTemplateSelection"]')
@@ -441,7 +514,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('renders a goal selector and removes the queue snapshot pane from the create form', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const goalSelect = document.querySelector(
@@ -456,7 +528,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('renders a workflow selector in the create form', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const workflowSelect = document.querySelector(
@@ -470,7 +541,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('keeps cross-project workflows available after selecting a project', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const projectSelect = document.querySelector(
@@ -494,7 +564,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('applies a saved task template to the create form', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
@@ -524,7 +593,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('links selected task templates to the template library for management', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const templateSelect = page.getByRole('combobox', { name: 'Use task template' });
@@ -547,6 +615,77 @@ describe('/app/tasks/+page.svelte', () => {
 		]);
 
 		expect(document.body.textContent).toContain('Workflow Release flow');
+	});
+
+	it('keeps parent and child tasks grouped together in the queue', () => {
+		renderPage([
+			createTask({
+				id: 'task_child',
+				title: 'Child task',
+				parentTaskId: 'task_parent',
+				updatedAt: '2026-04-01T11:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_parent',
+				title: 'Parent task',
+				updatedAt: '2026-04-01T09:00:00.000Z'
+			})
+		]);
+
+		const renderedCards = Array.from(
+			document.querySelectorAll('[data-testid^="task-mobile-card-"]')
+		).map((element) => element.getAttribute('data-testid'));
+
+		expect(renderedCards).toEqual(['task-mobile-card-task_parent', 'task-mobile-card-task_child']);
+		expect(document.body.textContent).toContain('Subtask');
+	});
+
+	it('lets operators collapse and expand child task branches', async () => {
+		renderPage([
+			createTask({
+				id: 'task_child_branch',
+				title: 'Branch child task',
+				parentTaskId: 'task_parent_branch',
+				updatedAt: '2026-04-01T11:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_parent_branch',
+				title: 'Branch parent task',
+				updatedAt: '2026-04-01T09:00:00.000Z'
+			})
+		]);
+
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_child_branch"]')
+		).not.toBeNull();
+
+		await page.getByRole('button', { name: 'Collapse child tasks for Branch parent task' }).click();
+
+		expect(document.querySelector('[data-testid="task-mobile-card-task_child_branch"]')).toBeNull();
+
+		await page.getByRole('button', { name: 'Expand child tasks for Branch parent task' }).click();
+
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_child_branch"]')
+		).not.toBeNull();
+	});
+
+	it('opts task queue selection checkboxes out of page field persistence', () => {
+		renderPage([
+			createTask({
+				id: 'task_selection_guard',
+				title: 'Selection should start clean'
+			})
+		]);
+
+		const selectionCheckboxes = Array.from(
+			document.querySelectorAll('input[type="checkbox"]')
+		) as HTMLInputElement[];
+
+		expect(selectionCheckboxes.length).toBeGreaterThan(0);
+		expect(selectionCheckboxes.every((checkbox) => checkbox.hasAttribute('data-persist-off'))).toBe(
+			true
+		);
 	});
 
 	it('filters queue rows by workflow', async () => {
@@ -574,9 +713,97 @@ describe('/app/tasks/+page.svelte', () => {
 			.not.toContain('Standalone task without workflow');
 	});
 
+	it('sorts queue rows by priority', async () => {
+		renderPage([
+			createTask({
+				id: 'task_low_priority',
+				title: 'Low priority task',
+				priority: 'low',
+				updatedAt: '2026-04-01T11:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_urgent_priority',
+				title: 'Urgent priority task',
+				priority: 'urgent',
+				updatedAt: '2026-04-01T09:00:00.000Z'
+			})
+		]);
+
+		await page.getByRole('combobox', { name: 'Sort tasks' }).selectOptions('priority');
+
+		const renderedCards = Array.from(
+			document.querySelectorAll('[data-testid^="task-mobile-card-"]')
+		).map((element) => element.getAttribute('data-testid'));
+
+		expect(renderedCards[0]).toBe('task-mobile-card-task_urgent_priority');
+	});
+
+	it('applies the needs-attention preset with focused filtering and target-date sorting', async () => {
+		renderPage([
+			createTask({
+				id: 'task_attention_blocked',
+				title: 'Blocked task due soon',
+				status: 'blocked',
+				targetDate: '2026-04-18',
+				updatedAt: '2026-04-01T11:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_attention_review',
+				title: 'Review task due later',
+				status: 'review',
+				targetDate: '2026-04-21',
+				updatedAt: '2026-04-01T10:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_attention_stale',
+				title: 'Stale in-progress task',
+				status: 'in_progress',
+				targetDate: null,
+				updatedAt: '2026-04-01T12:00:00.000Z',
+				freshness: {
+					isStale: true,
+					staleSignals: ['staleInProgress'],
+					staleInProgress: true,
+					noRecentRunActivity: false,
+					activeThreadNoRecentOutput: false,
+					taskAgeMs: 8 * 60 * 60 * 1000,
+					taskAgeLabel: '8h ago',
+					runActivityAgeMs: null,
+					runActivityAgeLabel: 'No activity yet',
+					threadActivityAgeMs: null,
+					threadActivityAgeLabel: 'No activity yet'
+				}
+			}),
+			createTask({
+				id: 'task_ready_normal',
+				title: 'Fresh ready task',
+				status: 'ready'
+			}),
+			createTask({
+				id: 'task_done_hidden',
+				title: 'Completed task',
+				status: 'done'
+			})
+		]);
+
+		await page.getByRole('button', { name: 'Needs attention' }).click();
+
+		const renderedCards = Array.from(
+			document.querySelectorAll('[data-testid^="task-mobile-card-"]')
+		).map((element) => element.getAttribute('data-testid'));
+
+		expect(renderedCards).toEqual([
+			'task-mobile-card-task_attention_blocked',
+			'task-mobile-card-task_attention_review',
+			'task-mobile-card-task_attention_stale'
+		]);
+		expect(document.body.textContent ?? '').not.toContain('Fresh ready task');
+		expect(document.body.textContent ?? '').not.toContain('Completed task');
+	});
+
 	it('renders a multi-file attachment control in the quick create form', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Quick task' }).click();
 
 		const attachmentInput = document.querySelector(
 			'form[action="?/createTask"] input[name="attachments"]'
@@ -591,7 +818,7 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('adds pasted files to the quick create attachment list', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
+		await page.getByRole('button', { name: 'Quick task' }).click();
 
 		const createForm = document.querySelector(
 			'form[action="?/createTask"]'
@@ -622,7 +849,6 @@ describe('/app/tasks/+page.svelte', () => {
 
 	it('shows project skill coverage inside the create dialog', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 		const projectSelect = document.querySelector(
 			'form[action="?/createTask"] select[name="projectId"]'
@@ -640,22 +866,29 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(page.getByText('web-design-guidelines').elements().length).toBeGreaterThan(0);
 	});
 
-	it('keeps advanced routing fields collapsed until requested', async () => {
+	it('keeps additional settings collapsed while dependencies stay searchable', async () => {
 		renderPage();
-		await page.getByRole('button', { name: 'Add task' }).click();
 		await page.getByRole('button', { name: 'Full task' }).click();
 
 		const createForm = document.querySelector(
 			'form[action="?/createTask"]'
 		) as HTMLFormElement | null;
 
-		expect(createForm?.textContent).toContain('Advanced intake');
-		expect(createForm?.textContent).toContain('Defaults stay lightweight');
+		expect(createForm?.textContent).toContain('Additional settings');
+		expect(createForm?.textContent).toContain('Search tasks');
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="priority"]')
 		).toBeNull();
+		expect(
+			document.querySelector('form[action="?/createTask"] input[type="search"]')
+		).not.toBeNull();
+		expect(createForm?.textContent).not.toContain('Existing dependency task');
 
-		await page.getByRole('button', { name: 'Show advanced' }).click();
+		const dependencySearch = page.getByRole('searchbox', { name: 'Search tasks' });
+		await dependencySearch.fill('Existing dependency');
+		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Show settings' }).click();
 
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="priority"]')
@@ -663,7 +896,9 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(
 			document.querySelector('form[action="?/createTask"] textarea[name="blockedReason"]')
 		).not.toBeNull();
-		expect(createForm?.textContent).toContain('Existing dependency task');
+		await expect
+			.element(page.getByRole('combobox', { name: 'Required sandbox' }))
+			.toBeInTheDocument();
 	});
 
 	it('restores a saved create-task draft after reload', async () => {
@@ -691,7 +926,7 @@ describe('/app/tasks/+page.svelte', () => {
 
 		renderPage();
 
-		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+		await expect.element(page.getByRole('dialog', { name: 'Full task' })).toBeInTheDocument();
 
 		const nameInput = document.querySelector(
 			'form[action="?/createTask"] input[name="name"]'
@@ -714,7 +949,7 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(instructionsInput?.value).toBe('Persist this between reloads.');
 		expect(requiredCapabilitiesInput?.value).toBe('planning, citations');
 		expect(requiredToolsInput?.value).toBe('codex');
-		await expect.element(page.getByRole('button', { name: 'Hide advanced' })).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Hide settings' })).toBeInTheDocument();
 		expect(
 			(
 				document.querySelector(
@@ -729,13 +964,7 @@ describe('/app/tasks/+page.svelte', () => {
 				) as HTMLTextAreaElement | null
 			)?.value
 		).toBe('Waiting on review environment access.');
-		expect(
-			(
-				document.querySelector(
-					'form[action="?/createTask"] input[name="dependencyTaskIds"]'
-				) as HTMLInputElement | null
-			)?.checked
-		).toBe(true);
+		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
 	});
 
 	it('opens the create dialog from a prefilled deep link', async () => {
@@ -751,7 +980,7 @@ describe('/app/tasks/+page.svelte', () => {
 			}
 		);
 
-		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+		await expect.element(page.getByRole('dialog', { name: 'Full task' })).toBeInTheDocument();
 
 		const nameInput = document.querySelector(
 			'form[action="?/createTask"] input[name="name"]'
@@ -782,7 +1011,7 @@ describe('/app/tasks/+page.svelte', () => {
 				'Rewrote the draft into a clearer execution brief with explicit deliverable and constraints.'
 		});
 
-		await expect.element(page.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+		await expect.element(page.getByRole('dialog', { name: 'Quick task' })).toBeInTheDocument();
 		await expect
 			.element(
 				page.getByText(
@@ -842,7 +1071,7 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(window.localStorage.getItem('ams:create-task')).toBeNull();
 	});
 
-	it('filters the active queue with stale work chips', async () => {
+	it('removes the stale-work chip filters from the task page', () => {
 		renderPage([
 			createTask({
 				id: 'task_stale',
@@ -869,13 +1098,31 @@ describe('/app/tasks/+page.svelte', () => {
 			})
 		]);
 
-		expect(document.querySelector('[data-testid="task-mobile-card-task_stale"]')).not.toBeNull();
-		expect(document.querySelector('[data-testid="task-mobile-card-task_fresh"]')).not.toBeNull();
+		expect(page.getByRole('button', { name: /Stale WIP/i }).elements()).toHaveLength(0);
+		expect(page.getByRole('button', { name: /Quiet run/i }).elements()).toHaveLength(0);
+		expect(page.getByRole('button', { name: /Quiet thread/i }).elements()).toHaveLength(0);
+		expect(document.body.textContent).not.toContain('Clear stale filters');
+	});
 
-		await page.getByRole('button', { name: /Stale WIP \(1\)/i }).click();
+	it('shows thread status and target date surfaces instead of assignee and runs columns', () => {
+		renderPage([
+			createTask({
+				id: 'task_threaded',
+				title: 'Threaded task',
+				targetDate: '2026-04-18',
+				statusThread: {
+					id: 'thread_status',
+					name: 'Thread status row',
+					threadState: 'working',
+					lastActivityLabel: 'just now'
+				}
+			})
+		]);
 
-		expect(document.querySelector('[data-testid="task-mobile-card-task_stale"]')).not.toBeNull();
-		expect(document.querySelector('[data-testid="task-mobile-card-task_fresh"]')).toBeNull();
+		expect(document.body.textContent).toContain('Thread');
+		expect(document.body.textContent).toContain('Target date');
+		expect(document.body.textContent).not.toContain('Assignee');
+		expect(document.body.textContent).not.toContain('Runs');
 	});
 
 	it('shows the target date in the queue when a task has one', async () => {
@@ -891,7 +1138,22 @@ describe('/app/tasks/+page.svelte', () => {
 			'[data-testid="task-mobile-card-task_target_date"]'
 		);
 
-		expect(targetDateCard?.textContent).toContain('Target Apr 18, 2026');
+		expect(targetDateCard?.textContent).toContain('Target date');
+		expect(targetDateCard?.textContent).toContain('Apr 18, 2026');
+	});
+
+	it('emphasizes overdue target dates in the queue', () => {
+		renderPage([
+			createTask({
+				id: 'task_overdue',
+				title: 'Overdue task',
+				targetDate: '2024-01-01'
+			})
+		]);
+
+		const overdueCard = document.querySelector('[data-testid="task-mobile-card-task_overdue"]');
+
+		expect(overdueCard?.textContent).toContain('Overdue by');
 	});
 
 	it('switches between active and completed task views with local tabs', async () => {
@@ -911,10 +1173,41 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(document.querySelector('[data-testid="task-mobile-card-task_active"]')).not.toBeNull();
 		expect(document.querySelector('[data-testid="task-mobile-card-task_done"]')).toBeNull();
 
-		await page.getByRole('tab', { name: /Completed work 1/i }).click();
+		await page.getByRole('tab', { name: /Completed 1/i }).click();
 
 		expect(document.querySelector('[data-testid="task-mobile-card-task_done"]')).not.toBeNull();
 		expect(document.querySelector('[data-testid="task-mobile-card-task_active"]')).toBeNull();
+	});
+
+	it('uses the completed preset to clear workflow filters and show finished work', async () => {
+		renderPage([
+			createTask({
+				id: 'task_done_reset',
+				title: 'Completed task outside filtered workflow',
+				status: 'done',
+				workflowId: null,
+				workflowName: ''
+			}),
+			createTask({
+				id: 'task_workflow_filtered',
+				title: 'Open workflow task',
+				status: 'ready',
+				workflowId: 'workflow_1',
+				workflowName: 'Release flow'
+			})
+		]);
+
+		await page.getByRole('combobox', { name: 'Filter by workflow' }).selectOptions('workflow_1');
+		expect(document.querySelector('[data-testid="task-mobile-card-task_done_reset"]')).toBeNull();
+
+		await page.getByRole('button', { name: 'Completed' }).click();
+
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_done_reset"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_workflow_filtered"]')
+		).toBeNull();
 	});
 
 	it('surfaces a switch when matching tasks are hidden in the other queue tab', async () => {
@@ -927,11 +1220,11 @@ describe('/app/tasks/+page.svelte', () => {
 		]);
 
 		expect(document.body.textContent?.replace(/\s+/g, ' ').trim()).toContain(
-			'Matching tasks are currently in the completed queue. 1 matching task is available in Completed work.'
+			'Matching tasks are currently in completed tasks. 1 matching task is available in Completed.'
 		);
 		expect(document.querySelector('[data-testid="task-mobile-card-task_done_only"]')).toBeNull();
 
-		await page.getByRole('button', { name: 'Open Completed work' }).click();
+		await page.getByRole('button', { name: 'Open Completed' }).click();
 
 		expect(
 			document.querySelector('[data-testid="task-mobile-card-task_done_only"]')

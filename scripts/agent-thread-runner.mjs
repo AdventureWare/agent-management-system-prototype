@@ -131,6 +131,8 @@ const child = spawn(config.codexBin, buildCodexArgs(config), {
 		AMS_AGENT_API_BASE_URL: agentApiBaseUrl,
 		AMS_AGENT_API_TOKEN: agentApiToken,
 		AMS_AGENT_THREAD_ID: config.agentThreadId ?? '',
+		AMS_AGENT_RUN_ID: config.controlPlaneRunId ?? '',
+		AMS_AGENT_TASK_ID: config.taskId ?? '',
 		NO_COLOR: '1'
 	},
 	// Managed runs pass the task prompt as argv. If stdin remains as a live pipe,

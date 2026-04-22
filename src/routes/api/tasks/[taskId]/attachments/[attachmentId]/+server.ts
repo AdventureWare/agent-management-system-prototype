@@ -1,4 +1,5 @@
 import { error, json } from '@sveltejs/kit';
+import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
 	removeAgentApiTaskAttachment
@@ -36,7 +37,7 @@ export const DELETE = async ({ params }) => {
 		return json(await removeAgentApiTaskAttachment(params.taskId, params.attachmentId));
 	} catch (caughtError) {
 		if (caughtError instanceof AgentControlPlaneApiError) {
-			return json({ error: caughtError.message }, { status: caughtError.status });
+			return jsonAgentApiError(caughtError);
 		}
 
 		throw caughtError;

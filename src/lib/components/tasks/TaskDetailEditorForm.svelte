@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import RolePicker from '$lib/components/RolePicker.svelte';
 	import {
 		appendExecutionRequirementName,
 		findUnknownExecutionRequirementNames
@@ -186,11 +187,6 @@
 	let eligibleAssignmentSuggestionCount = $derived(
 		assignmentSuggestions.filter((suggestion) => suggestion.eligible).length
 	);
-	let desiredRoleExists = $derived.by(() => {
-		const desiredRoleId = desiredRoleIdInput ?? null;
-		return roles.some((role) => role.id === desiredRoleId);
-	});
-	let selectedDesiredRole = $derived(roles.find((role) => role.id === desiredRoleIdInput) ?? null);
 	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
@@ -842,24 +838,15 @@
 			</div>
 
 			<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Desired role</span>
-					<select bind:value={desiredRoleIdInput} class="select text-white" name="desiredRoleId">
-						<option value="">No role preference</option>
-						{#if desiredRoleIdInput && !desiredRoleExists}
-							<option value={desiredRoleIdInput}>
-								{task.desiredRoleName || desiredRoleIdInput} (missing role)
-							</option>
-						{/if}
-						{#each roles as role (role.id)}
-							<option value={role.id}>{role.name}</option>
-						{/each}
-					</select>
-					<p class="mt-2 text-xs text-slate-500">
-						Optional. When set, launch uses the role for routing, prompt instructions, and any
-						role-declared skills.
-					</p>
-				</label>
+				<RolePicker
+					label="Desired role"
+					name="desiredRoleId"
+					inputId="task-detail-desired-role"
+					bind:value={desiredRoleIdInput}
+					helperText="Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills."
+					missingValueLabel={task.desiredRoleName || `${desiredRoleIdInput} (missing role)`}
+					{roles}
+				/>
 
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Blocked reason</span>
@@ -873,66 +860,6 @@
 						Record the current blocker explicitly instead of relying on status alone.
 					</p>
 				</label>
-			</div>
-
-			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Role preview</p>
-				{#if !desiredRoleIdInput}
-					<p class="mt-2 text-sm text-slate-400">
-						No role preference is set. The task can still launch and route by assignee and declared
-						requirements alone.
-					</p>
-				{:else if selectedDesiredRole}
-					<div class="mt-3 space-y-3">
-						<div>
-							<p class="text-sm font-medium text-white">{selectedDesiredRole.name}</p>
-							<p class="mt-1 text-sm text-slate-400">
-								{selectedDesiredRole.description || 'No role description recorded.'}
-							</p>
-						</div>
-						<div class="grid gap-3 lg:grid-cols-3">
-							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-									Role skills
-								</p>
-								<p class="mt-2 text-sm text-slate-300">
-									{selectedDesiredRole.skillIds?.length
-										? selectedDesiredRole.skillIds.join(', ')
-										: 'No role skills declared.'}
-								</p>
-							</div>
-							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-									Role tools
-								</p>
-								<p class="mt-2 text-sm text-slate-300">
-									{selectedDesiredRole.toolIds?.length
-										? selectedDesiredRole.toolIds.join(', ')
-										: 'No role tools declared.'}
-								</p>
-							</div>
-							<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-									Role MCPs
-								</p>
-								<p class="mt-2 text-sm text-slate-300">
-									{selectedDesiredRole.mcpIds?.length
-										? selectedDesiredRole.mcpIds.join(', ')
-										: 'No role MCPs declared.'}
-								</p>
-							</div>
-						</div>
-						<p class="text-xs text-slate-500">
-							{selectedDesiredRole.systemPrompt?.trim()
-								? 'This role also contributes dedicated prompt instructions at launch.'
-								: 'This role does not add dedicated prompt instructions.'}
-						</p>
-					</div>
-				{:else}
-					<p class="mt-2 text-sm text-amber-300">
-						This task references a role that is no longer available.
-					</p>
-				{/if}
 			</div>
 
 			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">

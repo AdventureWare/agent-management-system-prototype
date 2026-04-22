@@ -3,18 +3,20 @@
 	import { appNavigationSections, type AppNavigationLinkId } from '$lib/app-navigation';
 	import {
 		ActivityIcon,
-		ArrowLeftRightIcon,
 		BriefcaseBusinessIcon,
 		CalendarRangeIcon,
 		CpuIcon,
 		FolderOpenIcon,
+		GavelIcon,
 		LayoutDashboardIcon,
 		ListTodoIcon,
 		MenuIcon,
 		MessagesSquareIcon,
+		PanelLeftCloseIcon,
 		ShieldCheckIcon,
 		TargetIcon,
 		UsersIcon,
+		WorkflowIcon,
 		XIcon
 	} from '@lucide/svelte';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
@@ -24,15 +26,16 @@
 	}>();
 
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
-		governance: ArrowLeftRightIcon,
+		governance: GavelIcon,
 		access: ShieldCheckIcon,
 		tasks: ListTodoIcon,
 		threads: MessagesSquareIcon,
 		runs: ActivityIcon,
+		agentUse: ActivityIcon,
 		projects: FolderOpenIcon,
 		goals: TargetIcon,
 		taskTemplates: ListTodoIcon,
-		workflows: TargetIcon,
+		workflows: WorkflowIcon,
 		planning: CalendarRangeIcon,
 		executionSurfaces: UsersIcon,
 		roles: BriefcaseBusinessIcon,
@@ -184,7 +187,7 @@
 					</div>
 				{/if}
 				<Navigation.Trigger onclick={toggleLayout}>
-					<ArrowLeftRightIcon class={layoutRail ? 'size-5' : 'size-4'} />
+					<PanelLeftCloseIcon class={layoutRail ? 'size-5' : 'size-4'} />
 					{#if !layoutRail}<span>Resize</span>{/if}
 				</Navigation.Trigger>
 			</Navigation.Header>

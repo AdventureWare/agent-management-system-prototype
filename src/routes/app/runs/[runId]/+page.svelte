@@ -8,6 +8,7 @@
 		executionSurfaceRecordStore
 	} from '$lib/client/execution-surface-record-store';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
+	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
@@ -63,6 +64,18 @@
 
 	function shouldAutoRefreshRunDetail() {
 		return ['queued', 'starting', 'running'].includes(data.run.status);
+	}
+
+	function buildAgentUseHref(filters: Record<string, string | null | undefined>) {
+		const params = new URLSearchParams();
+
+		for (const [key, value] of Object.entries(filters)) {
+			if (typeof value === 'string' && value.trim()) {
+				params.set(key, value);
+			}
+		}
+
+		return `/app/agent-use${params.size > 0 ? `?${params.toString()}` : ''}`;
 	}
 
 	async function refreshRunDetail(options: { force?: boolean } = {}) {
@@ -147,6 +160,12 @@
 				{refreshError}
 			</span>
 		{/if}
+		<AppButton href={buildAgentUseHref({ run: data.run.id })} variant="neutral">
+			View run agent use
+		</AppButton>
+		<AppButton href={buildAgentUseHref({ task: data.run.taskId })} variant="ghost">
+			View task agent use
+		</AppButton>
 	</div>
 
 	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

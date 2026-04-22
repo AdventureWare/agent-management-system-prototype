@@ -4,6 +4,7 @@ import { canonicalizeExecutionRequirementNames } from '$lib/execution-requiremen
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
+	createRunId,
 	createTask,
 	createTaskTemplate,
 	getPendingApprovalForTask,
@@ -676,6 +677,7 @@ export const actions: Actions = {
 		}
 
 		let session;
+		const controlPlaneRunId = createRunId();
 
 		try {
 			session = await startAgentThread({
@@ -688,7 +690,11 @@ export const actions: Actions = {
 				additionalWritableRoots: project.additionalWritableRoots ?? [],
 				prompt,
 				sandbox,
-				model: null
+				model: null,
+				launchContext: {
+					taskId: createdTask.id,
+					controlPlaneRunId
+				}
 			});
 		} catch (error) {
 			return failTaskCreate(400, {
@@ -699,6 +705,7 @@ export const actions: Actions = {
 		const providerId = provider?.id ?? null;
 		const now = new Date().toISOString();
 		const run = createRun({
+			id: controlPlaneRunId,
 			taskId: createdTask.id,
 			executionSurfaceId: assignedExecutionSurface?.id ?? null,
 			assumedRoleId: createdTask.desiredRoleId || null,
@@ -1085,6 +1092,7 @@ export const actions: Actions = {
 		const compatibleAssignedThread = threadContext.assignedThread;
 		const compatibleLatestRunThread = threadContext.latestRunThread;
 		let agentThreadId = compatibleAssignedThread?.id ?? compatibleLatestRunThread?.id ?? null;
+		const controlPlaneRunId = createRunId();
 		let agentThreadRunId: string | null;
 		let codexThreadId: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
@@ -1109,7 +1117,13 @@ export const actions: Actions = {
 
 		if (compatibleAssignedThread?.canResume) {
 			try {
-				const sendResult = await sendAgentThreadMessage(compatibleAssignedThread.id, prompt);
+				const sendResult = await sendAgentThreadMessage(compatibleAssignedThread.id, {
+					prompt,
+					launchContext: {
+						taskId,
+						controlPlaneRunId
+					}
+				});
 				agentThreadRunId = sendResult.runId;
 			} catch (error) {
 				return fail(400, {
@@ -1122,7 +1136,13 @@ export const actions: Actions = {
 			reusedThreadMode = 'assigned';
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			try {
-				const sendResult = await sendAgentThreadMessage(compatibleLatestRunThread.id, prompt);
+				const sendResult = await sendAgentThreadMessage(compatibleLatestRunThread.id, {
+					prompt,
+					launchContext: {
+						taskId,
+						controlPlaneRunId
+					}
+				});
 				agentThreadRunId = sendResult.runId;
 			} catch (error) {
 				return fail(400, {
@@ -1147,7 +1167,11 @@ export const actions: Actions = {
 					additionalWritableRoots: project.additionalWritableRoots ?? [],
 					prompt,
 					sandbox,
-					model: null
+					model: null,
+					launchContext: {
+						taskId,
+						controlPlaneRunId
+					}
 				});
 			} catch (error) {
 				return fail(400, {
@@ -1162,6 +1186,7 @@ export const actions: Actions = {
 
 		const providerId = provider?.id ?? null;
 		const run = createRun({
+			id: controlPlaneRunId,
 			taskId,
 			executionSurfaceId: effectiveExecutionSurface?.id ?? null,
 			assumedRoleId: task.desiredRoleId || null,

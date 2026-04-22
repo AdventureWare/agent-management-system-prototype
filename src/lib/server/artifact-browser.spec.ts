@@ -60,6 +60,33 @@ describe('buildArtifactBrowser', () => {
 		);
 	});
 
+	it('falls back to the containing folder when a recorded file is missing', async () => {
+		const tempRoot = await createTempDir();
+		const artifactRoot = join(tempRoot, 'agent_output');
+		const missingPath = join(artifactRoot, 'missing.log');
+
+		await mkdir(artifactRoot, { recursive: true });
+		await writeFile(join(artifactRoot, 'summary.md'), '# Summary');
+
+		const browser = await buildArtifactBrowser({
+			rootPath: missingPath,
+			rootFileLabel: 'Recorded output'
+		});
+
+		expect(browser).not.toBeNull();
+		expect(browser?.rootKind).toBe('missing');
+		expect(browser?.browsePath).toBe(artifactRoot);
+		expect(browser?.inspectingParentDirectory).toBe(true);
+		expect(browser?.directoryEntries.map((entry) => entry.name)).toEqual(['summary.md']);
+		expect(browser?.knownOutputs[0]).toEqual(
+			expect.objectContaining({
+				label: 'Recorded output',
+				path: missingPath,
+				exists: false
+			})
+		);
+	});
+
 	it('reports whether an artifact path exists on disk', async () => {
 		const tempRoot = await createTempDir();
 		const outputPath = join(tempRoot, 'summary.md');

@@ -6,42 +6,6 @@ const controlPlaneState = vi.hoisted(() => ({
 	saved: null as ControlPlaneData | null
 }));
 
-const createWorkflowMock = vi.hoisted(() =>
-	vi.fn((input: { name: string; summary: string; projectId: string }) => ({
-		id: `workflow_${input.name.toLowerCase().replace(/\s+/g, '_')}`,
-		name: input.name,
-		summary: input.summary,
-		projectId: input.projectId,
-		status: 'draft',
-		templateKey: null,
-		createdAt: '2026-04-15T10:00:00.000Z',
-		updatedAt: '2026-04-15T10:00:00.000Z'
-	}))
-);
-
-const createWorkflowStepMock = vi.hoisted(() =>
-	vi.fn(
-		(input: {
-			workflowId: string;
-			title: string;
-			summary?: string;
-			desiredRoleId?: string;
-			dependsOnStepIds?: string[];
-			position: number;
-		}) => ({
-			id: `${input.workflowId}_step_${input.position}`,
-			workflowId: input.workflowId,
-			title: input.title,
-			summary: input.summary ?? '',
-			desiredRoleId: input.desiredRoleId ?? '',
-			dependsOnStepIds: input.dependsOnStepIds ?? [],
-			position: input.position,
-			createdAt: '2026-04-15T10:00:00.000Z',
-			updatedAt: '2026-04-15T10:00:00.000Z'
-		})
-	)
-);
-
 vi.mock('$lib/server/control-plane', async () => {
 	const actual = await vi.importActual<typeof import('$lib/server/control-plane')>(
 		'$lib/server/control-plane'
@@ -49,8 +13,6 @@ vi.mock('$lib/server/control-plane', async () => {
 
 	return {
 		...actual,
-		createWorkflow: createWorkflowMock,
-		createWorkflowStep: createWorkflowStepMock,
 		loadControlPlane: vi.fn(async () => controlPlaneState.current),
 		updateControlPlaneCollections: vi.fn(
 			async (
@@ -68,12 +30,10 @@ vi.mock('$lib/server/control-plane', async () => {
 	};
 });
 
-import { actions, load } from './+page.server';
+import { load } from './+page.server';
 
 describe('workflows page server', () => {
 	beforeEach(() => {
-		createWorkflowMock.mockClear();
-		createWorkflowStepMock.mockClear();
 		controlPlaneState.current = {
 			providers: [],
 			roles: [
@@ -193,7 +153,9 @@ describe('workflows page server', () => {
 	});
 
 	it('loads workflow templates with ordered steps and task previews', async () => {
-		const result = await load({} as never);
+		const result = await load({
+			url: new URL('http://localhost/app/workflows')
+		} as never);
 		expect(result).toBeTruthy();
 
 		if (!result) {
@@ -201,9 +163,12 @@ describe('workflows page server', () => {
 		}
 
 		expect(result.workflows).toHaveLength(1);
+		expect(result.deleteSuccess).toBe(false);
 		expect(result.workflows[0]).toMatchObject({
 			name: 'Feature development',
 			projectName: 'Agent Management System Prototype',
+			parallelizableStepCount: 0,
+			defaultRoleCount: 3,
 			steps: [
 				{
 					title: 'Requirements gathering',
@@ -222,151 +187,6 @@ describe('workflows page server', () => {
 				}
 			],
 			taskPreview: [{ id: 'task_1', title: 'Build dark mode: Requirements gathering' }]
-		});
-	});
-
-	it('creates a workflow template with step definitions', async () => {
-		const form = new FormData();
-		form.set('name', 'Release flow');
-		form.set('summary', 'Reusable release process.');
-		form.set('projectId', 'project_1');
-		form.append('stepTitle', 'Requirements gathering');
-		form.append('stepDesiredRoleId', 'role_product');
-		form.append('stepSummary', 'Clarify scope.');
-		form.append('stepDependsOnStepPositions', '');
-		form.append('stepTitle', 'Technical implementation');
-		form.append('stepDesiredRoleId', 'role_engineer');
-		form.append('stepSummary', 'Build the feature.');
-		form.append('stepDependsOnStepPositions', '1');
-		form.append('stepTitle', 'Documentation');
-		form.append('stepDesiredRoleId', 'role_product');
-		form.append('stepSummary', 'Document the feature.');
-		form.append('stepDependsOnStepPositions', '1');
-
-		const result = await actions.createWorkflow({
-			request: new Request('http://localhost/app/workflows', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				ok: true,
-				successAction: 'createWorkflow'
-			})
-		);
-		expect(createWorkflowMock).toHaveBeenCalled();
-		expect(createWorkflowStepMock).toHaveBeenCalledTimes(3);
-		expect(controlPlaneState.saved?.workflowSteps?.[0]).toEqual(
-			expect.objectContaining({
-				title: 'Requirements gathering'
-			})
-		);
-		expect(
-			controlPlaneState.saved?.workflowSteps?.find((step) => step.title === 'Documentation')
-		).toEqual(expect.objectContaining({ dependsOnStepIds: ['workflow_release_flow_step_1'] }));
-	});
-
-	it('updates workflow template metadata and replaces step definitions', async () => {
-		const form = new FormData();
-		form.set('workflowId', 'workflow_1');
-		form.set('name', 'Feature delivery');
-		form.set('summary', 'Updated workflow template.');
-		form.set('projectId', 'project_1');
-		form.append('stepTitle', 'Design draft');
-		form.append('stepDesiredRoleId', 'role_product');
-		form.append('stepSummary', 'Draft the design.');
-		form.append('stepDependsOnStepPositions', '');
-		form.append('stepTitle', 'Implementation');
-		form.append('stepDesiredRoleId', 'role_engineer');
-		form.append('stepSummary', 'Build it.');
-		form.append('stepDependsOnStepPositions', '1');
-
-		const result = await actions.updateWorkflow({
-			request: new Request('http://localhost/app/workflows', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				ok: true,
-				successAction: 'updateWorkflow',
-				workflowId: 'workflow_1'
-			})
-		);
-		expect(controlPlaneState.saved?.workflows?.[0]).toEqual(
-			expect.objectContaining({
-				name: 'Feature delivery',
-				summary: 'Updated workflow template.'
-			})
-		);
-		expect(
-			controlPlaneState.saved?.workflowSteps?.filter((step) => step.workflowId === 'workflow_1')
-		).toHaveLength(2);
-		expect(controlPlaneState.saved?.workflowSteps?.[0]?.title).toBe('Design draft');
-		expect(controlPlaneState.saved?.workflowSteps?.[1]?.dependsOnStepIds).toEqual([
-			controlPlaneState.saved?.workflowSteps?.[0]?.id
-		]);
-	});
-
-	it('instantiates a workflow template into a parent task plus child tasks', async () => {
-		const form = new FormData();
-		form.set('workflowId', 'workflow_1');
-		form.set('taskName', 'Build dark mode');
-		form.set('taskSummary', 'Ship the first dark mode version.');
-
-		const result = await actions.instantiateWorkflow({
-			request: new Request('http://localhost/app/workflows', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				ok: true,
-				successAction: 'instantiateWorkflow',
-				createdTaskCount: 4
-			})
-		);
-
-		const createdParentTask = controlPlaneState.saved?.tasks.find(
-			(task) => task.title === 'Build dark mode'
-		);
-		const createdChildTasks =
-			controlPlaneState.saved?.tasks.filter(
-				(task) => task.parentTaskId === createdParentTask?.id
-			) ?? [];
-
-		expect(createdParentTask).toBeTruthy();
-		expect(createdChildTasks.map((task) => task.title)).toEqual([
-			'Build dark mode: Requirements gathering',
-			'Build dark mode: Technical implementation',
-			'Build dark mode: Documentation'
-		]);
-		expect(createdChildTasks[1]?.dependencyTaskIds).toEqual([createdChildTasks[0]?.id]);
-		expect(createdChildTasks[2]?.dependencyTaskIds).toEqual([createdChildTasks[0]?.id]);
-	});
-
-	it('blocks deleting templates that still have generated tasks linked', async () => {
-		const form = new FormData();
-		form.set('workflowId', 'workflow_1');
-
-		const result = await actions.deleteWorkflow({
-			request: new Request('http://localhost/app/workflows', {
-				method: 'POST',
-				body: form
-			})
-		} as never);
-
-		expect(result).toMatchObject({
-			status: 400,
-			data: {
-				message: 'Workflow cannot be deleted while generated tasks still point to it.'
-			}
 		});
 	});
 });

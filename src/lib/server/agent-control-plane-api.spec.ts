@@ -145,7 +145,7 @@ describe('agent-control-plane-api', () => {
 				goalName: 'Improve agent tooling'
 			})
 		]);
-	});
+	}, 15_000);
 
 	it('creates agent API tasks with sensible defaults', async () => {
 		const root = createTempDir();

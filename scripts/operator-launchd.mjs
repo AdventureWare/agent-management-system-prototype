@@ -14,6 +14,11 @@ const PLIST_LABEL =
 const LAUNCH_AGENTS_DIR = resolve(homedir(), 'Library', 'LaunchAgents');
 const PLIST_PATH = resolve(LAUNCH_AGENTS_DIR, `${PLIST_LABEL}.plist`);
 const UID = String(process.getuid());
+const NODE_BINARY_PATH = process.execPath;
+
+function escapePlistValue(value) {
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
 
 function failWithMessage(message) {
 	process.stderr.write(`${message}\n`);
@@ -32,13 +37,9 @@ function runLaunchctl(args, { allowFailure = false } = {}) {
 
 function renderPlist() {
 	const stdoutPath = resolve(OUTPUT_DIR, 'launchd.log');
-	const escapedRepoRoot = REPO_ROOT.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;');
-	const escapedStdout = stdoutPath
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;');
+	const escapedRepoRoot = escapePlistValue(REPO_ROOT);
+	const escapedStdout = escapePlistValue(stdoutPath);
+	const escapedNodeBinary = escapePlistValue(NODE_BINARY_PATH);
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -50,8 +51,7 @@ function renderPlist() {
 	<string>${escapedRepoRoot}</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/bin/env</string>
-		<string>node</string>
+		<string>${escapedNodeBinary}</string>
 		<string>--env-file-if-exists=.env.local</string>
 		<string>scripts/operator-server.mjs</string>
 		<string>run</string>

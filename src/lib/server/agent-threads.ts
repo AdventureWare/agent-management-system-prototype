@@ -1004,11 +1004,15 @@ async function writeRunnerConfig(input: {
 	session: AgentThread;
 	run: AgentRun;
 	threadId: string | null;
+	taskId?: string | null;
+	controlPlaneRunId?: string | null;
 }) {
 	const config = {
 		codexBin: getConfiguredCodexBin(),
 		agentThreadId: input.session.id,
 		runId: input.run.id,
+		controlPlaneRunId: input.controlPlaneRunId ?? null,
+		taskId: input.taskId ?? null,
 		mode: input.run.mode,
 		cwd: input.session.cwd,
 		additionalWritableRoots: input.session.additionalWritableRoots ?? [],
@@ -3258,6 +3262,10 @@ export async function startAgentThread(input: {
 	prompt: string;
 	sandbox: AgentSandbox;
 	model: string | null;
+	launchContext?: {
+		taskId?: string | null;
+		controlPlaneRunId?: string | null;
+	} | null;
 }) {
 	const additionalWritableRoots = normalizeAdditionalWritableRoots(
 		input.cwd,
@@ -3317,7 +3325,13 @@ export async function startAgentThread(input: {
 		configPath: paths.configPath
 	};
 
-	await writeRunnerConfig({ session, run, threadId: null });
+	await writeRunnerConfig({
+		session,
+		run,
+		threadId: null,
+		taskId: input.launchContext?.taskId ?? null,
+		controlPlaneRunId: input.launchContext?.controlPlaneRunId ?? null
+	});
 	await updateAgentThreadsDb((db) => ({
 		threads: [session, ...db.threads],
 		runs: [run, ...db.runs],
@@ -3452,6 +3466,10 @@ export async function sendAgentThreadMessage(
 				} | null;
 				contactId?: string | null;
 				replyToContactId?: string | null;
+				launchContext?: {
+					taskId?: string | null;
+					controlPlaneRunId?: string | null;
+				} | null;
 		  }
 ) {
 	const db = await loadAgentThreadsDb();
@@ -3470,6 +3488,7 @@ export async function sendAgentThreadMessage(
 	const sourceThread = typeof input === 'string' ? null : (input.sourceThread ?? null);
 	const contactId = typeof input === 'string' ? null : (input.contactId ?? null);
 	const replyToContactId = typeof input === 'string' ? null : (input.replyToContactId ?? null);
+	const launchContext = typeof input === 'string' ? null : (input.launchContext ?? null);
 
 	if (!session) {
 		const nativeThread = await getNativeCodexThread(agentThreadId);
@@ -3582,7 +3601,13 @@ export async function sendAgentThreadMessage(
 		updatedAt: now
 	};
 
-	await writeRunnerConfig({ session: nextSession, run, threadId: detail.threadId });
+	await writeRunnerConfig({
+		session: nextSession,
+		run,
+		threadId: detail.threadId,
+		taskId: launchContext?.taskId ?? null,
+		controlPlaneRunId: launchContext?.controlPlaneRunId ?? null
+	});
 	await updateAgentThreadsDb((current) => ({
 		threads: current.threads.map((candidate) =>
 			candidate.id === agentThreadId ? nextSession : candidate

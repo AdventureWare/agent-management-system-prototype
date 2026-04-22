@@ -2564,6 +2564,7 @@ export function createTask(input: {
 }
 
 export function createRun(input: {
+	id?: string;
 	taskId: string;
 	executionSurfaceId?: string | null;
 	assumedRoleId?: string | null;
@@ -2593,7 +2594,7 @@ export function createRun(input: {
 	const now = new Date().toISOString();
 
 	return {
-		id: createRunId(),
+		id: input.id ?? createRunId(),
 		taskId: input.taskId,
 		executionSurfaceId: input.executionSurfaceId ?? null,
 		...(input.assumedRoleId !== undefined ? { assumedRoleId: input.assumedRoleId ?? null } : {}),

@@ -166,6 +166,21 @@ async function listDirectoryEntries(
 	};
 }
 
+async function parentDirectoryIfReadable(path: string) {
+	const parentPath = dirname(path);
+
+	if (!parentPath || parentPath === path) {
+		return null;
+	}
+
+	try {
+		const parentStats = await stat(parentPath);
+		return parentStats.isDirectory() ? parentPath : null;
+	} catch {
+		return null;
+	}
+}
+
 export async function buildArtifactBrowser(
 	input: BuildArtifactBrowserInput
 ): Promise<ArtifactBrowserData | null> {
@@ -192,14 +207,6 @@ export async function buildArtifactBrowser(
 			rootKind = 'file';
 			browsePath = dirname(rootPath);
 			inspectingParentDirectory = browsePath !== rootPath;
-
-			if (input.rootFileLabel) {
-				knownOutputInputs.unshift({
-					label: input.rootFileLabel,
-					path: rootPath,
-					description: 'Recorded file.'
-				});
-			}
 		} else {
 			rootKind = 'unreadable';
 			errorMessage = 'This artifact path is not a regular file or folder.';
@@ -208,10 +215,20 @@ export async function buildArtifactBrowser(
 		if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
 			rootKind = 'missing';
 			errorMessage = 'This artifact path is not on disk yet.';
+			browsePath = await parentDirectoryIfReadable(rootPath);
+			inspectingParentDirectory = browsePath !== null;
 		} else {
 			rootKind = 'unreadable';
 			errorMessage = 'This artifact path could not be inspected.';
 		}
+	}
+
+	if (input.rootFileLabel && rootKind !== 'directory') {
+		knownOutputInputs.unshift({
+			label: input.rootFileLabel,
+			path: rootPath,
+			description: rootKind === 'missing' ? 'Recorded file is missing from disk.' : 'Recorded file.'
+		});
 	}
 
 	const knownOutputs = await Promise.all(

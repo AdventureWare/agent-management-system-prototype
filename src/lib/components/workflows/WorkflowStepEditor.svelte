@@ -1,5 +1,6 @@
 <script lang="ts">
 	import AppButton from '$lib/components/AppButton.svelte';
+	import RolePicker from '$lib/components/RolePicker.svelte';
 
 	type StepDraft = {
 		clientId: string;
@@ -60,7 +61,7 @@
 				</AppButton>
 			</div>
 
-			<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+			<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Step title</span>
 					<input
@@ -72,22 +73,14 @@
 					/>
 				</label>
 
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Default role</span>
-					<select
-						class="select text-white"
-						name="stepDesiredRoleId"
-						onchange={(event) =>
-							onupdate(step.clientId, 'desiredRoleId', event.currentTarget.value)}
-					>
-						<option value="" selected={!step.desiredRoleId}>No default role</option>
-						{#each roles as role (role.id)}
-							<option value={role.id} selected={step.desiredRoleId === role.id}>
-								{role.name}
-							</option>
-						{/each}
-					</select>
-				</label>
+				<RolePicker
+					label="Default role"
+					inputId={`workflow-step-role-${step.clientId}`}
+					value={step.desiredRoleId}
+					helperText="Optional. Sets the default specialization for this step."
+					onchange={(nextValue) => onupdate(step.clientId, 'desiredRoleId', nextValue)}
+					{roles}
+				/>
 			</div>
 
 			<label class="mt-4 block">
