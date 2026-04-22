@@ -3,6 +3,10 @@ import type { Role } from '$lib/types/control-plane';
 import { getExecutionSurfaces, loadControlPlane } from '$lib/server/control-plane';
 
 type LoadedControlPlane = Awaited<ReturnType<typeof loadControlPlane>>;
+type NamedReference = {
+	id: string;
+	name: string;
+};
 
 function countRoleDemand(data: LoadedControlPlane) {
 	const taskCounts = new Map<string, number>();
@@ -36,6 +40,23 @@ function pushUniqueValue(map: Map<string, string[]>, key: string, value: string)
 	}
 }
 
+function pushUniqueReference(
+	map: Map<string, NamedReference[]>,
+	key: string,
+	reference: NamedReference
+) {
+	if (!reference.name.trim()) {
+		return;
+	}
+
+	const values = map.get(key) ?? [];
+
+	if (!values.some((value) => value.id === reference.id)) {
+		values.push(reference);
+		map.set(key, values);
+	}
+}
+
 function countConfiguredDefaults(role: Role) {
 	return [
 		(role.skillIds?.length ?? 0) > 0,
@@ -49,11 +70,12 @@ function countConfiguredDefaults(role: Role) {
 }
 
 export function buildRoleDirectory(data: LoadedControlPlane) {
+	const roleById = new Map(data.roles.map((role) => [role.id, role]));
 	const { taskCounts, executionSurfaceCounts } = countRoleDemand(data);
-	const taskExampleTitles = new Map<string, string[]>();
-	const executionSurfaceNames = new Map<string, string[]>();
-	const workflowNames = new Map<string, string[]>();
-	const templateNames = new Map<string, string[]>();
+	const taskExamples = new Map<string, NamedReference[]>();
+	const executionSurfaceReferences = new Map<string, NamedReference[]>();
+	const workflowReferences = new Map<string, NamedReference[]>();
+	const templateReferences = new Map<string, NamedReference[]>();
 	const workflowCounts = new Map<string, number>();
 	const templateCounts = new Map<string, number>();
 	const workflowById = new Map((data.workflows ?? []).map((workflow) => [workflow.id, workflow]));
@@ -61,17 +83,20 @@ export function buildRoleDirectory(data: LoadedControlPlane) {
 	const templateIdsByRole = new Map<string, Set<string>>();
 
 	for (const task of [...data.tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
-		const examples = taskExampleTitles.get(task.desiredRoleId) ?? [];
+		const examples = taskExamples.get(task.desiredRoleId) ?? [];
 
-		if (!examples.includes(task.title) && examples.length < 3) {
-			examples.push(task.title);
-			taskExampleTitles.set(task.desiredRoleId, examples);
+		if (!examples.some((example) => example.id === task.id) && examples.length < 3) {
+			examples.push({ id: task.id, name: task.title });
+			taskExamples.set(task.desiredRoleId, examples);
 		}
 	}
 
 	for (const executionSurface of getExecutionSurfaces(data)) {
 		for (const roleId of executionSurface.supportedRoleIds ?? []) {
-			pushUniqueValue(executionSurfaceNames, roleId, executionSurface.name);
+			pushUniqueReference(executionSurfaceReferences, roleId, {
+				id: executionSurface.id,
+				name: executionSurface.name
+			});
 		}
 	}
 
@@ -82,14 +107,20 @@ export function buildRoleDirectory(data: LoadedControlPlane) {
 			continue;
 		}
 
-		pushUniqueValue(workflowNames, workflowStep.desiredRoleId, workflow.name);
+		pushUniqueReference(workflowReferences, workflowStep.desiredRoleId, {
+			id: workflow.id,
+			name: workflow.name
+		});
 		const workflowIds = workflowIdsByRole.get(workflowStep.desiredRoleId) ?? new Set<string>();
 		workflowIds.add(workflow.id);
 		workflowIdsByRole.set(workflowStep.desiredRoleId, workflowIds);
 	}
 
 	for (const taskTemplate of data.taskTemplates ?? []) {
-		pushUniqueValue(templateNames, taskTemplate.desiredRoleId, taskTemplate.name);
+		pushUniqueReference(templateReferences, taskTemplate.desiredRoleId, {
+			id: taskTemplate.id,
+			name: taskTemplate.name
+		});
 		const templateIds = templateIdsByRole.get(taskTemplate.desiredRoleId) ?? new Set<string>();
 		templateIds.add(taskTemplate.id);
 		templateIdsByRole.set(taskTemplate.desiredRoleId, templateIds);
@@ -110,11 +141,21 @@ export function buildRoleDirectory(data: LoadedControlPlane) {
 			executionSurfaceCount: executionSurfaceCounts.get(role.id) ?? 0,
 			workflowCount: workflowCounts.get(role.id) ?? 0,
 			templateCount: templateCounts.get(role.id) ?? 0,
-			taskExampleTitles: taskExampleTitles.get(role.id) ?? [],
-			executionSurfaceNames: executionSurfaceNames.get(role.id) ?? [],
-			workflowNames: workflowNames.get(role.id) ?? [],
-			templateNames: templateNames.get(role.id) ?? [],
-			configuredDefaultsCount: countConfiguredDefaults(role)
+			taskExamples: taskExamples.get(role.id) ?? [],
+			taskExampleTitles: (taskExamples.get(role.id) ?? []).map((reference) => reference.name),
+			executionSurfaceReferences: executionSurfaceReferences.get(role.id) ?? [],
+			executionSurfaceNames: (executionSurfaceReferences.get(role.id) ?? []).map(
+				(reference) => reference.name
+			),
+			workflowReferences: workflowReferences.get(role.id) ?? [],
+			workflowNames: (workflowReferences.get(role.id) ?? []).map((reference) => reference.name),
+			templateReferences: templateReferences.get(role.id) ?? [],
+			templateNames: (templateReferences.get(role.id) ?? []).map((reference) => reference.name),
+			configuredDefaultsCount: countConfiguredDefaults(role),
+			sourceRole: role.sourceRoleId ? (roleById.get(role.sourceRoleId) ?? null) : null,
+			supersededByRole: role.supersededByRoleId
+				? (roleById.get(role.supersededByRoleId) ?? null)
+				: null
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -54,6 +54,10 @@ describe('RolePicker', () => {
 		expect(document.body.textContent).toContain(
 			'Configured defaults: 1 skill · 1 tool · 1 MCP · prompt'
 		);
+		expect(document.body.textContent).toContain('Nearby roles to compare');
+		expect(document.body.textContent).toContain('Reviewer');
+		expect(document.body.textContent).toContain('Tools: codex');
+		expect(document.body.textContent).toContain('Use when: Checks completeness.');
 		expect(
 			(
 				document.querySelector(

@@ -43,6 +43,7 @@ const createRun = vi.hoisted(() =>
 		})
 	)
 );
+const createRunId = vi.hoisted(() => vi.fn(() => 'run_generated'));
 const createTaskState = vi.hoisted(() => ({ nextId: 1 }));
 const createTask = vi.hoisted(() =>
 	vi.fn(
@@ -55,6 +56,7 @@ const createTask = vi.hoisted(() =>
 			projectId: string;
 			area?: string;
 			goalId: string;
+			taskTemplateId?: string | null;
 			parentTaskId?: string | null;
 			delegationPacket?: {
 				objective: string;
@@ -91,6 +93,7 @@ const createTask = vi.hoisted(() =>
 			projectId: input.projectId,
 			area: input.area ?? 'product',
 			goalId: input.goalId,
+			taskTemplateId: input.taskTemplateId ?? null,
 			parentTaskId: input.parentTaskId ?? null,
 			delegationPacket: input.delegationPacket ?? null,
 			delegationAcceptance: input.delegationAcceptance ?? null,
@@ -211,6 +214,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	createTask,
 	createTaskAttachmentId: vi.fn(() => 'attachment_test'),
 	createRun,
+	createRunId,
 	deleteTask: vi.fn(),
 	formatRelativeTime: vi.fn(() => 'just now'),
 	getOpenReviewForTask: vi.fn(() => null),
@@ -434,6 +438,7 @@ describe('task detail page server actions', () => {
 		createTaskState.nextId = 1;
 		createTask.mockClear();
 		createRun.mockClear();
+		createRunId.mockClear();
 		projectMatchesPath.mockReset();
 		projectMatchesPath.mockReturnValue(true);
 		getWorkspaceExecutionIssue.mockReset();
@@ -1344,7 +1349,13 @@ describe('task detail page server actions', () => {
 			})
 		} as never);
 
-		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_previous', 'run the task');
+		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_previous', {
+			prompt: 'run the task',
+			launchContext: {
+				controlPlaneRunId: 'run_generated',
+				taskId: 'task_1'
+			}
+		});
 		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(result).toEqual(
 			expect.objectContaining({
@@ -1502,7 +1513,13 @@ describe('task detail page server actions', () => {
 		} as never);
 
 		expect(recoverAgentThread).toHaveBeenCalledWith('session_active');
-		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_active', 'run the task');
+		expect(sendAgentThreadMessage).toHaveBeenCalledWith('session_active', {
+			prompt: 'run the task',
+			launchContext: {
+				controlPlaneRunId: 'run_generated',
+				taskId: 'task_1'
+			}
+		});
 		expect(startAgentThread).not.toHaveBeenCalled();
 		expect(result).toEqual(
 			expect.objectContaining({

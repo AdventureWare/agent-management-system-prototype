@@ -32,6 +32,8 @@ const createRunMock = vi.hoisted(() =>
 	}))
 );
 
+const createRunIdMock = vi.hoisted(() => vi.fn(() => 'run_generated'));
+
 const createTaskMock = vi.hoisted(() =>
 	vi.fn(
 		(input: {
@@ -42,6 +44,7 @@ const createTaskMock = vi.hoisted(() =>
 			expectedOutcome?: string;
 			projectId: string;
 			goalId: string;
+			taskTemplateId?: string | null;
 			workflowId?: string | null;
 			parentTaskId?: string | null;
 			delegationPacket?: {
@@ -75,6 +78,7 @@ const createTaskMock = vi.hoisted(() =>
 			projectId: input.projectId,
 			area: 'product',
 			goalId: input.goalId,
+			taskTemplateId: input.taskTemplateId ?? null,
 			workflowId: input.workflowId ?? null,
 			parentTaskId: input.parentTaskId ?? null,
 			delegationPacket: input.delegationPacket ?? null,
@@ -229,6 +233,7 @@ function syncTaskExecutionStateLike(data: ControlPlaneData) {
 vi.mock('$lib/server/control-plane', () => ({
 	createTaskAttachmentId: vi.fn(() => 'attachment_created'),
 	createRun: createRunMock,
+	createRunId: createRunIdMock,
 	createTask: createTaskMock,
 	createTaskTemplate: createTaskTemplateMock,
 	deleteTask: vi.fn(),
@@ -403,6 +408,7 @@ describe('tasks page server actions', () => {
 		listInstalledCodexSkillsMock.mockClear();
 		assistTaskWritingMock.mockClear();
 		createRunMock.mockClear();
+		createRunIdMock.mockClear();
 		createTaskMock.mockClear();
 		createTaskTemplateMock.mockClear();
 		startAgentThreadMock.mockClear();
@@ -535,7 +541,34 @@ describe('tasks page server actions', () => {
 					updatedAt: '2026-03-30T12:00:00.000Z'
 				}
 			],
-			taskTemplates: [],
+			taskTemplates: [
+				{
+					id: 'task_template_research_brief',
+					name: 'Research brief',
+					summary: 'Reusable defaults for repeatable research requests.',
+					projectId: 'project_ams',
+					goalId: 'goal_queue_quality',
+					workflowId: null,
+					taskTitle: 'Run research brief',
+					taskSummary: 'Investigate adjacent marketplace UX patterns and summarize findings.',
+					successCriteria: '',
+					readyCondition: '',
+					expectedOutcome: '',
+					area: 'product',
+					priority: 'medium',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiredThreadSandbox: null,
+					requiresReview: true,
+					desiredRoleId: 'role_reviewer',
+					assigneeExecutionSurfaceId: null,
+					requiredPromptSkillNames: [],
+					requiredCapabilityNames: ['planning', 'citations'],
+					requiredToolNames: [],
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:00:00.000Z'
+				}
+			],
 			executionSurfaces: [],
 			tasks: [
 				{
@@ -609,6 +642,39 @@ describe('tasks page server actions', () => {
 				requiredToolNames: ['codex', 'playwright'],
 				agentThreadId: null,
 				runCount: 0
+			})
+		);
+	});
+
+	it('records the selected task template as the task provenance source', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('taskTemplateId', 'task_template_research_brief');
+		form.set('name', 'Follow the research brief');
+		form.set('instructions', 'Use the saved template defaults as the starting point.');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				taskTemplateId: 'task_template_research_brief'
+			})
+		);
+		expect(controlPlaneState.saved?.tasks[0]).toEqual(
+			expect.objectContaining({
+				title: 'Follow the research brief',
+				taskTemplateId: 'task_template_research_brief'
 			})
 		);
 	});
@@ -1170,7 +1236,11 @@ describe('tasks page server actions', () => {
 			additionalWritableRoots: [],
 			prompt: 'task prompt',
 			sandbox: 'workspace-write',
-			model: null
+			model: null,
+			launchContext: {
+				controlPlaneRunId: 'run_generated',
+				taskId: 'task_create_and_run_from_the_task_form'
+			}
 		});
 		expect(buildTaskThreadNameMock).toHaveBeenCalledWith({
 			projectName: 'Agent Management System Prototype',

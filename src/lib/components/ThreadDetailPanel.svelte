@@ -15,6 +15,7 @@
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import ArtifactQuickPreviewDialog from '$lib/components/ArtifactQuickPreviewDialog.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
+	import OpenInEditorButton from '$lib/components/OpenInEditorButton.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
 	import ThreadMessageContent from '$lib/components/ThreadMessageContent.svelte';
 	import {
@@ -3701,8 +3702,12 @@
 													</div>
 													<div class="flex flex-col gap-2 sm:items-end">
 														{#if artifactPreviewKind(attachment.path)}
+															<OpenInEditorButton
+																path={attachment.path}
+																className="rounded-full border border-violet-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+															/>
 															<button
-																class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-500/50 hover:text-violet-100"
+																class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
 																type="button"
 																onclick={() => {
 																	openAttachmentQuickPreview(attachment.path, attachment.name);

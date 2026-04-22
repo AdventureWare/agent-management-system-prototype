@@ -2,13 +2,14 @@ import { json } from '@sveltejs/kit';
 import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
-	decomposeAgentApiTask
+	decomposeAgentApiTask,
+	previewAgentApiTaskDecomposition
 } from '$lib/server/agent-control-plane-api';
 
 export const POST = async ({ params, request }) => {
 	try {
 		const body = (await request.json()) as Record<string, unknown>;
-		const result = await decomposeAgentApiTask(params.taskId, {
+		const input = {
 			children: Array.isArray(body.children)
 				? body.children.map((child) => {
 						const item = child as Record<string, unknown>;
@@ -31,9 +32,13 @@ export const POST = async ({ params, request }) => {
 						};
 					})
 				: undefined
-		});
+		};
+		const validateOnly = body.validateOnly === true;
+		const result = validateOnly
+			? await previewAgentApiTaskDecomposition(params.taskId, input)
+			: await decomposeAgentApiTask(params.taskId, input);
 
-		return json(result, { status: 201 });
+		return json(result, { status: validateOnly ? 200 : 201 });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
 			return jsonAgentApiError(error);

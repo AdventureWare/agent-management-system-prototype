@@ -48,6 +48,9 @@ export async function loadTaskDetailPageData(taskId: string) {
 	);
 	const providerMap = new Map(data.providers.map((provider) => [provider.id, provider]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
+	const taskTemplateMap = new Map(
+		(data.taskTemplates ?? []).map((taskTemplate) => [taskTemplate.id, taskTemplate])
+	);
 	const workflowMap = new Map((data.workflows ?? []).map((workflow) => [workflow.id, workflow]));
 	const roleMap = new Map(data.roles.map((role) => [role.id, role]));
 	const parentTask = task.parentTaskId
@@ -133,6 +136,7 @@ export async function loadTaskDetailPageData(taskId: string) {
 			task,
 			projectMap,
 			goalMap,
+			taskTemplateMap,
 			workflowMap,
 			roleMap,
 			executionSurfaceMap: executionSurfaceMap,

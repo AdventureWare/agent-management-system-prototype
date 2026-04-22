@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { canonicalizeExecutionRequirementNames } from '$lib/execution-requirements';
+import { buildAgentGuidanceHint } from '$lib/server/agent-current-context';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	createRun,
@@ -129,6 +130,7 @@ function buildTaskCreateFormContext(
 		readyCondition: input.readyCondition,
 		expectedOutcome: input.expectedOutcome,
 		projectId: input.projectId,
+		taskTemplateId: input.taskTemplateId,
 		workflowId: input.workflowId,
 		parentTaskId: input.parentTaskId,
 		delegationObjective: input.delegationObjective,
@@ -166,6 +168,7 @@ function failTaskCreate(
 		readyCondition: string;
 		expectedOutcome: string;
 		projectId: string;
+		taskTemplateId: string;
 		workflowId: string;
 		parentTaskId: string;
 		delegationObjective: string;
@@ -259,7 +262,17 @@ export const load: PageServerLoad = async ({ url }) => {
 		executionRequirementInventory,
 		executionSurfaces: [...data.executionSurfaces].sort((a, b) => a.name.localeCompare(b.name)),
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
-		tasks: taskWorkItems
+		tasks: taskWorkItems.map((task) => ({
+			...task,
+			agentGuidanceHint: buildAgentGuidanceHint({
+				task: data.tasks.find((candidate) => candidate.id === task.id) ?? null,
+				run: task.latestRun ?? null,
+				openReview: task.openReview ?? null,
+				pendingApproval: task.pendingApproval ?? null,
+				threadId:
+					task.agentThreadId ?? task.latestRun?.agentThreadId ?? task.latestRun?.threadId ?? null
+			})
+		}))
 	};
 };
 
@@ -274,6 +287,7 @@ export const actions: Actions = {
 			readyCondition,
 			expectedOutcome,
 			projectId,
+			taskTemplateId,
 			workflowId,
 			parentTaskId,
 			delegationObjective,
@@ -340,6 +354,9 @@ export const actions: Actions = {
 		const goal = goalId ? current.goals.find((candidate) => candidate.id === goalId) : null;
 		const workflow = workflowId
 			? (current.workflows ?? []).find((candidate) => candidate.id === workflowId)
+			: null;
+		const selectedTaskTemplate = taskTemplateId
+			? ((current.taskTemplates ?? []).find((candidate) => candidate.id === taskTemplateId) ?? null)
 			: null;
 		const parentTask = parentTaskId
 			? current.tasks.find((candidate) => candidate.id === parentTaskId)
@@ -567,6 +584,7 @@ export const actions: Actions = {
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
+			taskTemplateId: selectedTaskTemplate?.id ?? null,
 			workflowId: workflowId || null,
 			parentTaskId: parentTaskId || null,
 			delegationPacket: parentTask
@@ -813,12 +831,12 @@ export const actions: Actions = {
 		}));
 
 		return {
+			...failureContext,
 			ok: true,
 			reopenCreateModal: true,
 			successAction: 'saveTaskTemplate',
 			taskTemplateId: taskTemplate.id,
-			taskTemplateName: taskTemplate.name,
-			...failureContext
+			taskTemplateName: taskTemplate.name
 		};
 	},
 

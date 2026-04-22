@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AMS_CLI_DOCS_PATH, buildAmsCliCommand } from './ams-cli-paths';
 import { getAgentCapabilityManifest } from './agent-capability-manifest';
 
 describe('agent-capability-manifest', () => {
@@ -7,10 +8,9 @@ describe('agent-capability-manifest', () => {
 
 		expect(manifest.discovery.apiPath).toBe('/api/agent-capabilities');
 		expect(manifest.discovery.currentContextApiPath).toBe('/api/agent-context/current');
-		expect(manifest.discovery.cliCommand).toBe('node scripts/ams-cli.mjs manifest');
-		expect(manifest.discovery.currentContextCliCommand).toBe(
-			'node scripts/ams-cli.mjs context current'
-		);
+		expect(manifest.discovery.cliCommand).toBe(buildAmsCliCommand('manifest'));
+		expect(manifest.discovery.currentContextCliCommand).toBe(buildAmsCliCommand('context current'));
+		expect(manifest.discovery.docsPath).toBe(AMS_CLI_DOCS_PATH);
 		expect(manifest.guidance.reliableLoop).toEqual(
 			expect.arrayContaining([
 				expect.stringContaining('manifest discovery'),
@@ -40,6 +40,13 @@ describe('agent-capability-manifest', () => {
 				})
 			])
 		);
+		expect(
+			manifest.commands.find(
+				(command) => command.resource === 'context' && command.command === 'current'
+			)?.cli
+		).toBe(
+			buildAmsCliCommand('context current [--thread <threadId>] [--task <taskId>] [--run <runId>]')
+		);
 		expect(manifest.commands).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -47,13 +54,63 @@ describe('agent-capability-manifest', () => {
 					command: 'current',
 					path: '/api/agent-context/current',
 					whenToUse: expect.any(Array),
-					nextCommands: expect.arrayContaining(['task:get', 'thread:panel'])
+					nextCommands: expect.arrayContaining(['task:get', 'thread:panel']),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Resolve current task and run'),
+							input: expect.any(Object),
+							output: expect.any(Object)
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'prepare_task_for_review',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview review preparation'),
+							input: expect.objectContaining({
+								validateOnly: true
+							})
+						})
+					])
 				}),
 				expect.objectContaining({
 					resource: 'intent',
 					command: 'prepare_task_for_approval',
 					path: '/api/agent-intents/:intent',
-					readAfter: expect.arrayContaining(['context:current'])
+					readAfter: expect.arrayContaining(['context:current']),
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Open an approval gate')
+						}),
+						expect.objectContaining({
+							title: expect.stringContaining('Preview approval preparation'),
+							input: expect.objectContaining({
+								validateOnly: true
+							})
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'coordinate_with_another_thread',
+					path: '/api/agent-intents/:intent',
+					readAfter: expect.arrayContaining(['thread:contacts', 'context:current']),
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Route a focused question')
+						}),
+						expect.objectContaining({
+							title: expect.stringContaining('Preview thread coordination'),
+							input: expect.objectContaining({
+								validateOnly: true
+							})
+						})
+					])
 				}),
 				expect.objectContaining({
 					resource: 'task',
@@ -61,9 +118,114 @@ describe('agent-capability-manifest', () => {
 					readAfter: expect.arrayContaining(['task:get'])
 				}),
 				expect.objectContaining({
+					resource: 'intent',
+					command: 'accept_child_handoff',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview acceptance')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'request_child_handoff_changes',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview a child handoff')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'reject_task_approval',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview rejection')
+						})
+					])
+				}),
+				expect.objectContaining({
 					resource: 'task',
 					command: 'launch-session',
 					path: '/api/tasks/:taskId/session-launch'
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'request-review',
+					whenToUse: expect.arrayContaining([expect.stringContaining('payload.validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview a review request'),
+							input: expect.objectContaining({
+								payload: expect.objectContaining({
+									validateOnly: true
+								})
+							})
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'approve-review',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview review approval')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'request-approval',
+					whenToUse: expect.arrayContaining([expect.stringContaining('payload.validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview an approval request'),
+							input: expect.objectContaining({
+								payload: expect.objectContaining({
+									validateOnly: true
+								})
+							})
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'reject-approval',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview approval rejection')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'accept-child-handoff',
+					whenToUse: expect.arrayContaining([expect.stringContaining('payload.validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview child handoff acceptance')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'decompose',
+					whenToUse: expect.arrayContaining([expect.stringContaining('payload.validateOnly=true')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Preview task decomposition'),
+							input: expect.objectContaining({
+								payload: expect.objectContaining({
+									validateOnly: true
+								})
+							})
+						})
+					])
 				}),
 				expect.objectContaining({
 					resource: 'thread',

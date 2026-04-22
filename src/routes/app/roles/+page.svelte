@@ -9,6 +9,12 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import TokenizedListInput from '$lib/components/TokenizedListInput.svelte';
+	import { buildRelatedRoles, formatRoleAreaLabel } from '$lib/roles/related-roles';
+	import {
+		CATALOG_LIFECYCLE_STATUS_OPTIONS,
+		formatCatalogLifecycleStatusLabel
+	} from '$lib/types/control-plane';
+	import type { CatalogLifecycleStatus } from '$lib/types/control-plane';
 
 	let { data, form }: { data: PageData; form: ActionData | null } = $props();
 
@@ -17,11 +23,18 @@
 		role: RoleDirectoryEntry;
 		score: number;
 		reason: string;
+		purposeSummary: string;
+		contrastSummary: string;
 	};
 	type RoleDraftSource = {
 		roleId?: string;
 		name?: string;
 		area?: string;
+		family?: string;
+		lifecycleStatus?: CatalogLifecycleStatus;
+		sourceRoleId?: string | null;
+		forkReason?: string;
+		supersededByRoleId?: string | null;
 		description?: string;
 		skillIds?: string[] | string;
 		toolIds?: string[] | string;
@@ -45,10 +58,17 @@
 	let selectedRoleId = $state('');
 	let query = $state('');
 	let selectedArea = $state('all');
+	let selectedFamily = $state('all');
+	let selectedLifecycle = $state('all');
 	let editPanelOpen = $state(false);
 	let createAdvancedOpen = $state(false);
 	let createName = $state('');
 	let createArea = $state('shared');
+	let createFamily = $state('');
+	let createLifecycleStatus = $state('active');
+	let createSourceRoleId = $state('');
+	let createForkReason = $state('');
+	let createSupersededByRoleId = $state('');
 	let createDescription = $state('');
 	let createSkillIds = $state<string[]>([]);
 	let createToolIds = $state<string[]>([]);
@@ -59,6 +79,11 @@
 	let createEscalationPolicy = $state('');
 	let updateName = $state('');
 	let updateArea = $state('shared');
+	let updateFamily = $state('');
+	let updateLifecycleStatus = $state('active');
+	let updateSourceRoleId = $state('');
+	let updateForkReason = $state('');
+	let updateSupersededByRoleId = $state('');
 	let updateDescription = $state('');
 	let updateSkillIds = $state<string[]>([]);
 	let updateToolIds = $state<string[]>([]);
@@ -77,29 +102,52 @@
 	let surfaceLinkedRoleCount = $derived(
 		data.roles.filter((role) => role.executionSurfaceCount > 0).length
 	);
+	let activeRoleCount = $derived(
+		data.roles.filter((role) => (role.lifecycleStatus ?? 'active') === 'active').length
+	);
+	let knownFamilies = $derived(
+		[...new Set(data.roles.map((role) => role.family?.trim() ?? '').filter(Boolean))].sort((a, b) =>
+			a.localeCompare(b)
+		)
+	);
+	let createForkSourceRole = $derived(
+		createSourceRoleId ? (data.roles.find((role) => role.id === createSourceRoleId) ?? null) : null
+	);
+	let updateForkSourceRole = $derived(
+		updateSourceRoleId ? (data.roles.find((role) => role.id === updateSourceRoleId) ?? null) : null
+	);
+	let createSuccessorOptions = $derived(
+		data.roles.filter((role) => role.id !== createSourceRoleId)
+	);
+	let updateSuccessorOptions = $derived(data.roles.filter((role) => role.id !== selectedRole?.id));
 	let filteredRoles = $derived.by(() => {
 		const normalizedQuery = query.trim().toLowerCase();
 
 		return data.roles.filter((role) => {
 			const matchesArea = selectedArea === 'all' || role.area === selectedArea;
+			const matchesFamily =
+				selectedFamily === 'all' || (role.family?.trim() ?? '') === selectedFamily;
+			const matchesLifecycle =
+				selectedLifecycle === 'all' || (role.lifecycleStatus ?? 'active') === selectedLifecycle;
 			const matchesQuery =
 				!normalizedQuery ||
 				[
 					role.name,
+					role.family ?? '',
 					role.description,
 					...(role.skillIds ?? []),
 					...(role.toolIds ?? []),
 					...(role.mcpIds ?? []),
-					...role.taskExampleTitles,
-					...role.templateNames,
-					...role.workflowNames,
-					...role.executionSurfaceNames
+					...(role.taskExamples ?? []).map((task) => task.name),
+					...(role.templateReferences ?? []).map((template) => template.name),
+					...(role.workflowReferences ?? []).map((workflow) => workflow.name),
+					...(role.executionSurfaceReferences ?? []).map((surface) => surface.name)
 				]
 					.join(' ')
 					.toLowerCase()
 					.includes(normalizedQuery);
 
-			return matchesArea && matchesQuery;
+			return matchesArea && matchesFamily && matchesLifecycle && matchesQuery;
 		});
 	});
 	let selectedRole = $derived(
@@ -121,61 +169,9 @@
 			selectedRole.executionSurfaceCount
 		);
 	});
-	let relatedRoles = $derived.by<RelatedRole[]>(() => {
-		if (!selectedRole) {
-			return [];
-		}
-
-		const selectedSkills = new Set(selectedRole.skillIds ?? []);
-		const selectedTools = new Set(selectedRole.toolIds ?? []);
-		const selectedMcps = new Set(selectedRole.mcpIds ?? []);
-
-		return data.roles
-			.filter((role) => role.id !== selectedRole.id)
-			.map((role) => {
-				const sharedSkills = (role.skillIds ?? []).filter((skill) =>
-					selectedSkills.has(skill)
-				).length;
-				const sharedTools = (role.toolIds ?? []).filter((tool) => selectedTools.has(tool)).length;
-				const sharedMcps = (role.mcpIds ?? []).filter((mcp) => selectedMcps.has(mcp)).length;
-				const sharedDefaults = sharedSkills + sharedTools + sharedMcps;
-				const sameArea = role.area === selectedRole.area;
-				const score = (sameArea ? 3 : 0) + sharedDefaults * 4 + (role.taskCount > 0 ? 1 : 0);
-
-				if (sameArea && sharedDefaults > 0) {
-					return {
-						role,
-						score,
-						reason: `${formatAreaLabel(role.area)} area · ${sharedDefaults} shared default${sharedDefaults === 1 ? '' : 's'}`
-					};
-				}
-
-				if (sameArea) {
-					return {
-						role,
-						score,
-						reason: `${formatAreaLabel(role.area)} area`
-					};
-				}
-
-				if (sharedDefaults > 0) {
-					return {
-						role,
-						score,
-						reason: `${sharedDefaults} shared default${sharedDefaults === 1 ? '' : 's'}`
-					};
-				}
-
-				return {
-					role,
-					score,
-					reason: ''
-				};
-			})
-			.filter((candidate) => candidate.score > 0)
-			.sort((a, b) => b.score - a.score || a.role.name.localeCompare(b.role.name))
-			.slice(0, 4);
-	});
+	let relatedRoles = $derived.by<RelatedRole[]>(() =>
+		selectedRole ? buildRelatedRoles(selectedRole, data.roles, 4) : []
+	);
 	let roleDirectorySummary = $derived(
 		`${filteredRoles.length} matching role${filteredRoles.length === 1 ? '' : 's'}`
 	);
@@ -199,7 +195,6 @@
 	);
 	$effect(() => {
 		const submittedRoleId = form?.roleId ?? '';
-		const filteredRoleIds = new Set(filteredRoles.map((role) => role.id));
 		const knownRoleIds = new Set(data.roles.map((role) => role.id));
 
 		if (
@@ -214,11 +209,6 @@
 		if (!selectedRoleId) {
 			selectedRoleId =
 				data.initialSelectedRoleId || filteredRoles[0]?.id || data.roles[0]?.id || '';
-			return;
-		}
-
-		if (filteredRoles.length > 0 && !filteredRoleIds.has(selectedRoleId)) {
-			selectedRoleId = filteredRoles[0]?.id ?? '';
 			return;
 		}
 
@@ -311,11 +301,7 @@
 	});
 
 	function formatAreaLabel(value: string) {
-		if (value === 'shared') {
-			return 'Shared';
-		}
-
-		return value.replace(/\b\w/g, (character) => character.toUpperCase());
+		return formatRoleAreaLabel(value);
 	}
 
 	function formatListField(values?: string[]) {
@@ -379,6 +365,11 @@
 	function applyCreateDraft(values?: RoleDraftSource | null) {
 		createName = values?.name?.trim() ?? '';
 		createArea = values?.area?.trim() || 'shared';
+		createFamily = values?.family?.trim() ?? '';
+		createLifecycleStatus = values?.lifecycleStatus?.trim() || 'active';
+		createSourceRoleId = values?.sourceRoleId?.trim() ?? '';
+		createForkReason = values?.forkReason ?? '';
+		createSupersededByRoleId = values?.supersededByRoleId?.trim() ?? '';
 		createDescription = values?.description?.trim() ?? '';
 		createSkillIds = parseDraftList(values?.skillIds);
 		createToolIds = parseDraftList(values?.toolIds);
@@ -392,6 +383,11 @@
 	function applyUpdateDraft(values?: RoleDraftSource | null) {
 		updateName = values?.name?.trim() ?? '';
 		updateArea = values?.area?.trim() || 'shared';
+		updateFamily = values?.family?.trim() ?? '';
+		updateLifecycleStatus = values?.lifecycleStatus?.trim() || 'active';
+		updateSourceRoleId = values?.sourceRoleId?.trim() ?? '';
+		updateForkReason = values?.forkReason ?? '';
+		updateSupersededByRoleId = values?.supersededByRoleId?.trim() ?? '';
 		updateDescription = values?.description?.trim() ?? '';
 		updateSkillIds = parseDraftList(values?.skillIds);
 		updateToolIds = parseDraftList(values?.toolIds);
@@ -413,7 +409,11 @@
 
 		applyCreateDraft({
 			...role,
-			name: `${role.name} Copy`
+			name: `${role.name} variant`,
+			sourceRoleId: role.id,
+			forkReason: '',
+			lifecycleStatus: 'active',
+			supersededByRoleId: ''
 		});
 		createAdvancedOpen = hasAdvancedValues(role);
 	}
@@ -461,11 +461,16 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
 		<MetricCard
 			label="Cataloged roles"
 			value={data.roles.length}
 			detail="Distinct specialization bundles available for routing and reuse."
+		/>
+		<MetricCard
+			label="Active roles"
+			value={activeRoleCount}
+			detail="Roles currently preferred for new work and routing."
 		/>
 		<MetricCard
 			label="Used in tasks"
@@ -492,7 +497,9 @@
 		>
 			{#snippet controls()}
 				<div class="flex flex-col gap-3 xl:w-[46rem]">
-					<div class="grid gap-3 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+					<div
+						class="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+					>
 						<label class="block">
 							<span class="sr-only">Search roles</span>
 							<input
@@ -508,6 +515,28 @@
 								<option value="all">All areas</option>
 								{#each data.roleAreaOptions as area (area)}
 									<option value={area}>{formatAreaLabel(area)}</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="sr-only">Filter roles by family</span>
+							<select bind:value={selectedFamily} class="select text-white">
+								<option value="all">All families</option>
+								{#each knownFamilies as family (family)}
+									<option value={family}>{family}</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="sr-only">Filter roles by lifecycle</span>
+							<select bind:value={selectedLifecycle} class="select text-white">
+								<option value="all">All states</option>
+								{#each CATALOG_LIFECYCLE_STATUS_OPTIONS as lifecycleStatus (lifecycleStatus)}
+									<option value={lifecycleStatus}>
+										{formatCatalogLifecycleStatusLabel(lifecycleStatus)}
+									</option>
 								{/each}
 							</select>
 						</label>
@@ -545,9 +574,21 @@
 							<div class="flex flex-wrap items-center justify-between gap-3">
 								<div class="min-w-0">
 									<h2 class="ui-wrap-anywhere text-lg font-semibold text-white">{role.name}</h2>
-									<p class="mt-1 text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
-										{formatAreaLabel(role.area)}
-									</p>
+									<div class="mt-1 flex flex-wrap gap-2">
+										<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
+											{formatAreaLabel(role.area)}
+										</p>
+										{#if role.family?.trim()}
+											<p class="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
+												Family · {role.family}
+											</p>
+										{/if}
+										{#if (role.lifecycleStatus ?? 'active') !== 'active'}
+											<p class="text-xs font-medium tracking-[0.16em] text-amber-300 uppercase">
+												{formatCatalogLifecycleStatusLabel(role.lifecycleStatus ?? 'active')}
+											</p>
+										{/if}
+									</div>
 								</div>
 								<span
 									class="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs text-slate-300"
@@ -582,9 +623,9 @@
 								Defaults · {formatCapabilityPreview(role)}
 							</p>
 
-							{#if role.taskExampleTitles.length > 0}
+							{#if (role.taskExamples ?? []).length > 0}
 								<p class="mt-2 text-xs text-slate-500">
-									Examples · {role.taskExampleTitles.join(' · ')}
+									Examples · {(role.taskExamples ?? []).map((task) => task.name).join(' · ')}
 								</p>
 							{/if}
 						</button>
@@ -607,6 +648,20 @@
 						>
 							Area · {formatAreaLabel(selectedRole.area)}
 						</span>
+						{#if selectedRole.family?.trim()}
+							<span
+								class="badge border border-slate-700 bg-slate-900/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+							>
+								Family · {selectedRole.family}
+							</span>
+						{/if}
+						{#if (selectedRole.lifecycleStatus ?? 'active') !== 'active'}
+							<span
+								class="badge border border-amber-800/60 bg-amber-950/30 text-[0.7rem] tracking-[0.2em] text-amber-200 uppercase"
+							>
+								{formatCatalogLifecycleStatusLabel(selectedRole.lifecycleStatus ?? 'active')}
+							</span>
+						{/if}
 					</div>
 
 					<div class="flex flex-wrap gap-3">
@@ -640,6 +695,45 @@
 						</div>
 					</div>
 
+					{#if selectedRole.sourceRole || selectedRole.forkReason || selectedRole.supersededByRole}
+						<div class="grid gap-4 lg:grid-cols-3">
+							{#if selectedRole.sourceRole}
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Forked from</p>
+									<p class="mt-2 text-sm text-white">
+										<a
+											class="underline decoration-slate-700 underline-offset-4 hover:text-sky-200"
+											href={`/app/roles/${selectedRole.sourceRole.id}`}
+										>
+											{selectedRole.sourceRole.name}
+										</a>
+									</p>
+								</div>
+							{/if}
+							{#if selectedRole.forkReason}
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Fork reason</p>
+									<p class="mt-2 text-sm text-slate-300">{selectedRole.forkReason}</p>
+								</div>
+							{/if}
+							{#if selectedRole.supersededByRole}
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+										Successor role
+									</p>
+									<p class="mt-2 text-sm text-white">
+										<a
+											class="underline decoration-slate-700 underline-offset-4 hover:text-sky-200"
+											href={`/app/roles/${selectedRole.supersededByRole.id}`}
+										>
+											{selectedRole.supersededByRole.name}
+										</a>
+									</p>
+								</div>
+							{/if}
+						</div>
+					{/if}
+
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 						<div class="flex flex-wrap items-center justify-between gap-3">
 							<div>
@@ -659,11 +753,16 @@
 								<p class="text-sm font-medium text-white">Typical work</p>
 								<p class="text-xs text-slate-500">{selectedRole.taskCount} task references</p>
 							</div>
-							{#if selectedRole.taskExampleTitles.length > 0}
+							{#if (selectedRole.taskExamples ?? []).length > 0}
 								<ul class="mt-4 space-y-2 text-sm text-slate-300">
-									{#each selectedRole.taskExampleTitles as taskTitle (taskTitle)}
+									{#each selectedRole.taskExamples ?? [] as task (task.id)}
 										<li class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
-											{taskTitle}
+											<a
+												class="underline decoration-slate-700 underline-offset-4 hover:text-white"
+												href={`/app/tasks/${task.id}`}
+											>
+												{task.name}
+											</a>
 										</li>
 									{/each}
 								</ul>
@@ -693,7 +792,10 @@
 												</p>
 												<span class="text-xs text-slate-500">{relatedRole.reason}</span>
 											</div>
-											<p class="mt-2 text-sm text-slate-400">{relatedRole.role.description}</p>
+											<p class="mt-2 text-xs text-slate-500">
+												Compare against current: {relatedRole.contrastSummary}
+											</p>
+											<p class="mt-2 text-sm text-slate-400">{relatedRole.purposeSummary}</p>
 										</button>
 									{/each}
 								</div>
@@ -717,14 +819,15 @@
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 										Execution surfaces
 									</p>
-									{#if selectedRole.executionSurfaceNames.length > 0}
+									{#if (selectedRole.executionSurfaceReferences ?? []).length > 0}
 										<div class="mt-2 flex flex-wrap gap-2">
-											{#each selectedRole.executionSurfaceNames as surfaceName (surfaceName)}
-												<span
-													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300"
+											{#each selectedRole.executionSurfaceReferences ?? [] as surface (surface.id)}
+												<a
+													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300 underline decoration-slate-700 underline-offset-4 hover:text-white"
+													href={`/app/execution-surfaces/${surface.id}`}
 												>
-													{surfaceName}
-												</span>
+													{surface.name}
+												</a>
 											{/each}
 										</div>
 									{:else}
@@ -738,14 +841,15 @@
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
 										Task templates
 									</p>
-									{#if selectedRole.templateNames.length > 0}
+									{#if (selectedRole.templateReferences ?? []).length > 0}
 										<div class="mt-2 flex flex-wrap gap-2">
-											{#each selectedRole.templateNames as templateName (templateName)}
-												<span
-													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300"
+											{#each selectedRole.templateReferences ?? [] as template (template.id)}
+												<a
+													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300 underline decoration-slate-700 underline-offset-4 hover:text-white"
+													href={`/app/task-templates/${template.id}`}
 												>
-													{templateName}
-												</span>
+													{template.name}
+												</a>
 											{/each}
 										</div>
 									{:else}
@@ -757,14 +861,15 @@
 
 								<div>
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Workflows</p>
-									{#if selectedRole.workflowNames.length > 0}
+									{#if (selectedRole.workflowReferences ?? []).length > 0}
 										<div class="mt-2 flex flex-wrap gap-2">
-											{#each selectedRole.workflowNames as workflowName (workflowName)}
-												<span
-													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300"
+											{#each selectedRole.workflowReferences ?? [] as workflow (workflow.id)}
+												<a
+													class="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300 underline decoration-slate-700 underline-offset-4 hover:text-white"
+													href={`/app/workflows/${workflow.id}`}
 												>
-													{workflowName}
-												</span>
+													{workflow.name}
+												</a>
 											{/each}
 										</div>
 									{:else}
@@ -890,9 +995,7 @@
 									</p>
 								</div>
 
-								<div
-									class="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,200px)_minmax(0,1fr)]"
-								>
+								<div class="grid gap-4 lg:grid-cols-5">
 									<label class="block">
 										<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 										<input class="input text-white" name="name" required bind:value={updateName} />
@@ -908,13 +1011,83 @@
 									</label>
 
 									<label class="block">
-										<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
+										<span class="mb-2 block text-sm font-medium text-slate-200">Family</span>
 										<input
 											class="input text-white"
-											name="description"
-											required
-											bind:value={updateDescription}
+											name="family"
+											list="role-family-options"
+											placeholder="Writing"
+											bind:value={updateFamily}
 										/>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Catalog state</span>
+										<select
+											class="select text-white"
+											name="lifecycleStatus"
+											bind:value={updateLifecycleStatus}
+										>
+											{#each CATALOG_LIFECYCLE_STATUS_OPTIONS as lifecycleStatus (lifecycleStatus)}
+												<option value={lifecycleStatus}>
+													{formatCatalogLifecycleStatusLabel(lifecycleStatus)}
+												</option>
+											{/each}
+										</select>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Successor role</span
+										>
+										<select
+											class="select text-white"
+											name="supersededByRoleId"
+											bind:value={updateSupersededByRoleId}
+										>
+											<option value="">No successor</option>
+											{#each updateSuccessorOptions as roleOption (roleOption.id)}
+												<option value={roleOption.id}>{roleOption.name}</option>
+											{/each}
+										</select>
+									</label>
+								</div>
+
+								<label class="block">
+									<span class="mb-2 block text-sm font-medium text-slate-200"> Use when </span>
+									<textarea
+										class="textarea min-h-28 text-white"
+										name="description"
+										placeholder="Use this role when the task needs..."
+										required
+										bind:value={updateDescription}
+									></textarea>
+								</label>
+
+								<div class="grid gap-4 lg:grid-cols-2">
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">Forked from</span>
+										<select
+											class="select text-white"
+											name="sourceRoleId"
+											bind:value={updateSourceRoleId}
+										>
+											<option value="">No source role</option>
+											{#each data.roles.filter((role) => role.id !== selectedRole.id) as roleOption (roleOption.id)}
+												<option value={roleOption.id}>{roleOption.name}</option>
+											{/each}
+										</select>
+									</label>
+
+									<label class="block">
+										<span class="mb-2 block text-sm font-medium text-slate-200">
+											How this differs
+										</span>
+										<textarea
+											class="textarea min-h-28 text-white"
+											name="forkReason"
+											placeholder="Explain why this role exists separately from its source."
+											bind:value={updateForkReason}
+										></textarea>
 									</label>
 								</div>
 							</div>
@@ -1029,6 +1202,12 @@
 	</section>
 
 	<section class="ui-panel space-y-5">
+		<datalist id="role-family-options">
+			{#each knownFamilies as family (family)}
+				<option value={family}></option>
+			{/each}
+		</datalist>
+
 		<div class="flex flex-wrap items-start justify-between gap-4">
 			<div class="max-w-3xl">
 				<h2 class="text-xl font-semibold text-white">Create role</h2>
@@ -1044,7 +1223,7 @@
 					disabled={!selectedRole}
 					onclick={() => seedCreateDraftFromRole(selectedRole)}
 				>
-					Create from selected role
+					Fork selected role
 				</AppButton>
 				<AppButton type="button" variant="ghost" onclick={resetCreateDraft}>Clear</AppButton>
 			</div>
@@ -1059,7 +1238,7 @@
 				</p>
 			</div>
 
-			<div class="grid gap-4 lg:grid-cols-[minmax(0,280px)_minmax(0,220px)_minmax(0,1fr)]">
+			<div class="grid gap-4 lg:grid-cols-5">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Name</span>
 					<input
@@ -1081,14 +1260,76 @@
 				</label>
 
 				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Description</span>
+					<span class="mb-2 block text-sm font-medium text-slate-200">Family</span>
 					<input
 						class="input text-white"
-						name="description"
-						placeholder="Produces clear release notes, setup guides, and operator-facing docs."
-						required
-						bind:value={createDescription}
+						name="family"
+						list="role-family-options"
+						placeholder="Writing"
+						bind:value={createFamily}
 					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Catalog state</span>
+					<select
+						class="select text-white"
+						name="lifecycleStatus"
+						bind:value={createLifecycleStatus}
+					>
+						{#each CATALOG_LIFECYCLE_STATUS_OPTIONS as lifecycleStatus (lifecycleStatus)}
+							<option value={lifecycleStatus}>
+								{formatCatalogLifecycleStatusLabel(lifecycleStatus)}
+							</option>
+						{/each}
+					</select>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Successor role</span>
+					<select
+						class="select text-white"
+						name="supersededByRoleId"
+						bind:value={createSupersededByRoleId}
+					>
+						<option value="">No successor</option>
+						{#each createSuccessorOptions as roleOption (roleOption.id)}
+							<option value={roleOption.id}>{roleOption.name}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Use when</span>
+				<textarea
+					class="textarea min-h-28 text-white"
+					name="description"
+					placeholder="Use this role when the task needs..."
+					required
+					bind:value={createDescription}
+				></textarea>
+			</label>
+
+			<div class="grid gap-4 lg:grid-cols-2">
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Forked from</span>
+					<select class="select text-white" name="sourceRoleId" bind:value={createSourceRoleId}>
+						<option value="">No source role</option>
+						{#each data.roles as roleOption (roleOption.id)}
+							<option value={roleOption.id}>{roleOption.name}</option>
+						{/each}
+					</select>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">How this differs</span>
+					<textarea
+						class="textarea min-h-28 text-white"
+						name="forkReason"
+						placeholder="Explain why this role should exist separately from its source."
+						bind:value={createForkReason}
+					></textarea>
 				</label>
 			</div>
 

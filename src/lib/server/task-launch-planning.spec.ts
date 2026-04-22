@@ -16,6 +16,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		readyCondition: '',
 		expectedOutcome: '',
 		projectId: '',
+		taskTemplateId: '',
 		workflowId: '',
 		parentTaskId: '',
 		delegationObjective: '',

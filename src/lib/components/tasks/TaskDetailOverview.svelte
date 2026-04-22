@@ -32,6 +32,8 @@
 
 	type TaskOverviewView = {
 		projectName: string;
+		taskTemplateName?: string | null;
+		taskTemplateId?: string | null;
 		workflowName?: string | null;
 		workflowId?: string | null;
 		assigneeName: string;
@@ -146,7 +148,7 @@
 		{/if}
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
 		<DetailFactCard
 			label="Project"
 			value={task.projectName}
@@ -155,6 +157,19 @@
 			class="card border border-slate-800 bg-slate-950/70 p-4"
 			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
 			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+		/>
+		<DetailFactCard
+			label="Template source"
+			value={task.taskTemplateName || 'None'}
+			detail={task.taskTemplateId
+				? `Started from template ${task.taskTemplateId}`
+				: 'This task was created without a saved task template.'}
+			href={task.taskTemplateId ? resolve(`/app/task-templates/${task.taskTemplateId}`) : undefined}
+			hrefLabel={task.taskTemplateId ? 'Open task template details' : undefined}
+			class="card border border-slate-800 bg-slate-950/70 p-4"
+			labelClass="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase"
+			valueClass="ui-wrap-anywhere mt-3 text-lg font-semibold text-white"
+			detailClass="ui-wrap-anywhere mt-2 text-sm text-slate-400"
 		/>
 		<DetailFactCard
 			label="Workflow"

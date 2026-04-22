@@ -1,5 +1,7 @@
 export type ArtifactPreviewKind = 'text' | 'image' | 'pdf';
 
+export type ArtifactEditorPreference = 'auto' | 'code' | 'cursor' | 'zed' | 'system';
+
 type ArtifactPageOptions = {
 	line?: number | null;
 	column?: number | null;
@@ -45,6 +47,10 @@ export function artifactPreviewKind(path: string): ArtifactPreviewKind | null {
 
 export function artifactPreviewHref(path: string) {
 	return `/api/artifacts/preview?path=${encodeURIComponent(path)}`;
+}
+
+export function artifactDiffHref(path: string) {
+	return `/api/artifacts/diff?path=${encodeURIComponent(path)}`;
 }
 
 export function artifactFileHref(path: string, options: ArtifactPageOptions = {}) {

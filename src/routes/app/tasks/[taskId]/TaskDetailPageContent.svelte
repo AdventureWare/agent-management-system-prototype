@@ -4,6 +4,7 @@
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { fetchJson } from '$lib/client/agent-data';
 	import { shouldPauseRefresh } from '$lib/client/refresh';
+	import AgentCurrentContextPanel from '$lib/components/AgentCurrentContextPanel.svelte';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import { mergeStoredTaskRecord, taskRecordStore } from '$lib/client/task-record-store';
 	import {
@@ -433,6 +434,8 @@
 			</div>
 		</div>
 	</section>
+
+	<AgentCurrentContextPanel context={data.agentCurrentContext} />
 
 	<TaskDetailOverview
 		onRefresh={() => {

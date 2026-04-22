@@ -110,6 +110,7 @@ describe('task-detail-display-data', () => {
 			task,
 			projectMap: new Map([[project.id, project]]),
 			goalMap: new Map([['goal_cleanup', { name: 'Cleanup' }]]),
+			taskTemplateMap: new Map(),
 			workflowMap: new Map([['workflow_release', { name: 'Release flow' }]]),
 			roleMap: new Map([['role_reviewer', { name: 'Reviewer' }]]),
 			executionSurfaceMap: new Map([[worker.id, worker]]),

@@ -15,6 +15,7 @@ import { AGENT_SANDBOX_OPTIONS, type AgentSandbox } from '$lib/types/agent-threa
 import {
 	APPROVAL_STATUS_OPTIONS,
 	AREA_OPTIONS,
+	CATALOG_LIFECYCLE_STATUS_OPTIONS,
 	DECISION_TYPE_OPTIONS,
 	GOAL_STATUS_OPTIONS,
 	PROVIDER_AUTH_MODE_OPTIONS,
@@ -33,6 +34,7 @@ import {
 	type Approval,
 	type ApprovalStatus,
 	type Area,
+	type CatalogLifecycleStatus,
 	type ControlPlaneData,
 	type Decision,
 	type DecisionType,
@@ -106,6 +108,10 @@ function isDecisionType(value: string): value is DecisionType {
 
 function isGoalStatus(value: string): value is GoalStatus {
 	return GOAL_STATUS_OPTIONS.includes(value as GoalStatus);
+}
+
+function isCatalogLifecycleStatus(value: string): value is CatalogLifecycleStatus {
+	return CATALOG_LIFECYCLE_STATUS_OPTIONS.includes(value as CatalogLifecycleStatus);
 }
 
 function isExecutionSurfaceStatus(value: string): value is ExecutionSurfaceStatus {
@@ -257,11 +263,32 @@ type LegacyRole = Partial<Role> & {
 function normalizeRole(role: LegacyRole): Role {
 	const areaValue = typeof role.area === 'string' ? role.area : '';
 	const area: Role['area'] = areaValue === 'shared' || isArea(areaValue) ? areaValue : 'shared';
+	const lifecycleStatusValue =
+		typeof role.lifecycleStatus === 'string' ? role.lifecycleStatus.trim() : '';
 
 	return {
 		id: typeof role.id === 'string' ? role.id : `role_${randomUUID()}`,
 		name: typeof role.name === 'string' ? role.name : '',
 		area,
+		family:
+			typeof role.family === 'string' && role.family.trim().length > 0
+				? role.family.trim()
+				: undefined,
+		lifecycleStatus: isCatalogLifecycleStatus(lifecycleStatusValue)
+			? lifecycleStatusValue
+			: 'active',
+		sourceRoleId:
+			typeof role.sourceRoleId === 'string' && role.sourceRoleId.trim().length > 0
+				? role.sourceRoleId.trim()
+				: null,
+		forkReason:
+			typeof role.forkReason === 'string' && role.forkReason.trim().length > 0
+				? role.forkReason.trim()
+				: undefined,
+		supersededByRoleId:
+			typeof role.supersededByRoleId === 'string' && role.supersededByRoleId.trim().length > 0
+				? role.supersededByRoleId.trim()
+				: null,
 		description: typeof role.description === 'string' ? role.description : '',
 		skillIds: normalizeStringList(role.skillIds).length
 			? normalizeStringList(role.skillIds)
@@ -720,12 +747,30 @@ function normalizeTaskTemplate(template: LegacyTaskTemplate): TaskTemplate | nul
 		typeof template.approvalMode === 'string' && isTaskApprovalMode(template.approvalMode)
 			? template.approvalMode
 			: 'none';
+	const lifecycleStatusValue =
+		typeof template.lifecycleStatus === 'string' ? template.lifecycleStatus.trim() : '';
 
 	return {
 		id: typeof template.id === 'string' ? template.id : createTaskTemplateId(),
 		name,
 		summary: typeof template.summary === 'string' ? template.summary.trim() : '',
 		projectId,
+		lifecycleStatus: isCatalogLifecycleStatus(lifecycleStatusValue)
+			? lifecycleStatusValue
+			: 'active',
+		sourceTaskTemplateId:
+			typeof template.sourceTaskTemplateId === 'string' && template.sourceTaskTemplateId.trim()
+				? template.sourceTaskTemplateId.trim()
+				: null,
+		forkReason:
+			typeof template.forkReason === 'string' && template.forkReason.trim()
+				? template.forkReason.trim()
+				: undefined,
+		supersededByTaskTemplateId:
+			typeof template.supersededByTaskTemplateId === 'string' &&
+			template.supersededByTaskTemplateId.trim()
+				? template.supersededByTaskTemplateId.trim()
+				: null,
 		goalId:
 			typeof template.goalId === 'string' && template.goalId.trim() ? template.goalId.trim() : null,
 		workflowId:
@@ -1097,6 +1142,10 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		projectId: inferTaskProjectId(task, projects),
 		area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
+		taskTemplateId:
+			typeof task.taskTemplateId === 'string' && task.taskTemplateId.trim()
+				? task.taskTemplateId.trim()
+				: null,
 		workflowId:
 			typeof task.workflowId === 'string' && task.workflowId.trim() ? task.workflowId.trim() : null,
 		parentTaskId:
@@ -1359,9 +1408,22 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
 	const workflowIds = new Set((data.workflows ?? []).map((workflow) => workflow.id));
 	const roleIds = new Set(data.roles.map((role) => role.id));
+	const taskTemplateIds = new Set(
+		(data.taskTemplates ?? []).map((taskTemplate) => taskTemplate.id)
+	);
 	const executionSurfaceIds = new Set(data.executionSurfaces.map((surface) => surface.id));
 	const taskIds = new Set(data.tasks.map((task) => task.id));
 	const issues: string[] = [];
+
+	for (const role of data.roles) {
+		if (role.sourceRoleId && !roleIds.has(role.sourceRoleId)) {
+			issues.push(`Role ${role.id} references missing source role ${role.sourceRoleId}.`);
+		}
+
+		if (role.supersededByRoleId && !roleIds.has(role.supersededByRoleId)) {
+			issues.push(`Role ${role.id} references missing successor role ${role.supersededByRoleId}.`);
+		}
+	}
 
 	for (const goal of data.goals) {
 		if (goal.parentGoalId && !goalIds.has(goal.parentGoalId)) {
@@ -1378,6 +1440,10 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 	for (const task of data.tasks) {
 		if (task.goalId && !goalIds.has(task.goalId)) {
 			issues.push(`Task ${task.id} references missing goal ${task.goalId}.`);
+		}
+
+		if (task.taskTemplateId && !taskTemplateIds.has(task.taskTemplateId)) {
+			issues.push(`Task ${task.id} references missing task template ${task.taskTemplateId}.`);
 		}
 
 		if (task.workflowId && !workflowIds.has(task.workflowId)) {
@@ -1442,6 +1508,24 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 				`Task template ${taskTemplate.id} references missing execution surface ${taskTemplate.assigneeExecutionSurfaceId}.`
 			);
 		}
+
+		if (
+			taskTemplate.sourceTaskTemplateId &&
+			!taskTemplateIds.has(taskTemplate.sourceTaskTemplateId)
+		) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing source template ${taskTemplate.sourceTaskTemplateId}.`
+			);
+		}
+
+		if (
+			taskTemplate.supersededByTaskTemplateId &&
+			!taskTemplateIds.has(taskTemplate.supersededByTaskTemplateId)
+		) {
+			issues.push(
+				`Task template ${taskTemplate.id} references missing successor template ${taskTemplate.supersededByTaskTemplateId}.`
+			);
+		}
 	}
 
 	for (const run of data.runs) {
@@ -1496,7 +1580,19 @@ export function collectControlPlaneIntegrityIssues(data: ControlPlaneData) {
 export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlaneData {
 	const projectIds = new Set(data.projects.map((project) => project.id));
 	const goalIds = new Set(data.goals.map((goal) => goal.id));
-	const roleIds = new Set(data.roles.map((role) => role.id));
+	const roles = data.roles.map((role) => ({
+		...role,
+		sourceRoleId:
+			role.sourceRoleId && data.roles.some((candidate) => candidate.id === role.sourceRoleId)
+				? role.sourceRoleId
+				: null,
+		supersededByRoleId:
+			role.supersededByRoleId &&
+			data.roles.some((candidate) => candidate.id === role.supersededByRoleId)
+				? role.supersededByRoleId
+				: null
+	}));
+	const roleIds = new Set(roles.map((role) => role.id));
 	const executionSurfaceIds = new Set(data.executionSurfaces.map((surface) => surface.id));
 	const workflows = (data.workflows ?? []).map((workflow) => ({
 		...workflow,
@@ -1549,6 +1645,20 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 				...template,
 				goalId,
 				workflowId,
+				sourceTaskTemplateId:
+					template.sourceTaskTemplateId &&
+					(data.taskTemplates ?? []).some(
+						(candidate) => candidate.id === template.sourceTaskTemplateId
+					)
+						? template.sourceTaskTemplateId
+						: null,
+				supersededByTaskTemplateId:
+					template.supersededByTaskTemplateId &&
+					(data.taskTemplates ?? []).some(
+						(candidate) => candidate.id === template.supersededByTaskTemplateId
+					)
+						? template.supersededByTaskTemplateId
+						: null,
 				desiredRoleId:
 					template.desiredRoleId && roleIds.has(template.desiredRoleId)
 						? template.desiredRoleId
@@ -1560,6 +1670,7 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 						: null
 			};
 		});
+	const taskTemplateIds = new Set(taskTemplates.map((taskTemplate) => taskTemplate.id));
 	const tasks = data.tasks.map((task) => {
 		const nextGoalId = task.goalId && goalIds.has(task.goalId) ? task.goalId : '';
 		const nextParentTaskId =
@@ -1568,6 +1679,10 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 		return {
 			...task,
 			goalId: nextGoalId,
+			taskTemplateId:
+				task.taskTemplateId && taskTemplateIds.has(task.taskTemplateId)
+					? task.taskTemplateId
+					: null,
 			workflowId: task.workflowId && workflowIds.has(task.workflowId) ? task.workflowId : null,
 			parentTaskId: nextParentTaskId
 		};
@@ -1613,6 +1728,7 @@ export function repairControlPlaneIntegrity(data: ControlPlaneData): ControlPlan
 
 	return {
 		...data,
+		roles,
 		goals,
 		workflows,
 		workflowSteps: repairedWorkflowSteps,
@@ -2098,6 +2214,11 @@ export function createProvider(input: {
 export function createRole(input: {
 	name: string;
 	area?: Role['area'];
+	family?: string;
+	lifecycleStatus?: CatalogLifecycleStatus;
+	sourceRoleId?: string | null;
+	forkReason?: string;
+	supersededByRoleId?: string | null;
 	description: string;
 	skillIds?: string[];
 	toolIds?: string[];
@@ -2111,6 +2232,11 @@ export function createRole(input: {
 		id: createRoleId(),
 		name: input.name,
 		area: input.area ?? 'shared',
+		family: input.family?.trim() ? input.family.trim() : undefined,
+		lifecycleStatus: input.lifecycleStatus ?? 'active',
+		sourceRoleId: input.sourceRoleId?.trim() ? input.sourceRoleId.trim() : null,
+		forkReason: input.forkReason?.trim() ? input.forkReason.trim() : undefined,
+		supersededByRoleId: input.supersededByRoleId?.trim() ? input.supersededByRoleId.trim() : null,
 		description: input.description,
 		skillIds: normalizeStringList(input.skillIds).length
 			? normalizeStringList(input.skillIds)
@@ -2218,6 +2344,10 @@ export function createTaskTemplate(input: {
 	name: string;
 	summary?: string;
 	projectId: string;
+	lifecycleStatus?: CatalogLifecycleStatus;
+	sourceTaskTemplateId?: string | null;
+	forkReason?: string;
+	supersededByTaskTemplateId?: string | null;
 	goalId?: string | null;
 	workflowId?: string | null;
 	taskTitle?: string;
@@ -2246,6 +2376,14 @@ export function createTaskTemplate(input: {
 		name: input.name.trim(),
 		summary: input.summary?.trim() ?? '',
 		projectId: input.projectId.trim(),
+		lifecycleStatus: input.lifecycleStatus ?? 'active',
+		sourceTaskTemplateId: input.sourceTaskTemplateId?.trim()
+			? input.sourceTaskTemplateId.trim()
+			: null,
+		forkReason: input.forkReason?.trim() ? input.forkReason.trim() : undefined,
+		supersededByTaskTemplateId: input.supersededByTaskTemplateId?.trim()
+			? input.supersededByTaskTemplateId.trim()
+			: null,
 		goalId: input.goalId?.trim() ? input.goalId.trim() : null,
 		workflowId: input.workflowId?.trim() ? input.workflowId.trim() : null,
 		taskTitle: input.taskTitle?.trim() ?? '',
@@ -2496,6 +2634,7 @@ export function createTask(input: {
 	projectId: string;
 	area?: Area;
 	goalId: string;
+	taskTemplateId?: string | null;
 	workflowId?: string | null;
 	parentTaskId?: string | null;
 	delegationPacket?: DelegationPacket | null;
@@ -2534,6 +2673,7 @@ export function createTask(input: {
 		projectId: input.projectId,
 		area,
 		goalId: input.goalId,
+		taskTemplateId: input.taskTemplateId?.trim() ? input.taskTemplateId.trim() : null,
 		workflowId: input.workflowId?.trim() ? input.workflowId.trim() : null,
 		parentTaskId: input.parentTaskId?.trim() ? input.parentTaskId : null,
 		delegationPacket: normalizeDelegationPacket(input.delegationPacket ?? null),

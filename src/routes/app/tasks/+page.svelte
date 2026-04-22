@@ -30,6 +30,7 @@
 		getTaskReviewRequirementLabel
 	} from '$lib/task-governance-ui';
 	import { getTaskThreadActionLabel, getTaskThreadReviewHref } from '$lib/task-thread-context';
+	import AgentGuidanceHintBadge from '$lib/components/AgentGuidanceHintBadge.svelte';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppDialog from '$lib/components/AppDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -1178,7 +1179,7 @@
 					assigneeExecutionSurfaceId: form.assigneeExecutionSurfaceId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
-					taskTemplateId: '',
+					taskTemplateId: form.taskTemplateId?.toString() ?? '',
 					workflowId: form.workflowId?.toString() ?? '',
 					area: ('area' in form ? form.area?.toString() : undefined) ?? 'product',
 					priority: form.priority?.toString() ?? 'medium',
@@ -2342,6 +2343,9 @@
 										Depends on: {task.dependencyTaskNames.join(', ')}
 									</p>
 								{/if}
+								{#if task.agentGuidanceHint}
+									<AgentGuidanceHintBadge hint={task.agentGuidanceHint} compact class="mt-3" />
+								{/if}
 
 								<div class="mt-4 flex flex-col gap-2 sm:flex-row">
 									{@render queueQuickAction(task, 'w-full sm:w-auto')}
@@ -2565,6 +2569,13 @@
 													>
 														{getTaskPendingApprovalBadgeLabel(task.pendingApproval.mode)}
 													</span>
+												{/if}
+												{#if task.agentGuidanceHint}
+													<AgentGuidanceHintBadge
+														hint={task.agentGuidanceHint}
+														compact
+														class="mt-2"
+													/>
 												{/if}
 											</div>
 										</td>
@@ -3526,7 +3537,7 @@
 										<select
 											bind:value={createTaskTemplateId}
 											class="select text-white"
-											name="taskTemplateSelection"
+											name="taskTemplateId"
 											onchange={(event) => {
 												applyCreateTaskTemplateById(
 													(event.currentTarget as HTMLSelectElement).value
@@ -3592,9 +3603,13 @@
 											Manage template details in the task template library.
 											<a
 												class="ml-1 font-medium text-sky-300 underline"
-												href={resolve('/app/task-templates')}
+												href={resolve(
+													selectedCreateTaskTemplate
+														? `/app/task-templates/${selectedCreateTaskTemplate.id}`
+														: '/app/task-templates'
+												)}
 											>
-												Open library
+												{selectedCreateTaskTemplate ? 'Open template detail' : 'Open library'}
 											</a>
 										</p>
 									</div>

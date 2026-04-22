@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listAgentThreads } from '$lib/server/agent-threads';
+import { loadAgentCurrentContext } from '$lib/server/agent-current-context';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { getExecutionSurfaces } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
@@ -44,6 +45,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		thread: run.agentThreadId
 			? (threads.find((thread) => thread.id === run.agentThreadId) ?? null)
 			: null,
+		agentCurrentContext: await loadAgentCurrentContext({ runId: params.runId }),
 		relatedTaskRuns: runs
 			.filter((candidate) => candidate.taskId === run.taskId && candidate.id !== run.id)
 			.slice(0, 6)

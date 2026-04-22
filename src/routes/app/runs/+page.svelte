@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AgentGuidanceHintBadge from '$lib/components/AgentGuidanceHintBadge.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -335,6 +336,9 @@
 											</span>
 										</div>
 										<p class="text-sm text-slate-300">{compactText(run.summary || 'No summary')}</p>
+										{#if run.agentGuidanceHint}
+											<AgentGuidanceHintBadge hint={run.agentGuidanceHint} compact class="mt-2" />
+										{/if}
 									</div>
 								</td>
 								<td class="px-3 py-3">

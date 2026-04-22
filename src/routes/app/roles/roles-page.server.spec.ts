@@ -233,6 +233,11 @@ describe('roles page server', () => {
 		expect(createRoleMock).toHaveBeenCalledWith({
 			name: 'Doctor',
 			area: 'shared',
+			family: undefined,
+			lifecycleStatus: 'active',
+			sourceRoleId: null,
+			forkReason: undefined,
+			supersededByRoleId: null,
 			description: 'Assesses health-related tasks.',
 			skillIds: ['medical-reasoning', 'triage'],
 			toolIds: ['codex', 'web'],

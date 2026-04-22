@@ -55,6 +55,12 @@ export const PROVIDER_KIND_OPTIONS = ['local', 'cloud', 'api'] as const;
 export const PROVIDER_SETUP_STATUS_OPTIONS = ['connected', 'needs_setup', 'planned'] as const;
 export const PROVIDER_AUTH_MODE_OPTIONS = ['local_cli', 'oauth', 'api_key', 'custom'] as const;
 export const PLANNING_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'] as const;
+export const CATALOG_LIFECYCLE_STATUS_OPTIONS = [
+	'draft',
+	'active',
+	'deprecated',
+	'superseded'
+] as const;
 export const WORKFLOW_STATUS_OPTIONS = [
 	'draft',
 	'active',
@@ -80,6 +86,7 @@ export type ProviderKind = (typeof PROVIDER_KIND_OPTIONS)[number];
 export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number];
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
+export type CatalogLifecycleStatus = (typeof CATALOG_LIFECYCLE_STATUS_OPTIONS)[number];
 export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
@@ -323,6 +330,10 @@ export function formatWorkflowStatusLabel(status: string): string {
 	return formatEnumLabel(status);
 }
 
+export function formatCatalogLifecycleStatusLabel(status: string): string {
+	return formatEnumLabel(status);
+}
+
 export function workflowStatusToneClass(status: string): string {
 	switch (status) {
 		case 'active':
@@ -384,6 +395,11 @@ export type Role = {
 	id: string;
 	name: string;
 	area: Area | 'shared';
+	family?: string;
+	lifecycleStatus?: CatalogLifecycleStatus;
+	sourceRoleId?: string | null;
+	forkReason?: string;
+	supersededByRoleId?: string | null;
 	description: string;
 	skillIds?: string[];
 	toolIds?: string[];
@@ -472,6 +488,10 @@ export type TaskTemplate = {
 	name: string;
 	summary: string;
 	projectId: string;
+	lifecycleStatus?: CatalogLifecycleStatus;
+	sourceTaskTemplateId?: string | null;
+	forkReason?: string;
+	supersededByTaskTemplateId?: string | null;
 	goalId: string | null;
 	workflowId: string | null;
 	taskTitle: string;
@@ -517,6 +537,7 @@ export type Task = {
 	projectId: string;
 	area: Area;
 	goalId: string;
+	taskTemplateId?: string | null;
 	workflowId?: string | null;
 	parentTaskId?: string | null;
 	delegationPacket?: DelegationPacket | null;

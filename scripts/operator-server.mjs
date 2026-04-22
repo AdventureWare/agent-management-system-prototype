@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { closeSync, existsSync, openSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import net from 'node:net';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -114,6 +114,72 @@ async function readJson(path) {
 	} catch {
 		return null;
 	}
+}
+
+function readCommandOutput(command, args) {
+	try {
+		return execFileSync(command, args, {
+			cwd: REPO_ROOT,
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore']
+		}).trim();
+	} catch {
+		return '';
+	}
+}
+
+function findListeningPids(port) {
+	if (process.platform === 'win32') {
+		return [];
+	}
+
+	const output = readCommandOutput('lsof', ['-tiTCP:' + String(port), '-sTCP:LISTEN', '-n', '-P']);
+
+	return output
+		.split('\n')
+		.map((value) => Number.parseInt(value.trim(), 10))
+		.filter((value) => Number.isInteger(value) && value > 0);
+}
+
+function readProcessArgs(pid) {
+	if (!pid || process.platform === 'win32') {
+		return '';
+	}
+
+	return readCommandOutput('ps', ['-p', String(pid), '-o', 'args=']);
+}
+
+function isExpectedOperatorProcess(pid) {
+	const args = readProcessArgs(pid);
+	return args.includes(BUILD_ENTRY_PATH);
+}
+
+async function writeStatus(status) {
+	await writeFile(STATUS_PATH, `${JSON.stringify(status, null, 2)}\n`);
+}
+
+async function resolveLiveOperatorStatus(hostname, port) {
+	const probeHost = resolveProbeHost(hostname);
+	const localUrl = createLocalUrl(probeHost, port);
+	const livePids = findListeningPids(port);
+
+	for (const pid of livePids) {
+		if (isExpectedOperatorProcess(pid)) {
+			const status = {
+				startedAt: new Date().toISOString(),
+				pid,
+				host: hostname,
+				port,
+				localUrl,
+				logPath: LOG_PATH,
+				source: 'recovered'
+			};
+			await writeStatus(status);
+			return status;
+		}
+	}
+
+	return null;
 }
 
 async function waitForServer(url, attempts = 40) {
@@ -245,6 +311,15 @@ async function startServer() {
 		await rm(STATUS_PATH, { force: true });
 	}
 
+	const recoveredStatus = await resolveLiveOperatorStatus(hostname, port);
+
+	if (recoveredStatus) {
+		printHeader('Operator server already running');
+		process.stdout.write(`Local: ${recoveredStatus.localUrl}\n`);
+		process.stdout.write(`Log: ${recoveredStatus.logPath}\n`);
+		return;
+	}
+
 	if (await isPortReachable(probeHost, port)) {
 		failWithMessage(
 			`Port ${probeHost}:${port} is already in use by another process. Stop that process before starting the operator server.`
@@ -290,7 +365,7 @@ async function startServer() {
 		logPath: LOG_PATH
 	};
 
-	await writeFile(STATUS_PATH, `${JSON.stringify(status, null, 2)}\n`);
+	await writeStatus(status);
 	child.unref();
 
 	printHeader('Operator server started');
@@ -299,7 +374,8 @@ async function startServer() {
 }
 
 async function stopServer() {
-	const status = await readJson(STATUS_PATH);
+	const status =
+		(await readJson(STATUS_PATH)) ?? (await resolveLiveOperatorStatus(DEFAULT_HOST, DEFAULT_PORT));
 
 	if (!status) {
 		process.stdout.write('Operator server is not running.\n');
@@ -312,7 +388,8 @@ async function stopServer() {
 }
 
 async function showStatus() {
-	const status = await readJson(STATUS_PATH);
+	const status =
+		(await readJson(STATUS_PATH)) ?? (await resolveLiveOperatorStatus(DEFAULT_HOST, DEFAULT_PORT));
 
 	if (!status) {
 		process.stdout.write('Operator server is not running.\n');
@@ -326,6 +403,9 @@ async function showStatus() {
 	process.stdout.write(`Local: ${status.localUrl}\n`);
 	process.stdout.write(`PID: ${status.pid ?? 'unknown'}\n`);
 	process.stdout.write(`Log: ${status.logPath}\n`);
+	if (status.source === 'recovered') {
+		process.stdout.write('Source: recovered from live listener\n');
+	}
 }
 
 async function runForegroundServer() {

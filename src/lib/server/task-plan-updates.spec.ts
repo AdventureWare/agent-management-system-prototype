@@ -121,6 +121,7 @@ function createFormInput(overrides: Partial<TaskDetailFormInput> = {}): TaskDeta
 		readyCondition: '',
 		expectedOutcome: '',
 		projectId: task.projectId,
+		taskTemplateId: '',
 		workflowId: '',
 		parentTaskId: '',
 		delegationObjective: '',

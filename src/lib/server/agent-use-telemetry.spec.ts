@@ -144,6 +144,30 @@ describe('agent-use-telemetry', () => {
 		expect(summary.uncoveredToolCounts).toEqual([]);
 	});
 
+	it('treats direct thread-coordination intent tools as covered playbook usage', async () => {
+		await prepareTelemetryFileEnv();
+		const { recordAgentToolUse, summarizeAgentToolUse } = await import('./agent-use-telemetry.js');
+
+		await recordAgentToolUse({
+			threadId: 'thread_coordination',
+			toolName: 'ams_intent_coordinate_with_another_thread',
+			args: { targetThreadIdOrHandle: 'researcher' },
+			outcome: 'success'
+		});
+
+		const summary = await summarizeAgentToolUse({ threadId: 'thread_coordination' });
+
+		expect(summary.playbookMatches).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					intent: 'coordinate_with_another_thread',
+					count: 1
+				})
+			])
+		);
+		expect(summary.uncoveredToolCounts).toEqual([]);
+	});
+
 	it('supports filtering by thread, task, run, tool, outcome, and recent time window', async () => {
 		await prepareTelemetryFileEnv();
 		const { recordAgentToolUse, summarizeAgentToolUse } = await import('./agent-use-telemetry.js');

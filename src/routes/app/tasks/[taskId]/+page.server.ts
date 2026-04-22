@@ -33,6 +33,7 @@ import {
 	requestTaskReviewChanges,
 	TaskGovernanceActionError
 } from '$lib/server/task-governance';
+import { loadAgentCurrentContext } from '$lib/server/agent-current-context';
 
 async function handleTaskGovernanceAction(action: () => Promise<unknown>) {
 	try {
@@ -125,7 +126,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		throw error(404, 'Task not found.');
 	}
 
-	return pageData;
+	return {
+		...pageData,
+		agentCurrentContext: await loadAgentCurrentContext({ taskId: params.taskId })
+	};
 };
 
 export const actions: Actions = {

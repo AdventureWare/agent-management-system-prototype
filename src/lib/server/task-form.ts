@@ -16,6 +16,7 @@ export type CreateTaskFormInput = {
 	readyCondition: string;
 	expectedOutcome: string;
 	projectId: string;
+	taskTemplateId: string;
 	workflowId: string;
 	parentTaskId: string;
 	delegationObjective: string;
@@ -155,6 +156,7 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		readyCondition: readTrimmedValue(form.get('readyCondition')),
 		expectedOutcome: readTrimmedValue(form.get('expectedOutcome')),
 		projectId: readTrimmedValue(form.get('projectId')),
+		taskTemplateId: readTrimmedValue(form.get('taskTemplateId')),
 		workflowId: readTrimmedValue(form.get('workflowId')),
 		parentTaskId: readTrimmedValue(form.get('parentTaskId')),
 		delegationObjective: readTrimmedValue(form.get('delegationObjective')),

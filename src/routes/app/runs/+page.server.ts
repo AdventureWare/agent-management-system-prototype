@@ -1,7 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { listAgentThreads } from '$lib/server/agent-threads';
+import { buildAgentGuidanceHint } from '$lib/server/agent-current-context';
 import { buildRunRecords } from '$lib/server/run-records';
 import { loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
+import { getOpenReviewForTask, getPendingApprovalForTask } from '$lib/server/control-plane';
 import { RUN_STATUS_OPTIONS } from '$lib/types/control-plane';
 
 export const load: PageServerLoad = async () => {
@@ -32,7 +34,22 @@ export const load: PageServerLoad = async () => {
 	);
 
 	return {
-		runs: buildRunRecords(data, threads),
+		runs: buildRunRecords(data, threads).map((run) => {
+			const task = data.tasks.find((candidate) => candidate.id === run.taskId) ?? null;
+			const openReview = task ? getOpenReviewForTask(data, task.id) : null;
+			const pendingApproval = task ? getPendingApprovalForTask(data, task.id) : null;
+
+			return {
+				...run,
+				agentGuidanceHint: buildAgentGuidanceHint({
+					task,
+					run,
+					openReview,
+					pendingApproval,
+					threadId: run.agentThreadId ?? run.threadId ?? null
+				})
+			};
+		}),
 		statusOptions: RUN_STATUS_OPTIONS,
 		tasks: [...data.tasks]
 			.filter((task) => taskIdsWithRuns.has(task.id))

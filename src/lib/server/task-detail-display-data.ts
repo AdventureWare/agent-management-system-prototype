@@ -73,6 +73,7 @@ export function buildTaskDetailTaskView(input: {
 	task: Task;
 	projectMap: Map<string, Project>;
 	goalMap: Map<string, { name: string }>;
+	taskTemplateMap: Map<string, { name: string }>;
 	workflowMap: Map<string, { name: string }>;
 	roleMap: Map<string, { name: string }>;
 	executionSurfaceMap: Map<string, ExecutionSurface>;
@@ -87,6 +88,7 @@ export function buildTaskDetailTaskView(input: {
 		task,
 		projectMap,
 		goalMap,
+		taskTemplateMap,
 		workflowMap,
 		roleMap,
 		executionSurfaceMap,
@@ -108,6 +110,9 @@ export function buildTaskDetailTaskView(input: {
 			: null,
 		projectName: projectMap.get(task.projectId)?.name ?? 'No project',
 		goalName: task.goalId ? (goalMap.get(task.goalId)?.name ?? 'Unknown goal') : '',
+		taskTemplateName: task.taskTemplateId
+			? (taskTemplateMap.get(task.taskTemplateId)?.name ?? 'Unknown task template')
+			: '',
 		workflowName: task.workflowId
 			? (workflowMap.get(task.workflowId)?.name ?? 'Unknown workflow')
 			: '',

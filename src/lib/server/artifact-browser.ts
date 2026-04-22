@@ -1,7 +1,9 @@
+import { execFile, spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
-import { basename, dirname, extname, isAbsolute } from 'node:path';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { basename, dirname, extname, isAbsolute, relative } from 'node:path';
 import { Readable } from 'node:stream';
+import { promisify } from 'node:util';
 import { normalizePathInput } from '$lib/server/path-tools';
 import type {
 	ArtifactBrowserData,
@@ -17,12 +19,57 @@ type ArtifactKnownOutputInput = {
 	description?: string;
 };
 
+type ArtifactDiffPreview = {
+	status: 'ready' | 'empty' | 'unavailable';
+	diffText: string;
+	message: string;
+	comparedAgainst: string | null;
+};
+
 type BuildArtifactBrowserInput = {
 	rootPath: string;
 	knownOutputs?: ArtifactKnownOutputInput[];
 	maxEntries?: number;
 	rootFileLabel?: string;
 };
+
+type ArtifactEditorLaunchCommand = {
+	label: string;
+	command: string;
+	args: string[];
+};
+
+const execFileAsync = promisify(execFile);
+const ARTIFACT_TEXT_EXTENSIONS = new Set([
+	'md',
+	'markdown',
+	'txt',
+	'log',
+	'yml',
+	'yaml',
+	'svelte',
+	'ts',
+	'tsx',
+	'js',
+	'jsx',
+	'json',
+	'css',
+	'html',
+	'xml',
+	'sh'
+]);
+const ARTIFACT_EDITOR_PREFERENCES = new Set(['auto', 'code', 'cursor', 'zed', 'system']);
+
+function normalizeArtifactEditorPreference(value: unknown) {
+	if (typeof value !== 'string') {
+		return 'auto';
+	}
+
+	const normalized = value.trim().toLowerCase();
+	return ARTIFACT_EDITOR_PREFERENCES.has(normalized)
+		? (normalized as 'auto' | 'code' | 'cursor' | 'zed' | 'system')
+		: 'auto';
+}
 
 function getArtifactEntryKind(stats: Awaited<ReturnType<typeof stat>>): ArtifactEntryKind {
 	if (stats.isDirectory()) {
@@ -314,6 +361,350 @@ export async function createArtifactDownloadResponse(input: {
 			'content-disposition': `${disposition}; filename*=UTF-8''${encodedName}`
 		}
 	});
+}
+
+function formatArtifactEditorLocation(input: {
+	path: string;
+	line?: number | null;
+	column?: number | null;
+}) {
+	if (!input.line || input.line <= 0) {
+		return input.path;
+	}
+
+	return `${input.path}:${input.line}${input.column && input.column > 0 ? `:${input.column}` : ''}`;
+}
+
+export function buildArtifactEditorLaunchCommands(input: {
+	path: string;
+	line?: number | null;
+	column?: number | null;
+	platform?: NodeJS.Platform;
+	preferredEditor?: string | null;
+}): ArtifactEditorLaunchCommand[] {
+	const platform = input.platform ?? process.platform;
+	const location = formatArtifactEditorLocation(input);
+	const preferredEditor = normalizeArtifactEditorPreference(
+		input.preferredEditor ?? process.env.AMS_ARTIFACT_EDITOR
+	);
+	const platformCommands =
+		platform === 'darwin'
+			? {
+					code: { label: 'VS Code CLI', command: 'code', args: ['-g', location] },
+					cursor: { label: 'Cursor CLI', command: 'cursor', args: ['-g', location] },
+					zed: { label: 'Zed CLI', command: 'zed', args: ['--goto', location] },
+					system: { label: 'macOS open', command: 'open', args: [input.path] }
+				}
+			: platform === 'win32'
+				? {
+						code: { label: 'VS Code CLI', command: 'code.cmd', args: ['-g', location] },
+						cursor: { label: 'Cursor CLI', command: 'cursor.cmd', args: ['-g', location] },
+						zed: { label: 'Zed CLI', command: 'zed', args: ['--goto', location] },
+						system: {
+							label: 'Windows shell',
+							command: 'cmd',
+							args: ['/c', 'start', '', input.path]
+						}
+					}
+				: {
+						code: { label: 'VS Code CLI', command: 'code', args: ['-g', location] },
+						cursor: { label: 'Cursor CLI', command: 'cursor', args: ['-g', location] },
+						zed: { label: 'Zed CLI', command: 'zed', args: ['--goto', location] },
+						system: { label: 'xdg-open', command: 'xdg-open', args: [input.path] }
+					};
+
+	if (preferredEditor === 'auto') {
+		return [
+			platformCommands.code,
+			platformCommands.cursor,
+			platformCommands.zed,
+			platformCommands.system
+		];
+	}
+
+	return [platformCommands[preferredEditor]];
+}
+
+async function runArtifactEditorCommand(command: ArtifactEditorLaunchCommand) {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(command.command, command.args, {
+			stdio: 'ignore',
+			detached: true
+		});
+		let settled = false;
+
+		const resolveOnce = () => {
+			if (settled) {
+				return;
+			}
+
+			settled = true;
+			child.unref();
+			resolve();
+		};
+		const rejectOnce = (error: Error) => {
+			if (settled) {
+				return;
+			}
+
+			settled = true;
+			reject(error);
+		};
+
+		child.once('error', (error) => {
+			rejectOnce(error instanceof Error ? error : new Error(`${command.label} failed.`));
+		});
+		child.once('spawn', () => {
+			setTimeout(resolveOnce, 80);
+		});
+		child.once('close', (code) => {
+			if (code === 0) {
+				resolveOnce();
+				return;
+			}
+
+			rejectOnce(new Error(`${command.label} exited with code ${code ?? 'unknown'}.`));
+		});
+	});
+}
+
+export async function openArtifactInEditor(input: {
+	path: string;
+	line?: number | null;
+	column?: number | null;
+	preferredEditor?: string | null;
+}) {
+	const path = normalizePathInput(input.path);
+
+	if (!path) {
+		throw new Error('Path is required.');
+	}
+
+	if (!isAbsolute(path)) {
+		throw new Error('Use an absolute path.');
+	}
+
+	let details;
+
+	try {
+		details = await stat(path);
+	} catch {
+		throw new Error('Artifact file is missing from disk.');
+	}
+
+	if (!details.isFile()) {
+		throw new Error('Only files can be opened in the editor.');
+	}
+
+	const commands = buildArtifactEditorLaunchCommands({
+		path,
+		line: input.line,
+		column: input.column,
+		preferredEditor: input.preferredEditor
+	});
+	const failures: string[] = [];
+
+	for (const command of commands) {
+		try {
+			await runArtifactEditorCommand(command);
+			return {
+				path,
+				launcher: command.label
+			};
+		} catch (error) {
+			failures.push(error instanceof Error ? error.message : `${command.label} failed.`);
+		}
+	}
+
+	throw new Error(`No supported local editor launcher succeeded. ${failures.join(' ')}`.trim());
+}
+
+async function runGitCommand(input: { cwd: string; args: string[]; allowExitCodes?: number[] }) {
+	try {
+		const result = await execFileAsync('git', input.args, {
+			cwd: input.cwd,
+			maxBuffer: 1024 * 1024 * 8
+		});
+
+		return {
+			stdout: result.stdout,
+			stderr: result.stderr,
+			exitCode: 0
+		};
+	} catch (error) {
+		const commandError = error as Error & {
+			code?: number | string;
+			stdout?: string;
+			stderr?: string;
+		};
+		const exitCode = typeof commandError.code === 'number' ? commandError.code : Number.NaN;
+
+		if (input.allowExitCodes?.includes(exitCode)) {
+			return {
+				stdout: commandError.stdout ?? '',
+				stderr: commandError.stderr ?? '',
+				exitCode
+			};
+		}
+
+		throw error;
+	}
+}
+
+async function findGitRepositoryRoot(path: string) {
+	try {
+		const result = await runGitCommand({
+			cwd: dirname(path),
+			args: ['rev-parse', '--show-toplevel']
+		});
+
+		return result.stdout.trim() || null;
+	} catch {
+		return null;
+	}
+}
+
+async function isTrackedGitFile(repoRoot: string, filePath: string) {
+	try {
+		await runGitCommand({
+			cwd: repoRoot,
+			args: ['ls-files', '--error-unmatch', '--', filePath]
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function isArtifactTextFile(path: string) {
+	return ARTIFACT_TEXT_EXTENSIONS.has(extname(path).slice(1).toLowerCase());
+}
+
+function buildNewFileDiff(relativePath: string, content: string) {
+	const normalizedContent = content.replace(/\r\n/g, '\n');
+	const lines = normalizedContent.split('\n');
+	const printableLines = normalizedContent.endsWith('\n') ? lines.slice(0, -1) : lines;
+	const body =
+		printableLines.length === 0 ? '' : `${printableLines.map((line) => `+${line}`).join('\n')}\n`;
+	const hunkHeader =
+		printableLines.length === 0 ? '@@ -0,0 +1 @@\n' : `@@ -0,0 +1,${printableLines.length} @@\n`;
+
+	return [
+		`diff --git a/${relativePath} b/${relativePath}`,
+		'new file mode 100644',
+		'--- /dev/null',
+		`+++ b/${relativePath}`,
+		hunkHeader.trimEnd(),
+		body.trimEnd()
+	]
+		.filter(Boolean)
+		.join('\n')
+		.concat('\n');
+}
+
+export async function buildArtifactDiffPreview(input: {
+	path: string;
+}): Promise<ArtifactDiffPreview> {
+	const path = normalizePathInput(input.path);
+
+	if (!path) {
+		throw new Error('Path is required.');
+	}
+
+	if (!isAbsolute(path)) {
+		throw new Error('Use an absolute path.');
+	}
+
+	let details;
+
+	try {
+		details = await stat(path);
+	} catch {
+		throw new Error('Artifact file is missing from disk.');
+	}
+
+	if (!details.isFile()) {
+		throw new Error('Only files can be diffed.');
+	}
+
+	if (!isArtifactTextFile(path)) {
+		return {
+			status: 'unavailable',
+			diffText: '',
+			message: 'Diff preview is only available for text-like files.',
+			comparedAgainst: null
+		};
+	}
+
+	const repoRoot = await findGitRepositoryRoot(path);
+
+	if (!repoRoot) {
+		return {
+			status: 'unavailable',
+			diffText: '',
+			message: 'Diff preview is only available for files inside a Git repository.',
+			comparedAgainst: null
+		};
+	}
+
+	const resolvedRepoRoot = await realpath(repoRoot).catch(() => repoRoot);
+	const resolvedPath = await realpath(path).catch(() => path);
+	const relativePath = relative(resolvedRepoRoot, resolvedPath).replaceAll('\\', '/');
+
+	if (!relativePath || relativePath.startsWith('..')) {
+		return {
+			status: 'unavailable',
+			diffText: '',
+			message: 'Diff preview is only available for files inside this repository.',
+			comparedAgainst: null
+		};
+	}
+
+	if (!(await isTrackedGitFile(repoRoot, relativePath))) {
+		const content = await readFile(path, 'utf8');
+		return {
+			status: 'ready',
+			diffText: buildNewFileDiff(relativePath, content),
+			message: 'Showing a synthetic new-file diff because this file is not tracked yet.',
+			comparedAgainst: 'untracked file'
+		};
+	}
+
+	let diffResult;
+
+	try {
+		diffResult = await runGitCommand({
+			cwd: repoRoot,
+			args: ['diff', '--no-ext-diff', '--unified=3', 'HEAD', '--', relativePath]
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : '';
+
+		if (message.includes('bad revision')) {
+			diffResult = await runGitCommand({
+				cwd: repoRoot,
+				args: ['diff', '--no-ext-diff', '--unified=3', '--', relativePath]
+			});
+		} else {
+			throw error;
+		}
+	}
+
+	if (!diffResult.stdout.trim()) {
+		return {
+			status: 'empty',
+			diffText: '',
+			message: 'No local diff was found for this file.',
+			comparedAgainst: 'HEAD'
+		};
+	}
+
+	return {
+		status: 'ready',
+		diffText: diffResult.stdout,
+		message: 'Showing the local diff against HEAD.',
+		comparedAgainst: 'HEAD'
+	};
 }
 
 function inferArtifactContentType(path: string) {

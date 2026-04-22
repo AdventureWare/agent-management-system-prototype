@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reported Case Study Writing"
+  short_description: "Write factual case studies with evidence and narrative force"
+  default_prompt: "Use $reported-case-study-writing to create or revise a factual case study with stronger chronology, evidence, scenes, outcomes, and significance without hype or invented detail."

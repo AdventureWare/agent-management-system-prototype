@@ -2,13 +2,14 @@ import { json } from '@sveltejs/kit';
 import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	AgentControlPlaneApiError,
+	previewAgentApiTaskApprovalRequest,
 	requestAgentApiTaskApproval
 } from '$lib/server/agent-control-plane-api';
 
 export const POST = async ({ params, request }) => {
 	try {
 		const body = (await request.json()) as Record<string, unknown>;
-		const result = await requestAgentApiTaskApproval(params.taskId, {
+		const input = {
 			mode:
 				typeof body.mode === 'string' || body.mode === null
 					? (body.mode as string | null)
@@ -24,9 +25,13 @@ export const POST = async ({ params, request }) => {
 				body.approverExecutionSurfaceId === null
 					? (body.approverExecutionSurfaceId as string | null)
 					: undefined
-		});
+		};
+		const validateOnly = body.validateOnly === true;
+		const result = validateOnly
+			? await previewAgentApiTaskApprovalRequest(params.taskId, input)
+			: await requestAgentApiTaskApproval(params.taskId, input);
 
-		return json(result, { status: 201 });
+		return json(result, { status: validateOnly ? 200 : 201 });
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
 			return jsonAgentApiError(error);

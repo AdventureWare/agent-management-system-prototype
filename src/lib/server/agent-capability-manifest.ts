@@ -2,6 +2,11 @@ import {
 	AGENT_CAPABILITY_COMMANDS,
 	AGENT_CAPABILITY_MANIFEST_VERSION
 } from './agent-capability-commands.js';
+import {
+	AMS_CLI_DOCS_PATH,
+	buildAmsCliCommand,
+	rewriteManagedRunCliCommand
+} from './ams-cli-paths';
 import { AGENT_CAPABILITY_PLAYBOOKS } from './agent-capability-playbooks.js';
 
 export type AgentCapabilityCommand = {
@@ -15,6 +20,11 @@ export type AgentCapabilityCommand = {
 	whenToUse?: string[];
 	readAfter?: string[];
 	nextCommands?: string[];
+	examples?: Array<{
+		title: string;
+		input: Record<string, unknown>;
+		output: Record<string, unknown>;
+	}>;
 };
 
 export type AgentCapabilityManifest = {
@@ -52,13 +62,14 @@ function toManifestCommand(
 		resource: command.resource,
 		command: command.command,
 		summary: command.summary,
-		...(command.cli ? { cli: command.cli } : {}),
+		...(command.cli ? { cli: rewriteManagedRunCliCommand(command.cli) } : {}),
 		...(command.method ? { method: command.method } : {}),
 		...(command.path ? { path: command.path } : {}),
 		...(command.payloadMode ? { payloadMode: command.payloadMode } : {}),
 		...(command.whenToUse ? { whenToUse: command.whenToUse } : {}),
 		...(command.readAfter ? { readAfter: command.readAfter } : {}),
-		...(command.nextCommands ? { nextCommands: command.nextCommands } : {})
+		...(command.nextCommands ? { nextCommands: command.nextCommands } : {}),
+		...(command.examples ? { examples: command.examples } : {})
 	};
 }
 
@@ -89,9 +100,9 @@ export function getAgentCapabilityManifest(filters?: {
 		discovery: {
 			apiPath: '/api/agent-capabilities',
 			currentContextApiPath: '/api/agent-context/current',
-			cliCommand: 'node scripts/ams-cli.mjs manifest',
-			currentContextCliCommand: 'node scripts/ams-cli.mjs context current',
-			docsPath: 'docs/ams-cli-reference.md'
+			cliCommand: buildAmsCliCommand('manifest'),
+			currentContextCliCommand: buildAmsCliCommand('context current'),
+			docsPath: AMS_CLI_DOCS_PATH
 		},
 		guidance: {
 			reliableLoop: [

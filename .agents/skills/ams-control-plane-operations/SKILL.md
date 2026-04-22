@@ -17,6 +17,9 @@ description: Use when a thread needs to inspect or update Agent Management Syste
    Use `node scripts/ams-cli.mjs manifest` or the MCP tool `ams_manifest` before guessing which operation exists.
    The shared capability registry also drives the manifest-backed task, goal, project, and thread MCP tool definitions, so discovery and tool metadata should match.
    If the managed run already has a thread id, task id, or run id, immediately resolve canonical state with `node scripts/ams-cli.mjs context current` or the MCP tool `ams_context_current`.
+   Read the returned `summary.recommendedNextActions` structurally: `reason` is the short recommendation, while `stateSignals`, `expectedOutcome`, and `suggestedReadbackCommands` explain why that action is appropriate now and how to verify it. When `shouldValidateFirst` is true, prefer the matching `validationMode` preview before sending the real mutation.
+   When a command payload is unclear, inspect the manifest entry for that command and copy one of its `examples` rather than guessing the JSON shape.
+   For higher-risk review, approval, decomposition, child-handoff, or thread-coordination work, prefer a dry-run first with `validateOnly: true` when the manifest example or command guidance supports it, then send the real mutation only after the preview checks look correct.
    If the work matches a common AMS workflow, prefer the first-class intent tool before sequencing the lower-level task commands yourself.
    Use the manifest guidance as the default loop: discover, resolve current context when available, inspect, mutate narrowly, then read back the changed state.
    Check the manifest playbooks first for common AMS intents such as `create_task`, `prepare_task_for_review`, `prepare_task_for_approval`, `accept_child_handoff`, `reject_task_approval`, `request_child_handoff_changes`, and `coordinate_with_another_thread`.
@@ -34,7 +37,8 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 
 - Discovery: `node scripts/ams-cli.mjs manifest`
 - Current context: `node scripts/ams-cli.mjs context current`
-- First-class intents: `node scripts/ams-cli.mjs intent prepare_task_for_review`, `prepare_task_for_approval`, `reject_task_approval`, `accept_child_handoff`, `request_child_handoff_changes`
+- First-class intents: `node scripts/ams-cli.mjs intent prepare_task_for_review`, `prepare_task_for_approval`, `reject_task_approval`, `accept_child_handoff`, `request_child_handoff_changes`, `coordinate_with_another_thread`
+- Preview examples: `node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","validateOnly":true,"review":{"summary":"Ready for review."}}'`, `node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","validateOnly":true,"approval":{"summary":"Ready for approval.","mode":"before_complete"}}'`, `node scripts/ams-cli.mjs intent reject_task_approval --json '{"taskId":"<taskId>","validateOnly":true}'`, `node scripts/ams-cli.mjs intent accept_child_handoff --json '{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>","validateOnly":true}'`, `node scripts/ams-cli.mjs task decompose <taskId> --json '{"validateOnly":true,"children":[...]}'`
 - Task read/write: `node scripts/ams-cli.mjs task list`, `task get`, `task create`, `task update`
 - Task workflow: `task attach`, `task request-review`, `task request-approval`, `task decompose`, `task accept-child-handoff`, `task launch-session`, `task recover-session`
 - Goal/project read/write: `goal list|get|create|update`, `project list|get|create|update`

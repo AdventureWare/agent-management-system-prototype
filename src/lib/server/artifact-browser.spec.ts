@@ -2,7 +2,12 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildArtifactBrowser, inspectArtifactPathStatus } from './artifact-browser';
+import {
+	buildArtifactBrowser,
+	buildArtifactDiffPreview,
+	buildArtifactEditorLaunchCommands,
+	inspectArtifactPathStatus
+} from './artifact-browser';
 
 let tempPaths: string[] = [];
 
@@ -106,5 +111,74 @@ describe('buildArtifactBrowser', () => {
 			kind: 'other',
 			sizeBytes: null
 		});
+	});
+
+	it('builds editor launch commands that preserve line and column targeting', () => {
+		expect(
+			buildArtifactEditorLaunchCommands({
+				path: '/tmp/project/agent_output/brief.md',
+				line: 14,
+				column: 3,
+				platform: 'darwin'
+			})
+		).toEqual([
+			{
+				label: 'VS Code CLI',
+				command: 'code',
+				args: ['-g', '/tmp/project/agent_output/brief.md:14:3']
+			},
+			{
+				label: 'Cursor CLI',
+				command: 'cursor',
+				args: ['-g', '/tmp/project/agent_output/brief.md:14:3']
+			},
+			{
+				label: 'Zed CLI',
+				command: 'zed',
+				args: ['--goto', '/tmp/project/agent_output/brief.md:14:3']
+			},
+			{
+				label: 'macOS open',
+				command: 'open',
+				args: ['/tmp/project/agent_output/brief.md']
+			}
+		]);
+	});
+
+	it('respects an explicit editor preference when building launch commands', () => {
+		expect(
+			buildArtifactEditorLaunchCommands({
+				path: '/tmp/project/agent_output/brief.md',
+				line: 8,
+				preferredEditor: 'cursor',
+				platform: 'darwin'
+			})
+		).toEqual([
+			{
+				label: 'Cursor CLI',
+				command: 'cursor',
+				args: ['-g', '/tmp/project/agent_output/brief.md:8']
+			}
+		]);
+	});
+
+	it('builds a synthetic diff for untracked text files', async () => {
+		const tempRoot = await createTempDir();
+		const artifactRoot = join(tempRoot, 'repo');
+		const outputPath = join(artifactRoot, 'new-file.md');
+
+		await mkdir(artifactRoot, { recursive: true });
+		await writeFile(outputPath, '# New file\nhello world\n');
+
+		await import('node:child_process').then(({ execFileSync }) => {
+			execFileSync('git', ['init'], { cwd: artifactRoot });
+		});
+
+		const diffPreview = await buildArtifactDiffPreview({ path: outputPath });
+
+		expect(diffPreview.status).toBe('ready');
+		expect(diffPreview.comparedAgainst).toBe('untracked file');
+		expect(diffPreview.diffText).toContain('new file mode 100644');
+		expect(diffPreview.diffText).toContain('+# New file');
 	});
 });

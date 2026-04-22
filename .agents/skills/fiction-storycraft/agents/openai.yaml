@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fiction Storycraft"
+  short_description: "Build or repair fictional narrative with stronger scenes and voice"
+  default_prompt: "Use $fiction-storycraft to create or improve fictional narrative with better character desire, scene design, point of view, subtext, pacing, and endings."

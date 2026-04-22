@@ -147,6 +147,14 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 			statusThread: null,
 			hasActiveRun: false,
 			activeRun: null
+		},
+		agentCurrentContext: {
+			summary: {
+				currentState: 'Task "Task title" is ready.',
+				blockers: [],
+				openGates: [],
+				recommendedNextActions: []
+			}
 		}
 	};
 
@@ -218,6 +226,79 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 }
 
 describe('/app/tasks/[taskId]/+page.svelte', () => {
+	it('renders preview-first current context guidance for risky task actions', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				task: {
+					status: 'done',
+					approvalMode: 'before_complete'
+				},
+				agentCurrentContext: {
+					task: {
+						title: 'Task title',
+						status: 'done'
+					},
+					run: {
+						status: 'failed'
+					},
+					thread: {
+						name: 'Task thread',
+						threadState: 'attention'
+					},
+					summary: {
+						currentState: 'Task "Task title" is done with run failed.',
+						blockers: ['Run stopped during verification.'],
+						openGates: ['Pending approval: Ready for stakeholder sign-off'],
+						recommendedNextActions: [
+							{
+								resource: 'task',
+								command: 'approve-approval',
+								reason: 'There is a pending approval gate on this task.',
+								stateSignals: [
+									'Task task_1 has pending approval approval_1.',
+									'Approval mode is before_complete.'
+								],
+								expectedOutcome: 'Resolve the pending approval by approving the task output.',
+								suggestedReadbackCommands: ['task:get', 'context:current'],
+								shouldValidateFirst: true,
+								validationMode: 'validateOnly',
+								validationReason:
+									'Approval resolution is high-impact. Preview whether the task would close before mutating.'
+							}
+						]
+					}
+				}
+			})
+		});
+
+		expect(document.body.textContent).toContain('Current context recommendations');
+		expect(document.body.textContent).toContain('Preview first');
+		expect(document.body.textContent).toContain(
+			'Approval resolution is high-impact. Preview whether the task would close before mutating.'
+		);
+		expect(document.body.textContent).toContain('task:get');
+		expect(document.body.textContent).toContain('context:current');
+	});
+
+	it('shows the source task template as linked task context when present', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				task: {
+					taskTemplateId: 'task_template_research',
+					taskTemplateName: 'Research brief'
+				}
+			}) as never
+		});
+
+		expect(document.body.textContent).toContain('Template source');
+		expect(document.body.textContent).toContain('Research brief');
+		await expect
+			.element(page.getByRole('link', { name: 'Open task template details' }))
+			.toBeInTheDocument();
+	});
+
 	it('renders attached files with open, download, and detach controls', async () => {
 		render(Page, {
 			form: {} as never,
@@ -670,7 +751,7 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 			(document.querySelector('select[name="requiresReview"]') as HTMLSelectElement | null)?.value
 		).toBe('false');
 		expect(
-			(document.querySelector('select[name="desiredRoleId"]') as HTMLSelectElement | null)?.value
+			(document.querySelector('input[name="desiredRoleId"]') as HTMLInputElement | null)?.value
 		).toBe('role_reviewer');
 		expect(
 			(document.querySelector('textarea[name="blockedReason"]') as HTMLTextAreaElement | null)

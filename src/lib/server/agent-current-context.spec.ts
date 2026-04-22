@@ -146,10 +146,111 @@ describe('agent-current-context', () => {
 		expect(context.summary.openGates).toContain('Pending approval: Awaiting approver sign-off.');
 		expect(context.summary.recommendedNextActions).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ resource: 'context', command: 'current' }),
-				expect.objectContaining({ resource: 'task', command: 'approve-approval' }),
-				expect.objectContaining({ resource: 'task', command: 'reject-approval' })
+				expect.objectContaining({
+					resource: 'context',
+					command: 'current',
+					stateSignals: expect.any(Array),
+					expectedOutcome: expect.stringContaining('canonical current task'),
+					suggestedReadbackCommands: ['context:current']
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'approve-approval',
+					stateSignals: expect.arrayContaining([
+						expect.stringContaining('pending approval'),
+						expect.stringContaining('before_complete')
+					]),
+					expectedOutcome: expect.stringContaining('Resolve the pending approval'),
+					suggestedReadbackCommands: expect.arrayContaining(['task:get', 'context:current']),
+					shouldValidateFirst: true,
+					validationMode: 'validateOnly',
+					validationReason: expect.stringContaining('Preview')
+				}),
+				expect.objectContaining({
+					resource: 'task',
+					command: 'reject-approval',
+					suggestedReadbackCommands: expect.arrayContaining(['task:get', 'context:current']),
+					shouldValidateFirst: true,
+					validationMode: 'validateOnly'
+				})
 			])
+		);
+	});
+
+	it('returns state-specific coordination guidance for in-progress tasks', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const currentContextModule = await importAgentCurrentContextModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_progress',
+				title: 'Coordinate thread work',
+				summary: 'Need another thread to help',
+				projectId: project.id,
+				goalId: '',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: false,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot,
+				status: 'in_progress'
+			}),
+			agentThreadId: 'thread_coordination'
+		};
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task]
+		}));
+
+		const getAgentThreadSpy = vi
+			.spyOn(await import('./agent-threads'), 'getAgentThread')
+			.mockResolvedValue({
+				id: 'thread_coordination',
+				name: 'Coordination thread',
+				handle: 'coordination',
+				contactLabel: '@coordination',
+				threadState: 'working',
+				latestRunStatus: 'running',
+				hasActiveRun: true,
+				canResume: false,
+				lastActivityAt: '2026-04-22T13:00:00.000Z'
+			} as never);
+
+		const context = await currentContextModule.loadAgentCurrentContext({ taskId: task.id });
+		const coordinationAction = context.summary.recommendedNextActions.find(
+			(action: { resource: string; command: string }) =>
+				action.resource === 'intent' && action.command === 'coordinate_with_another_thread'
+		);
+
+		expect(getAgentThreadSpy).toHaveBeenCalled();
+		expect(coordinationAction).toEqual(
+			expect.objectContaining({
+				stateSignals: expect.arrayContaining([
+					expect.stringContaining('in_progress'),
+					expect.stringContaining('thread_coordination')
+				]),
+				expectedOutcome: expect.stringContaining('Resolve a target thread'),
+				suggestedReadbackCommands: ['thread:contacts', 'context:current'],
+				shouldValidateFirst: true,
+				validationMode: 'validateOnly',
+				validationReason: expect.stringContaining('Cross-thread routing')
+			})
 		);
 	});
 
@@ -168,6 +269,71 @@ describe('agent-current-context', () => {
 			code: 'run_not_found',
 			suggestedNextCommands: ['task:get', 'context:current'],
 			details: { runId: 'run_missing' }
+		});
+	});
+
+	it('builds a primary guidance hint from risky current-context recommendations', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const currentContextModule = await importAgentCurrentContextModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_hint',
+				title: 'Prepare approval flow',
+				summary: 'Get the task ready for approval',
+				projectId: project.id,
+				goalId: '',
+				priority: 'high',
+				riskLevel: 'medium',
+				approvalMode: 'before_complete',
+				requiresReview: false,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot,
+				status: 'done'
+			})
+		};
+		const run = controlPlaneModule.createRun({
+			id: 'run_hint',
+			taskId: task.id,
+			status: 'completed',
+			summary: 'Finished implementation.'
+		});
+		const approval = {
+			...controlPlaneModule.createApproval({
+				taskId: task.id,
+				runId: run.id,
+				mode: 'before_complete',
+				summary: 'Awaiting sign-off.'
+			}),
+			id: 'approval_hint'
+		};
+
+		const hint = currentContextModule.buildAgentGuidanceHint({
+			task,
+			run,
+			openReview: null,
+			pendingApproval: approval,
+			threadId: null
+		});
+
+		expect(hint).toMatchObject({
+			resource: 'task',
+			command: 'approve-approval',
+			shouldValidateFirst: true,
+			validationMode: 'validateOnly'
 		});
 	});
 });

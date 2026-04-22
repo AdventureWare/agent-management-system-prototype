@@ -1,0 +1,4 @@
+interface:
+  display_name: "Story Opening And Ending"
+  short_description: "Strengthen beginnings, closure, and first-to-last design"
+  default_prompt: "Use $story-opening-and-ending to improve a narrative's opening, ending, and overall first-to-last design so it starts with pressure and ends with real significance."

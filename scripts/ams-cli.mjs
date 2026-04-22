@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { summarizeAgentToolUse } from '../src/lib/server/agent-use-telemetry.js';
-import { formatAgentApiErrorMessage } from '../src/lib/server/agent-api-errors';
+import { formatAgentApiErrorMessage } from './agent-api-errors.mjs';
 
 const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
 const apiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
+const scriptDir = dirname(fileURLToPath(import.meta.url));
 const apiToken =
 	process.env.AMS_AGENT_API_TOKEN?.trim() ||
 	process.env.AMS_OPERATOR_SESSION_SECRET?.trim() ||
@@ -28,6 +30,7 @@ function printHelp() {
 			'  intent reject_task_approval --json <payload> | --file <path>',
 			'  intent accept_child_handoff --json <payload> | --file <path>',
 			'  intent request_child_handoff_changes --json <payload> | --file <path>',
+			'  intent coordinate_with_another_thread --json <payload> | --file <path>',
 			'',
 			'Resources:',
 			'  task list [--q <text>] [--project <projectId>] [--goal <goalId>] [--status <status>] [--limit <n>]',
@@ -38,10 +41,10 @@ function printHelp() {
 			'  task remove-attachment <taskId> <attachmentId>',
 			'  task request-review <taskId> --json <payload> | --file <path>',
 			'  task request-approval <taskId> --json <payload> | --file <path>',
-			'  task approve-review <taskId>',
-			'  task request-review-changes <taskId>',
-			'  task approve-approval <taskId>',
-			'  task reject-approval <taskId>',
+			'  task approve-review <taskId> [--validate-only true]',
+			'  task request-review-changes <taskId> [--validate-only true]',
+			'  task approve-approval <taskId> [--validate-only true]',
+			'  task reject-approval <taskId> [--validate-only true]',
 			'  task accept-child-handoff <parentTaskId> --json <payload> | --file <path>',
 			'  task request-child-handoff-changes <parentTaskId> --json <payload> | --file <path>',
 			'  task launch-session <taskId>',
@@ -59,7 +62,10 @@ function printHelp() {
 			'',
 			'Environment:',
 			'  AMS_AGENT_API_BASE_URL  Operator API base URL',
-			'  AMS_AGENT_API_TOKEN     Bearer token for the AMS API'
+			'  AMS_AGENT_API_TOKEN     Bearer token for the AMS API',
+			'',
+			'Notes:',
+			'  Use payload.validateOnly=true on supported approval, decomposition, and coordination commands to preview checks without mutating state.'
 		].join('\n') + '\n'
 	);
 }
@@ -87,6 +93,10 @@ function parseArgs(argv) {
 	}
 
 	return { options, positionals };
+}
+
+function readValidateOnlyOption(options) {
+	return options['validate-only'] === 'true';
 }
 
 function requireApiToken() {
@@ -181,15 +191,11 @@ function printJson(payload) {
 
 async function runThreadPassthrough(args) {
 	await new Promise((resolvePromise, reject) => {
-		const child = spawn(
-			process.execPath,
-			[resolve(process.cwd(), 'scripts/agent-thread-cli.mjs'), ...args],
-			{
-				cwd: process.cwd(),
-				env: process.env,
-				stdio: 'inherit'
-			}
-		);
+		const child = spawn(process.execPath, [resolve(scriptDir, 'agent-thread-cli.mjs'), ...args], {
+			cwd: process.cwd(),
+			env: process.env,
+			stdio: 'inherit'
+		});
 
 		child.on('error', reject);
 		child.on('close', (code) => {
@@ -288,7 +294,8 @@ async function run() {
 			'prepare_task_for_approval',
 			'reject_task_approval',
 			'accept_child_handoff',
-			'request_child_handoff_changes'
+			'request_child_handoff_changes',
+			'coordinate_with_another_thread'
 		]);
 
 		if (!supportedIntents.has(command)) {
@@ -445,7 +452,10 @@ async function run() {
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/review-decision`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ decision: 'approve' })
+					body: JSON.stringify({
+						decision: 'approve',
+						...(readValidateOnlyOption(options) ? { validateOnly: true } : {})
+					})
 				})
 			);
 			return;
@@ -462,7 +472,10 @@ async function run() {
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/review-decision`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ decision: 'changes_requested' })
+					body: JSON.stringify({
+						decision: 'changes_requested',
+						...(readValidateOnlyOption(options) ? { validateOnly: true } : {})
+					})
 				})
 			);
 			return;
@@ -479,7 +492,10 @@ async function run() {
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/approval-decision`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ decision: 'approve' })
+					body: JSON.stringify({
+						decision: 'approve',
+						...(readValidateOnlyOption(options) ? { validateOnly: true } : {})
+					})
 				})
 			);
 			return;
@@ -496,7 +512,10 @@ async function run() {
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/approval-decision`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ decision: 'reject' })
+					body: JSON.stringify({
+						decision: 'reject',
+						...(readValidateOnlyOption(options) ? { validateOnly: true } : {})
+					})
 				})
 			);
 			return;

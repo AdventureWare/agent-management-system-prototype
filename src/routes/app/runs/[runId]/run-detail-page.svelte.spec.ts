@@ -86,6 +86,14 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					threadState: 'attention',
 					canResume: true
 				},
+				agentCurrentContext: {
+					summary: {
+						currentState: 'Run run_1 is failed.',
+						blockers: [],
+						openGates: [],
+						recommendedNextActions: []
+					}
+				},
 				relatedTaskRuns: []
 			} as never
 		});
@@ -108,5 +116,96 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 				(link) => link.getAttribute('href') === '/app/agent-use?task=task_1'
 			)
 		).toBe(true);
+	});
+
+	it('shows preview-first guidance for risky coordination or governance actions', async () => {
+		render(Page, {
+			data: {
+				artifactBrowsers: [],
+				run: {
+					id: 'run_2',
+					taskId: 'task_2',
+					taskTitle: 'Coordinate rollout',
+					taskProjectId: 'project_1',
+					taskProjectName: 'Agent Management System Prototype',
+					executionSurfaceId: null,
+					executionSurfaceName: null,
+					providerId: null,
+					providerName: null,
+					status: 'running',
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:05:00.000Z',
+					startedAt: '2026-03-30T12:01:00.000Z',
+					endedAt: null,
+					threadId: 'thread_2',
+					agentThreadId: 'session_2',
+					threadName: 'Coordinator thread',
+					threadState: 'running',
+					sessionArchivedAt: null,
+					threadSummary: 'Coordinating rollout',
+					sessionCanResume: true,
+					sessionHasActiveRun: true,
+					promptDigest: 'digest',
+					artifactPaths: [],
+					summary: 'Run is actively coordinating.',
+					lastHeartbeatAt: '2026-03-30T12:04:30.000Z',
+					heartbeatAgeLabel: '30s ago',
+					isHeartbeatStale: false,
+					errorSummary: null,
+					createdAtLabel: '5m ago',
+					updatedAtLabel: 'just now'
+				},
+				task: { id: 'task_2' },
+				executionSurface: null,
+				provider: null,
+				session: null,
+				thread: null,
+				relatedTaskRuns: [],
+				agentCurrentContext: {
+					task: {
+						title: 'Coordinate rollout',
+						status: 'in_progress'
+					},
+					run: {
+						status: 'running'
+					},
+					thread: {
+						name: 'Coordinator thread',
+						threadState: 'running'
+					},
+					summary: {
+						currentState: 'Task "Coordinate rollout" is in_progress with run running.',
+						blockers: [],
+						openGates: [],
+						recommendedNextActions: [
+							{
+								resource: 'intent',
+								command: 'coordinate_with_another_thread',
+								reason:
+									'Route focused context or delegation to another thread without manually resolving and messaging it.',
+								stateSignals: [
+									'Task task_2 is in_progress.',
+									'Source thread session_2 is available for cross-thread routing.'
+								],
+								expectedOutcome:
+									'Resolve a target thread, send the contact, and read back contact state in one call.',
+								suggestedReadbackCommands: ['thread:contacts', 'context:current'],
+								shouldValidateFirst: true,
+								validationMode: 'validateOnly',
+								validationReason:
+									'Cross-thread routing is coordination-heavy. Preview target resolution and availability first.'
+							}
+						]
+					}
+				}
+			} as never
+		});
+
+		expect(document.body.textContent).toContain('Current context recommendations');
+		expect(document.body.textContent).toContain('Preview first');
+		expect(document.body.textContent).toContain(
+			'Cross-thread routing is coordination-heavy. Preview target resolution and availability first.'
+		);
+		expect(document.body.textContent).toContain('thread:contacts');
 	});
 });

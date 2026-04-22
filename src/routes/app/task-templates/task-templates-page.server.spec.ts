@@ -84,9 +84,14 @@ vi.mock('$lib/server/codex-skills', () => ({
 	])
 }));
 
-import { actions, load } from './+page.server';
+import { loadTaskTemplateDirectoryData } from '$lib/server/task-template-directory';
+import {
+	createTaskTemplateAction,
+	deleteTaskTemplateAction,
+	updateTaskTemplateAction
+} from '$lib/server/task-template-form-actions';
 
-describe('task templates page server', () => {
+describe('task template server helpers', () => {
 	beforeEach(() => {
 		createTaskTemplateMock.mockClear();
 		controlPlaneState.current = {
@@ -197,12 +202,7 @@ describe('task templates page server', () => {
 	});
 
 	it('loads decorated task templates for the library page', async () => {
-		const result = await load({} as never);
-
-		expect(result).toBeDefined();
-		if (!result) {
-			throw new Error('Expected task template page load result');
-		}
+		const result = await loadTaskTemplateDirectoryData();
 
 		expect(result.taskTemplates).toEqual([
 			expect.objectContaining({
@@ -227,12 +227,12 @@ describe('task templates page server', () => {
 		form.set('desiredRoleId', 'role_research');
 		form.set('requiredCapabilityNames', 'planning, citations');
 
-		const result = await actions.createTaskTemplate({
-			request: new Request('http://localhost/app/task-templates', {
+		const result = await createTaskTemplateAction(
+			new Request('http://localhost/app/task-templates', {
 				method: 'POST',
 				body: form
 			})
-		} as never);
+		);
 
 		expect(result).toEqual(
 			expect.objectContaining({
@@ -262,12 +262,12 @@ describe('task templates page server', () => {
 		form.set('name', 'Review docs for [topic]');
 		form.set('instructions', 'Review the documentation draft and leave revision notes.');
 
-		const result = await actions.createTaskTemplate({
-			request: new Request('http://localhost/app/task-templates', {
+		const result = await createTaskTemplateAction(
+			new Request('http://localhost/app/task-templates', {
 				method: 'POST',
 				body: form
 			})
-		} as never);
+		);
 
 		expect(result).toEqual(
 			expect.objectContaining({
@@ -296,12 +296,12 @@ describe('task templates page server', () => {
 		form.set('desiredRoleId', 'role_research');
 		form.set('requiredCapabilityNames', 'planning');
 
-		const result = await actions.updateTaskTemplate({
-			request: new Request('http://localhost/app/task-templates', {
+		const result = await updateTaskTemplateAction(
+			new Request('http://localhost/app/task-templates', {
 				method: 'POST',
 				body: form
 			})
-		} as never);
+		);
 
 		expect(result).toEqual(
 			expect.objectContaining({
@@ -323,12 +323,12 @@ describe('task templates page server', () => {
 		const form = new FormData();
 		form.set('taskTemplateId', 'task_template_research');
 
-		const result = await actions.deleteTaskTemplate({
-			request: new Request('http://localhost/app/task-templates', {
+		const result = await deleteTaskTemplateAction(
+			new Request('http://localhost/app/task-templates', {
 				method: 'POST',
 				body: form
 			})
-		} as never);
+		);
 
 		expect(result).toEqual(
 			expect.objectContaining({

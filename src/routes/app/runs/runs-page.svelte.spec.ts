@@ -56,7 +56,19 @@ describe('/app/runs/+page.svelte', () => {
 						totalTokens: 124500,
 						cacheRatio: 0.75,
 						createdAtLabel: '5m ago',
-						updatedAtLabel: 'just now'
+						updatedAtLabel: 'just now',
+						agentGuidanceHint: {
+							resource: 'intent',
+							command: 'coordinate_with_another_thread',
+							reason:
+								'Route focused context or delegation to another thread without manually resolving and messaging it.',
+							expectedOutcome:
+								'Resolve a target thread, send the contact, and read back contact state in one call.',
+							shouldValidateFirst: true,
+							validationMode: 'validateOnly',
+							validationReason:
+								'Cross-thread routing is coordination-heavy. Preview target resolution and availability first.'
+						}
 					}
 				]
 			} as never
@@ -69,5 +81,7 @@ describe('/app/runs/+page.svelte', () => {
 		expect(document.body.textContent).toContain('$0.34');
 		expect(document.body.textContent).toContain('30s ago');
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1');
+		expect(document.body.textContent).toContain('Preview first');
+		expect(document.body.textContent).toContain('intent:coordinate_with_another_thread');
 	});
 });

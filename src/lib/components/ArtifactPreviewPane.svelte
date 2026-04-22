@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		artifactDiffHref,
 		artifactPreviewHref,
 		artifactPreviewKind,
 		type ArtifactPreviewKind
@@ -11,6 +12,13 @@
 		status: 'idle' | 'loading' | 'ready' | 'error';
 		content: string;
 		errorMessage: string;
+	};
+
+	type DiffState = {
+		status: 'idle' | 'loading' | 'ready' | 'empty' | 'unavailable' | 'error';
+		content: string;
+		message: string;
+		comparedAgainst: string | null;
 	};
 
 	let {
@@ -25,12 +33,19 @@
 		focusColumn?: number | null;
 	}>();
 	let previewRoot = $state<HTMLElement | null>(null);
+	let activeTab = $state<'preview' | 'diff'>('preview');
 
 	let previewState = $state<PreviewState>({
 		kind: null,
 		status: 'idle',
 		content: '',
 		errorMessage: ''
+	});
+	let diffState = $state<DiffState>({
+		status: 'idle',
+		content: '',
+		message: '',
+		comparedAgainst: null
 	});
 
 	$effect(() => {
@@ -139,6 +154,108 @@
 			isMarkdownFile(path) &&
 			!focusLine
 	);
+	let hasDiffTab = $derived(previewState.kind === 'text');
+	let diffLines = $derived.by(() => diffState.content.split('\n'));
+
+	function diffLineClass(line: string) {
+		if (line.startsWith('@@')) {
+			return 'bg-sky-950/40 text-sky-100';
+		}
+
+		if (line.startsWith('+') && !line.startsWith('+++')) {
+			return 'bg-emerald-950/40 text-emerald-100';
+		}
+
+		if (line.startsWith('-') && !line.startsWith('---')) {
+			return 'bg-rose-950/40 text-rose-100';
+		}
+
+		if (
+			line.startsWith('diff ') ||
+			line.startsWith('index ') ||
+			line.startsWith('---') ||
+			line.startsWith('+++')
+		) {
+			return 'bg-slate-900/90 text-slate-300';
+		}
+
+		return 'text-slate-200';
+	}
+
+	$effect(() => {
+		if (previewState.kind !== 'text' && activeTab === 'diff') {
+			activeTab = 'preview';
+		}
+	});
+
+	$effect(() => {
+		if (!path || previewState.kind !== 'text' || activeTab !== 'diff') {
+			if (activeTab !== 'diff') {
+				diffState = {
+					status: 'idle',
+					content: '',
+					message: '',
+					comparedAgainst: null
+				};
+			}
+			return;
+		}
+
+		let cancelled = false;
+		diffState = {
+			status: 'loading',
+			content: '',
+			message: '',
+			comparedAgainst: null
+		};
+
+		void fetch(artifactDiffHref(path))
+			.then(async (response) => {
+				if (!response.ok) {
+					const payload = await response.json().catch(() => null);
+					throw new Error(
+						typeof payload?.message === 'string'
+							? payload.message
+							: 'Diff preview could not be loaded.'
+					);
+				}
+
+				return (await response.json()) as {
+					status: DiffState['status'];
+					diffText: string;
+					message: string;
+					comparedAgainst: string | null;
+				};
+			})
+			.then((payload) => {
+				if (cancelled) {
+					return;
+				}
+
+				diffState = {
+					status: payload.status,
+					content: payload.diffText,
+					message: payload.message,
+					comparedAgainst: payload.comparedAgainst
+				};
+			})
+			.catch((error) => {
+				if (cancelled) {
+					return;
+				}
+
+				diffState = {
+					status: 'error',
+					content: '',
+					message: error instanceof Error ? error.message : 'Diff preview could not be loaded.',
+					comparedAgainst: null
+				};
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	$effect(() => {
 		if (
@@ -155,7 +272,72 @@
 	});
 </script>
 
-{#if !previewState.kind}
+{#if hasDiffTab}
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex flex-wrap gap-2">
+			<button
+				type="button"
+				class={[
+					'rounded-full border px-3 py-2 text-xs font-medium tracking-[0.14em] uppercase transition',
+					activeTab === 'preview'
+						? 'border-sky-700/80 bg-sky-950/60 text-sky-100'
+						: 'border-slate-700 text-slate-300 hover:border-slate-500/60 hover:text-white'
+				]}
+				onclick={() => {
+					activeTab = 'preview';
+				}}
+			>
+				Preview
+			</button>
+			<button
+				type="button"
+				class={[
+					'rounded-full border px-3 py-2 text-xs font-medium tracking-[0.14em] uppercase transition',
+					activeTab === 'diff'
+						? 'border-sky-700/80 bg-sky-950/60 text-sky-100'
+						: 'border-slate-700 text-slate-300 hover:border-slate-500/60 hover:text-white'
+				]}
+				onclick={() => {
+					activeTab = 'diff';
+				}}
+			>
+				Diff
+			</button>
+		</div>
+		{#if activeTab === 'diff' && diffState.comparedAgainst}
+			<p class="text-xs text-slate-500">Compared against {diffState.comparedAgainst}</p>
+		{/if}
+	</div>
+{/if}
+
+{#if activeTab === 'diff'}
+	{#if diffState.status === 'loading' || diffState.status === 'idle'}
+		<p class="text-sm text-slate-300">Loading diff…</p>
+	{:else if diffState.status === 'error'}
+		<p class="text-sm text-amber-300">{diffState.message}</p>
+	{:else if diffState.status === 'empty' || diffState.status === 'unavailable'}
+		<div class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-400">
+			{diffState.message}
+		</div>
+	{:else}
+		<div class="space-y-3">
+			<p class="text-xs text-slate-500">{diffState.message}</p>
+			<div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+				<div class="font-mono text-sm leading-7">
+					{#each diffLines as line, index (`${index}-${line}`)}
+						<pre
+							class={[
+								'ui-wrap-anywhere rounded-md px-3 py-0.5 whitespace-pre-wrap',
+								diffLineClass(line)
+							]}>
+							{line || ' '}
+						</pre>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
+{:else if !previewState.kind}
 	<p class="text-sm text-slate-400">No inline preview is available for this file type.</p>
 {:else if previewState.status === 'loading'}
 	<p class="text-sm text-slate-300">Loading preview…</p>

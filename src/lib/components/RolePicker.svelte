@@ -1,15 +1,31 @@
 <script lang="ts">
 	import AppButton from '$lib/components/AppButton.svelte';
+	import {
+		buildRelatedRoles,
+		formatRoleAreaLabel,
+		summarizeRolePurpose
+	} from '$lib/roles/related-roles';
+	import { formatCatalogLifecycleStatusLabel } from '$lib/types/control-plane';
 
 	type RoleOption = {
 		id: string;
 		name: string;
 		area?: string;
+		family?: string;
+		lifecycleStatus?: string;
 		description?: string;
 		skillIds?: string[];
 		toolIds?: string[];
 		mcpIds?: string[];
 		systemPrompt?: string;
+	};
+
+	type NearbyRole = {
+		role: RoleOption;
+		score: number;
+		reason: string;
+		purposeSummary: string;
+		contrastSummary: string;
 	};
 
 	let {
@@ -48,6 +64,7 @@
 			[
 				role.name,
 				role.area ?? '',
+				role.family ?? '',
 				role.description ?? '',
 				...(role.skillIds ?? []),
 				...(role.toolIds ?? []),
@@ -76,6 +93,13 @@
 				items
 			}));
 	});
+	let nearbyRoles = $derived.by(() => {
+		if (!selectedRole) {
+			return [] as NearbyRole[];
+		}
+
+		return buildRelatedRoles(selectedRole, roles, 3);
+	});
 
 	function formatList(values?: string[]) {
 		return values?.join(', ') ?? '';
@@ -91,37 +115,12 @@
 				return 0;
 			case 'growth':
 				return 1;
-			case 'operations':
+			case 'ops':
 				return 2;
 			case 'shared':
 				return 3;
 			default:
 				return 4;
-		}
-	}
-
-	function formatRoleAreaLabel(area?: string) {
-		const normalizedArea = area?.trim();
-
-		switch (normalizedArea) {
-			case 'product':
-				return 'Product';
-			case 'growth':
-				return 'Growth';
-			case 'operations':
-				return 'Operations';
-			case 'shared':
-				return 'Shared';
-			case 'other':
-			case '':
-			case undefined:
-				return 'Other';
-			default:
-				return normalizedArea
-					.split(/[-_\s]+/)
-					.filter(Boolean)
-					.map((segment) => `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`)
-					.join(' ');
 		}
 	}
 
@@ -146,7 +145,6 @@
 
 		return parts.join(' · ') || 'No role defaults configured.';
 	}
-
 	function commitSelection(nextValue: string) {
 		value = nextValue;
 		query = '';
@@ -185,10 +183,35 @@
 						>
 							{formatRoleAreaLabel(selectedRole.area)}
 						</span>
+						{#if selectedRole.family?.trim()}
+							<span
+								class="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-slate-400 uppercase"
+							>
+								Family · {selectedRole.family}
+							</span>
+						{/if}
+						{#if selectedRole.lifecycleStatus && selectedRole.lifecycleStatus !== 'active'}
+							<span
+								class="rounded-full border border-amber-800/60 bg-amber-950/20 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-amber-200 uppercase"
+							>
+								{formatCatalogLifecycleStatusLabel(selectedRole.lifecycleStatus)}
+							</span>
+						{/if}
 					</div>
 					<p class="mt-1 text-sm text-slate-400">
 						{selectedRole.description || 'No role description recorded.'}
 					</p>
+					{#if selectedRole.lifecycleStatus === 'deprecated'}
+						<p class="mt-2 text-xs text-amber-300">
+							This role is deprecated. Prefer an active adjacent role unless you are preserving old
+							routing.
+						</p>
+					{:else if selectedRole.lifecycleStatus === 'superseded'}
+						<p class="mt-2 text-xs text-amber-300">
+							This role has been superseded. Check the directory detail before choosing it for new
+							work.
+						</p>
+					{/if}
 					<p class="mt-2 text-xs text-slate-500">
 						Configured defaults: {describeRoleDefaults(selectedRole)}
 					</p>
@@ -221,6 +244,32 @@
 
 		{#if helperText}
 			<p class="mt-3 text-xs text-slate-500">{helperText}</p>
+		{/if}
+
+		{#if selectedRole && nearbyRoles.length > 0}
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
+				<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					Nearby roles to compare
+				</p>
+				<div class="mt-3 flex flex-wrap gap-2">
+					{#each nearbyRoles as nearby (nearby.role.id)}
+						<button
+							type="button"
+							class="rounded-2xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-left transition hover:border-slate-600 hover:bg-slate-900"
+							onclick={() => commitSelection(nearby.role.id)}
+						>
+							<p class="text-sm font-medium text-white">{nearby.role.name}</p>
+							<p class="mt-1 text-xs text-slate-500">{nearby.reason}</p>
+							<p class="mt-1 text-xs text-slate-500">
+								Compared with current: {nearby.contrastSummary}
+							</p>
+							<p class="mt-2 text-xs text-slate-400">
+								Use when: {summarizeRolePurpose(nearby.role.description)}
+							</p>
+						</button>
+					{/each}
+				</div>
+			</div>
 		{/if}
 
 		{#if selectedRole}
@@ -266,7 +315,7 @@
 						id={inputId}
 						bind:value={query}
 						class="input text-white placeholder:text-slate-500"
-						placeholder="Search roles by name, area, purpose, or defaults…"
+						placeholder="Search roles by name, area, family, purpose, or defaults…"
 					/>
 				</label>
 
@@ -304,11 +353,27 @@
 									>
 										<div class="flex flex-wrap items-center justify-between gap-2">
 											<p class="text-sm font-medium text-white">{role.name}</p>
-											<span
-												class="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-slate-400 uppercase"
-											>
-												{formatRoleAreaLabel(role.area)}
-											</span>
+											<div class="flex flex-wrap gap-2">
+												<span
+													class="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-slate-400 uppercase"
+												>
+													{formatRoleAreaLabel(role.area)}
+												</span>
+												{#if role.family?.trim()}
+													<span
+														class="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-slate-400 uppercase"
+													>
+														Family · {role.family}
+													</span>
+												{/if}
+												{#if role.lifecycleStatus && role.lifecycleStatus !== 'active'}
+													<span
+														class="rounded-full border border-amber-800/60 bg-amber-950/20 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.14em] text-amber-200 uppercase"
+													>
+														{formatCatalogLifecycleStatusLabel(role.lifecycleStatus)}
+													</span>
+												{/if}
+											</div>
 										</div>
 										<p class="mt-1 text-sm text-slate-400">
 											{role.description || 'No role description recorded.'}

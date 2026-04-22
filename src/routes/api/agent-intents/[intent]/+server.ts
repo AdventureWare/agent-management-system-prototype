@@ -6,7 +6,11 @@ import { runAgentIntent } from '$lib/server/agent-intent-actions';
 export const POST = async ({ params, request }) => {
 	try {
 		const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-		return json(await runAgentIntent(params.intent, body));
+		return json(
+			await runAgentIntent(params.intent, body, {
+				validateOnly: body.validateOnly === true
+			})
+		);
 	} catch (error) {
 		if (error instanceof AgentControlPlaneApiError) {
 			return jsonAgentApiError(error);

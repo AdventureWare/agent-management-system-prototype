@@ -3,6 +3,7 @@ import { jsonAgentApiError } from '$lib/server/agent-api-route-responses';
 import {
 	acceptAgentApiTaskChildHandoff,
 	AgentControlPlaneApiError,
+	previewAgentApiTaskChildHandoffDecision,
 	requestAgentApiTaskChildHandoffChanges
 } from '$lib/server/agent-control-plane-api';
 
@@ -10,17 +11,30 @@ export const POST = async ({ params, request }) => {
 	try {
 		const body = (await request.json()) as Record<string, unknown>;
 		const decision = typeof body.decision === 'string' ? body.decision : '';
+		const validateOnly = body.validateOnly === true;
 		const payload = {
 			childTaskId: typeof body.childTaskId === 'string' ? body.childTaskId : undefined,
 			summary: typeof body.summary === 'string' ? body.summary : undefined
 		};
 
 		if (decision === 'accept') {
-			return json(await acceptAgentApiTaskChildHandoff(params.taskId, payload));
+			return json(
+				validateOnly
+					? await previewAgentApiTaskChildHandoffDecision(params.taskId, payload, 'accept')
+					: await acceptAgentApiTaskChildHandoff(params.taskId, payload)
+			);
 		}
 
 		if (decision === 'changes_requested') {
-			return json(await requestAgentApiTaskChildHandoffChanges(params.taskId, payload));
+			return json(
+				validateOnly
+					? await previewAgentApiTaskChildHandoffDecision(
+							params.taskId,
+							payload,
+							'changes_requested'
+						)
+					: await requestAgentApiTaskChildHandoffChanges(params.taskId, payload)
+			);
 		}
 
 		return jsonAgentApiError(

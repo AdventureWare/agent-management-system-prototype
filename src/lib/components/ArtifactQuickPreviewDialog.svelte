@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { artifactDownloadHref, artifactFileHref, artifactFolderHref } from '$lib/artifact-links';
 	import AppDialog from '$lib/components/AppDialog.svelte';
+	import ArtifactEditorPreferenceSelect from '$lib/components/ArtifactEditorPreferenceSelect.svelte';
 	import ArtifactPreviewPane from '$lib/components/ArtifactPreviewPane.svelte';
+	import OpenInEditorButton from '$lib/components/OpenInEditorButton.svelte';
 
 	let {
 		open = $bindable(false),
@@ -61,7 +63,14 @@
 	bodyClass="space-y-5"
 	closeLabel="Close artifact preview"
 >
-	<div class="flex flex-wrap gap-2">
+	<div class="flex flex-wrap items-center gap-2">
+		<ArtifactEditorPreferenceSelect />
+		<OpenInEditorButton
+			{path}
+			line={focusLine}
+			column={focusColumn}
+			className="rounded-full border border-violet-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+		/>
 		<a
 			class="rounded-full border border-sky-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 			href={pageHref}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Story Revision"
+  short_description: "Diagnose and strengthen weak narrative drafts"
+  default_prompt: "Use $story-revision to diagnose and improve a narrative draft by fixing the highest-leverage issues in point of view, scene pressure, dialogue, pacing, compression, theme, and endings."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Voice And Narration"
+  short_description: "Strengthen narrator stance, POV, and anti-generic prose"
+  default_prompt: "Use $voice-and-narration to improve narrator stance, point of view, narrative distance, and voice so the writing feels less generic and more deliberately told."

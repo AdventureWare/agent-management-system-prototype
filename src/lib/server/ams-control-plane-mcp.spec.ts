@@ -19,13 +19,78 @@ describe('ams-control-plane-mcp', () => {
 						'Resolve the current thread, task, run, project, and goal context from explicit ids or managed-run defaults.'
 				}),
 				expect.objectContaining({
+					name: 'ams_intent_prepare_task_for_review',
+					description:
+						'Prepare a task for review by optionally attaching support material, opening the review gate, and returning readback context.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
 					name: 'ams_intent_prepare_task_for_approval',
 					description:
-						'Prepare a task for approval by optionally attaching support material, opening the approval gate, and returning readback context.'
+						'Prepare a task for approval by optionally attaching support material, opening the approval gate, and returning readback context.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_intent_reject_task_approval',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_intent_accept_child_handoff',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_intent_request_child_handoff_changes',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_intent_coordinate_with_another_thread',
+					description:
+						'Resolve the best target thread or handle, send a cross-thread contact, and return readback contact state in one AMS operation.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
 				}),
 				expect.objectContaining({
 					name: 'ams_task_decompose',
 					description: 'Create child tasks from a parent task delegation template.'
+				}),
+				expect.objectContaining({
+					name: 'ams_task_approve_review',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_task_reject_approval',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
 				}),
 				expect.objectContaining({
 					name: 'ams_goal_update',
@@ -115,6 +180,45 @@ describe('ams-control-plane-mcp', () => {
 				body: JSON.stringify({
 					taskId: 'task_123',
 					approval: { summary: 'Ready for approval.' }
+				})
+			})
+		);
+	});
+
+	it('routes thread coordination intent tools through the generic agent-intent endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				intent: 'coordinate_with_another_thread',
+				executedCommands: [
+					'context:current',
+					'thread:contact',
+					'thread:contacts',
+					'context:current'
+				]
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_intent_coordinate_with_another_thread', {
+			targetThreadIdOrHandle: 'researcher',
+			prompt: 'Need context on the latest blocker.'
+		});
+
+		expect(result).toEqual({
+			intent: 'coordinate_with_another_thread',
+			executedCommands: ['context:current', 'thread:contact', 'thread:contacts', 'context:current']
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-intents/coordinate_with_another_thread'),
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({
+					targetThreadIdOrHandle: 'researcher',
+					prompt: 'Need context on the latest blocker.'
 				})
 			})
 		);

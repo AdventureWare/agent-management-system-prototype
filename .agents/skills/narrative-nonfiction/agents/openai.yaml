@@ -1,0 +1,4 @@
+interface:
+  display_name: "Narrative Nonfiction"
+  short_description: "Shape true stories without losing evidence or honesty"
+  default_prompt: "Use $narrative-nonfiction to create or improve essays, profiles, case studies, memoir, or reported storytelling while preserving factual integrity and narrative force."

@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { AGENT_CAPABILITY_COMMANDS } from '../src/lib/server/agent-capability-commands.js';
 import { recordAgentToolUseBestEffort } from '../src/lib/server/agent-use-telemetry.js';
 import { createThreadContactMcpHandlers } from '../src/lib/server/thread-contact-mcp-helpers.js';
-import { formatAgentApiErrorMessage } from '../src/lib/server/agent-api-errors';
+import { formatAgentApiErrorMessage } from './agent-api-errors.mjs';
 
 const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
 const apiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
@@ -52,24 +52,44 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 	'intent:prepare_task_for_review': buildObjectSchema({
 		taskId: { type: 'string' },
 		attachment: { type: 'object' },
-		review: { type: 'object' }
+		review: { type: 'object' },
+		validateOnly: { type: 'boolean' }
 	}),
 	'intent:prepare_task_for_approval': buildObjectSchema({
 		taskId: { type: 'string' },
 		attachment: { type: 'object' },
-		approval: { type: 'object' }
+		approval: { type: 'object' },
+		validateOnly: { type: 'boolean' }
 	}),
 	'intent:reject_task_approval': buildObjectSchema({
-		taskId: { type: 'string' }
+		taskId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
 	}),
 	'intent:accept_child_handoff': buildObjectSchema({
 		parentTaskId: { type: 'string' },
-		childTaskId: { type: 'string' }
+		childTaskId: { type: 'string' },
+		summary: { type: 'string' },
+		validateOnly: { type: 'boolean' }
 	}),
 	'intent:request_child_handoff_changes': buildObjectSchema({
 		parentTaskId: { type: 'string' },
 		childTaskId: { type: 'string' },
-		summary: { type: 'string' }
+		summary: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'intent:coordinate_with_another_thread': buildObjectSchema({
+		sourceThreadId: { type: 'string' },
+		targetThreadIdOrHandle: { type: 'string' },
+		q: { type: 'string' },
+		role: { type: 'string' },
+		project: { type: 'string' },
+		taskId: { type: 'string' },
+		prompt: { type: 'string' },
+		type: { type: 'string' },
+		context: { type: 'string' },
+		validateOnly: { type: 'boolean' },
+		replyRequested: { type: 'boolean' },
+		replyToContactId: { type: 'string' }
 	}),
 	'thread:start': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
 	'thread:get': buildObjectSchema({ threadId: { type: 'string' } }, ['threadId']),
@@ -172,14 +192,26 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		{ taskId: { type: 'string' }, payload: { type: 'object' } },
 		['taskId', 'payload']
 	),
-	'task:approve-review': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
-	'task:request-review-changes': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:approve-review': buildObjectSchema(
+		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
+		['taskId']
+	),
+	'task:request-review-changes': buildObjectSchema(
+		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
+		['taskId']
+	),
 	'task:request-approval': buildObjectSchema(
 		{ taskId: { type: 'string' }, payload: { type: 'object' } },
 		['taskId', 'payload']
 	),
-	'task:approve-approval': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
-	'task:reject-approval': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:approve-approval': buildObjectSchema(
+		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
+		['taskId']
+	),
+	'task:reject-approval': buildObjectSchema(
+		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
+		['taskId']
+	),
 	'task:decompose': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
 		'taskId',
 		'payload'

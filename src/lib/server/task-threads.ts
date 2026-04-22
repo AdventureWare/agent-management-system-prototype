@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
 import type { DelegationPacket } from '$lib/types/control-plane';
 import { buildTaskExecutionContractStatus } from '$lib/task-execution-contract';
+import { AMS_CLI_DOCS_PATH, buildAgentThreadCliCommand, buildAmsCliCommand } from './ams-cli-paths';
 import type { TaskRolePromptContext } from './task-role-context';
 
 const TASK_THREAD_NAME_PREFIX = 'Task thread';
@@ -46,46 +47,72 @@ export function buildTaskThreadPrompt(input: {
 	];
 	const coordinationLines = [
 		'Thread coordination:',
-		'If you need to inspect or update AMS state from this managed run, use the helper CLIs from the project root instead of guessing URLs or composing raw curl commands.',
+		'If you need to inspect or update AMS state from this managed run, use the AMS helper CLI paths below instead of guessing URLs or assuming the helper scripts exist in the target project workspace.',
 		'Start discovery with the machine-readable AMS capability manifest:',
-		'node scripts/ams-cli.mjs manifest',
-		'node scripts/ams-cli.mjs manifest --resource task',
+		buildAmsCliCommand('manifest'),
+		buildAmsCliCommand('manifest --resource task'),
 		'If the run already has a task, run, or thread id, resolve canonical state before assuming where the work stands:',
-		'node scripts/ams-cli.mjs context current',
-		'node scripts/ams-cli.mjs context current --task <taskId>',
-		'node scripts/ams-cli.mjs context current --run <runId>',
+		buildAmsCliCommand('context current'),
+		buildAmsCliCommand('context current --task <taskId>'),
+		buildAmsCliCommand('context current --run <runId>'),
+		'Read summary.recommendedNextActions structurally: stateSignals explains why a recommendation is active now, expectedOutcome explains what it should accomplish, suggestedReadbackCommands tells you how to verify it, and shouldValidateFirst means you should use the matching validateOnly preview before mutating.',
 		'When the work matches a common AMS workflow, prefer a first-class intent command over manually sequencing each mutation:',
-		'node scripts/ams-cli.mjs intent prepare_task_for_review --json \'{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}\'',
-		'node scripts/ams-cli.mjs intent prepare_task_for_approval --json \'{"taskId":"<taskId>","approval":{"summary":"Ready for approval."}}\'',
-		'node scripts/ams-cli.mjs intent reject_task_approval --json \'{"taskId":"<taskId>"}\'',
-		'node scripts/ams-cli.mjs intent accept_child_handoff --json \'{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>"}\'',
-		'node scripts/ams-cli.mjs intent request_child_handoff_changes --json \'{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\'',
+		buildAmsCliCommand(
+			'intent prepare_task_for_review --json \'{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}\''
+		),
+		buildAmsCliCommand(
+			'intent prepare_task_for_approval --json \'{"taskId":"<taskId>","approval":{"summary":"Ready for approval."}}\''
+		),
+		buildAmsCliCommand('intent reject_task_approval --json \'{"taskId":"<taskId>"}\''),
+		buildAmsCliCommand(
+			'intent accept_child_handoff --json \'{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>"}\''
+		),
+		buildAmsCliCommand(
+			'intent request_child_handoff_changes --json \'{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\''
+		),
+		buildAmsCliCommand(
+			'intent coordinate_with_another_thread --json \'{"targetThreadIdOrHandle":"<thread-handle-or-id>","prompt":"Need <instruction/context/assignment>. Reply back to thread $AMS_AGENT_THREAD_ID if needed.","type":"question","context":"<focused context note>"}\''
+		),
 		'Use the manifest guidance as the default reliable loop: discover first, inspect current state, mutate narrowly, then read the changed state back.',
 		'Look at the manifest playbooks when the intent is ambiguous, especially for create_task, prepare_task_for_review, prepare_task_for_approval, accept_child_handoff, reject_task_approval, request_child_handoff_changes, and coordinate_with_another_thread.',
-		'For the full command map, read docs/ams-cli-reference.md from the project root.',
+		`For the full command map, read ${AMS_CLI_DOCS_PATH}.`,
 		'Use the AMS CLI for task, goal, and project discovery or task updates:',
-		'node scripts/ams-cli.mjs project list',
-		'node scripts/ams-cli.mjs project create --json \'{"name":"<name>","summary":"<summary>"}\'',
-		'node scripts/ams-cli.mjs project update <projectId> --json \'{"defaultArtifactRoot":"<absolute-path>"}\'',
-		'node scripts/ams-cli.mjs goal list --project <projectId>',
-		'node scripts/ams-cli.mjs goal create --json \'{"name":"<name>","summary":"<summary>","projectIds":["<projectId>"]}\'',
-		'node scripts/ams-cli.mjs goal update <goalId> --json \'{"status":"running"}\'',
-		'node scripts/ams-cli.mjs task list --project <projectId>',
-		'node scripts/ams-cli.mjs task create --json \'{"title":"<title>","summary":"<summary>","projectId":"<projectId>"}\'',
-		'node scripts/ams-cli.mjs task update <taskId> --json \'{"status":"in_progress"}\'',
-		'node scripts/ams-cli.mjs task attach <taskId> --json \'{"path":"<absolute-file-path>"}\'',
-		'node scripts/ams-cli.mjs task remove-attachment <taskId> <attachmentId>',
-		'node scripts/ams-cli.mjs task request-review <taskId> --json \'{"summary":"Ready for review."}\'',
-		'node scripts/ams-cli.mjs task request-approval <taskId> --json \'{"summary":"Ready for approval."}\'',
-		'node scripts/ams-cli.mjs task approve-review <taskId>',
-		'node scripts/ams-cli.mjs task request-review-changes <taskId>',
-		'node scripts/ams-cli.mjs task approve-approval <taskId>',
-		'node scripts/ams-cli.mjs task reject-approval <taskId>',
-		'node scripts/ams-cli.mjs task accept-child-handoff <parentTaskId> --json \'{"childTaskId":"<childTaskId>"}\'',
-		'node scripts/ams-cli.mjs task request-child-handoff-changes <parentTaskId> --json \'{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\'',
-		'node scripts/ams-cli.mjs task launch-session <taskId>',
-		'node scripts/ams-cli.mjs task recover-session <taskId>',
-		'node scripts/ams-cli.mjs task decompose <taskId> --json \'{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}\'',
+		buildAmsCliCommand('project list'),
+		buildAmsCliCommand('project create --json \'{"name":"<name>","summary":"<summary>"}\''),
+		buildAmsCliCommand(
+			'project update <projectId> --json \'{"defaultArtifactRoot":"<absolute-path>"}\''
+		),
+		buildAmsCliCommand('goal list --project <projectId>'),
+		buildAmsCliCommand(
+			'goal create --json \'{"name":"<name>","summary":"<summary>","projectIds":["<projectId>"]}\''
+		),
+		buildAmsCliCommand('goal update <goalId> --json \'{"status":"running"}\''),
+		buildAmsCliCommand('task list --project <projectId>'),
+		buildAmsCliCommand(
+			'task create --json \'{"title":"<title>","summary":"<summary>","projectId":"<projectId>"}\''
+		),
+		buildAmsCliCommand('task update <taskId> --json \'{"status":"in_progress"}\''),
+		buildAmsCliCommand('task attach <taskId> --json \'{"path":"<absolute-file-path>"}\''),
+		buildAmsCliCommand('task remove-attachment <taskId> <attachmentId>'),
+		buildAmsCliCommand('task request-review <taskId> --json \'{"summary":"Ready for review."}\''),
+		buildAmsCliCommand(
+			'task request-approval <taskId> --json \'{"summary":"Ready for approval."}\''
+		),
+		buildAmsCliCommand('task approve-review <taskId>'),
+		buildAmsCliCommand('task request-review-changes <taskId>'),
+		buildAmsCliCommand('task approve-approval <taskId>'),
+		buildAmsCliCommand('task reject-approval <taskId>'),
+		buildAmsCliCommand(
+			'task accept-child-handoff <parentTaskId> --json \'{"childTaskId":"<childTaskId>"}\''
+		),
+		buildAmsCliCommand(
+			'task request-child-handoff-changes <parentTaskId> --json \'{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\''
+		),
+		buildAmsCliCommand('task launch-session <taskId>'),
+		buildAmsCliCommand('task recover-session <taskId>'),
+		buildAmsCliCommand(
+			'task decompose <taskId> --json \'{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}\''
+		),
 		'If you need instructions, context, or assignment from another thread, you can contact it directly from the shell in this managed run.',
 		'When you list threads, use each thread handle and contact label to infer the right target before sending a message.',
 		'Prefer filtered thread lookup first so you only inspect contactable threads that best match your current thread and task context.',
@@ -98,17 +125,19 @@ export function buildTaskThreadPrompt(input: {
 		'Agent-facing AMS API errors now include structured guidance such as errorCode, details, and suggestedNextCommands. Prefer those suggestions over guessing a recovery step.',
 		'Use the thread CLI for cross-thread coordination:',
 		'Resolve the best thread to contact first:',
-		'node scripts/agent-thread-cli.mjs best-target',
+		buildAgentThreadCliCommand('best-target'),
 		'List available threads when you need to inspect multiple options:',
-		'node scripts/agent-thread-cli.mjs list --can-contact',
+		buildAgentThreadCliCommand('list --can-contact'),
 		'Resolve a fuzzy or partial handle into ranked candidates when needed:',
-		'node scripts/agent-thread-cli.mjs resolve <query> --can-contact',
+		buildAgentThreadCliCommand('resolve <query> --can-contact'),
 		'The contact helper accepts either an exact thread id or an exact handle alias.',
 		'You can further narrow routing with q, role, project, taskId, and limit query params.',
 		'Contact another thread and ask it to reply back here if needed:',
-		'node scripts/agent-thread-cli.mjs contact <targetThreadIdOrHandle> --type <question|request_context|request_assignment|handoff|review_request|status_update> --context "<focused context note>" --prompt "Need <instruction/context/assignment>. Reply back to thread $AMS_AGENT_THREAD_ID if needed."',
+		buildAgentThreadCliCommand(
+			'contact <targetThreadIdOrHandle> --type <question|request_context|request_assignment|handoff|review_request|status_update> --context "<focused context note>" --prompt "Need <instruction/context/assignment>. Reply back to thread $AMS_AGENT_THREAD_ID if needed."'
+		),
 		'If you are replying to a prior contact, include --reply-to <contactId> so the original request is marked answered.',
-		'Use `node scripts/agent-thread-cli.mjs contacts` to inspect the recent contact log for the current thread.'
+		`Use \`${buildAgentThreadCliCommand('contacts')}\` to inspect the recent contact log for the current thread.`
 	];
 
 	if (input.defaultArtifactRoot) {

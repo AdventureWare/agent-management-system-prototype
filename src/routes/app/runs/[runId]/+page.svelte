@@ -7,6 +7,7 @@
 		mergeStoredExecutionSurfaceRecord,
 		executionSurfaceRecordStore
 	} from '$lib/client/execution-surface-record-store';
+	import AgentCurrentContextPanel from '$lib/components/AgentCurrentContextPanel.svelte';
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
@@ -167,6 +168,8 @@
 			View task agent use
 		</AppButton>
 	</div>
+
+	<AgentCurrentContextPanel context={data.agentCurrentContext} class="mb-6" />
 
 	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">

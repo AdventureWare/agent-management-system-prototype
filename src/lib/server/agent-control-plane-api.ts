@@ -258,6 +258,19 @@ function normalizeOptionalSandbox(value: AgentSandbox | string | null | undefine
 	return parseAgentSandbox(value, 'workspace-write');
 }
 
+function normalizeAgentTaskDecomposeChildren(input: AgentTaskDecomposeInput) {
+	return Array.isArray(input.children)
+		? input.children.map((child) => ({
+				title: readTrimmedString(child.title),
+				instructions: readTrimmedString(child.instructions),
+				desiredRoleId: readTrimmedString(child.desiredRoleId),
+				delegationObjective: readTrimmedString(child.delegationObjective),
+				delegationExpectedDeliverable: readTrimmedString(child.delegationExpectedDeliverable),
+				delegationDoneCondition: readTrimmedString(child.delegationDoneCondition)
+			}))
+		: [];
+}
+
 function normalizeOptionalPath(value: string | null | undefined) {
 	if (value === undefined) {
 		return undefined;
@@ -1065,6 +1078,76 @@ export async function requestAgentApiTaskReview(
 	}
 }
 
+export async function previewAgentApiTaskReviewRequest(
+	taskId: string,
+	input: AgentTaskReviewRequestInput
+) {
+	const normalizedTaskId = readTrimmedString(taskId);
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+
+	if (!task) {
+		throw missingIdError('task');
+	}
+
+	if (getOpenReviewForTask(current, normalizedTaskId)) {
+		throw new AgentControlPlaneApiError(409, 'An open review already exists for this task.', {
+			code: 'task_review_already_open',
+			suggestedNextCommands: ['task:get', 'context:current'],
+			details: { taskId: normalizedTaskId }
+		});
+	}
+
+	const requestedByExecutionSurfaceId = readNullableString(
+		input.requestedByExecutionSurfaceId ?? null
+	);
+	const reviewerExecutionSurfaceId = readNullableString(input.reviewerExecutionSurfaceId ?? null);
+
+	if (
+		requestedByExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === requestedByExecutionSurfaceId)
+	) {
+		throw new AgentControlPlaneApiError(400, 'Requesting execution surface was not found.', {
+			code: 'execution_surface_not_found',
+			suggestedNextCommands: ['context:current'],
+			details: { executionSurfaceId: requestedByExecutionSurfaceId }
+		});
+	}
+
+	if (
+		reviewerExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === reviewerExecutionSurfaceId)
+	) {
+		throw new AgentControlPlaneApiError(400, 'Reviewer execution surface was not found.', {
+			code: 'execution_surface_not_found',
+			suggestedNextCommands: ['context:current'],
+			details: { executionSurfaceId: reviewerExecutionSurfaceId }
+		});
+	}
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action: 'requestReview' as const,
+		taskId: normalizedTaskId,
+		checks: [
+			`Task ${normalizedTaskId} exists.`,
+			`No open review currently exists for task ${normalizedTaskId}.`
+		],
+		preview: {
+			summary: readTrimmedString(input.summary) || 'Review requested from the agent API.',
+			requestedByExecutionSurfaceId,
+			reviewerExecutionSurfaceId
+		},
+		suggestedNextCommands: ['task:request-review', 'task:get', 'context:current']
+	};
+}
+
 export async function requestAgentApiTaskApproval(
 	taskId: string,
 	input: AgentTaskApprovalRequestInput
@@ -1093,6 +1176,224 @@ export async function requestAgentApiTaskApproval(
 
 		throw error;
 	}
+}
+
+export async function previewAgentApiTaskApprovalRequest(
+	taskId: string,
+	input: AgentTaskApprovalRequestInput
+) {
+	const normalizedTaskId = readTrimmedString(taskId);
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+
+	if (!task) {
+		throw missingIdError('task');
+	}
+
+	if (getPendingApprovalForTask(current, normalizedTaskId)) {
+		throw new AgentControlPlaneApiError(409, 'A pending approval already exists for this task.', {
+			code: 'task_approval_already_pending',
+			suggestedNextCommands: ['task:get', 'context:current'],
+			details: { taskId: normalizedTaskId }
+		});
+	}
+
+	const requestedByExecutionSurfaceId = readNullableString(
+		input.requestedByExecutionSurfaceId ?? null
+	);
+	const approverExecutionSurfaceId = readNullableString(input.approverExecutionSurfaceId ?? null);
+
+	if (
+		requestedByExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === requestedByExecutionSurfaceId)
+	) {
+		throw new AgentControlPlaneApiError(400, 'Requesting execution surface was not found.', {
+			code: 'execution_surface_not_found',
+			suggestedNextCommands: ['context:current'],
+			details: { executionSurfaceId: requestedByExecutionSurfaceId }
+		});
+	}
+
+	if (
+		approverExecutionSurfaceId &&
+		!current.executionSurfaces.some((surface) => surface.id === approverExecutionSurfaceId)
+	) {
+		throw new AgentControlPlaneApiError(400, 'Approver execution surface was not found.', {
+			code: 'execution_surface_not_found',
+			suggestedNextCommands: ['context:current'],
+			details: { executionSurfaceId: approverExecutionSurfaceId }
+		});
+	}
+
+	const mode = parseTaskApprovalMode(readTrimmedString(input.mode ?? ''), task.approvalMode);
+
+	if (mode === 'none') {
+		throw new AgentControlPlaneApiError(
+			400,
+			'Task approval mode must be set before requesting approval.',
+			{
+				code: 'task_approval_mode_required',
+				suggestedNextCommands: ['task:update', 'context:current'],
+				details: { taskId: normalizedTaskId }
+			}
+		);
+	}
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action: 'requestApproval' as const,
+		taskId: normalizedTaskId,
+		checks: [
+			`Task ${normalizedTaskId} exists.`,
+			`No pending approval currently exists for task ${normalizedTaskId}.`,
+			`Approval mode resolves to ${mode}.`
+		],
+		preview: {
+			mode,
+			summary: readTrimmedString(input.summary) || 'Approval requested from the agent API.',
+			requestedByExecutionSurfaceId,
+			approverExecutionSurfaceId
+		},
+		suggestedNextCommands: ['task:request-approval', 'task:get', 'context:current']
+	};
+}
+
+export async function previewAgentApiTaskReviewDecision(
+	taskId: string,
+	decision: 'approve' | 'changes_requested'
+) {
+	const normalizedTaskId = readTrimmedString(taskId);
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+	const openReview = getOpenReviewForTask(current, normalizedTaskId);
+	const pendingApproval = getPendingApprovalForTask(current, normalizedTaskId);
+
+	if (!task || !openReview) {
+		throw new AgentControlPlaneApiError(404, 'No open review found for this task.', {
+			code: 'review_not_found',
+			suggestedNextCommands: ['task:get', 'task:request-review'],
+			details: { taskId: normalizedTaskId }
+		});
+	}
+
+	if (decision === 'approve') {
+		const shouldCloseTask = !pendingApproval;
+
+		return {
+			validationOnly: true,
+			valid: true,
+			action: 'approveReview' as const,
+			taskId: normalizedTaskId,
+			checks: [
+				`Task ${normalizedTaskId} exists.`,
+				`Open review ${openReview.id} can be approved now.`,
+				shouldCloseTask
+					? 'Approving this review would close the task because no pending approval remains.'
+					: 'Approving this review would keep the task open because a pending approval still exists.'
+			],
+			preview: {
+				reviewId: openReview.id,
+				resultingTaskStatus: shouldCloseTask ? 'done' : task.status,
+				pendingApprovalId: pendingApproval?.id ?? null
+			},
+			suggestedNextCommands: ['task:approve-review', 'task:get', 'context:current']
+		};
+	}
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action: 'requestReviewChanges' as const,
+		taskId: normalizedTaskId,
+		checks: [
+			`Task ${normalizedTaskId} exists.`,
+			`Open review ${openReview.id} can be returned with changes requested.`
+		],
+		preview: {
+			reviewId: openReview.id,
+			resultingTaskStatus: 'blocked',
+			blockedReason: 'Changes requested during review.'
+		},
+		suggestedNextCommands: ['task:request-review-changes', 'task:get', 'context:current']
+	};
+}
+
+export async function previewAgentApiTaskApprovalDecision(
+	taskId: string,
+	decision: 'approve' | 'reject'
+) {
+	const normalizedTaskId = readTrimmedString(taskId);
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	const current = await loadControlPlane();
+	const task = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+	const pendingApproval = getPendingApprovalForTask(current, normalizedTaskId);
+	const openReview = getOpenReviewForTask(current, normalizedTaskId);
+
+	if (!task || !pendingApproval) {
+		throw new AgentControlPlaneApiError(404, 'No pending approval found for this task.', {
+			code: 'approval_not_found',
+			suggestedNextCommands: ['task:get', 'task:request-approval'],
+			details: { taskId: normalizedTaskId }
+		});
+	}
+
+	if (decision === 'approve') {
+		const shouldCloseTask = pendingApproval.mode === 'before_complete' && !openReview;
+
+		return {
+			validationOnly: true,
+			valid: true,
+			action: 'approveApproval' as const,
+			taskId: normalizedTaskId,
+			checks: [
+				`Task ${normalizedTaskId} exists.`,
+				`Pending approval ${pendingApproval.id} can be approved now.`,
+				shouldCloseTask
+					? `Approving the ${pendingApproval.mode} gate would close the task.`
+					: `Approving the ${pendingApproval.mode} gate would keep the task open.`
+			],
+			preview: {
+				approvalId: pendingApproval.id,
+				mode: pendingApproval.mode,
+				resultingTaskStatus: shouldCloseTask ? 'done' : task.status,
+				openReviewId: openReview?.id ?? null
+			},
+			suggestedNextCommands: ['task:approve-approval', 'task:get', 'context:current']
+		};
+	}
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action: 'rejectApproval' as const,
+		taskId: normalizedTaskId,
+		checks: [
+			`Task ${normalizedTaskId} exists.`,
+			`Pending approval ${pendingApproval.id} can be rejected now.`
+		],
+		preview: {
+			approvalId: pendingApproval.id,
+			mode: pendingApproval.mode,
+			resultingTaskStatus: 'blocked',
+			blockedReason: `${pendingApproval.mode} approval rejected.`
+		},
+		suggestedNextCommands: ['task:reject-approval', 'task:get', 'context:current']
+	};
 }
 
 export async function approveAgentApiTaskReview(taskId: string) {
@@ -1183,6 +1484,106 @@ function buildChildHandoffForm(input: AgentTaskChildHandoffInput) {
 	return form;
 }
 
+export async function previewAgentApiTaskChildHandoffDecision(
+	parentTaskId: string,
+	input: AgentTaskChildHandoffInput,
+	decision: 'accept' | 'changes_requested'
+) {
+	const normalizedTaskId = readTrimmedString(parentTaskId);
+	const childTaskId = readTrimmedString(input.childTaskId ?? '');
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	if (!childTaskId) {
+		throw new AgentControlPlaneApiError(400, 'childTaskId is required.', {
+			code: 'missing_childTaskId',
+			suggestedNextCommands: [
+				'task:get',
+				decision === 'accept' ? 'task:accept-child-handoff' : 'task:request-child-handoff-changes'
+			],
+			details: { taskId: normalizedTaskId }
+		});
+	}
+
+	const current = await loadControlPlane();
+	const parentTask = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+	const childTask = current.tasks.find((candidate) => candidate.id === childTaskId) ?? null;
+
+	if (!parentTask) {
+		throw missingIdError('task');
+	}
+
+	if (!childTask || childTask.parentTaskId !== parentTask.id) {
+		throw new AgentControlPlaneApiError(404, 'Delegated child task not found.', {
+			code: 'child_handoff_invalid_child_task',
+			suggestedNextCommands: ['task:get', 'task:decompose'],
+			details: { taskId: normalizedTaskId, childTaskId }
+		});
+	}
+
+	if (childTask.delegationAcceptance) {
+		throw new AgentControlPlaneApiError(
+			409,
+			decision === 'accept'
+				? 'This child handoff has already been accepted.'
+				: 'Accepted child handoffs cannot be returned for follow-up.',
+			{
+				code: 'child_handoff_already_accepted',
+				suggestedNextCommands: ['task:get', 'context:current'],
+				details: { taskId: normalizedTaskId, childTaskId }
+			}
+		);
+	}
+
+	if (childTask.status !== 'done') {
+		throw new AgentControlPlaneApiError(
+			409,
+			decision === 'accept'
+				? 'Only completed child tasks can be accepted into the parent.'
+				: 'Only completed child tasks can be returned for follow-up.',
+			{
+				code: 'child_handoff_task_not_done',
+				suggestedNextCommands: ['task:get', 'context:current'],
+				details: { taskId: normalizedTaskId, childTaskId, status: childTask.status }
+			}
+		);
+	}
+
+	const summary =
+		readTrimmedString(input.summary) ||
+		(decision === 'accept'
+			? `Accepted child handoff into parent task "${parentTask.title}".`
+			: 'Parent task requested follow-up before accepting this child handoff.');
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action:
+			decision === 'accept'
+				? ('acceptChildHandoff' as const)
+				: ('requestChildHandoffChanges' as const),
+		taskId: normalizedTaskId,
+		checks: [
+			`Parent task ${parentTask.id} exists.`,
+			`Child task ${childTask.id} belongs to parent task ${parentTask.id}.`,
+			`Child task ${childTask.id} is complete and eligible for ${decision === 'accept' ? 'acceptance' : 'follow-up request'}.`
+		],
+		preview: {
+			childTaskId,
+			decision,
+			summary,
+			resultingChildStatus: decision === 'accept' ? childTask.status : 'blocked'
+		},
+		suggestedNextCommands: [
+			decision === 'accept' ? 'task:accept-child-handoff' : 'task:request-child-handoff-changes',
+			'task:get',
+			'context:current'
+		]
+	};
+}
+
 export async function acceptAgentApiTaskChildHandoff(
 	parentTaskId: string,
 	input: AgentTaskChildHandoffInput
@@ -1268,16 +1669,7 @@ export async function decomposeAgentApiTask(taskId: string, input: AgentTaskDeco
 		throw missingIdError('task');
 	}
 
-	const children: TaskDecompositionTemplateInput[] = Array.isArray(input.children)
-		? input.children.map((child) => ({
-				title: readTrimmedString(child.title),
-				instructions: readTrimmedString(child.instructions),
-				desiredRoleId: readTrimmedString(child.desiredRoleId),
-				delegationObjective: readTrimmedString(child.delegationObjective),
-				delegationExpectedDeliverable: readTrimmedString(child.delegationExpectedDeliverable),
-				delegationDoneCondition: readTrimmedString(child.delegationDoneCondition)
-			}))
-		: [];
+	const children: TaskDecompositionTemplateInput[] = normalizeAgentTaskDecomposeChildren(input);
 
 	try {
 		return await decomposeTaskFromTemplates(normalizedTaskId, children);
@@ -1288,6 +1680,158 @@ export async function decomposeAgentApiTask(taskId: string, input: AgentTaskDeco
 
 		throw error;
 	}
+}
+
+export async function previewAgentApiTaskDecomposition(
+	taskId: string,
+	input: AgentTaskDecomposeInput
+) {
+	const normalizedTaskId = readTrimmedString(taskId);
+
+	if (!normalizedTaskId) {
+		throw missingIdError('task');
+	}
+
+	const current = await loadControlPlane();
+	const parentTask = current.tasks.find((candidate) => candidate.id === normalizedTaskId) ?? null;
+
+	if (!parentTask) {
+		throw missingIdError('task');
+	}
+
+	const children: TaskDecompositionTemplateInput[] = normalizeAgentTaskDecomposeChildren(input);
+
+	if (children.length === 0) {
+		throw new AgentControlPlaneApiError(
+			400,
+			'Select at least one child template before decomposing this task.',
+			{
+				code: 'task_decomposition_requires_children',
+				suggestedNextCommands: ['task:get'],
+				details: { taskId: normalizedTaskId }
+			}
+		);
+	}
+
+	if (children.length > 3) {
+		throw new AgentControlPlaneApiError(
+			400,
+			'A task can only decompose into 3 child templates at once.',
+			{
+				code: 'task_decomposition_too_many_children',
+				suggestedNextCommands: ['task:get'],
+				details: { taskId: normalizedTaskId, childCount: children.length }
+			}
+		);
+	}
+
+	if (parentTask.status === 'done') {
+		throw new AgentControlPlaneApiError(
+			409,
+			'Completed tasks cannot create new delegated child tasks.',
+			{
+				code: 'task_decomposition_parent_done',
+				suggestedNextCommands: ['task:get', 'task:update'],
+				details: { taskId: normalizedTaskId }
+			}
+		);
+	}
+
+	const existingChildCount = current.tasks.filter(
+		(candidate) => candidate.parentTaskId === parentTask.id
+	).length;
+
+	if (existingChildCount + children.length > 3) {
+		throw new AgentControlPlaneApiError(
+			409,
+			`This task already has ${existingChildCount} delegated child task${existingChildCount === 1 ? '' : 's'}. The current fan-out limit is 3.`,
+			{
+				code: 'task_decomposition_fanout_limit',
+				suggestedNextCommands: ['task:get'],
+				details: {
+					taskId: normalizedTaskId,
+					existingChildCount,
+					requestedChildCount: children.length
+				}
+			}
+		);
+	}
+
+	for (const [index, child] of children.entries()) {
+		if (!child.title || !child.instructions) {
+			throw new AgentControlPlaneApiError(
+				400,
+				`Child template ${index + 1} needs both a title and a work brief.`,
+				{
+					code: 'task_decomposition_invalid_child',
+					suggestedNextCommands: ['task:get'],
+					details: { taskId: normalizedTaskId, childIndex: index + 1 }
+				}
+			);
+		}
+
+		if (!child.delegationObjective) {
+			throw new AgentControlPlaneApiError(
+				400,
+				`Child template ${index + 1} needs a delegation objective.`,
+				{
+					code: 'task_decomposition_invalid_child',
+					suggestedNextCommands: ['task:get'],
+					details: { taskId: normalizedTaskId, childIndex: index + 1 }
+				}
+			);
+		}
+
+		if (!child.delegationDoneCondition) {
+			throw new AgentControlPlaneApiError(
+				400,
+				`Child template ${index + 1} needs a done condition.`,
+				{
+					code: 'task_decomposition_invalid_child',
+					suggestedNextCommands: ['task:get'],
+					details: { taskId: normalizedTaskId, childIndex: index + 1 }
+				}
+			);
+		}
+
+		if (!child.desiredRoleId || !current.roles.some((role) => role.id === child.desiredRoleId)) {
+			throw new AgentControlPlaneApiError(
+				400,
+				`Child template ${index + 1} needs a valid desired role.`,
+				{
+					code: 'task_decomposition_invalid_child_role',
+					suggestedNextCommands: ['task:get'],
+					details: {
+						taskId: normalizedTaskId,
+						childIndex: index + 1,
+						desiredRoleId: child.desiredRoleId || null
+					}
+				}
+			);
+		}
+	}
+
+	return {
+		validationOnly: true,
+		valid: true,
+		action: 'decomposeTask' as const,
+		taskId: normalizedTaskId,
+		checks: [
+			`Parent task ${normalizedTaskId} exists and is not done.`,
+			`${existingChildCount} delegated child task${existingChildCount === 1 ? '' : 's'} already exist.`,
+			`${children.length} child template${children.length === 1 ? '' : 's'} passed structural validation.`
+		],
+		preview: {
+			createdChildCount: children.length,
+			children: children.map((child) => ({
+				title: child.title,
+				desiredRoleId: child.desiredRoleId,
+				delegationObjective: child.delegationObjective,
+				delegationDoneCondition: child.delegationDoneCondition
+			}))
+		},
+		suggestedNextCommands: ['task:decompose', 'task:get', 'context:current']
+	};
 }
 
 async function validateCommonTaskReferences(

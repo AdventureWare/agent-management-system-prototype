@@ -30,8 +30,20 @@ export function sortTaskTemplatesByName<T extends { name: string }>(taskTemplate
 }
 
 export function decorateTaskTemplates(data: ControlPlaneData) {
+	const taskTemplateById = new Map(
+		(data.taskTemplates ?? []).map((taskTemplate) => [taskTemplate.id, taskTemplate])
+	);
 	return sortTaskTemplatesByName(data.taskTemplates ?? []).map((taskTemplate) => ({
 		...taskTemplate,
+		project: data.projects.find((project) => project.id === taskTemplate.projectId) ?? null,
+		goal: data.goals.find((goal) => goal.id === taskTemplate.goalId) ?? null,
+		workflow:
+			(data.workflows ?? []).find((workflow) => workflow.id === taskTemplate.workflowId) ?? null,
+		desiredRole: data.roles.find((role) => role.id === taskTemplate.desiredRoleId) ?? null,
+		assigneeExecutionSurface:
+			data.executionSurfaces.find(
+				(executionSurface) => executionSurface.id === taskTemplate.assigneeExecutionSurfaceId
+			) ?? null,
 		projectName:
 			data.projects.find((project) => project.id === taskTemplate.projectId)?.name ??
 			'Unknown project',
@@ -45,7 +57,22 @@ export function decorateTaskTemplates(data: ControlPlaneData) {
 		assigneeExecutionSurfaceName:
 			data.executionSurfaces.find(
 				(executionSurface) => executionSurface.id === taskTemplate.assigneeExecutionSurfaceId
-			)?.name ?? 'Leave unassigned'
+			)?.name ?? 'Leave unassigned',
+		sourceTaskTemplate: taskTemplate.sourceTaskTemplateId
+			? (taskTemplateById.get(taskTemplate.sourceTaskTemplateId) ?? null)
+			: null,
+		supersededByTaskTemplate: taskTemplate.supersededByTaskTemplateId
+			? (taskTemplateById.get(taskTemplate.supersededByTaskTemplateId) ?? null)
+			: null,
+		createdTaskCount: data.tasks.filter((task) => task.taskTemplateId === taskTemplate.id).length,
+		createdTasks: data.tasks
+			.filter((task) => task.taskTemplateId === taskTemplate.id)
+			.slice(0, 6)
+			.map((task) => ({
+				id: task.id,
+				title: task.title,
+				status: task.status
+			}))
 	}));
 }
 

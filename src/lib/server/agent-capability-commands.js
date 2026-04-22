@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-export const AGENT_CAPABILITY_MANIFEST_VERSION = '2026-04-21';
+export const AGENT_CAPABILITY_MANIFEST_VERSION = '2026-04-22';
 
 export const AGENT_CAPABILITY_COMMANDS = [
 	{
@@ -16,7 +16,31 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use first in a managed run when you need the canonical current task, run, or thread state.',
 			'Use after an error when you need to re-anchor on the latest control-plane context.'
 		],
-		nextCommands: ['task:get', 'thread:panel', 'task:update', 'task:launch-session']
+		nextCommands: ['task:get', 'thread:panel', 'task:update', 'task:launch-session'],
+		examples: [
+			{
+				title: 'Resolve current task and run from managed-run defaults',
+				input: {},
+				output: {
+					resolved: {
+						threadId: 'thread_123',
+						taskId: 'task_123',
+						runId: 'run_123',
+						projectId: 'project_app',
+						goalId: 'goal_agent'
+					},
+					summary: {
+						currentState: 'Task "Prepare approval flow" is done with run completed.',
+						recommendedNextActions: [
+							{
+								resource: 'task',
+								command: 'approve-approval'
+							}
+						]
+					}
+				}
+			}
+		]
 	},
 	{
 		resource: 'intent',
@@ -28,10 +52,29 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-intents/:intent',
 		payloadMode: 'json_or_file',
 		whenToUse: [
-			'Use when you want the review preparation playbook as a single AMS operation instead of sequencing attach and request-review manually.'
+			'Use when you want the review preparation playbook as a single AMS operation instead of sequencing attach and request-review manually.',
+			'Set validateOnly=true first when you want a dry-run preview of the review payload and checks before opening the real review gate.'
 		],
 		readAfter: ['context:current'],
 		nextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+		examples: [
+			{
+				title: 'Preview review preparation without mutating the task',
+				input: {
+					taskId: 'task_123',
+					validateOnly: true,
+					review: {
+						summary: 'Ready for review.'
+					}
+				},
+				output: {
+					intent: 'prepare_task_for_review',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: ['context:current', 'task:request-review', 'context:current']
+				}
+			}
+		],
 		mcp: {
 			pathArgDefaults: {
 				intent: { default: 'prepare_task_for_review' }
@@ -48,10 +91,56 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-intents/:intent',
 		payloadMode: 'json_or_file',
 		whenToUse: [
-			'Use when you want the approval preparation playbook as a single AMS operation instead of sequencing the low-level calls yourself.'
+			'Use when you want the approval preparation playbook as a single AMS operation instead of sequencing the low-level calls yourself.',
+			'Set validateOnly=true first when you want a dry-run preview of the approval payload and checks before opening the real gate.'
 		],
 		readAfter: ['context:current'],
 		nextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval'],
+		examples: [
+			{
+				title: 'Open an approval gate in one intent call',
+				input: {
+					taskId: 'task_123',
+					approval: {
+						summary: 'Ready for final sign-off.',
+						mode: 'before_complete'
+					}
+				},
+				output: {
+					intent: 'prepare_task_for_approval',
+					executedCommands: ['context:current', 'task:request-approval', 'context:current'],
+					afterContext: {
+						governance: {
+							pendingApproval: {
+								status: 'pending',
+								summary: 'Ready for final sign-off.'
+							}
+						}
+					}
+				}
+			},
+			{
+				title: 'Preview approval preparation without mutating the task',
+				input: {
+					taskId: 'task_123',
+					validateOnly: true,
+					approval: {
+						summary: 'Ready for final sign-off.',
+						mode: 'before_complete'
+					}
+				},
+				output: {
+					intent: 'prepare_task_for_approval',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: ['context:current', 'task:request-approval', 'context:current'],
+					preview: {
+						action: 'requestApproval',
+						taskId: 'task_123'
+					}
+				}
+			}
+		],
 		mcp: {
 			pathArgDefaults: {
 				intent: { default: 'prepare_task_for_approval' }
@@ -68,10 +157,26 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-intents/:intent',
 		payloadMode: 'json_or_file',
 		whenToUse: [
-			'Use when a pending approval should be rejected and you want before/after context in one response.'
+			'Use when a pending approval should be rejected and you want before/after context in one response.',
+			'Set validateOnly=true first when you want to confirm that a pending approval exists before rejecting it.'
 		],
 		readAfter: ['context:current'],
 		nextCommands: ['task:get'],
+		examples: [
+			{
+				title: 'Preview rejection of a pending approval',
+				input: {
+					taskId: 'task_123',
+					validateOnly: true
+				},
+				output: {
+					intent: 'reject_task_approval',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: ['context:current', 'task:reject-approval', 'context:current']
+				}
+			}
+		],
 		mcp: {
 			pathArgDefaults: {
 				intent: { default: 'reject_task_approval' }
@@ -88,10 +193,27 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-intents/:intent',
 		payloadMode: 'json_or_file',
 		whenToUse: [
-			'Use when a delegated child task is done and the parent should accept the handoff without manually sequencing inspection and acceptance.'
+			'Use when a delegated child task is done and the parent should accept the handoff without manually sequencing inspection and acceptance.',
+			'Set validateOnly=true first when you want to confirm the parent-child relationship and completion state before accepting the handoff.'
 		],
 		readAfter: ['context:current'],
 		nextCommands: ['task:get'],
+		examples: [
+			{
+				title: 'Preview acceptance of a completed child handoff',
+				input: {
+					parentTaskId: 'task_parent',
+					childTaskId: 'task_child',
+					validateOnly: true
+				},
+				output: {
+					intent: 'accept_child_handoff',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: ['context:current', 'task:accept-child-handoff', 'context:current']
+				}
+			}
+		],
 		mcp: {
 			pathArgDefaults: {
 				intent: { default: 'accept_child_handoff' }
@@ -108,13 +230,104 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-intents/:intent',
 		payloadMode: 'json_or_file',
 		whenToUse: [
-			'Use when a delegated child handoff is not acceptable yet and should go back for follow-up in one AMS operation.'
+			'Use when a delegated child handoff is not acceptable yet and should go back for follow-up in one AMS operation.',
+			'Set validateOnly=true first when you want to confirm the handoff is complete and returnable before requesting changes.'
 		],
 		readAfter: ['context:current'],
 		nextCommands: ['task:get'],
+		examples: [
+			{
+				title: 'Preview a child handoff follow-up request',
+				input: {
+					parentTaskId: 'task_parent',
+					childTaskId: 'task_child',
+					summary: 'Needs stronger evidence before acceptance.',
+					validateOnly: true
+				},
+				output: {
+					intent: 'request_child_handoff_changes',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: [
+						'context:current',
+						'task:request-child-handoff-changes',
+						'context:current'
+					]
+				}
+			}
+		],
 		mcp: {
 			pathArgDefaults: {
 				intent: { default: 'request_child_handoff_changes' }
+			}
+		}
+	},
+	{
+		resource: 'intent',
+		command: 'coordinate_with_another_thread',
+		summary:
+			'Resolve the best target thread or handle, send a cross-thread contact, and return readback contact state in one AMS operation.',
+		cli: 'node scripts/ams-cli.mjs intent coordinate_with_another_thread --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-intents/:intent',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when you need another thread to help, review, or take follow-up work and want routing plus contact as a single intent.',
+			'Set validateOnly=true first when you want to confirm the target thread and routing checks before sending the real contact.'
+		],
+		readAfter: ['thread:contacts', 'context:current'],
+		nextCommands: ['thread:contacts', 'thread:panel'],
+		examples: [
+			{
+				title: 'Route a focused question to another thread',
+				input: {
+					targetThreadIdOrHandle: 'researcher',
+					prompt: 'Need context on the latest blocker.',
+					type: 'question',
+					context: 'Focus on the failing approval path.'
+				},
+				output: {
+					intent: 'coordinate_with_another_thread',
+					executedCommands: [
+						'context:current',
+						'thread:contact',
+						'thread:contacts',
+						'context:current'
+					],
+					result: {
+						target: {
+							id: 'thread_researcher',
+							handle: 'researcher'
+						},
+						contact: {
+							contactId: 'contact_123'
+						}
+					}
+				}
+			},
+			{
+				title: 'Preview thread coordination before sending the contact',
+				input: {
+					targetThreadIdOrHandle: 'researcher',
+					prompt: 'Need context on the latest blocker.',
+					validateOnly: true
+				},
+				output: {
+					intent: 'coordinate_with_another_thread',
+					validationOnly: true,
+					valid: true,
+					wouldExecuteCommands: [
+						'context:current',
+						'thread:contact',
+						'thread:contacts',
+						'context:current'
+					]
+				}
+			}
+		],
+		mcp: {
+			pathArgDefaults: {
+				intent: { default: 'coordinate_with_another_thread' }
 			}
 		}
 	},
@@ -161,7 +374,25 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		payloadMode: 'json_or_file',
 		whenToUse: ['Use when the user asked for a new task or scoped work item to be created.'],
 		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'context:current']
+		nextCommands: ['task:get', 'context:current'],
+		examples: [
+			{
+				title: 'Create a new task in a known project',
+				input: {
+					title: 'Prepare approval packet',
+					summary: 'Collect the materials needed for sign-off.',
+					projectId: 'project_app'
+				},
+				output: {
+					task: {
+						id: 'task_123',
+						title: 'Prepare approval packet',
+						status: 'in_draft',
+						projectId: 'project_app'
+					}
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -175,7 +406,26 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use to change planning, assignment, dependency, or blocked-state fields on an existing task.'
 		],
 		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'context:current']
+		nextCommands: ['task:get', 'context:current'],
+		examples: [
+			{
+				title: 'Mark a task blocked with an explicit reason',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						status: 'blocked',
+						blockedReason: 'Waiting on final approver availability.'
+					}
+				},
+				output: {
+					task: {
+						id: 'task_123',
+						status: 'blocked',
+						blockedReason: 'Waiting on final approver availability.'
+					}
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -203,9 +453,30 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/review-request',
 		payloadMode: 'json_or_file',
-		whenToUse: ['Use when work is ready for review and no open review exists yet.'],
+		whenToUse: [
+			'Use when work is ready for review and no open review exists yet.',
+			'Set payload.validateOnly=true first when you want to preview review checks and execution-surface resolution without opening the review.'
+		],
 		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes']
+		nextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+		examples: [
+			{
+				title: 'Preview a review request without creating the review record',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						summary: 'Ready for review.',
+						validateOnly: true
+					}
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'requestReview',
+					taskId: 'task_123'
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -215,6 +486,25 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/review-decision',
 		payloadMode: 'none',
+		whenToUse: [
+			'Use when an open review should be approved.',
+			'Set validateOnly=true first when you want to preview whether approving the review would close the task or keep it open.'
+		],
+		examples: [
+			{
+				title: 'Preview review approval without resolving the review',
+				input: {
+					taskId: 'task_123',
+					validateOnly: true
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'approveReview',
+					taskId: 'task_123'
+				}
+			}
+		],
 		mcp: {
 			body: {
 				defaults: { decision: 'approve' }
@@ -229,6 +519,10 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/review-decision',
 		payloadMode: 'none',
+		whenToUse: [
+			'Use when an open review should send the task back with changes requested.',
+			'Set validateOnly=true first when you want to preview the resulting blocked state before resolving the review.'
+		],
 		mcp: {
 			body: {
 				defaults: { decision: 'changes_requested' }
@@ -243,9 +537,49 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/approval-request',
 		payloadMode: 'json_or_file',
-		whenToUse: ['Use when work is ready for an approval gate and no pending approval exists.'],
+		whenToUse: [
+			'Use when work is ready for an approval gate and no pending approval exists.',
+			'Set payload.validateOnly=true first when you want to preview approval-mode resolution and execution-surface checks without mutating the task.'
+		],
 		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval']
+		nextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval'],
+		examples: [
+			{
+				title: 'Request approval on a completed task',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						summary: 'Ready for approval.',
+						mode: 'before_complete'
+					}
+				},
+				output: {
+					approval: {
+						id: 'approval_123',
+						taskId: 'task_123',
+						status: 'pending',
+						mode: 'before_complete'
+					}
+				}
+			},
+			{
+				title: 'Preview an approval request without creating the approval record',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						summary: 'Ready for approval.',
+						mode: 'before_complete',
+						validateOnly: true
+					}
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'requestApproval',
+					taskId: 'task_123'
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -255,6 +589,10 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/approval-decision',
 		payloadMode: 'none',
+		whenToUse: [
+			'Use when a pending approval should be approved.',
+			'Set validateOnly=true first when you want to preview whether approving the gate would close the task or keep it open.'
+		],
 		mcp: {
 			body: {
 				defaults: { decision: 'approve' }
@@ -269,6 +607,25 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/approval-decision',
 		payloadMode: 'none',
+		whenToUse: [
+			'Use when a pending approval should be rejected.',
+			'Set validateOnly=true first when you want to preview the resulting blocked state before rejecting the gate.'
+		],
+		examples: [
+			{
+				title: 'Preview approval rejection without resolving the gate',
+				input: {
+					taskId: 'task_123',
+					validateOnly: true
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'rejectApproval',
+					taskId: 'task_123'
+				}
+			}
+		],
 		mcp: {
 			body: {
 				defaults: { decision: 'reject' }
@@ -282,7 +639,37 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		cli: 'node scripts/ams-cli.mjs task decompose <taskId> --json <payload> | --file <path>',
 		method: 'POST',
 		path: '/api/tasks/:taskId/decompose',
-		payloadMode: 'json_or_file'
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a parent task should fan out into delegated child tasks with explicit done conditions.',
+			'Set payload.validateOnly=true first when you want to confirm child-template validity and fan-out limits before creating child tasks.'
+		],
+		examples: [
+			{
+				title: 'Preview task decomposition without creating child tasks',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						validateOnly: true,
+						children: [
+							{
+								title: 'Implement API route',
+								instructions: 'Build the machine-readable route.',
+								desiredRoleId: 'role_impl',
+								delegationObjective: 'Implement the route cleanly.',
+								delegationDoneCondition: 'Route exists with tests.'
+							}
+						]
+					}
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'decomposeTask',
+					taskId: 'task_123'
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -292,6 +679,28 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/child-handoff',
 		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a delegated child handoff should be accepted into the parent task.',
+			'Set payload.validateOnly=true first when you want to preview the parent-child eligibility checks before accepting it.'
+		],
+		examples: [
+			{
+				title: 'Preview child handoff acceptance without mutating the child task',
+				input: {
+					parentTaskId: 'task_parent',
+					payload: {
+						childTaskId: 'task_child',
+						validateOnly: true
+					}
+				},
+				output: {
+					validationOnly: true,
+					valid: true,
+					action: 'acceptChildHandoff',
+					taskId: 'task_parent'
+				}
+			}
+		],
 		mcp: {
 			pathArgAliases: {
 				taskId: 'parentTaskId'
@@ -310,6 +719,10 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		method: 'POST',
 		path: '/api/tasks/:taskId/child-handoff',
 		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a delegated child handoff should be returned for follow-up work.',
+			'Set payload.validateOnly=true first when you want to preview the return-for-follow-up checks before mutating the child task.'
+		],
 		mcp: {
 			pathArgAliases: {
 				taskId: 'parentTaskId'
@@ -593,7 +1006,24 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when another thread must answer, review, or take work that direct state mutation cannot solve alone.'
 		],
 		readAfter: ['thread:contacts'],
-		nextCommands: ['thread:contacts', 'thread:panel']
+		nextCommands: ['thread:contacts', 'thread:panel'],
+		examples: [
+			{
+				title: 'Send a review request to another thread directly',
+				input: {
+					threadId: 'thread_reviewer',
+					sourceThreadId: 'thread_author',
+					prompt: 'Please review the latest artifact for correctness.',
+					contactType: 'review_request',
+					contextSummary: 'Focus on edge cases in the approval flow.'
+				},
+				output: {
+					threadId: 'thread_reviewer',
+					runId: 'run_456',
+					contactId: 'contact_123'
+				}
+			}
+		]
 	},
 	{
 		resource: 'thread',

@@ -19,6 +19,7 @@ describe('ArtifactBrowser.svelte', () => {
 	});
 
 	it('shows an inline preview for a root file and routes file actions through the artifact viewer', async () => {
+		window.localStorage.clear();
 		render(ArtifactBrowser, {
 			browser: {
 				rootPath: '/tmp/project/agent_output/brief.md',
@@ -53,6 +54,9 @@ describe('ArtifactBrowser.svelte', () => {
 
 		expect(document.body.textContent).toContain('File preview');
 		await expect.element(page.getByText('Hello world.')).toBeInTheDocument();
+		expect(document.body.textContent).toContain('Open in editor');
+		expect(document.body.textContent).toContain('Preferred editor');
+		expect(document.body.textContent).toContain('Auto detect');
 		expect(document.body.textContent).toContain('Quick preview');
 		expect(document.body.textContent).toContain('Copy link');
 

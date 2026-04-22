@@ -657,6 +657,214 @@ describe('agent-control-plane-api', () => {
 		);
 	});
 
+	it('previews approval requests and decomposition without mutating control-plane state', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const agentApiModule = await importAgentApiModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const role = {
+			...controlPlaneModule.createRole({
+				name: 'Implementer',
+				description: 'Handles implementation work'
+			}),
+			id: 'role_impl'
+		};
+		const task = controlPlaneModule.createTask({
+			id: 'task_preview',
+			title: 'Preview me',
+			summary: 'Validate approval and decomposition first',
+			projectId: project.id,
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'before_complete',
+			requiresReview: true,
+			desiredRoleId: role.id,
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			roles: [role],
+			tasks: [task]
+		}));
+
+		const reviewPreview = await agentApiModule.previewAgentApiTaskReviewRequest(task.id, {
+			summary: 'Ready for review.'
+		});
+		const approvalPreview = await agentApiModule.previewAgentApiTaskApprovalRequest(task.id, {
+			summary: 'Ready for approval.'
+		});
+		const decompositionPreview = await agentApiModule.previewAgentApiTaskDecomposition(task.id, {
+			children: [
+				{
+					title: 'Implement API route',
+					instructions: 'Build the machine-readable route.',
+					desiredRoleId: role.id,
+					delegationObjective: 'Implement the route cleanly.',
+					delegationExpectedDeliverable: 'Merged route implementation.',
+					delegationDoneCondition: 'Route exists with tests.'
+				}
+			]
+		});
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(reviewPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'requestReview',
+				taskId: task.id,
+				suggestedNextCommands: expect.arrayContaining(['task:request-review'])
+			})
+		);
+		expect(approvalPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'requestApproval',
+				taskId: task.id,
+				suggestedNextCommands: expect.arrayContaining(['task:request-approval'])
+			})
+		);
+		expect(decompositionPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'decomposeTask',
+				taskId: task.id
+			})
+		);
+		expect(loaded.reviews).toEqual([]);
+		expect(loaded.approvals).toEqual([]);
+		expect(loaded.tasks.filter((candidate) => candidate.parentTaskId === task.id)).toEqual([]);
+	});
+
+	it('previews review, approval, and child-handoff decisions without mutating state', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const agentApiModule = await importAgentApiModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const parentTask = controlPlaneModule.createTask({
+			id: 'task_parent_preview',
+			title: 'Parent task',
+			summary: 'Owns delegated work',
+			projectId: project.id,
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'before_complete',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: project.defaultArtifactRoot
+		});
+		const childTask = controlPlaneModule.createTask({
+			id: 'task_child_preview',
+			title: 'Child task',
+			summary: 'Delegated work',
+			projectId: project.id,
+			goalId: '',
+			parentTaskId: parentTask.id,
+			priority: 'medium',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: false,
+			desiredRoleId: '',
+			status: 'done',
+			artifactPath: project.defaultArtifactRoot
+		});
+		const now = new Date().toISOString();
+		const review = controlPlaneModule.createReview({
+			taskId: parentTask.id,
+			runId: null,
+			summary: 'Review pending.'
+		});
+		const approval = controlPlaneModule.createApproval({
+			taskId: parentTask.id,
+			runId: null,
+			mode: 'before_complete',
+			summary: 'Approval pending.'
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [parentTask, childTask],
+			reviews: [{ ...review, createdAt: now, updatedAt: now }],
+			approvals: [{ ...approval, createdAt: now, updatedAt: now }]
+		}));
+
+		const reviewDecisionPreview = await agentApiModule.previewAgentApiTaskReviewDecision(
+			parentTask.id,
+			'approve'
+		);
+		const approvalDecisionPreview = await agentApiModule.previewAgentApiTaskApprovalDecision(
+			parentTask.id,
+			'reject'
+		);
+		const childHandoffPreview = await agentApiModule.previewAgentApiTaskChildHandoffDecision(
+			parentTask.id,
+			{ childTaskId: childTask.id },
+			'accept'
+		);
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(reviewDecisionPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'approveReview',
+				taskId: parentTask.id
+			})
+		);
+		expect(approvalDecisionPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'rejectApproval',
+				taskId: parentTask.id
+			})
+		);
+		expect(childHandoffPreview).toEqual(
+			expect.objectContaining({
+				validationOnly: true,
+				valid: true,
+				action: 'acceptChildHandoff',
+				taskId: parentTask.id
+			})
+		);
+		expect(loaded.reviews[0]?.status).toBe('open');
+		expect(loaded.approvals[0]?.status).toBe('pending');
+		expect(
+			loaded.tasks.find((candidate) => candidate.id === childTask.id)?.delegationAcceptance
+		).toBeNull();
+	});
+
 	it('approves open reviews through the agent API', async () => {
 		const root = createTempDir();
 		process.chdir(root);

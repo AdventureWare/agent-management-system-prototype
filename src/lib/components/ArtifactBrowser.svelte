@@ -6,7 +6,9 @@
 		artifactPreviewKind
 	} from '$lib/artifact-links';
 	import ArtifactQuickPreviewDialog from '$lib/components/ArtifactQuickPreviewDialog.svelte';
+	import ArtifactEditorPreferenceSelect from '$lib/components/ArtifactEditorPreferenceSelect.svelte';
 	import ArtifactPreviewPane from '$lib/components/ArtifactPreviewPane.svelte';
+	import OpenInEditorButton from '$lib/components/OpenInEditorButton.svelte';
 	import type {
 		ArtifactBrowserData,
 		ArtifactDirectoryEntry,
@@ -231,7 +233,14 @@
 							Inspect the referenced file here instead of downloading it first.
 						</p>
 					</div>
-					<div class="flex flex-wrap gap-2">
+					<div class="flex flex-wrap items-center gap-2">
+						<ArtifactEditorPreferenceSelect />
+						<OpenInEditorButton
+							path={browser.rootPath}
+							line={focusLine}
+							column={focusColumn}
+							className="rounded-full border border-violet-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+						/>
 						{#if browser.browsePath}
 							<a
 								class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-slate-200 uppercase transition hover:border-slate-500/60 hover:text-white"
@@ -327,6 +336,10 @@
 								{:else}
 									<div class="flex flex-wrap gap-2">
 										{#if output.kind === 'file' && artifactPreviewKind(output.path)}
+											<OpenInEditorButton
+												path={output.path}
+												className="rounded-full border border-violet-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+											/>
 											<button
 												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-500/50 hover:text-violet-100"
 												type="button"
@@ -434,6 +447,10 @@
 								{:else}
 									<div class="flex flex-wrap gap-2">
 										{#if entry.kind === 'file' && artifactPreviewKind(entry.path)}
+											<OpenInEditorButton
+												path={entry.path}
+												className="rounded-full border border-violet-800/70 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+											/>
 											<button
 												class="rounded-full border border-slate-700 px-3 py-2 text-xs font-medium tracking-[0.14em] text-violet-200 uppercase transition hover:border-violet-500/50 hover:text-violet-100"
 												type="button"

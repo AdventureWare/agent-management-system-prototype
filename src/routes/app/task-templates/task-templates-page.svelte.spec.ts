@@ -119,7 +119,7 @@ describe('/app/task-templates/+page.svelte', () => {
 		});
 
 		await expect.element(page.getByText('Task template library')).toBeInTheDocument();
-		await expect.element(page.getByText('Research Brief')).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Research Brief' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
 

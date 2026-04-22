@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildAgentThreadCliCommand } from './ams-cli-paths';
 import { buildTaskThreadName, buildTaskThreadPrompt, resolveTaskThreadName } from './task-threads';
 
 describe('task thread naming', () => {
@@ -184,35 +185,44 @@ describe('task thread naming', () => {
 				projectRootFolder: '/tmp/project',
 				defaultArtifactRoot: '/tmp/project/agent_output'
 			})
-		).toContain('node scripts/agent-thread-cli.mjs best-target');
-		expect(
-			buildTaskThreadPrompt({
-				taskName: 'Coordinate thread work',
-				taskInstructions: 'Use another thread if you need outside context.',
-				projectName: 'Agent Management System Prototype',
-				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/agent_output'
-			})
-		).toContain('node scripts/agent-thread-cli.mjs list --can-contact');
-		expect(
-			buildTaskThreadPrompt({
-				taskName: 'Coordinate thread work',
-				taskInstructions: 'Use another thread if you need outside context.',
-				projectName: 'Agent Management System Prototype',
-				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/agent_output'
-			})
-		).toContain('node scripts/agent-thread-cli.mjs resolve <query> --can-contact');
-		expect(
-			buildTaskThreadPrompt({
-				taskName: 'Coordinate thread work',
-				taskInstructions: 'Use another thread if you need outside context.',
-				projectName: 'Agent Management System Prototype',
-				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/agent_output'
-			})
 		).toContain(
-			'node scripts/agent-thread-cli.mjs contact <targetThreadIdOrHandle> --type <question|request_context|request_assignment|handoff|review_request|status_update> --context'
+			'use the AMS helper CLI paths below instead of guessing URLs or assuming the helper scripts exist in the target project workspace'
 		);
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain(buildAgentThreadCliCommand('best-target'));
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain(buildAgentThreadCliCommand('list --can-contact'));
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain(buildAgentThreadCliCommand('resolve <query> --can-contact'));
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain(buildAgentThreadCliCommand('contact <targetThreadIdOrHandle> --type'));
 	});
 });

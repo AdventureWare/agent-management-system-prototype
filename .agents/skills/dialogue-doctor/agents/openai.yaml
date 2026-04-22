@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dialogue Doctor"
+  short_description: "Repair flat, expositional, or same-voice dialogue"
+  default_prompt: "Use $dialogue-doctor to diagnose and improve dialogue that feels expositional, generic, weak in subtext, or too uniform across speakers."

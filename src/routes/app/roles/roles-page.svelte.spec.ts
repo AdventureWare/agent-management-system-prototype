@@ -26,6 +26,20 @@ function renderPage() {
 					executionSurfaceCount: 2,
 					workflowCount: 1,
 					templateCount: 2,
+					family: 'Implementation',
+					taskExamples: [
+						{ id: 'task_fix_layout', name: 'Fix task detail layout' },
+						{ id: 'task_roles_page', name: 'Improve roles page' }
+					],
+					executionSurfaceReferences: [
+						{ id: 'surface_local', name: 'Local Codex Worker' },
+						{ id: 'surface_cloud', name: 'Cloud UI Worker' }
+					],
+					workflowReferences: [{ id: 'workflow_ui_audit', name: 'UI audit workflow' }],
+					templateReferences: [
+						{ id: 'template_ui_polish', name: 'UI polish template' },
+						{ id: 'template_cleanup', name: 'Task detail cleanup' }
+					],
 					taskExampleTitles: ['Fix task detail layout', 'Improve roles page'],
 					executionSurfaceNames: ['Local Codex Worker', 'Cloud UI Worker'],
 					workflowNames: ['UI audit workflow'],
@@ -48,6 +62,11 @@ function renderPage() {
 					executionSurfaceCount: 1,
 					workflowCount: 0,
 					templateCount: 1,
+					family: 'Review',
+					taskExamples: [{ id: 'task_review_roles', name: 'Review role changes' }],
+					executionSurfaceReferences: [{ id: 'surface_review', name: 'Review surface' }],
+					workflowReferences: [],
+					templateReferences: [{ id: 'template_review', name: 'Review template' }],
 					taskExampleTitles: ['Review role changes'],
 					executionSurfaceNames: ['Review surface'],
 					workflowNames: [],
@@ -95,7 +114,7 @@ describe('/app/roles/+page.svelte', () => {
 		expect(reviewerDetailLink?.getAttribute('href')).toBe('/app/roles/role_reviewer');
 
 		const createFromSelectedRoleButton = Array.from(document.querySelectorAll('button')).find(
-			(button) => button.textContent?.includes('Create from selected role')
+			(button) => button.textContent?.includes('Fork selected role')
 		) as HTMLButtonElement | undefined;
 
 		createFromSelectedRoleButton?.click();
@@ -105,8 +124,8 @@ describe('/app/roles/+page.svelte', () => {
 			'form[action="?/createRole"] input[name="name"]'
 		) as HTMLInputElement | null;
 		const createDescriptionField = document.querySelector(
-			'form[action="?/createRole"] input[name="description"]'
-		) as HTMLInputElement | null;
+			'form[action="?/createRole"] textarea[name="description"]'
+		) as HTMLTextAreaElement | null;
 		const createAreaField = document.querySelector(
 			'form[action="?/createRole"] select[name="area"]'
 		) as HTMLSelectElement | null;
@@ -117,11 +136,16 @@ describe('/app/roles/+page.svelte', () => {
 			'form[action="?/createRole"] details'
 		) as HTMLDetailsElement | null;
 
-		expect(createNameField?.value).toBe('Reviewer Copy');
+		const createSourceRoleField = document.querySelector(
+			'form[action="?/createRole"] select[name="sourceRoleId"]'
+		) as HTMLSelectElement | null;
+
+		expect(createNameField?.value).toBe('Reviewer variant');
 		expect(createDescriptionField?.value).toBe(
 			'Checks completeness, provenance, duplicates, and handoff quality.'
 		);
 		expect(createAreaField?.value).toBe('ops');
+		expect(createSourceRoleField?.value).toBe('role_reviewer');
 		expect(createSkillIdsField?.value).toBe('writing');
 		expect(createAdvancedDetails?.open).toBe(true);
 	});

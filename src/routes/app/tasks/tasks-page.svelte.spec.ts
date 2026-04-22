@@ -61,6 +61,7 @@ function createTask(overrides: Record<string, unknown> = {}) {
 			threadActivityAgeMs: null,
 			threadActivityAgeLabel: 'No activity yet'
 		},
+		agentGuidanceHint: null,
 		...overrides
 	};
 }
@@ -427,13 +428,12 @@ describe('/app/tasks/+page.svelte', () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Quick task' }).click();
 
-		const createFormLabels = Array.from(
-			document.querySelectorAll('form[action="?/createTask"] label > span:first-child')
-		).map((label) => label.textContent?.trim());
-
 		await expect.element(page.getByRole('dialog', { name: 'Quick task' })).toBeInTheDocument();
-		expect(createFormLabels.slice(0, 3)).toEqual(['Project', 'Preferred role', 'Name']);
-		expect(createFormLabels[3]).toContain('Instructions');
+		await expect.element(page.getByText('Project', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByText('Preferred role', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Choose role' })).toBeInTheDocument();
+		await expect.element(page.getByText('Name', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByText('Instructions', { exact: true })).toBeInTheDocument();
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="workflowId"]')
 		).toBeNull();
@@ -445,9 +445,7 @@ describe('/app/tasks/+page.svelte', () => {
 		renderPage();
 		await page.getByRole('button', { name: 'Quick task' }).click();
 
-		await expect
-			.element(page.getByRole('combobox', { name: 'Preferred role' }))
-			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Choose role' })).toBeInTheDocument();
 	});
 
 	it('keeps the quick task footer minimal while still allowing create and run', async () => {
@@ -480,7 +478,7 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect.element(page.getByText('Jump to')).toBeInTheDocument();
 
 		expect(
-			document.querySelector('form[action="?/createTask"] select[name="taskTemplateSelection"]')
+			document.querySelector('form[action="?/createTask"] select[name="taskTemplateId"]')
 		).not.toBeNull();
 		expect(
 			document.querySelector('form[action="?/createTask"] select[name="goalId"]')
@@ -601,7 +599,9 @@ describe('/app/tasks/+page.svelte', () => {
 		await expect
 			.element(page.getByText('Manage template details in the task template library.'))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('link', { name: 'Open library' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Open template detail' }))
+			.toBeInTheDocument();
 	});
 
 	it('renders the linked workflow in queue rows', () => {
@@ -882,7 +882,8 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(
 			document.querySelector('form[action="?/createTask"] input[type="search"]')
 		).not.toBeNull();
-		expect(createForm?.textContent).not.toContain('Existing dependency task');
+		expect(createForm?.textContent).toContain('Suggested dependencies');
+		expect(createForm?.textContent).toContain('Existing dependency task');
 
 		const dependencySearch = page.getByRole('searchbox', { name: 'Search tasks' });
 		await dependencySearch.fill('Existing dependency');
@@ -1200,7 +1201,7 @@ describe('/app/tasks/+page.svelte', () => {
 		await page.getByRole('combobox', { name: 'Filter by workflow' }).selectOptions('workflow_1');
 		expect(document.querySelector('[data-testid="task-mobile-card-task_done_reset"]')).toBeNull();
 
-		await page.getByRole('button', { name: 'Completed' }).click();
+		await page.getByRole('button', { name: /Completed 1/ }).click();
 
 		expect(
 			document.querySelector('[data-testid="task-mobile-card-task_done_reset"]')
@@ -1229,5 +1230,34 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(
 			document.querySelector('[data-testid="task-mobile-card-task_done_only"]')
 		).not.toBeNull();
+	});
+
+	it('shows preview-first guidance hints on risky task rows', async () => {
+		renderPage([
+			createTask({
+				id: 'task_preview',
+				title: 'Approval gate task',
+				status: 'done',
+				approvalMode: 'before_complete',
+				agentGuidanceHint: {
+					resource: 'task',
+					command: 'approve-approval',
+					reason: 'There is a pending approval gate on this task.',
+					expectedOutcome: 'Resolve the pending approval by approving the task output.',
+					shouldValidateFirst: true,
+					validationMode: 'validateOnly',
+					validationReason:
+						'Approval resolution is high-impact. Preview whether the task would close before mutating.'
+				}
+			})
+		]);
+
+		await page.getByRole('button', { name: /Completed 1/ }).click();
+
+		expect(document.body.textContent).toContain('Preview first');
+		expect(document.body.textContent).toContain('task:approve-approval');
+		expect(document.body.textContent).toContain(
+			'Approval resolution is high-impact. Preview whether the task would close before mutating.'
+		);
 	});
 });

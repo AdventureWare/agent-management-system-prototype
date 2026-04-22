@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base, resolve } from '$app/paths';
+	import { resolve } from '$app/paths';
 	import {
 		artifactDownloadHref,
 		artifactFileHref,
@@ -7,6 +7,7 @@
 		artifactPreviewKind
 	} from '$lib/artifact-links';
 	import AppDialog from '$lib/components/AppDialog.svelte';
+	import OpenInEditorButton from '$lib/components/OpenInEditorButton.svelte';
 
 	type MessageBlock =
 		| { type: 'heading'; text: string; level: number }
@@ -54,10 +55,6 @@
 			externalLinks: number;
 		};
 	};
-
-	function resolveUncheckedPath(href: string) {
-		return `${base}${href}`;
-	}
 
 	const artifactReferenceStatusCache: Record<string, ArtifactReferenceStatus> = {};
 	const pendingArtifactReferenceRequests: Record<string, Promise<ArtifactReferenceStatus>> = {};
@@ -1376,6 +1373,7 @@
 												</button>
 											{/if}
 											{#if canOpenArtifactReference(reference.path)}
+												{@const localReference = splitLocalPathReference(reference.reference)}
 												{#if onAttachArtifact}
 													<button
 														type="button"
@@ -1402,8 +1400,14 @@
 																	: 'Attach'}
 													</button>
 												{/if}
+												<OpenInEditorButton
+													path={localReference.path}
+													line={localReference.line}
+													column={localReference.column}
+													className="rounded-full border border-violet-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-violet-200 uppercase transition hover:border-violet-700/90 hover:text-violet-100 disabled:cursor-wait disabled:opacity-70"
+												/>
 												<a
-													href={resolveUncheckedPath(localArtifactPageHref(reference.reference))}
+													href={localArtifactPageHref(reference.reference)}
 													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 												>
 													Open page
@@ -1420,18 +1424,14 @@
 													</button>
 												{/if}
 												<a
-													href={resolveUncheckedPath(
-														artifactDownloadHref(trimLocalPathFragment(reference.reference))
-													)}
+													href={artifactDownloadHref(trimLocalPathFragment(reference.reference))}
 													class="rounded-full border border-emerald-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-emerald-200 uppercase transition hover:border-emerald-700/90 hover:text-emerald-100"
 												>
 													Download
 												</a>
 											{:else if canBrowseArtifactReference(reference.path)}
 												<a
-													href={resolveUncheckedPath(
-														artifactFileHref(trimLocalPathFragment(reference.reference))
-													)}
+													href={artifactFileHref(trimLocalPathFragment(reference.reference))}
 													class="rounded-full border border-sky-800/70 px-2.5 py-1.5 text-[11px] font-medium tracking-[0.12em] text-sky-200 uppercase transition hover:border-sky-700/90 hover:text-sky-100"
 												>
 													Browse
