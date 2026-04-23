@@ -111,6 +111,17 @@
 		routingReason: string;
 	};
 
+	type ThreadControlPlaneRun = {
+		id: string;
+		taskId: string;
+		taskTitle: string;
+		agentThreadRunId: string | null;
+		status: string;
+		summary: string;
+		errorSummary: string;
+		updatedAt: string;
+	};
+
 	type ContactContextItemOption = AgentThreadContactContextItem & {
 		defaultSelected: boolean;
 	};
@@ -126,6 +137,7 @@
 		taskResponseAction = null,
 		threadContacts = [],
 		threadContactTargets = [],
+		threadControlPlaneRuns = [],
 		lazyLoadThreadContactTargets = false,
 		responseContextArtifacts = [],
 		form = null,
@@ -139,6 +151,7 @@
 		taskResponseAction?: TaskResponseAction | null;
 		threadContacts?: AgentThreadContact[];
 		threadContactTargets?: ThreadContactTarget[];
+		threadControlPlaneRuns?: ThreadControlPlaneRun[];
 		lazyLoadThreadContactTargets?: boolean;
 		responseContextArtifacts?: ResponseContextArtifact[];
 		form?: {
@@ -375,6 +388,17 @@
 	let latestInstructionNeedsClamp = $derived((latestContextRun?.prompt?.trim().length ?? 0) > 180);
 	let selectedContactTarget = $derived.by<ThreadContactTarget | null>(
 		() => contactTargetById.get(contactTargetThreadId) ?? null
+	);
+	let controlPlaneRunByAgentRunId = $derived.by<Map<string, ThreadControlPlaneRun>>(
+		() =>
+			new Map(
+				threadControlPlaneRuns
+					.filter((run: ThreadControlPlaneRun) => Boolean(run.agentThreadRunId))
+					.map((run: ThreadControlPlaneRun) => [run.agentThreadRunId as string, run] as const)
+			)
+	);
+	let latestContextControlPlaneRun = $derived.by(() =>
+		latestContextRun ? controlPlaneRunForAgentRun(latestContextRun) : null
 	);
 	let orderedThreadContacts = $derived.by(() =>
 		[...threadContactsState].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -1468,6 +1492,10 @@
 		return run.mode === 'message' ? 'Follow-up queued on' : 'Queued on';
 	}
 
+	function controlPlaneRunForAgentRun(run: AgentRunDetail) {
+		return controlPlaneRunByAgentRunId.get(run.id) ?? null;
+	}
+
 	function describeThreadState(detail: AgentThreadDetail): ThreadStateDescriptor {
 		return {
 			label: formatThreadStateLabel(detail.threadState ?? detail.threadState ?? 'idle'),
@@ -2114,11 +2142,40 @@
 										>
 											{latestContextRun.mode}
 										</span>
+										{#if latestContextControlPlaneRun}
+											<AppButton
+												size="sm"
+												href={resolve(`/app/runs/${latestContextControlPlaneRun.id}#run-logs`)}
+												variant={latestContextControlPlaneRun.errorSummary ? 'neutral' : 'ghost'}
+											>
+												Run logs
+											</AppButton>
+										{/if}
 									</div>
 								{/if}
 							</div>
 
 							{#if latestContextRun}
+								{#if latestContextControlPlaneRun?.errorSummary}
+									<div class="mt-4 rounded-xl border border-rose-900/60 bg-rose-950/25 p-4">
+										<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+											<div class="min-w-0">
+												<p class="text-sm font-semibold text-rose-100">
+													Latest control-plane run needs attention
+												</p>
+												<p class="ui-wrap-anywhere mt-2 text-sm text-rose-100/80">
+													{latestContextControlPlaneRun.errorSummary}
+												</p>
+											</div>
+											<a
+												class="inline-flex shrink-0 items-center justify-center rounded-full border border-rose-700/70 bg-rose-950/50 px-3 py-2 text-center text-xs font-medium text-rose-100 transition hover:border-rose-500/70 hover:text-white"
+												href={resolve(`/app/runs/${latestContextControlPlaneRun.id}#run-logs`)}
+											>
+												View failure logs
+											</a>
+										</div>
+									</div>
+								{/if}
 								{@const latestExecution = executionMeta(session)}
 								<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.48fr)]">
 									<div class="min-w-0 space-y-4 xl:col-span-2">
@@ -2221,6 +2278,7 @@
 					</DetailSection>
 
 					{#if selectedHistoricalRun}
+						{@const selectedControlPlaneRun = controlPlaneRunForAgentRun(selectedHistoricalRun)}
 						<DetailSection
 							eyebrow="Selected turn"
 							title="Inspect earlier context"
@@ -2248,8 +2306,38 @@
 									>
 										{selectedHistoricalRun.mode}
 									</span>
+									{#if selectedControlPlaneRun}
+										<AppButton
+											size="sm"
+											href={resolve(`/app/runs/${selectedControlPlaneRun.id}#run-logs`)}
+											variant={selectedControlPlaneRun.errorSummary ? 'neutral' : 'ghost'}
+										>
+											Run logs
+										</AppButton>
+									{/if}
 								</div>
 							</div>
+
+							{#if selectedControlPlaneRun?.errorSummary}
+								<div class="rounded-xl border border-rose-900/60 bg-rose-950/25 p-4">
+									<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+										<div class="min-w-0">
+											<p class="text-sm font-semibold text-rose-100">
+												Selected turn has a failed control-plane run
+											</p>
+											<p class="ui-wrap-anywhere mt-2 text-sm text-rose-100/80">
+												{selectedControlPlaneRun.errorSummary}
+											</p>
+										</div>
+										<a
+											class="inline-flex shrink-0 items-center justify-center rounded-full border border-rose-700/70 bg-rose-950/50 px-3 py-2 text-center text-xs font-medium text-rose-100 transition hover:border-rose-500/70 hover:text-white"
+											href={resolve(`/app/runs/${selectedControlPlaneRun.id}#run-logs`)}
+										>
+											View failure logs
+										</a>
+									</div>
+								</div>
+							{/if}
 
 							<div class="grid gap-3 sm:grid-cols-3">
 								<DetailFactCard
@@ -2353,6 +2441,7 @@
 							</p>
 						{:else}
 							{#each visibleConversationRuns as run (run.id)}
+								{@const runControlPlaneRecord = controlPlaneRunForAgentRun(run)}
 								<article
 									data-testid={`conversation-run-${run.id}`}
 									class={[
@@ -2446,6 +2535,15 @@
 												? 'Collapse full text'
 												: 'Expand full text'}
 										</AppButton>
+										{#if runControlPlaneRecord}
+											<AppButton
+												size="sm"
+												href={resolve(`/app/runs/${runControlPlaneRecord.id}#run-logs`)}
+												variant={runControlPlaneRecord.errorSummary ? 'neutral' : 'ghost'}
+											>
+												{runControlPlaneRecord.errorSummary ? 'Failure logs' : 'Run logs'}
+											</AppButton>
+										{/if}
 									</div>
 								</article>
 							{/each}

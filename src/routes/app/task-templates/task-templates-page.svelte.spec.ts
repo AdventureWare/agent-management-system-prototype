@@ -37,6 +37,13 @@ describe('/app/task-templates/+page.svelte', () => {
 						requiredPromptSkillNames: ['web-design-guidelines'],
 						requiredCapabilityNames: ['planning'],
 						requiredToolNames: ['codex'],
+						lifecycleStatus: 'superseded',
+						supersededByTaskTemplateId: 'task_template_review',
+						supersededByTaskTemplate: {
+							id: 'task_template_review',
+							name: 'Review Brief'
+						},
+						createdTaskCount: 2,
 						createdAt: '2026-04-15T09:00:00.000Z',
 						updatedAt: '2026-04-15T09:00:00.000Z'
 					}
@@ -120,6 +127,8 @@ describe('/app/task-templates/+page.svelte', () => {
 
 		await expect.element(page.getByText('Task template library')).toBeInTheDocument();
 		await expect.element(page.getByRole('link', { name: 'Research Brief' })).toBeInTheDocument();
+		await expect.element(page.getByText('Migrate downstream tasks')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Migrate tasks' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
 

@@ -11,6 +11,7 @@
 	import ArtifactBrowser from '$lib/components/ArtifactBrowser.svelte';
 	import AppButton from '$lib/components/AppButton.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
+	import DetailFactCard from '$lib/components/DetailFactCard.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { ACTIVE_REFRESH_INTERVAL_MS, formatThreadStateLabel } from '$lib/thread-activity';
 	import {
@@ -65,6 +66,32 @@
 
 	function shouldAutoRefreshRunDetail() {
 		return ['queued', 'starting', 'running'].includes(data.run.status);
+	}
+
+	function agentRunStatusLabel() {
+		return data.agentThreadRun?.state?.status ?? 'No agent run';
+	}
+
+	function agentRunExitLabel() {
+		const state = data.agentThreadRun?.state;
+
+		if (!state) {
+			return 'Not recorded';
+		}
+
+		if (state.exitCode !== null && state.exitCode !== undefined) {
+			return `Exit ${state.exitCode}`;
+		}
+
+		if (state.signal) {
+			return `Signal ${state.signal}`;
+		}
+
+		return 'No exit recorded';
+	}
+
+	function lineCountLabel(count: number) {
+		return `${count} saved log line${count === 1 ? '' : 's'}`;
 	}
 
 	function buildAgentUseHref(filters: Record<string, string | null | undefined>) {
@@ -166,6 +193,9 @@
 		</AppButton>
 		<AppButton href={buildAgentUseHref({ task: data.run.taskId })} variant="ghost">
 			View task agent use
+		</AppButton>
+		<AppButton href="#run-logs" variant={data.run.errorSummary ? 'neutral' : 'ghost'}>
+			View logs
 		</AppButton>
 	</div>
 
@@ -438,6 +468,123 @@
 						{data.run.errorSummary || 'No error summary recorded.'}
 					</p>
 				</div>
+			</section>
+
+			<section id="run-logs" class="scroll-mt-6 card border border-slate-800 bg-slate-950/70 p-6">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+					<div>
+						<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">Run logs</p>
+						<h2 class="mt-2 text-xl font-semibold text-white">Agent process output</h2>
+						<p class="mt-2 text-sm text-slate-400">
+							Inspect the saved process state, recent log tail, and local files behind this run.
+						</p>
+					</div>
+					{#if data.run.agentThreadId}
+						<AppButton href={resolve(`/app/threads/${data.run.agentThreadId}`)} variant="ghost">
+							Open thread
+						</AppButton>
+					{/if}
+				</div>
+
+				{#if data.agentThreadRun}
+					<div class="mt-5 grid gap-3 sm:grid-cols-2">
+						<DetailFactCard label="Agent run" value={data.agentThreadRun.id} />
+						<DetailFactCard
+							label="Process state"
+							value={agentRunStatusLabel()}
+							detail={agentRunExitLabel()}
+						/>
+						<DetailFactCard
+							label="Started"
+							value={formatTimestamp(data.agentThreadRun.state?.startedAt ?? null)}
+						/>
+						<DetailFactCard
+							label="Finished"
+							value={formatTimestamp(data.agentThreadRun.state?.finishedAt ?? null)}
+						/>
+					</div>
+
+					<div class="mt-4 space-y-3">
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Log file
+							</p>
+							<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-200">
+								{data.agentThreadRun.logPath}
+							</p>
+						</div>
+
+						<div class="grid gap-3 sm:grid-cols-3">
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									State file
+								</p>
+								<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-300">
+									{data.agentThreadRun.statePath}
+								</p>
+							</div>
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Message file
+								</p>
+								<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-300">
+									{data.agentThreadRun.messagePath}
+								</p>
+							</div>
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Config file
+								</p>
+								<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-300">
+									{data.agentThreadRun.configPath}
+								</p>
+							</div>
+						</div>
+
+						{#if data.agentThreadRun.lastMessage}
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Last saved message
+								</p>
+								<p class="ui-wrap-anywhere mt-3 text-sm whitespace-pre-wrap text-slate-200">
+									{data.agentThreadRun.lastMessage}
+								</p>
+							</div>
+						{/if}
+
+						<div
+							class={data.agentThreadRun.logTail.length > 0
+								? 'rounded-2xl border border-slate-800 bg-black/40 p-4'
+								: 'rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-4'}
+						>
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Recent log output
+								</p>
+								<p class="text-xs text-slate-500">
+									{lineCountLabel(data.agentThreadRun.logTail.length)}
+								</p>
+							</div>
+							{#if data.agentThreadRun.logTail.length > 0}
+								<pre
+									class="ui-wrap-anywhere mt-3 max-h-[32rem] overflow-auto text-xs leading-5 whitespace-pre-wrap text-slate-200">{data.agentThreadRun.logTail.join(
+										'\n'
+									)}</pre>
+							{:else}
+								<p class="mt-3 text-sm text-slate-400">
+									No recent log lines were saved for this agent run.
+								</p>
+							{/if}
+						</div>
+					</div>
+				{:else}
+					<p
+						class="mt-5 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-6 text-sm text-slate-400"
+					>
+						This control-plane run is not linked to a saved agent-run log record. Check the thread
+						page or artifact paths if this run predates agent-run log linking.
+					</p>
+				{/if}
 			</section>
 
 			<section class="card border border-slate-800 bg-slate-950/70 p-6">

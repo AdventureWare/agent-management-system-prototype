@@ -1,11 +1,37 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { listAgentThreads } from '$lib/server/agent-threads';
+import { getAgentThread, listAgentThreads } from '$lib/server/agent-threads';
 import { loadAgentCurrentContext } from '$lib/server/agent-current-context';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { getExecutionSurfaces } from '$lib/server/control-plane';
 import { buildRunRecords } from '$lib/server/run-records';
 import { loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
+import type { AgentRunDetail, AgentThreadDetail } from '$lib/types/agent-thread';
+import type { Run } from '$lib/types/control-plane';
+
+function findAgentThreadRun(input: {
+	run: Run;
+	thread: AgentThreadDetail | null;
+}): AgentRunDetail | null {
+	if (!input.thread) {
+		return null;
+	}
+
+	if (input.run.agentThreadRunId) {
+		const matchedRun =
+			input.thread.runs.find((candidate) => candidate.id === input.run.agentThreadRunId) ?? null;
+
+		if (matchedRun) {
+			return matchedRun;
+		}
+	}
+
+	if (input.thread.runs.length === 1) {
+		return input.thread.runs[0] ?? null;
+	}
+
+	return null;
+}
 
 export const load: PageServerLoad = async ({ params }) => {
 	const controlPlanePromise = loadControlPlaneWithRunTelemetry();
@@ -24,8 +50,14 @@ export const load: PageServerLoad = async ({ params }) => {
 		throw error(404, 'Run not found.');
 	}
 
+	const thread = run.agentThreadId
+		? await getAgentThread(run.agentThreadId, { controlPlane: data })
+		: null;
+	const agentThreadRun = findAgentThreadRun({ run, thread });
+
 	return {
 		run,
+		agentThreadRun,
 		artifactBrowsers: await Promise.all(
 			run.artifactPaths.map((path) =>
 				buildArtifactBrowser({
@@ -43,7 +75,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,
 		thread: run.agentThreadId
-			? (threads.find((thread) => thread.id === run.agentThreadId) ?? null)
+			? (thread ?? threads.find((candidate) => candidate.id === run.agentThreadId) ?? null)
 			: null,
 		agentCurrentContext: await loadAgentCurrentContext({ runId: params.runId }),
 		relatedTaskRuns: runs

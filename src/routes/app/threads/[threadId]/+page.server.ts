@@ -498,6 +498,18 @@ export const load: PageServerLoad = async ({ params }) => {
 		}),
 		threadContacts: contacts,
 		threadContactTargets: [],
+		threadControlPlaneRuns: data.runs
+			.filter((run) => run.agentThreadId === params.threadId)
+			.map((run) => ({
+				id: run.id,
+				taskId: run.taskId,
+				taskTitle: data.tasks.find((task) => task.id === run.taskId)?.title ?? 'Unknown task',
+				agentThreadRunId: run.agentThreadRunId ?? null,
+				status: run.status,
+				summary: run.summary,
+				errorSummary: run.errorSummary,
+				updatedAt: run.updatedAt
+			})),
 		responseContextArtifacts: buildThreadResponseContextArtifacts({
 			threadId: params.threadId,
 			thread,

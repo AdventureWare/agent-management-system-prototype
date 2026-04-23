@@ -33,6 +33,9 @@
 	let deleteTaskTemplateSuccess = $derived(
 		form?.ok && form?.successAction === 'deleteTaskTemplate'
 	);
+	let migrateTaskTemplateReferencesSuccess = $derived(
+		form?.ok && form?.successAction === 'migrateTaskTemplateReferences'
+	);
 	let workflowLinkedTemplateCount = $derived(
 		data.taskTemplates.filter((taskTemplate) => Boolean(taskTemplate.workflowId)).length
 	);
@@ -192,7 +195,7 @@
 		{/snippet}
 	</PageHeader>
 
-	{#if form?.message}
+	{#if form?.message && !form?.ok}
 		<p class="ui-notice border border-rose-900/70 bg-rose-950/40 text-rose-200">
 			{form.message}
 		</p>
@@ -213,6 +216,12 @@
 	{#if deleteTaskTemplateSuccess}
 		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
 			Task template deleted.
+		</p>
+	{/if}
+
+	{#if migrateTaskTemplateReferencesSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			{form?.message || 'Task template references migrated.'}
 		</p>
 	{/if}
 
@@ -435,6 +444,53 @@
 										No successor
 									{/if}
 								</p>
+							</div>
+						</div>
+					{/if}
+
+					{#if taskTemplate.supersededByTaskTemplate && (taskTemplate.createdTaskCount ?? 0) > 0}
+						<div class="mt-4 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="max-w-2xl">
+									<p class="text-sm font-medium text-white">Migrate downstream tasks</p>
+									<p class="mt-2 text-sm text-slate-300">
+										This superseded template still owns {taskTemplate.createdTaskCount}
+										recorded task{taskTemplate.createdTaskCount === 1 ? '' : 's'}. Move that
+										provenance to
+										<a
+											class="underline decoration-amber-700 underline-offset-4 hover:text-white"
+											href={resolve(
+												`/app/task-templates/${taskTemplate.supersededByTaskTemplate.id}`
+											)}
+										>
+											{taskTemplate.supersededByTaskTemplate.name}
+										</a>
+										from the library.
+									</p>
+								</div>
+
+								<form
+									method="POST"
+									action="?/migrateTaskTemplateReferences"
+									data-persist-scope="manual"
+								>
+									<input type="hidden" name="taskTemplateId" value={taskTemplate.id} />
+									<AppButton
+										type="submit"
+										variant="warning"
+										onclick={(event) => {
+											if (
+												!window.confirm(
+													`Move all recorded tasks from "${taskTemplate.name}" to "${taskTemplate.supersededByTaskTemplate?.name}"?`
+												)
+											) {
+												event.preventDefault();
+											}
+										}}
+									>
+										Migrate tasks
+									</AppButton>
+								</form>
 							</div>
 						</div>
 					{/if}

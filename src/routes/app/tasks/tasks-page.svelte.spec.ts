@@ -782,7 +782,7 @@ describe('/app/tasks/+page.svelte', () => {
 			document.querySelector('[data-testid="task-mobile-card-task_child_active"]')
 		).not.toBeNull();
 
-		await page.getByRole('button', { name: /Completed 0/ }).click();
+		await page.getByRole('tab', { name: /Completed 0/ }).click();
 
 		expect(document.body.textContent).toContain('No completed tasks match the current filters.');
 		expect(document.body.textContent).not.toContain('Completed child task');

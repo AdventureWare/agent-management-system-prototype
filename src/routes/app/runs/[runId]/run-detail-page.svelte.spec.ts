@@ -70,6 +70,31 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					createdAtLabel: '5m ago',
 					updatedAtLabel: 'just now'
 				},
+				agentThreadRun: {
+					id: 'agent_run_1',
+					agentThreadId: 'session_1',
+					mode: 'start',
+					prompt: 'Implement the runs page.',
+					requestedThreadId: null,
+					createdAt: '2026-03-30T12:00:00.000Z',
+					updatedAt: '2026-03-30T12:05:00.000Z',
+					logPath: '/tmp/project/.agents/runs/agent_run_1/codex.log',
+					statePath: '/tmp/project/.agents/runs/agent_run_1/state.json',
+					messagePath: '/tmp/project/.agents/runs/agent_run_1/last-message.txt',
+					configPath: '/tmp/project/.agents/runs/agent_run_1/config.json',
+					state: {
+						status: 'failed',
+						pid: null,
+						startedAt: '2026-03-30T12:01:00.000Z',
+						finishedAt: '2026-03-30T12:05:00.000Z',
+						exitCode: 1,
+						signal: null,
+						codexThreadId: 'thread_1'
+					},
+					lastMessage: null,
+					logTail: ['route load started', 'Error: missing execution-surface filter'],
+					activityAt: '2026-03-30T12:05:00.000Z'
+				},
 				task: {
 					id: 'task_1'
 				},
@@ -105,6 +130,9 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 			'Route load failed on missing execution-surface filter.'
 		);
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1/log.txt');
+		expect(document.body.textContent).toContain('Run logs');
+		expect(document.body.textContent).toContain('/tmp/project/.agents/runs/agent_run_1/codex.log');
+		expect(document.body.textContent).toContain('Error: missing execution-surface filter');
 		expect(document.body.textContent).toContain('Recorded output');
 		expect(
 			Array.from(document.querySelectorAll('a')).some(
@@ -155,6 +183,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					createdAtLabel: '5m ago',
 					updatedAtLabel: 'just now'
 				},
+				agentThreadRun: null,
 				task: { id: 'task_2' },
 				executionSurface: null,
 				provider: null,

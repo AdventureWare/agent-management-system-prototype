@@ -519,7 +519,26 @@
 								<td class="px-3 py-3">
 									<div class="min-w-[14rem] space-y-2 text-sm text-slate-300">
 										<p>{run.heartbeatAgeLabel}</p>
-										<p class="text-rose-300">{compactText(run.errorSummary || 'No errors')}</p>
+										{#if run.errorSummary}
+											<p
+												class="rounded-xl border border-rose-900/60 bg-rose-950/25 px-3 py-2 text-rose-200"
+											>
+												{compactText(run.errorSummary)}
+											</p>
+											<a
+												class="inline-flex text-xs font-medium text-rose-200 transition hover:text-rose-100"
+												href={resolve(`/app/runs/${run.id}#run-logs`)}
+											>
+												View failure logs
+											</a>
+										{:else}
+											<a
+												class="inline-flex text-xs font-medium text-sky-300 transition hover:text-sky-200"
+												href={resolve(`/app/runs/${run.id}#run-logs`)}
+											>
+												View logs
+											</a>
+										{/if}
 									</div>
 								</td>
 								<td class="px-3 py-3">

@@ -258,7 +258,8 @@ describe('/app/task-templates/[taskTemplateId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Execution defaults');
 		expect(document.body.textContent).toContain('Compare templates');
 		expect(document.body.textContent).toContain('Migrate downstream tasks');
-		expect(document.body.textContent).toContain('Key contrast');
+		expect(document.body.textContent).toContain('Key contrasts');
+		expect(document.body.textContent).toContain('Workflow:');
 		expect(document.querySelector('form[action="?/updateTaskTemplate"]')).not.toBeNull();
 		expect(document.querySelector('form[action="?/migrateTaskTemplateReferences"]')).not.toBeNull();
 		expect(

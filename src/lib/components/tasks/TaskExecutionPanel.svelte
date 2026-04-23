@@ -91,6 +91,7 @@
 		id: string;
 		status: string;
 		summary: string | null;
+		errorSummary?: string | null;
 		updatedAtLabel: string;
 		executionSurfaceName: string;
 		providerName: string;
@@ -259,6 +260,10 @@
 			.filter((run) => ['failed', 'blocked', 'canceled'].includes(run.status))
 			.reduce((total, run) => total + (run.estimatedCostUsd ?? 0), 0)
 	);
+	let attentionRuns = $derived(
+		relatedRuns.filter((run) => ['failed', 'blocked', 'canceled'].includes(run.status))
+	);
+	let latestAttentionRun = $derived(attentionRuns[0] ?? null);
 	let lastPricedRun = $derived(
 		relatedRuns.find(
 			(run) => run.estimatedCostUsd !== null && run.estimatedCostUsd !== undefined
@@ -1006,6 +1011,29 @@
 				</a>
 			</div>
 
+			{#if latestAttentionRun}
+				<div class="mt-5 rounded-2xl border border-rose-900/60 bg-rose-950/25 p-4">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<div class="min-w-0">
+							<p class="text-sm font-semibold text-rose-100">
+								Latest attention run: {formatRunStatusLabel(latestAttentionRun.status)}
+							</p>
+							<p class="ui-wrap-anywhere mt-2 text-sm text-rose-100/80">
+								{latestAttentionRun.errorSummary ||
+									latestAttentionRun.summary ||
+									'Open the run detail page to inspect its saved process state and logs.'}
+							</p>
+						</div>
+						<a
+							class="inline-flex shrink-0 items-center justify-center rounded-full border border-rose-700/70 bg-rose-950/50 px-3 py-2 text-center text-xs font-medium text-rose-100 transition hover:border-rose-500/70 hover:text-white"
+							href={resolve(`/app/runs/${latestAttentionRun.id}#run-logs`)}
+						>
+							View failure logs
+						</a>
+					</div>
+				</div>
+			{/if}
+
 			<div class="mt-5 space-y-4">
 				{#if relatedRuns.length === 0}
 					<p
@@ -1035,6 +1063,13 @@
 									<p class="ui-wrap-anywhere mt-2 text-sm text-slate-300">
 										{run.summary || 'No summary recorded.'}
 									</p>
+									{#if run.errorSummary}
+										<p
+											class="ui-wrap-anywhere mt-3 rounded-xl border border-rose-900/60 bg-rose-950/25 px-3 py-2 text-sm text-rose-100"
+										>
+											{run.errorSummary}
+										</p>
+									{/if}
 								</div>
 								<p class="text-xs text-slate-500">Updated {run.updatedAtLabel}</p>
 							</div>
@@ -1092,9 +1127,9 @@
 							<div class="mt-3">
 								<a
 									class="text-xs font-medium text-sky-300 transition hover:text-sky-200"
-									href={resolve(`/app/runs/${run.id}`)}
+									href={resolve(`/app/runs/${run.id}#run-logs`)}
 								>
-									Open run details
+									Open run details and logs
 								</a>
 							</div>
 						</article>

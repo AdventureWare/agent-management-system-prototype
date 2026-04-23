@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { persistPageFields } from '$lib/client/persist-page-fields';
+	import AssistantLauncher from '$lib/components/AssistantLauncher.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let { children } = $props();
@@ -31,5 +32,6 @@
 		<div use:persistPageFields>
 			{@render children()}
 		</div>
+		<AssistantLauncher />
 	</Sidebar>
 {/if}

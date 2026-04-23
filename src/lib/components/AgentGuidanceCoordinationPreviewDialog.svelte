@@ -40,6 +40,14 @@
 		  }
 		| null;
 
+	type CoordinationPreviewMemory = {
+		targetThreadIdOrHandle?: string;
+		prompt?: string;
+		updatedAt?: string;
+	};
+
+	const COORDINATION_PREVIEW_MEMORY_KEY = 'ams:coordination-preview-memory';
+
 	let {
 		open = $bindable(false),
 		sourceThreadId,
@@ -60,7 +68,48 @@
 	let previewLoading = $state(false);
 	let previewError = $state<string | null>(null);
 	let previewResult = $state.raw<CoordinationPreviewResult | null>(null);
+	let memoryRestored = $state(false);
 	let selectableTargets = $derived(targets.filter((target) => target.canContact));
+
+	function readMemory(threadId: string): CoordinationPreviewMemory | null {
+		try {
+			const raw = globalThis.localStorage?.getItem(COORDINATION_PREVIEW_MEMORY_KEY);
+			const parsed = raw ? JSON.parse(raw) : null;
+			const entry = parsed && typeof parsed === 'object' ? parsed[threadId] : null;
+
+			if (!entry || typeof entry !== 'object') {
+				return null;
+			}
+
+			return {
+				targetThreadIdOrHandle:
+					typeof entry.targetThreadIdOrHandle === 'string'
+						? entry.targetThreadIdOrHandle
+						: undefined,
+				prompt: typeof entry.prompt === 'string' ? entry.prompt : undefined,
+				updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : undefined
+			};
+		} catch {
+			return null;
+		}
+	}
+
+	function writeMemory(threadId: string, memory: CoordinationPreviewMemory) {
+		try {
+			const raw = globalThis.localStorage?.getItem(COORDINATION_PREVIEW_MEMORY_KEY);
+			const parsed = raw ? JSON.parse(raw) : null;
+			const next = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+
+			next[threadId] = {
+				...memory,
+				updatedAt: new Date().toISOString()
+			};
+
+			globalThis.localStorage?.setItem(COORDINATION_PREVIEW_MEMORY_KEY, JSON.stringify(next));
+		} catch {
+			// Browser storage can be unavailable; preview should still work without persistence.
+		}
+	}
 
 	$effect(() => {
 		if (!open) {
@@ -78,6 +127,9 @@
 			return;
 		}
 
+		const remembered = readMemory(sourceThreadId);
+		memoryRestored = Boolean(remembered?.targetThreadIdOrHandle || remembered?.prompt);
+		prompt = remembered?.prompt || initialPrompt;
 		loadingTargets = true;
 		targetsError = null;
 
@@ -108,10 +160,14 @@
 				targets = nextTargets;
 				const preferredTarget =
 					nextTargets.find((target: ThreadContactTarget) => target.canContact) ?? null;
-				targetThreadIdOrHandle = preferredTarget?.handle || preferredTarget?.id || '';
+				targetThreadIdOrHandle =
+					remembered?.targetThreadIdOrHandle ||
+					preferredTarget?.handle ||
+					preferredTarget?.id ||
+					'';
 			} catch (error) {
 				targets = [];
-				targetThreadIdOrHandle = '';
+				targetThreadIdOrHandle = remembered?.targetThreadIdOrHandle || '';
 				targetsError =
 					error instanceof Error ? error.message : 'Could not load thread contact targets.';
 			} finally {
@@ -187,6 +243,11 @@
 			}
 
 			previewResult = (payload as CoordinationPreviewResult) ?? null;
+			writeMemory(sourceThreadId, {
+				targetThreadIdOrHandle: targetThreadIdOrHandle.trim(),
+				prompt: prompt.trim()
+			});
+			memoryRestored = true;
 		} catch (error) {
 			previewError =
 				error instanceof Error ? error.message : 'Could not run the coordination preview.';
@@ -224,6 +285,11 @@
 							<span class="text-xs text-slate-500">Loading targets…</span>
 						{/if}
 					</div>
+					{#if memoryRestored}
+						<p class="mt-2 text-xs text-slate-400">
+							Restored the last target and prompt used from this source thread.
+						</p>
+					{/if}
 
 					{#if targetsError}
 						<p class="mt-3 text-sm text-rose-200">{targetsError}</p>

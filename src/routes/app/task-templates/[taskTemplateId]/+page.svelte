@@ -186,40 +186,78 @@
 		].join(' · ');
 	}
 
-	function describeTemplateContrast(
+	function describeTemplateContrasts(
 		currentTemplate: typeof taskTemplate,
 		otherTemplate: typeof taskTemplate
 	) {
-		const contrasts: string[] = [];
+		const contrasts: Array<{ label: string; detail: string }> = [];
 
 		if ((currentTemplate.workflow?.id ?? '') !== (otherTemplate.workflow?.id ?? '')) {
-			contrasts.push(
-				currentTemplate.workflow && !otherTemplate.workflow
-					? `${currentTemplate.name} carries a workflow; ${otherTemplate.name} stays single-task.`
-					: !currentTemplate.workflow && otherTemplate.workflow
-						? `${otherTemplate.name} carries a workflow; ${currentTemplate.name} stays single-task.`
-						: 'They route through different workflows.'
-			);
+			contrasts.push({
+				label: 'Workflow',
+				detail:
+					currentTemplate.workflow && !otherTemplate.workflow
+						? `${currentTemplate.name} carries a workflow; ${otherTemplate.name} stays single-task.`
+						: !currentTemplate.workflow && otherTemplate.workflow
+							? `${otherTemplate.name} carries a workflow; ${currentTemplate.name} stays single-task.`
+							: 'They route through different workflows.'
+			});
 		}
 
 		if ((currentTemplate.desiredRole?.id ?? '') !== (otherTemplate.desiredRole?.id ?? '')) {
-			contrasts.push(
-				`They default to different roles: ${currentTemplate.desiredRole?.name ?? 'none'} vs ${otherTemplate.desiredRole?.name ?? 'none'}.`
-			);
+			contrasts.push({
+				label: 'Role',
+				detail: `They default to different roles: ${currentTemplate.desiredRole?.name ?? 'none'} vs ${otherTemplate.desiredRole?.name ?? 'none'}.`
+			});
+		}
+
+		if (
+			(currentTemplate.lifecycleStatus ?? 'active') !== (otherTemplate.lifecycleStatus ?? 'active')
+		) {
+			contrasts.push({
+				label: 'Catalog state',
+				detail: `${currentTemplate.name} is ${formatCatalogLifecycleStatusLabel(currentTemplate.lifecycleStatus ?? 'active')}; ${otherTemplate.name} is ${formatCatalogLifecycleStatusLabel(otherTemplate.lifecycleStatus ?? 'active')}.`
+			});
+		}
+
+		const currentRequirementCount =
+			currentTemplate.requiredPromptSkillNames.length +
+			currentTemplate.requiredCapabilityNames.length +
+			currentTemplate.requiredToolNames.length;
+		const otherRequirementCount =
+			otherTemplate.requiredPromptSkillNames.length +
+			otherTemplate.requiredCapabilityNames.length +
+			otherTemplate.requiredToolNames.length;
+
+		if (currentRequirementCount !== otherRequirementCount) {
+			contrasts.push({
+				label: 'Requirements',
+				detail:
+					currentRequirementCount > otherRequirementCount
+						? `${currentTemplate.name} carries more execution requirements.`
+						: `${otherTemplate.name} carries more execution requirements.`
+			});
 		}
 
 		if ((currentTemplate.createdTaskCount ?? 0) !== (otherTemplate.createdTaskCount ?? 0)) {
-			contrasts.push(
-				currentTemplate.createdTaskCount > otherTemplate.createdTaskCount
-					? `${currentTemplate.name} has more recorded downstream use.`
-					: `${otherTemplate.name} has more recorded downstream use.`
-			);
+			contrasts.push({
+				label: 'Usage',
+				detail:
+					currentTemplate.createdTaskCount > otherTemplate.createdTaskCount
+						? `${currentTemplate.name} has more recorded downstream use.`
+						: `${otherTemplate.name} has more recorded downstream use.`
+			});
 		}
 
-		return (
-			contrasts[0] ??
-			'The clearest difference is in the summary, instructions, and reusable defaults.'
-		);
+		return contrasts.length > 0
+			? contrasts.slice(0, 4)
+			: [
+					{
+						label: 'Definition',
+						detail:
+							'The clearest difference is in the summary, instructions, and reusable defaults.'
+					}
+				];
 	}
 </script>
 
@@ -696,11 +734,16 @@
 
 						<div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
 							<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-								Key contrast
+								Key contrasts
 							</p>
-							<p class="mt-2 text-sm text-slate-300">
-								{describeTemplateContrast(taskTemplate, compareTaskTemplate)}
-							</p>
+							<ul class="mt-3 space-y-2 text-sm text-slate-300">
+								{#each describeTemplateContrasts(taskTemplate, compareTaskTemplate) as contrast (contrast.label)}
+									<li>
+										<span class="font-medium text-white">{contrast.label}:</span>
+										{contrast.detail}
+									</li>
+								{/each}
+							</ul>
 						</div>
 					</div>
 				</DetailSection>

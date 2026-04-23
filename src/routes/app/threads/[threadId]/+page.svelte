@@ -11,6 +11,7 @@
 	taskResponseAction={data.taskResponseAction}
 	threadContacts={data.threadContacts}
 	threadContactTargets={data.threadContactTargets}
+	threadControlPlaneRuns={data.threadControlPlaneRuns}
 	lazyLoadThreadContactTargets
 	responseContextArtifacts={data.responseContextArtifacts}
 	{form}

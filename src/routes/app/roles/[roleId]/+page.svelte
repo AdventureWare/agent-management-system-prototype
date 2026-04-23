@@ -210,40 +210,72 @@
 		return `${count} configured default${count === 1 ? '' : 's'}`;
 	}
 
-	function describeRoleContrast(currentRole: RoleDirectoryEntry, otherRole: RoleDirectoryEntry) {
-		const contrasts: string[] = [];
+	function countSharedValues(leftValues?: string[], rightValues?: string[]) {
+		const rightSet = new Set(rightValues ?? []);
+		return (leftValues ?? []).filter((value) => rightSet.has(value)).length;
+	}
+
+	function describeRoleContrasts(currentRole: RoleDirectoryEntry, otherRole: RoleDirectoryEntry) {
+		const contrasts: Array<{ label: string; detail: string }> = [];
 
 		if (
 			currentRole.family?.trim() &&
 			otherRole.family?.trim() &&
 			currentRole.family !== otherRole.family
 		) {
-			contrasts.push(`${currentRole.family} vs ${otherRole.family} family`);
+			contrasts.push({
+				label: 'Family',
+				detail: `${currentRole.name} is in ${currentRole.family}; ${otherRole.name} is in ${otherRole.family}.`
+			});
 		}
 
 		if (currentRole.area !== otherRole.area) {
-			contrasts.push(
-				`${formatAreaLabel(currentRole.area)} vs ${formatAreaLabel(otherRole.area)} area`
-			);
+			contrasts.push({
+				label: 'Area',
+				detail: `${currentRole.name} sits in ${formatAreaLabel(currentRole.area)}; ${otherRole.name} sits in ${formatAreaLabel(otherRole.area)}.`
+			});
 		}
 
 		if (currentRole.configuredDefaultsCount !== otherRole.configuredDefaultsCount) {
-			contrasts.push(
-				currentRole.configuredDefaultsCount > otherRole.configuredDefaultsCount
-					? `${currentRole.name} carries more defaults`
-					: `${otherRole.name} carries more defaults`
-			);
+			contrasts.push({
+				label: 'Defaults',
+				detail:
+					currentRole.configuredDefaultsCount > otherRole.configuredDefaultsCount
+						? `${currentRole.name} carries more configured defaults.`
+						: `${otherRole.name} carries more configured defaults.`
+			});
+		}
+
+		const sharedSkillCount = countSharedValues(currentRole.skillIds, otherRole.skillIds);
+		const sharedToolCount = countSharedValues(currentRole.toolIds, otherRole.toolIds);
+		const sharedMcpCount = countSharedValues(currentRole.mcpIds, otherRole.mcpIds);
+		const sharedDefaultCount = sharedSkillCount + sharedToolCount + sharedMcpCount;
+
+		if (sharedDefaultCount > 0) {
+			contrasts.push({
+				label: 'Shared defaults',
+				detail: `They overlap on ${sharedDefaultCount} skill/tool/MCP default${sharedDefaultCount === 1 ? '' : 's'}, so compare the purpose text before creating another variant.`
+			});
 		}
 
 		if ((currentRole.taskCount ?? 0) !== (otherRole.taskCount ?? 0)) {
-			contrasts.push(
-				currentRole.taskCount > otherRole.taskCount
-					? `${currentRole.name} is used by more live tasks`
-					: `${otherRole.name} is used by more live tasks`
-			);
+			contrasts.push({
+				label: 'Usage',
+				detail:
+					currentRole.taskCount > otherRole.taskCount
+						? `${currentRole.name} is used by more live tasks.`
+						: `${otherRole.name} is used by more live tasks.`
+			});
 		}
 
-		return contrasts[0] ?? 'The biggest difference is in the role purpose text and default setup.';
+		return contrasts.length > 0
+			? contrasts.slice(0, 4)
+			: [
+					{
+						label: 'Purpose',
+						detail: 'The clearest difference is in the role purpose text and default setup.'
+					}
+				];
 	}
 </script>
 
@@ -537,10 +569,15 @@
 				</div>
 
 				<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-					<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Key contrast</p>
-					<p class="mt-2 text-sm text-slate-300">
-						{describeRoleContrast(selectedRole, compareRole)}
-					</p>
+					<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Key contrasts</p>
+					<ul class="mt-3 space-y-2 text-sm text-slate-300">
+						{#each describeRoleContrasts(selectedRole, compareRole) as contrast (contrast.label)}
+							<li>
+								<span class="font-medium text-white">{contrast.label}:</span>
+								{contrast.detail}
+							</li>
+						{/each}
+					</ul>
 				</div>
 			</div>
 		{/if}

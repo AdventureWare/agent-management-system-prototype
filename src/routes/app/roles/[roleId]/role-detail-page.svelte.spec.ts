@@ -111,6 +111,8 @@ describe('/app/roles/[roleId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Related roles');
 		expect(document.body.textContent).toContain('Migrate existing references');
 		expect(document.body.textContent).toContain('Compare roles');
+		expect(document.body.textContent).toContain('Key contrasts');
+		expect(document.body.textContent).toContain('Defaults:');
 		expect(document.querySelector('form[action="?/updateRole"]')).not.toBeNull();
 		expect(document.querySelector('form[action="?/migrateRoleReferences"]')).not.toBeNull();
 		expect(
