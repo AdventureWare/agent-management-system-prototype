@@ -3,6 +3,7 @@ import { loadTaskTemplateDirectoryData } from '$lib/server/task-template-directo
 import {
 	createTaskTemplateAction,
 	deleteTaskTemplateAction,
+	migrateTaskTemplateReferencesAction,
 	updateTaskTemplateAction
 } from '$lib/server/task-template-form-actions';
 
@@ -13,5 +14,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	createTaskTemplate: async ({ request }) => createTaskTemplateAction(request),
 	updateTaskTemplate: async ({ request }) => updateTaskTemplateAction(request),
+	migrateTaskTemplateReferences: async ({ request }) =>
+		migrateTaskTemplateReferencesAction(request),
 	deleteTaskTemplate: async ({ request }) => deleteTaskTemplateAction(request)
 };

@@ -75,10 +75,13 @@
 				.includes(normalizedQuery)
 		);
 	});
+	let sortedFilteredRoles = $derived(
+		[...filteredRoles].sort((left, right) => compareRoles(left, right))
+	);
 	let groupedRoles = $derived.by(() => {
 		const groups = new Map<string, RoleOption[]>();
 
-		for (const role of filteredRoles) {
+		for (const role of sortedFilteredRoles) {
 			const area = role.area?.trim() || 'other';
 			const existing = groups.get(area) ?? [];
 			existing.push(role);
@@ -109,6 +112,15 @@
 		return roleAreaSortValue(left) - roleAreaSortValue(right) || left.localeCompare(right);
 	}
 
+	function compareRoles(left: RoleOption, right: RoleOption) {
+		return (
+			roleLifecycleSortValue(left.lifecycleStatus) -
+				roleLifecycleSortValue(right.lifecycleStatus) ||
+			compareRoleAreas(left.area?.trim() || 'other', right.area?.trim() || 'other') ||
+			left.name.localeCompare(right.name)
+		);
+	}
+
 	function roleAreaSortValue(area: string) {
 		switch (area) {
 			case 'product':
@@ -118,6 +130,21 @@
 			case 'ops':
 				return 2;
 			case 'shared':
+				return 3;
+			default:
+				return 4;
+		}
+	}
+
+	function roleLifecycleSortValue(lifecycleStatus?: string) {
+		switch (lifecycleStatus ?? 'active') {
+			case 'active':
+				return 0;
+			case 'draft':
+				return 1;
+			case 'deprecated':
+				return 2;
+			case 'superseded':
 				return 3;
 			default:
 				return 4;
@@ -318,6 +345,10 @@
 						placeholder="Search roles by name, area, family, purpose, or defaults…"
 					/>
 				</label>
+				<p class="text-xs text-slate-500">
+					Active and draft roles are shown first. Deprecated and superseded roles stay available for
+					legacy routing, but they are not preferred for new work.
+				</p>
 
 				<div class="max-h-72 space-y-2 overflow-y-auto pr-1">
 					<button
@@ -381,6 +412,15 @@
 										<p class="mt-2 text-xs text-slate-500">
 											Defaults: {describeRoleDefaults(role)}
 										</p>
+										{#if role.lifecycleStatus === 'deprecated'}
+											<p class="mt-2 text-xs text-amber-300">
+												Legacy role. Prefer an active adjacent role when you can.
+											</p>
+										{:else if role.lifecycleStatus === 'superseded'}
+											<p class="mt-2 text-xs text-amber-300">
+												Superseded role. Use only when preserving older routing.
+											</p>
+										{/if}
 									</button>
 								{/each}
 							</div>

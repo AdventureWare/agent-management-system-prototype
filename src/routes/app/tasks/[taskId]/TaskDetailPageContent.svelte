@@ -22,7 +22,7 @@
 	import TaskResourcesPanel from '$lib/components/tasks/TaskResourcesPanel.svelte';
 	import { getTaskThreadActionLabel, isActiveTaskThread } from '$lib/task-thread-context';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
-	import { formatTaskStatusLabel } from '$lib/types/control-plane';
+	import { formatTaskStatusLabel, taskStatusToneClass } from '$lib/types/control-plane';
 	import { fromStore } from 'svelte/store';
 
 	let props = $props<{
@@ -125,6 +125,10 @@
 				case 'removeTaskAttachment':
 					return 'resources';
 				default:
+					if (props.data.initialDetailPanel) {
+						return props.data.initialDetailPanel;
+					}
+
 					return props.data.task.linkThread || props.data.relatedRuns.length > 0
 						? 'execution'
 						: 'resources';
@@ -132,8 +136,27 @@
 		})()
 	);
 	let governanceSignalCount = $derived(
-		(data.task.openReview ? 1 : 0) + (data.task.pendingApproval ? 1 : 0)
+		(data.task.openReview ? 1 : 0) +
+			(data.task.pendingApproval ? 1 : 0) +
+			(data.parentTask ? 1 : 0) +
+			data.childTasks.length
 	);
+	let pendingChildHandoffCount = $derived(
+		data.childTasks.filter(
+			(childTask: PageData['childTasks'][number]) => childTask.integrationStatus === 'pending'
+		).length
+	);
+	let activeChildTaskCount = $derived(
+		data.childTasks.filter(
+			(childTask: PageData['childTasks'][number]) => childTask.integrationStatus === 'not_ready'
+		).length
+	);
+	let acceptedChildTaskCount = $derived(
+		data.childTasks.filter(
+			(childTask: PageData['childTasks'][number]) => childTask.integrationStatus === 'accepted'
+		).length
+	);
+	let relatedChildTaskPreview = $derived(data.childTasks.slice(0, 3));
 
 	$effect(() => {
 		if (props.data) {
@@ -436,6 +459,100 @@
 	</section>
 
 	<AgentCurrentContextPanel context={data.agentCurrentContext} />
+
+	{#if data.parentTask || data.childTasks.length > 0}
+		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+						Related tasks
+					</p>
+					<p class="mt-1 text-sm text-slate-400">
+						Keep the parent-child task chain visible without digging through the governance panel
+						first.
+					</p>
+				</div>
+				<button
+					class="btn border border-slate-700 bg-slate-950/70 text-xs font-semibold text-slate-100"
+					type="button"
+					onclick={() => {
+						selectedDetailPanel = 'governance';
+					}}
+				>
+					Open related tasks workspace
+				</button>
+			</div>
+
+			<div class="mt-4 grid gap-3 lg:grid-cols-2">
+				{#if data.parentTask}
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Parent task
+						</p>
+						<div class="mt-2 flex flex-wrap items-center gap-2">
+							<a
+								class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+								href={resolve(`/app/tasks/${data.parentTask.id}`)}
+							>
+								{data.parentTask.title}
+							</a>
+							<span
+								class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(data.parentTask.status)}`}
+							>
+								{formatTaskStatusLabel(data.parentTask.status)}
+							</span>
+						</div>
+						<p class="mt-2 text-xs text-slate-500">{data.parentTask.projectName}</p>
+					</div>
+				{/if}
+
+				{#if data.childTasks.length > 0}
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-3">
+							<div>
+								<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Child tasks
+								</p>
+								<p class="mt-2 text-sm text-white">
+									{data.childTasks.length === 1
+										? '1 delegated child task is linked to this parent.'
+										: `${data.childTasks.length} delegated child tasks are linked to this parent.`}
+								</p>
+							</div>
+							<span
+								class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+							>
+								{pendingChildHandoffCount} pending · {activeChildTaskCount} active · {acceptedChildTaskCount}
+								accepted
+							</span>
+						</div>
+
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each relatedChildTaskPreview as childTask (childTask.id)}
+								<a
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900/80 px-3 py-2 text-center text-xs leading-none font-medium text-slate-100 transition hover:border-slate-600 hover:text-white"
+									href={resolve(`/app/tasks/${childTask.id}`)}
+								>
+									{childTask.title}
+								</a>
+							{/each}
+							{#if data.childTasks.length > relatedChildTaskPreview.length}
+								<button
+									class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-3 py-2 text-center text-xs leading-none font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+									type="button"
+									onclick={() => {
+										selectedDetailPanel = 'governance';
+									}}
+								>
+									+{data.childTasks.length - relatedChildTaskPreview.length} more in governance
+								</button>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</section>
+	{/if}
 
 	<TaskDetailOverview
 		onRefresh={() => {

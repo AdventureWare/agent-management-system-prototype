@@ -35,6 +35,16 @@ import {
 } from '$lib/server/task-governance';
 import { loadAgentCurrentContext } from '$lib/server/agent-current-context';
 
+const TASK_DETAIL_PANELS = new Set(['resources', 'execution', 'governance', 'danger'] as const);
+
+type TaskDetailPanelId = 'resources' | 'execution' | 'governance' | 'danger';
+
+function readInitialDetailPanel(value: string | null): TaskDetailPanelId | null {
+	return value && TASK_DETAIL_PANELS.has(value as TaskDetailPanelId)
+		? (value as TaskDetailPanelId)
+		: null;
+}
+
 async function handleTaskGovernanceAction(action: () => Promise<unknown>) {
 	try {
 		return await action();
@@ -119,7 +129,7 @@ async function handleTaskDecompositionAction(action: () => Promise<unknown>) {
 	}
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	const pageData = await loadTaskDetailPageData(params.taskId);
 
 	if (!pageData) {
@@ -128,6 +138,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	return {
 		...pageData,
+		initialDetailPanel: readInitialDetailPanel(url?.searchParams.get('panel') ?? null),
 		agentCurrentContext: await loadAgentCurrentContext({ taskId: params.taskId })
 	};
 };

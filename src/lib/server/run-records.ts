@@ -6,6 +6,7 @@ import { formatRelativeTime } from '$lib/server/control-plane';
 
 export type RunRecord = Run & {
 	taskTitle: string;
+	taskParentTaskId: string | null;
 	taskProjectId: string | null;
 	taskProjectName: string;
 	executionSurfaceName: string;
@@ -50,6 +51,7 @@ export function buildRunRecords(data: ControlPlaneData, threads: AgentThreadDeta
 			return {
 				...run,
 				taskTitle: task?.title ?? 'Unknown task',
+				taskParentTaskId: task?.parentTaskId ?? null,
 				taskProjectId: task?.projectId ?? null,
 				taskProjectName: project?.name ?? 'Unknown project',
 				executionSurfaceName: executionSurface?.name ?? 'Unassigned',

@@ -61,6 +61,7 @@
 
 	let selectedRole = $derived(data.role);
 	let editPanelOpen = $state(false);
+	let compareRoleId = $state('');
 	let updateName = $state('');
 	let updateArea = $state('shared');
 	let updateFamily = $state('');
@@ -77,6 +78,9 @@
 	let updateApprovalPolicy = $state('');
 	let updateEscalationPolicy = $state('');
 	let updateRoleSuccess = $derived(form?.ok && form?.successAction === 'updateRole');
+	let migrateRoleReferencesSuccess = $derived(
+		form?.ok && form?.successAction === 'migrateRoleReferences'
+	);
 	let selectedRoleReferences = $derived(
 		selectedRole.taskCount +
 			selectedRole.templateCount +
@@ -101,9 +105,13 @@
 			a.localeCompare(b)
 		)
 	);
-	let knownFamilies = $derived(
-		[...new Set(data.roles.map((role) => role.family?.trim() ?? '').filter(Boolean))].sort((a, b) =>
-			a.localeCompare(b)
+	let knownFamilies = $derived(data.roleFamilyOptions);
+	let successorRoleOptions = $derived(
+		data.roles.filter(
+			(role) =>
+				role.id !== selectedRole.id &&
+				(role.lifecycleStatus ?? 'active') !== 'deprecated' &&
+				(role.lifecycleStatus ?? 'active') !== 'superseded'
 		)
 	);
 	let sourceRole = $derived(
@@ -117,10 +125,23 @@
 			: null
 	);
 	let relatedRoles = $derived.by(() => buildRelatedRoles(selectedRole, data.roles, 4));
+	let compareRoleOptions = $derived(data.roles.filter((role) => role.id !== selectedRole.id));
+	let compareRole = $derived(
+		compareRoleOptions.find((role) => role.id === compareRoleId) ??
+			compareRoleOptions.find((role) => role.id === relatedRoles[0]?.role.id) ??
+			compareRoleOptions[0] ??
+			null
+	);
 
 	$effect(() => {
 		if (updateRoleSuccess || form?.formContext === 'updateRole') {
 			editPanelOpen = true;
+		}
+	});
+
+	$effect(() => {
+		if (!compareRoleOptions.some((role) => role.id === compareRoleId)) {
+			compareRoleId = relatedRoles[0]?.role.id ?? compareRoleOptions[0]?.id ?? '';
 		}
 	});
 
@@ -184,6 +205,46 @@
 			`${role.executionSurfaceCount} surface link${role.executionSurfaceCount === 1 ? '' : 's'}`
 		].join(' · ');
 	}
+
+	function formatDefaultCount(count: number) {
+		return `${count} configured default${count === 1 ? '' : 's'}`;
+	}
+
+	function describeRoleContrast(currentRole: RoleDirectoryEntry, otherRole: RoleDirectoryEntry) {
+		const contrasts: string[] = [];
+
+		if (
+			currentRole.family?.trim() &&
+			otherRole.family?.trim() &&
+			currentRole.family !== otherRole.family
+		) {
+			contrasts.push(`${currentRole.family} vs ${otherRole.family} family`);
+		}
+
+		if (currentRole.area !== otherRole.area) {
+			contrasts.push(
+				`${formatAreaLabel(currentRole.area)} vs ${formatAreaLabel(otherRole.area)} area`
+			);
+		}
+
+		if (currentRole.configuredDefaultsCount !== otherRole.configuredDefaultsCount) {
+			contrasts.push(
+				currentRole.configuredDefaultsCount > otherRole.configuredDefaultsCount
+					? `${currentRole.name} carries more defaults`
+					: `${otherRole.name} carries more defaults`
+			);
+		}
+
+		if ((currentRole.taskCount ?? 0) !== (otherRole.taskCount ?? 0)) {
+			contrasts.push(
+				currentRole.taskCount > otherRole.taskCount
+					? `${currentRole.name} is used by more live tasks`
+					: `${otherRole.name} is used by more live tasks`
+			);
+		}
+
+		return contrasts[0] ?? 'The biggest difference is in the role purpose text and default setup.';
+	}
 </script>
 
 <AppPage width="full">
@@ -193,7 +254,7 @@
 		description={selectedRole.description}
 	/>
 
-	{#if form?.message}
+	{#if form?.message && !form?.ok}
 		<p class="ui-notice border border-rose-900/70 bg-rose-950/40 text-rose-200">
 			{form.message}
 		</p>
@@ -205,9 +266,18 @@
 		</p>
 	{/if}
 
+	{#if migrateRoleReferencesSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			{form?.message || 'Role references migrated.'}
+		</p>
+	{/if}
+
 	<div class="flex flex-wrap gap-3">
 		<AppButton href={`/app/roles?role=${selectedRole.id}`} variant="neutral">
 			Back to directory
+		</AppButton>
+		<AppButton href={`/app/roles?role=${selectedRole.id}&fork=${selectedRole.id}`} variant="ghost">
+			Fork in directory
 		</AppButton>
 		<AppButton type="button" variant="ghost" onclick={() => (editPanelOpen = true)}>
 			Edit here
@@ -311,6 +381,46 @@
 			</div>
 		{/if}
 
+		{#if supersededByRole && selectedRoleReferences > 0}
+			<div class="rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div class="max-w-2xl">
+						<p class="text-sm font-medium text-white">Migrate existing references</p>
+						<p class="mt-2 text-sm text-slate-300">
+							This superseded role is still referenced across tasks, templates, workflows, or
+							execution surfaces. Move those references to
+							<a
+								class="underline decoration-amber-700 underline-offset-4 hover:text-white"
+								href={`/app/roles/${supersededByRole.id}`}
+							>
+								{supersededByRole.name}
+							</a>
+							when the replacement is ready to take over.
+						</p>
+					</div>
+
+					<form method="POST" action="?/migrateRoleReferences" data-persist-scope="manual">
+						<input type="hidden" name="roleId" value={selectedRole.id} />
+						<AppButton
+							type="submit"
+							variant="warning"
+							onclick={(event) => {
+								if (
+									!window.confirm(
+										`Move all references from "${selectedRole.name}" to "${supersededByRole.name}"?`
+									)
+								) {
+									event.preventDefault();
+								}
+							}}
+						>
+							Migrate references
+						</AppButton>
+					</form>
+				</div>
+			</div>
+		{/if}
+
 		<div class="grid gap-4 xl:grid-cols-2">
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 				<div class="flex items-center justify-between gap-3">
@@ -365,6 +475,75 @@
 				{/if}
 			</div>
 		</div>
+
+		{#if compareRole}
+			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+				<div class="flex flex-wrap items-end justify-between gap-4">
+					<div>
+						<p class="text-sm font-medium text-white">Compare roles</p>
+						<p class="mt-1 text-sm text-slate-400">
+							Use this side-by-side view to decide whether this role should stay distinct from a
+							nearby alternative.
+						</p>
+					</div>
+					<label class="block min-w-[16rem]">
+						<span class="mb-2 block text-xs tracking-[0.16em] text-slate-500 uppercase">
+							Compare against
+						</span>
+						<select class="select text-white" bind:value={compareRoleId}>
+							{#each compareRoleOptions as roleOption (roleOption.id)}
+								<option value={roleOption.id}>{roleOption.name}</option>
+							{/each}
+						</select>
+					</label>
+				</div>
+
+				<div class="mt-4 grid gap-4 xl:grid-cols-2">
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Current role</p>
+						<h3 class="mt-2 text-lg font-semibold text-white">{selectedRole.name}</h3>
+						<p class="mt-1 text-xs text-slate-500">
+							{formatAreaLabel(selectedRole.area)}
+							{#if selectedRole.family?.trim()}
+								· {selectedRole.family}{/if}
+						</p>
+						<p class="mt-3 text-sm text-slate-300">{selectedRole.description}</p>
+						<div class="mt-4 space-y-2 text-sm text-slate-300">
+							<p>Defaults · {formatDefaultCount(selectedRole.configuredDefaultsCount)}</p>
+							<p>References · {formatRoleSummary(selectedRole)}</p>
+							<p>
+								Skills · {formatListField(selectedRole.skillIds) || 'No default skills listed.'}
+							</p>
+						</div>
+					</div>
+
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Compared role</p>
+						<h3 class="mt-2 text-lg font-semibold text-white">{compareRole.name}</h3>
+						<p class="mt-1 text-xs text-slate-500">
+							{formatAreaLabel(compareRole.area)}
+							{#if compareRole.family?.trim()}
+								· {compareRole.family}{/if}
+						</p>
+						<p class="mt-3 text-sm text-slate-300">{compareRole.description}</p>
+						<div class="mt-4 space-y-2 text-sm text-slate-300">
+							<p>Defaults · {formatDefaultCount(compareRole.configuredDefaultsCount)}</p>
+							<p>References · {formatRoleSummary(compareRole)}</p>
+							<p>
+								Skills · {formatListField(compareRole.skillIds) || 'No default skills listed.'}
+							</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+					<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Key contrast</p>
+					<p class="mt-2 text-sm text-slate-300">
+						{describeRoleContrast(selectedRole, compareRole)}
+					</p>
+				</div>
+			</div>
+		{/if}
 
 		<div class="grid gap-4 xl:grid-cols-2">
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
@@ -567,6 +746,9 @@
 								placeholder="Writing"
 								bind:value={updateFamily}
 							/>
+							<span class="mt-2 block text-xs text-slate-500">
+								Choose one of the shared family labels to keep the catalog comparable.
+							</span>
 						</label>
 
 						<label class="block">
@@ -592,10 +774,13 @@
 								bind:value={updateSupersededByRoleId}
 							>
 								<option value="">No successor</option>
-								{#each data.roles.filter((role) => role.id !== selectedRole.id) as roleOption (roleOption.id)}
+								{#each successorRoleOptions as roleOption (roleOption.id)}
 									<option value={roleOption.id}>{roleOption.name}</option>
 								{/each}
 							</select>
+							<span class="mt-2 block text-xs text-slate-500">
+								Successors should stay active or draft so new routing has a safe default.
+							</span>
 						</label>
 					</div>
 

@@ -126,5 +126,10 @@ describe('/app/task-templates/+page.svelte', () => {
 		await page.getByRole('button', { name: 'New template' }).click();
 		await expect.element(page.getByText('New task template')).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create template' })).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Close create task template dialog' }).click();
+
+		await page.getByRole('button', { name: 'Fork' }).click();
+		await expect.element(page.getByText('Fork task template')).toBeInTheDocument();
+		await expect.element(page.getByText('Forking from Research Brief')).toBeInTheDocument();
 	});
 });

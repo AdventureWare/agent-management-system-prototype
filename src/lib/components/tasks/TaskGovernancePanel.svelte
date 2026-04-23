@@ -114,9 +114,59 @@
 		readOnly = false
 	}: TaskGovernancePanelProps = $props();
 	let remainingChildSlots = $derived(Math.max(0, 3 - childTasks.length));
+	let pendingChildTasks = $derived(
+		childTasks.filter((childTask) => childTask.integrationStatus === 'pending')
+	);
+	let activeChildTasks = $derived(
+		childTasks.filter((childTask) => childTask.integrationStatus === 'not_ready')
+	);
+	let acceptedChildTasks = $derived(
+		childTasks.filter((childTask) => childTask.integrationStatus === 'accepted')
+	);
 
 	function taskAction(actionName: string) {
 		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
+
+	function childTaskOpenHref(childTask: ChildTaskView) {
+		const panel = childTask.integrationStatus === 'not_ready' ? 'execution' : 'governance';
+		return resolve(`/app/tasks/${childTask.id}?panel=${panel}`);
+	}
+
+	function childTaskOpenLabel(childTask: ChildTaskView) {
+		if (childTask.integrationStatus === 'pending') {
+			return 'Review handoff';
+		}
+
+		if (childTask.integrationStatus === 'accepted') {
+			return 'View accepted task';
+		}
+
+		return 'Open task';
+	}
+
+	function childTaskIntegrationToneClass(childTask: ChildTaskView) {
+		if (childTask.integrationStatus === 'accepted') {
+			return taskStatusToneClass('done');
+		}
+
+		if (childTask.integrationStatus === 'pending') {
+			return taskStatusToneClass('review');
+		}
+
+		return taskStatusToneClass(childTask.status);
+	}
+
+	function childTaskIntegrationLabel(childTask: ChildTaskView) {
+		if (childTask.integrationStatus === 'accepted') {
+			return 'Accepted';
+		}
+
+		if (childTask.integrationStatus === 'pending') {
+			return 'Pending integration';
+		}
+
+		return 'Not ready';
 	}
 </script>
 
@@ -292,20 +342,30 @@
 								Parent task
 							</p>
 							{#if parentTask}
-								<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-									<a
-										class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
-										href={resolve(`/app/tasks/${parentTask.id}`)}
-									>
-										{parentTask.title}
-									</a>
-									<span
-										class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(parentTask.status)}`}
-									>
-										{formatTaskStatusLabel(parentTask.status)}
-									</span>
+								<div class="mt-2 rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<a
+											class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+											href={resolve(`/app/tasks/${parentTask.id}`)}
+										>
+											{parentTask.title}
+										</a>
+										<span
+											class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(parentTask.status)}`}
+										>
+											{formatTaskStatusLabel(parentTask.status)}
+										</span>
+									</div>
+									<p class="mt-2 text-xs text-slate-500">{parentTask.projectName}</p>
+									<div class="mt-3">
+										<a
+											class="btn border border-slate-700 bg-slate-950/70 text-xs font-semibold text-slate-100"
+											href={resolve(`/app/tasks/${parentTask.id}`)}
+										>
+											Open parent task
+										</a>
+									</div>
 								</div>
-								<p class="mt-2 text-xs text-slate-500">{parentTask.projectName}</p>
 							{:else}
 								<p class="mt-2 text-sm text-slate-400">This task is not linked to a parent task.</p>
 							{/if}
@@ -324,84 +384,294 @@
 							{#if childTasks.length === 0}
 								<p class="mt-2 text-sm text-slate-400">No delegated subtasks are linked yet.</p>
 							{:else}
-								<div class="mt-3 space-y-3">
-									{#each childTasks as childTask (childTask.id)}
-										<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-											<div class="flex flex-wrap items-center justify-between gap-3">
-												<a
-													class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
-													href={resolve(`/app/tasks/${childTask.id}`)}
-												>
-													{childTask.title}
-												</a>
+								<div class="mt-4 grid gap-3 md:grid-cols-3">
+									<div class="rounded-xl border border-amber-900/60 bg-amber-950/20 p-3">
+										<p
+											class="text-[0.7rem] font-semibold tracking-[0.16em] text-amber-200 uppercase"
+										>
+											Needs parent decision
+										</p>
+										<p class="mt-2 text-2xl font-semibold text-white">{pendingChildTasks.length}</p>
+										<p class="mt-1 text-xs text-slate-400">
+											Completed child handoff{pendingChildTasks.length === 1 ? '' : 's'} waiting on parent
+											review.
+										</p>
+									</div>
+									<div class="rounded-xl border border-sky-900/60 bg-sky-950/20 p-3">
+										<p class="text-[0.7rem] font-semibold tracking-[0.16em] text-sky-200 uppercase">
+											Still moving
+										</p>
+										<p class="mt-2 text-2xl font-semibold text-white">{activeChildTasks.length}</p>
+										<p class="mt-1 text-xs text-slate-400">
+											Child task{activeChildTasks.length === 1 ? '' : 's'} still running, queued, or blocked.
+										</p>
+									</div>
+									<div class="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-3">
+										<p
+											class="text-[0.7rem] font-semibold tracking-[0.16em] text-emerald-200 uppercase"
+										>
+											Accepted
+										</p>
+										<p class="mt-2 text-2xl font-semibold text-white">
+											{acceptedChildTasks.length}
+										</p>
+										<p class="mt-1 text-xs text-slate-400">
+											Child task{acceptedChildTasks.length === 1 ? '' : 's'} already integrated into the
+											parent workflow.
+										</p>
+									</div>
+								</div>
+
+								<div class="mt-4 space-y-4">
+									{#if pendingChildTasks.length > 0}
+										<section class="space-y-3">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<div>
+													<h4 class="text-sm font-semibold text-white">Needs parent decision</h4>
+													<p class="mt-1 text-xs text-slate-400">
+														Review these completed handoffs first so the branch can move forward
+														cleanly.
+													</p>
+												</div>
 												<span
-													class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(childTask.status)}`}
+													class="badge border border-amber-900/70 bg-amber-950/40 text-[0.7rem] tracking-[0.2em] text-amber-200 uppercase"
 												>
-													{formatTaskStatusLabel(childTask.status)}
+													{pendingChildTasks.length} awaiting review
 												</span>
 											</div>
-											<p class="mt-2 text-xs text-slate-500">
-												{childTask.projectName} · Updated {childTask.updatedAtLabel}
-											</p>
-											<div class="mt-3 flex flex-wrap items-center gap-2">
+											{#each pendingChildTasks as childTask (childTask.id)}
+												<div class="rounded-xl border border-amber-900/50 bg-slate-950/80 p-4">
+													<div
+														class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
+													>
+														<div class="min-w-0 flex-1">
+															<div class="flex flex-wrap items-center gap-2">
+																<a
+																	class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+																	href={childTaskOpenHref(childTask)}
+																>
+																	{childTask.title}
+																</a>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(childTask.status)}`}
+																>
+																	{formatTaskStatusLabel(childTask.status)}
+																</span>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${childTaskIntegrationToneClass(childTask)}`}
+																>
+																	{childTaskIntegrationLabel(childTask)}
+																</span>
+															</div>
+															<p class="mt-2 text-xs text-slate-500">
+																{childTask.projectName} · Updated {childTask.updatedAtLabel}
+															</p>
+															{#if childTask.delegationPacket?.objective || childTask.delegationPacket?.expectedDeliverable || childTask.delegationPacket?.doneCondition}
+																<div class="mt-3 space-y-2 text-xs text-slate-400">
+																	{#if childTask.delegationPacket?.objective}
+																		<p>Objective: {childTask.delegationPacket.objective}</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.expectedDeliverable}
+																		<p>
+																			Deliverable: {childTask.delegationPacket.expectedDeliverable}
+																		</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.doneCondition}
+																		<p>
+																			Done condition: {childTask.delegationPacket.doneCondition}
+																		</p>
+																	{/if}
+																</div>
+															{/if}
+														</div>
+														<div class="flex flex-wrap gap-2">
+															<a
+																class="btn border border-slate-700 bg-slate-950/70 text-xs font-semibold text-slate-100"
+																href={childTaskOpenHref(childTask)}
+															>
+																{childTaskOpenLabel(childTask)}
+															</a>
+														</div>
+													</div>
+													<div
+														class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+													>
+														{#if childTask.delegationAcceptance}
+															<p class="text-xs text-slate-500">
+																Accepted {childTask.delegationAcceptance.acceptedAtLabel}
+															</p>
+														{:else}
+															<p class="text-xs text-slate-500">
+																Waiting for the parent to accept or return the handoff.
+															</p>
+														{/if}
+														{#if !readOnly}
+															<div class="flex flex-col gap-3 sm:flex-row">
+																<form method="POST" action={taskAction('acceptChildHandoff')}>
+																	<input type="hidden" name="childTaskId" value={childTask.id} />
+																	<button
+																		class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
+																		type="submit"
+																	>
+																		Accept handoff
+																	</button>
+																</form>
+																<form
+																	method="POST"
+																	action={taskAction('requestChildHandoffChanges')}
+																>
+																	<input type="hidden" name="childTaskId" value={childTask.id} />
+																	<button
+																		class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+																		type="submit"
+																	>
+																		Request follow-up
+																	</button>
+																</form>
+															</div>
+														{/if}
+													</div>
+												</div>
+											{/each}
+										</section>
+									{/if}
+
+									{#if activeChildTasks.length > 0}
+										<section class="space-y-3">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<div>
+													<h4 class="text-sm font-semibold text-white">Still moving</h4>
+													<p class="mt-1 text-xs text-slate-400">
+														These delegated tasks are still in progress, queued, or blocked.
+													</p>
+												</div>
 												<span
-													class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${
-														childTask.integrationStatus === 'accepted'
-															? taskStatusToneClass('done')
-															: childTask.integrationStatus === 'pending'
-																? taskStatusToneClass('review')
-																: taskStatusToneClass(childTask.status)
-													}`}
+													class="badge border border-sky-900/70 bg-sky-950/40 text-[0.7rem] tracking-[0.2em] text-sky-200 uppercase"
 												>
-													{childTask.integrationStatus === 'accepted'
-														? 'Accepted'
-														: childTask.integrationStatus === 'pending'
-															? 'Pending integration'
-															: 'Not ready'}
+													{activeChildTasks.length} active
 												</span>
-												{#if childTask.delegationAcceptance}
-													<span class="text-xs text-slate-500">
-														{childTask.delegationAcceptance.acceptedAtLabel}
-													</span>
-												{/if}
 											</div>
-											{#if childTask.delegationPacket?.objective || childTask.delegationPacket?.expectedDeliverable || childTask.delegationPacket?.doneCondition}
-												<div class="mt-3 space-y-2 text-xs text-slate-400">
-													{#if childTask.delegationPacket?.objective}
-														<p>Objective: {childTask.delegationPacket.objective}</p>
-													{/if}
-													{#if childTask.delegationPacket?.expectedDeliverable}
-														<p>Deliverable: {childTask.delegationPacket.expectedDeliverable}</p>
-													{/if}
-													{#if childTask.delegationPacket?.doneCondition}
-														<p>Done condition: {childTask.delegationPacket.doneCondition}</p>
-													{/if}
+											{#each activeChildTasks as childTask (childTask.id)}
+												<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
+													<div
+														class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
+													>
+														<div class="min-w-0 flex-1">
+															<div class="flex flex-wrap items-center gap-2">
+																<a
+																	class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+																	href={childTaskOpenHref(childTask)}
+																>
+																	{childTask.title}
+																</a>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(childTask.status)}`}
+																>
+																	{formatTaskStatusLabel(childTask.status)}
+																</span>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${childTaskIntegrationToneClass(childTask)}`}
+																>
+																	{childTaskIntegrationLabel(childTask)}
+																</span>
+															</div>
+															<p class="mt-2 text-xs text-slate-500">
+																{childTask.projectName} · Updated {childTask.updatedAtLabel}
+															</p>
+															{#if childTask.delegationPacket?.objective || childTask.delegationPacket?.expectedDeliverable || childTask.delegationPacket?.doneCondition}
+																<div class="mt-3 space-y-2 text-xs text-slate-400">
+																	{#if childTask.delegationPacket?.objective}
+																		<p>Objective: {childTask.delegationPacket.objective}</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.expectedDeliverable}
+																		<p>
+																			Deliverable: {childTask.delegationPacket.expectedDeliverable}
+																		</p>
+																	{/if}
+																	{#if childTask.delegationPacket?.doneCondition}
+																		<p>
+																			Done condition: {childTask.delegationPacket.doneCondition}
+																		</p>
+																	{/if}
+																</div>
+															{/if}
+														</div>
+														<div class="flex flex-wrap gap-2">
+															<a
+																class="btn border border-slate-700 bg-slate-950/70 text-xs font-semibold text-slate-100"
+																href={childTaskOpenHref(childTask)}
+															>
+																{childTaskOpenLabel(childTask)}
+															</a>
+														</div>
+													</div>
 												</div>
-											{/if}
-											{#if !readOnly && childTask.integrationStatus === 'pending'}
-												<div class="mt-4 flex flex-col gap-3 sm:flex-row">
-													<form method="POST" action={taskAction('acceptChildHandoff')}>
-														<input type="hidden" name="childTaskId" value={childTask.id} />
-														<button
-															class="btn border border-emerald-800/70 bg-emerald-950/40 font-semibold text-emerald-200"
-															type="submit"
-														>
-															Accept handoff
-														</button>
-													</form>
-													<form method="POST" action={taskAction('requestChildHandoffChanges')}>
-														<input type="hidden" name="childTaskId" value={childTask.id} />
-														<button
-															class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
-															type="submit"
-														>
-															Request follow-up
-														</button>
-													</form>
+											{/each}
+										</section>
+									{/if}
+
+									{#if acceptedChildTasks.length > 0}
+										<section class="space-y-3">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<div>
+													<h4 class="text-sm font-semibold text-white">Already accepted</h4>
+													<p class="mt-1 text-xs text-slate-400">
+														Accepted child tasks stay visible here so the parent branch remains easy
+														to audit.
+													</p>
 												</div>
-											{/if}
-										</div>
-									{/each}
+												<span
+													class="badge border border-emerald-900/70 bg-emerald-950/40 text-[0.7rem] tracking-[0.2em] text-emerald-200 uppercase"
+												>
+													{acceptedChildTasks.length} accepted
+												</span>
+											</div>
+											{#each acceptedChildTasks as childTask (childTask.id)}
+												<div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
+													<div
+														class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
+													>
+														<div class="min-w-0 flex-1">
+															<div class="flex flex-wrap items-center gap-2">
+																<a
+																	class="ui-wrap-anywhere text-sm font-medium text-sky-300 transition hover:text-sky-200"
+																	href={childTaskOpenHref(childTask)}
+																>
+																	{childTask.title}
+																</a>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${taskStatusToneClass(childTask.status)}`}
+																>
+																	{formatTaskStatusLabel(childTask.status)}
+																</span>
+																<span
+																	class={`badge border text-[0.7rem] tracking-[0.2em] uppercase ${childTaskIntegrationToneClass(childTask)}`}
+																>
+																	{childTaskIntegrationLabel(childTask)}
+																</span>
+															</div>
+															<p class="mt-2 text-xs text-slate-500">
+																{childTask.projectName} · Updated {childTask.updatedAtLabel}
+															</p>
+															{#if childTask.delegationAcceptance}
+																<p class="mt-2 text-xs text-slate-500">
+																	Accepted {childTask.delegationAcceptance.acceptedAtLabel}
+																</p>
+															{/if}
+														</div>
+														<div class="flex flex-wrap gap-2">
+															<a
+																class="btn border border-slate-700 bg-slate-950/70 text-xs font-semibold text-slate-100"
+																href={childTaskOpenHref(childTask)}
+															>
+																{childTaskOpenLabel(childTask)}
+															</a>
+														</div>
+													</div>
+												</div>
+											{/each}
+										</section>
+									{/if}
 								</div>
 							{/if}
 						</div>

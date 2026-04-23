@@ -32,7 +32,13 @@ describe('/app/roles/[roleId]/+page.svelte', () => {
 					executionSurfaceNames: ['Local surface'],
 					workflowNames: ['Documentation workflow'],
 					templateNames: ['Docs template'],
-					configuredDefaultsCount: 7
+					configuredDefaultsCount: 7,
+					lifecycleStatus: 'superseded',
+					supersededByRoleId: 'role_editor',
+					supersededByRole: {
+						id: 'role_editor',
+						name: 'Editor'
+					}
 				},
 				roles: [
 					{
@@ -60,7 +66,13 @@ describe('/app/roles/[roleId]/+page.svelte', () => {
 						executionSurfaceNames: ['Local surface'],
 						workflowNames: ['Documentation workflow'],
 						templateNames: ['Docs template'],
-						configuredDefaultsCount: 7
+						configuredDefaultsCount: 7,
+						lifecycleStatus: 'superseded',
+						supersededByRoleId: 'role_editor',
+						supersededByRole: {
+							id: 'role_editor',
+							name: 'Editor'
+						}
 					},
 					{
 						id: 'role_editor',
@@ -97,7 +109,10 @@ describe('/app/roles/[roleId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Role purpose and fit');
 		expect(document.body.textContent).toContain('Write release notes');
 		expect(document.body.textContent).toContain('Related roles');
+		expect(document.body.textContent).toContain('Migrate existing references');
+		expect(document.body.textContent).toContain('Compare roles');
 		expect(document.querySelector('form[action="?/updateRole"]')).not.toBeNull();
+		expect(document.querySelector('form[action="?/migrateRoleReferences"]')).not.toBeNull();
 		expect(
 			(
 				document.querySelector(

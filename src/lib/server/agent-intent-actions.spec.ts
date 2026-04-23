@@ -240,15 +240,13 @@ describe('agent-intent-actions', () => {
 			runId: 'run_contact',
 			contactId: 'contact_123'
 		} as never);
-		const contactsSpy = vi
-			.spyOn(agentThreadsModule, 'listAgentThreadContacts')
-			.mockResolvedValue([
-				{
-					id: 'contact_123',
-					sourceAgentThreadId: 'thread_source',
-					targetAgentThreadId: 'thread_target'
-				}
-			] as never);
+		const contactsSpy = vi.spyOn(agentThreadsModule, 'listAgentThreadContacts').mockResolvedValue([
+			{
+				id: 'contact_123',
+				sourceAgentThreadId: 'thread_source',
+				targetAgentThreadId: 'thread_target'
+			}
+		] as never);
 
 		const result = await intentModule.runAgentIntent('coordinate_with_another_thread', {
 			targetThreadIdOrHandle: 'target',

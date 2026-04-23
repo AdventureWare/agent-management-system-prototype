@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { loadRolesDirectoryData } from '$lib/server/roles-directory';
-import { updateRoleAction } from '$lib/server/role-form-actions';
+import { migrateRoleReferencesAction, updateRoleAction } from '$lib/server/role-form-actions';
 
 export const load: PageServerLoad = async ({ params, url }) => {
 	const requestUrl = new URL(url);
@@ -23,5 +23,9 @@ export const load: PageServerLoad = async ({ params, url }) => {
 export const actions: Actions = {
 	updateRole: async ({ request }) => {
 		return updateRoleAction(request);
+	},
+
+	migrateRoleReferences: async ({ request }) => {
+		return migrateRoleReferencesAction(request);
 	}
 };

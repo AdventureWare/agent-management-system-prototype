@@ -1,4 +1,4 @@
-import { AREA_OPTIONS } from '$lib/types/control-plane';
+import { AREA_OPTIONS, ROLE_FAMILY_OPTIONS } from '$lib/types/control-plane';
 import type { Role } from '$lib/types/control-plane';
 import { getExecutionSurfaces, loadControlPlane } from '$lib/server/control-plane';
 
@@ -169,6 +169,12 @@ export async function loadRolesDirectoryData(url: URL) {
 
 	return {
 		roleAreaOptions: ['shared', ...AREA_OPTIONS],
+		roleFamilyOptions: [
+			...new Set([
+				...ROLE_FAMILY_OPTIONS,
+				...roles.map((role) => role.family?.trim() ?? '').filter(Boolean)
+			])
+		].sort((left, right) => left.localeCompare(right)),
 		initialSelectedRoleId,
 		roles
 	};

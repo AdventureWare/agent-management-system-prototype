@@ -144,6 +144,8 @@ describe('/app/roles/+page.svelte', () => {
 		expect(createDescriptionField?.value).toBe(
 			'Checks completeness, provenance, duplicates, and handoff quality.'
 		);
+		expect(document.body.textContent).toContain('Fork role');
+		expect(document.body.textContent).toContain('Forking from Reviewer');
 		expect(createAreaField?.value).toBe('ops');
 		expect(createSourceRoleField?.value).toBe('role_reviewer');
 		expect(createSkillIdsField?.value).toBe('writing');

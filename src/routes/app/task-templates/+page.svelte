@@ -44,6 +44,27 @@
 	let projectCoverageCount = $derived(
 		new Set(data.taskTemplates.map((taskTemplate) => taskTemplate.projectId)).size
 	);
+	let forkSourceTemplate = $derived(
+		editorMode === 'create' && editorValues.sourceTaskTemplateId
+			? (data.taskTemplates.find(
+					(taskTemplate) => taskTemplate.id === editorValues.sourceTaskTemplateId
+				) ?? null)
+			: null
+	);
+	let createDialogTitle = $derived(
+		editorMode === 'edit'
+			? 'Edit task template'
+			: forkSourceTemplate
+				? 'Fork task template'
+				: 'New task template'
+	);
+	let createDialogDescription = $derived(
+		editorMode === 'edit'
+			? 'Update the reusable defaults for this repeated task type.'
+			: forkSourceTemplate
+				? `Start from ${forkSourceTemplate.name}, then explain what this variant changes before you save it.`
+				: 'Create a reusable task setup so future intake does not require re-entering the same defaults.'
+	);
 	function openCreateEditor() {
 		editorMode = 'create';
 		editorValues = buildDefaultTaskTemplateEditorValues(undefined, defaultProjectId());
@@ -466,13 +487,13 @@
 
 	<AppDialog
 		bind:open={isEditorOpen}
-		title={editorMode === 'edit' ? 'Edit task template' : 'New task template'}
-		description={editorMode === 'edit'
-			? 'Update the reusable defaults for this repeated task type.'
-			: 'Create a reusable task setup so future intake does not require re-entering the same defaults.'}
+		title={createDialogTitle}
+		description={createDialogDescription}
 		closeLabel={editorMode === 'edit'
 			? 'Close edit task template dialog'
-			: 'Close create task template dialog'}
+			: forkSourceTemplate
+				? 'Close fork task template dialog'
+				: 'Close create task template dialog'}
 	>
 		<TaskTemplateEditorForm
 			mode={editorMode}

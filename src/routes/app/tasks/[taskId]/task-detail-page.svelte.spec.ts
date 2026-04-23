@@ -226,6 +226,114 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 }
 
 describe('/app/tasks/[taskId]/+page.svelte', () => {
+	it('honors initial detail-panel deep links for current-context drill-ins', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				initialDetailPanel: 'governance',
+				task: {
+					pendingApproval: {
+						id: 'approval_1',
+						mode: 'before_complete',
+						status: 'pending',
+						summary: 'Ready for final approval.'
+					}
+				}
+			}) as never
+		});
+
+		expect(document.body.textContent).toContain('Review and approval state');
+		expect(document.body.textContent).toContain('Ready for final approval.');
+	});
+
+	it('surfaces related child tasks early and groups them clearly in governance', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				parentTask: {
+					id: 'task_parent',
+					title: 'Parent orchestration task',
+					status: 'in_progress',
+					projectName: 'Agent Management System Prototype'
+				},
+				childTasks: [
+					{
+						id: 'task_child_pending',
+						title: 'Pending child handoff',
+						status: 'done',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						updatedAtLabel: '5m ago',
+						integrationStatus: 'pending',
+						delegationAcceptance: null,
+						delegationPacket: {
+							objective: 'Deliver the delegated result.',
+							expectedDeliverable: 'Attached artifact.',
+							doneCondition: 'Parent can accept the handoff.'
+						}
+					},
+					{
+						id: 'task_child_active',
+						title: 'Active child task',
+						status: 'in_progress',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						updatedAtLabel: '10m ago',
+						integrationStatus: 'not_ready',
+						delegationAcceptance: null,
+						delegationPacket: {
+							objective: 'Keep implementation moving.'
+						}
+					},
+					{
+						id: 'task_child_accepted',
+						title: 'Accepted child task',
+						status: 'done',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						updatedAtLabel: '20m ago',
+						integrationStatus: 'accepted',
+						delegationAcceptance: {
+							acceptedAt: '2026-04-20T10:00:00.000Z',
+							acceptedByTaskId: 'task_1',
+							acceptedAtLabel: '1d ago'
+						},
+						delegationPacket: null
+					},
+					{
+						id: 'task_child_fourth',
+						title: 'Fourth child task',
+						status: 'ready',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						updatedAtLabel: '25m ago',
+						integrationStatus: 'not_ready',
+						delegationAcceptance: null,
+						delegationPacket: null
+					}
+				]
+			}) as never
+		});
+
+		expect(document.body.textContent).toContain('Related tasks');
+		expect(document.body.textContent).toContain('Open related tasks workspace');
+		expect(document.body.textContent).toContain('Parent orchestration task');
+		expect(document.body.textContent).toContain('Pending child handoff');
+		expect(document.body.textContent).toContain('Active child task');
+		expect(document.body.textContent).toContain('Accepted child task');
+		expect(document.body.textContent).toContain('+1 more in governance');
+
+		await page.getByRole('button', { name: 'Open related tasks workspace' }).click();
+
+		expect(document.body.textContent).toContain('Needs parent decision');
+		expect(document.body.textContent).toContain('Still moving');
+		expect(document.body.textContent).toContain('Already accepted');
+		await expect.element(page.getByRole('link', { name: 'Review handoff' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'View accepted task' }))
+			.toBeInTheDocument();
+	});
+
 	it('renders preview-first current context guidance for risky task actions', async () => {
 		render(Page, {
 			form: {} as never,

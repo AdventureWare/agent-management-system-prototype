@@ -1,12 +1,19 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { AgentGuidanceHint } from '$lib/server/agent-current-context';
 
 	let {
 		hint,
+		actions = [],
 		compact = false,
 		class: className = ''
 	} = $props<{
 		hint: AgentGuidanceHint | null | undefined;
+		actions?: Array<{
+			label: string;
+			href?: string;
+			onclick?: (() => void | Promise<void>) | null;
+		}>;
 		compact?: boolean;
 		class?: string;
 	}>();
@@ -45,6 +52,28 @@
 			>
 				{hint.validationReason}
 			</p>
+		{/if}
+		{#if actions.length > 0}
+			<div class="mt-3 flex flex-wrap gap-2">
+				{#each actions as action (`${action.label}:${action.href}`)}
+					{#if action.href}
+						<a
+							class={`inline-flex items-center rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 font-medium text-sky-200 transition hover:border-sky-700/70 hover:bg-sky-950/30 hover:text-sky-100 ${compact ? 'text-[11px]' : 'text-xs'}`}
+							href={resolve(action.href)}
+						>
+							{action.label}
+						</a>
+					{:else}
+						<button
+							class={`inline-flex items-center rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 font-medium text-sky-200 transition hover:border-sky-700/70 hover:bg-sky-950/30 hover:text-sky-100 ${compact ? 'text-[11px]' : 'text-xs'}`}
+							type="button"
+							onclick={action.onclick ?? undefined}
+						>
+							{action.label}
+						</button>
+					{/if}
+				{/each}
+			</div>
 		{/if}
 	</div>
 {/if}

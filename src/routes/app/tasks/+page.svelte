@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { buildTaskGuidancePreviewRequest } from '$lib/agent-guidance-preview';
 	import type { PageData as TaskDetailPageData } from './[taskId]/$types';
 	import type { PageData as ThreadDetailPageData } from '../threads/[threadId]/$types';
+	import AgentGuidanceCoordinationPreviewDialog from '$lib/components/AgentGuidanceCoordinationPreviewDialog.svelte';
+	import AgentGuidancePreviewDialog from '$lib/components/AgentGuidancePreviewDialog.svelte';
 	import TaskDetailPageContent from './[taskId]/TaskDetailPageContent.svelte';
 	import ThreadDetailPanel from '$lib/components/ThreadDetailPanel.svelte';
 	import { fetchJson } from '$lib/client/agent-data';
@@ -12,6 +15,7 @@
 	} from '$lib/client/collection-visibility';
 	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
+	import { buildTaskGuidanceAction } from '$lib/agent-guidance-links';
 	import {
 		appendExecutionRequirementName,
 		findUnknownExecutionRequirementNames
@@ -50,6 +54,7 @@
 		PRIORITY_OPTIONS,
 		TASK_APPROVAL_MODE_OPTIONS,
 		TASK_RISK_LEVEL_OPTIONS,
+		formatCatalogLifecycleStatusLabel,
 		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
 		formatTaskRiskLevelLabel,
@@ -88,6 +93,10 @@
 		directMatchCount: number;
 		hiddenCollapsedRowCount: number;
 	};
+	type TaskQueueBranchState = {
+		matchesSearch: boolean;
+		branchAllDone: boolean;
+	};
 	type TaskQueueQuickAction = {
 		action: 'launchTaskSession' | 'recoverTaskSession';
 		label: string;
@@ -124,6 +133,16 @@
 		{ id: string; name: string; sizeBytes: number; contentType: string }[]
 	>([]);
 	let taskLayoutMode = $state<TaskLayoutMode>('desktop');
+	let isGuidancePreviewOpen = $state(false);
+	let guidancePreviewTitle = $state('Guidance preview');
+	let guidancePreviewDescription = $state('');
+	let guidancePreviewLoading = $state(false);
+	let guidancePreviewError = $state<string | null>(null);
+	let guidancePreviewResult = $state.raw<Record<string, unknown> | null>(null);
+	let isCoordinationPreviewOpen = $state(false);
+	let coordinationPreviewSourceThreadId = $state<string | null>(null);
+	let coordinationPreviewSourceThreadLabel = $state('');
+	let coordinationPreviewPrompt = $state('');
 
 	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
 	const ROOT_TASK_PARENT_KEY = '__root__';
@@ -242,6 +261,121 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function taskGuidanceActions(task: TaskRow) {
+		const actions: Array<{
+			label: string;
+			href?: string;
+			onclick?: () => void | Promise<void>;
+		}> = [];
+		const previewRequest = buildTaskGuidancePreviewRequest(task.id, task.agentGuidanceHint, {
+			parentTaskId: task.parentTaskId ?? null
+		});
+		const primaryAction = buildTaskGuidanceAction(task.id, task.agentGuidanceHint);
+		const sourceThreadId = taskGuidanceSourceThreadId(task);
+
+		if (previewRequest) {
+			actions.push({
+				label: previewRequest.label,
+				onclick: () => runGuidancePreview(previewRequest)
+			});
+		}
+
+		if (task.agentGuidanceHint?.command === 'coordinate_with_another_thread' && sourceThreadId) {
+			actions.push({
+				label: 'Set up preview',
+				onclick: () =>
+					openCoordinationPreview({
+						sourceThreadId,
+						sourceThreadLabel: taskGuidanceSourceThreadLabel(task),
+						prompt: `Need coordination on task "${task.title}".`
+					})
+			});
+		}
+
+		if (primaryAction) {
+			actions.push(primaryAction);
+		}
+
+		return actions;
+	}
+
+	function taskGuidanceSourceThreadId(task: TaskRow) {
+		return (
+			task.agentThreadId ??
+			task.linkThread?.id ??
+			task.statusThread?.id ??
+			task.latestRun?.agentThreadId ??
+			task.latestRun?.threadId ??
+			null
+		);
+	}
+
+	function taskGuidanceSourceThreadLabel(task: TaskRow) {
+		return (
+			task.linkThread?.name ?? task.statusThread?.name ?? task.latestRunThread?.name ?? task.title
+		);
+	}
+
+	function openCoordinationPreview(input: {
+		sourceThreadId: string;
+		sourceThreadLabel: string;
+		prompt: string;
+	}) {
+		coordinationPreviewSourceThreadId = input.sourceThreadId;
+		coordinationPreviewSourceThreadLabel = input.sourceThreadLabel;
+		coordinationPreviewPrompt = input.prompt;
+		isCoordinationPreviewOpen = true;
+	}
+
+	async function runGuidancePreview(request: {
+		title: string;
+		description: string;
+		path: string;
+		body: Record<string, unknown>;
+	}) {
+		isGuidancePreviewOpen = true;
+		guidancePreviewTitle = request.title;
+		guidancePreviewDescription = request.description;
+		guidancePreviewLoading = true;
+		guidancePreviewError = null;
+		guidancePreviewResult = null;
+
+		try {
+			const response = await fetch(request.path, {
+				method: 'POST',
+				headers: {
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify(request.body)
+			});
+			const payload = (await response.json().catch(() => null)) as
+				| Record<string, unknown>
+				| { error?: { message?: string } }
+				| null;
+
+			if (!response.ok) {
+				throw new Error(
+					(payload &&
+						typeof payload === 'object' &&
+						'error' in payload &&
+						typeof payload.error === 'object' &&
+						payload.error &&
+						'message' in payload.error &&
+						typeof payload.error.message === 'string' &&
+						payload.error.message) ||
+						'Could not run the guidance preview.'
+				);
+			}
+
+			guidancePreviewResult = (payload as Record<string, unknown>) ?? null;
+		} catch (error) {
+			guidancePreviewError =
+				error instanceof Error ? error.message : 'Could not run the guidance preview.';
+		} finally {
+			guidancePreviewLoading = false;
+		}
 	}
 
 	function openTaskDetailPanel(task: TaskRow) {
@@ -853,7 +987,10 @@
 		};
 	}
 
-	function buildTaskQueueCollection(sourceTasks: TaskRow[]): TaskQueueCollection {
+	function buildTaskQueueCollection(
+		sourceTasks: TaskRow[],
+		view: 'active' | 'completed'
+	): TaskQueueCollection {
 		const taskById = new Map(sourceTasks.map((task) => [task.id, task]));
 		const childrenByParentId = new Map<string, TaskRow[]>();
 
@@ -873,37 +1010,61 @@
 
 		const directMatchIds = new Set<string>();
 		const includedTaskIds = new Set<string>();
+		const branchStateByTaskId = new Map<string, TaskQueueBranchState>();
 
-		function includeTask(task: TaskRow): boolean {
+		function summarizeTaskBranch(task: TaskRow): TaskQueueBranchState {
+			const existingSummary = branchStateByTaskId.get(task.id);
+
+			if (existingSummary) {
+				return existingSummary;
+			}
+
 			const visibleChildren = childrenByParentId.get(task.id) ?? [];
-			const hasIncludedDescendant = visibleChildren.some(includeTask);
 			const isDirectMatch = matchesTask(task, query);
+			const childSummaries = visibleChildren.map(summarizeTaskBranch);
+			const hasIncludedDescendant = childSummaries.some((summary) => summary.matchesSearch);
 
 			if (isDirectMatch) {
 				directMatchIds.add(task.id);
 			}
 
-			if (isDirectMatch || hasIncludedDescendant) {
-				includedTaskIds.add(task.id);
-				return true;
-			}
-
-			return false;
+			const summary = {
+				matchesSearch: isDirectMatch || hasIncludedDescendant,
+				branchAllDone:
+					task.status === 'done' &&
+					childSummaries.every((childSummary) => childSummary.branchAllDone)
+			} satisfies TaskQueueBranchState;
+			branchStateByTaskId.set(task.id, summary);
+			return summary;
 		}
 
-		for (const rootTask of childrenByParentId.get(ROOT_TASK_PARENT_KEY) ?? []) {
-			includeTask(rootTask);
+		function branchBelongsInView(taskId: string) {
+			const summary = branchStateByTaskId.get(taskId);
+
+			if (!summary?.matchesSearch) {
+				return false;
+			}
+
+			return view === 'active' ? !summary.branchAllDone : summary.branchAllDone;
+		}
+
+		const rootTasks = childrenByParentId.get(ROOT_TASK_PARENT_KEY) ?? [];
+
+		for (const rootTask of rootTasks) {
+			summarizeTaskBranch(rootTask);
 		}
 
 		const rows: TaskQueueRow[] = [];
 
 		function visit(task: TaskRow, depth: number) {
-			if (!includedTaskIds.has(task.id)) {
+			if (!branchStateByTaskId.get(task.id)?.matchesSearch) {
 				return;
 			}
 
-			const visibleChildren = (childrenByParentId.get(task.id) ?? []).filter((childTask) =>
-				includedTaskIds.has(childTask.id)
+			includedTaskIds.add(task.id);
+
+			const visibleChildren = (childrenByParentId.get(task.id) ?? []).filter(
+				(childTask) => branchStateByTaskId.get(childTask.id)?.matchesSearch
 			);
 			const isExpanded = forceExpandedTree || !collapsedTaskIds.includes(task.id);
 
@@ -923,13 +1084,21 @@
 			}
 		}
 
-		for (const rootTask of childrenByParentId.get(ROOT_TASK_PARENT_KEY) ?? []) {
+		for (const rootTask of rootTasks) {
+			if (!branchBelongsInView(rootTask.id)) {
+				continue;
+			}
+
 			visit(rootTask, 0);
 		}
 
+		const directMatchCount = [...directMatchIds].filter((taskId) =>
+			includedTaskIds.has(taskId)
+		).length;
+
 		return {
 			rows,
-			directMatchCount: directMatchIds.size,
+			directMatchCount,
 			hiddenCollapsedRowCount: getHiddenCollapsedRowCount({
 				matchingRowCount: includedTaskIds.size,
 				visibleRowCount: rows.length
@@ -992,13 +1161,11 @@
 
 		const activeTasks = filteredTasks.filter((task) => task.status !== 'done');
 		const completedTasks = filteredTasks.filter((task) => task.status === 'done');
-		const activeCollection = buildTaskQueueCollection(activeTasks);
-		const completedCollection = buildTaskQueueCollection(completedTasks);
+		const activeCollection = buildTaskQueueCollection(filteredTasks, 'active');
+		const completedCollection = buildTaskQueueCollection(filteredTasks, 'completed');
 
 		return {
 			filteredTasks,
-			activeTasks,
-			completedTasks,
 			activeTaskRows: activeCollection.rows,
 			completedTaskRows: completedCollection.rows,
 			activeDirectMatchCount: activeCollection.directMatchCount,
@@ -1009,8 +1176,8 @@
 				selectedTaskView === 'completed' ? completedCollection.rows : activeCollection.rows
 		};
 	});
-	let activeTasks = $derived(taskCollections.activeTasks);
-	let completedTasks = $derived(taskCollections.completedTasks);
+	let activeTaskRowCount = $derived(taskCollections.activeTaskRows.length);
+	let completedTaskRowCount = $derived(taskCollections.completedTaskRows.length);
 	let visibleTaskRows = $derived(taskCollections.visibleTaskRows);
 	let hiddenCollapsedTaskRowCount = $derived(
 		selectedTaskView === 'completed'
@@ -1278,9 +1445,35 @@
 	let selectedProjectSkillSummary = $derived(
 		data.projectSkillSummaries.find((summary) => summary.projectId === createTaskProjectId) ?? null
 	);
-	let availableTaskTemplates = $derived(data.taskTemplates);
+	let availableTaskTemplates = $derived(
+		[...data.taskTemplates].sort((left, right) => {
+			const leftRank = taskTemplateLifecycleSortValue(left.lifecycleStatus);
+			const rightRank = taskTemplateLifecycleSortValue(right.lifecycleStatus);
+			return leftRank - rightRank || left.name.localeCompare(right.name);
+		})
+	);
+	let preferredTaskTemplates = $derived(
+		availableTaskTemplates.filter((taskTemplate) => {
+			const lifecycleStatus = taskTemplate.lifecycleStatus ?? 'active';
+			return lifecycleStatus === 'active' || lifecycleStatus === 'draft';
+		})
+	);
+	let legacyTaskTemplates = $derived(
+		availableTaskTemplates.filter((taskTemplate) => {
+			const lifecycleStatus = taskTemplate.lifecycleStatus ?? 'active';
+			return lifecycleStatus === 'deprecated' || lifecycleStatus === 'superseded';
+		})
+	);
 	let selectedCreateTaskTemplate = $derived(
 		data.taskTemplates.find((taskTemplate) => taskTemplate.id === createTaskTemplateId) ?? null
+	);
+	let selectedCreateTaskTemplateSuccessor = $derived(
+		selectedCreateTaskTemplate?.supersededByTaskTemplateId
+			? (data.taskTemplates.find(
+					(taskTemplate) =>
+						taskTemplate.id === selectedCreateTaskTemplate.supersededByTaskTemplateId
+				) ?? null)
+			: null
 	);
 	let availableCreateTaskWorkflows = $derived(data.workflows);
 	let selectedCreateWorkflow = $derived(
@@ -1311,6 +1504,31 @@
 			return dependency ? [dependency] : [];
 		})
 	);
+
+	function taskTemplateLifecycleSortValue(lifecycleStatus?: string) {
+		switch (lifecycleStatus ?? 'active') {
+			case 'active':
+				return 0;
+			case 'draft':
+				return 1;
+			case 'deprecated':
+				return 2;
+			case 'superseded':
+				return 3;
+			default:
+				return 4;
+		}
+	}
+
+	function formatTaskTemplateOptionLabel(taskTemplate: (typeof data.taskTemplates)[number]) {
+		const lifecycleStatus = taskTemplate.lifecycleStatus ?? 'active';
+		const lifecycleSuffix =
+			lifecycleStatus === 'active'
+				? ''
+				: ` · ${formatCatalogLifecycleStatusLabel(lifecycleStatus)}`;
+
+		return `${taskTemplate.name} · ${taskTemplate.projectName}${lifecycleSuffix}`;
+	}
 	let createTaskDependencySearchLabel = $derived(
 		createTaskDependencyQuery.trim() ? 'Matching tasks' : 'Suggested dependencies'
 	);
@@ -2344,7 +2562,12 @@
 									</p>
 								{/if}
 								{#if task.agentGuidanceHint}
-									<AgentGuidanceHintBadge hint={task.agentGuidanceHint} compact class="mt-3" />
+									<AgentGuidanceHintBadge
+										hint={task.agentGuidanceHint}
+										actions={taskGuidanceActions(task)}
+										compact
+										class="mt-3"
+									/>
 								{/if}
 
 								<div class="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -2573,6 +2796,7 @@
 												{#if task.agentGuidanceHint}
 													<AgentGuidanceHintBadge
 														hint={task.agentGuidanceHint}
+														actions={taskGuidanceActions(task)}
 														compact
 														class="mt-2"
 													/>
@@ -3201,8 +3425,8 @@
 							ariaLabel="Task list views"
 							bind:value={selectedTaskView}
 							items={[
-								{ id: 'active', label: 'Open tasks', badge: activeTasks.length },
-								{ id: 'completed', label: 'Completed', badge: completedTasks.length }
+								{ id: 'active', label: 'Open tasks', badge: activeTaskRowCount },
+								{ id: 'completed', label: 'Completed', badge: completedTaskRowCount }
 							]}
 							panelIdPrefix="task-list"
 						/>
@@ -3545,15 +3769,32 @@
 											}}
 										>
 											<option value="">No task template</option>
-											{#each availableTaskTemplates as taskTemplate (taskTemplate.id)}
-												<option value={taskTemplate.id}>
-													{taskTemplate.name} · {taskTemplate.projectName}
-												</option>
-											{/each}
+											{#if preferredTaskTemplates.length > 0}
+												<optgroup label="Active templates">
+													{#each preferredTaskTemplates as taskTemplate (taskTemplate.id)}
+														<option value={taskTemplate.id}>
+															{formatTaskTemplateOptionLabel(taskTemplate)}
+														</option>
+													{/each}
+												</optgroup>
+											{/if}
+											{#if legacyTaskTemplates.length > 0}
+												<optgroup label="Legacy templates">
+													{#each legacyTaskTemplates as taskTemplate (taskTemplate.id)}
+														<option value={taskTemplate.id}>
+															{formatTaskTemplateOptionLabel(taskTemplate)}
+														</option>
+													{/each}
+												</optgroup>
+											{/if}
 										</select>
 										<span class="mt-2 block text-xs text-slate-500">
 											Optional. Task templates prefill repeated task defaults like project, goal,
 											role, workflow, instructions, review settings, and execution requirements.
+										</span>
+										<span class="mt-2 block text-xs text-slate-500">
+											Active and draft templates are listed first. Deprecated and superseded
+											templates stay available only for legacy intake.
 										</span>
 										{#if data.taskTemplates.length === 0}
 											<span class="mt-2 block text-xs text-slate-500">
@@ -3593,6 +3834,28 @@
 										{#if selectedCreateTaskTemplate.summary}
 											<p class="mt-2 text-sm text-slate-300">
 												{selectedCreateTaskTemplate.summary}
+											</p>
+										{/if}
+										{#if (selectedCreateTaskTemplate.lifecycleStatus ?? 'active') === 'deprecated'}
+											<p class="mt-2 text-xs text-amber-300">
+												This template is deprecated. Prefer an active replacement unless you are
+												preserving an older task shape.
+											</p>
+										{:else if (selectedCreateTaskTemplate.lifecycleStatus ?? 'active') === 'superseded'}
+											<p class="mt-2 text-xs text-amber-300">
+												This template has been superseded.
+												{#if selectedCreateTaskTemplateSuccessor}
+													Use
+													<a
+														class="ml-1 font-medium text-sky-300 underline"
+														href={resolve(
+															`/app/task-templates/${selectedCreateTaskTemplateSuccessor.id}`
+														)}
+													>
+														{selectedCreateTaskTemplateSuccessor.name}
+													</a>
+													for new intake when possible.
+												{/if}
 											</p>
 										{/if}
 										<p class="mt-2 text-xs text-slate-400">
@@ -4596,5 +4859,21 @@
 				</form>
 			</AppDialog>
 		{/if}
+
+		<AgentGuidancePreviewDialog
+			bind:open={isGuidancePreviewOpen}
+			title={guidancePreviewTitle}
+			description={guidancePreviewDescription}
+			loading={guidancePreviewLoading}
+			error={guidancePreviewError}
+			result={guidancePreviewResult}
+		/>
+
+		<AgentGuidanceCoordinationPreviewDialog
+			bind:open={isCoordinationPreviewOpen}
+			sourceThreadId={coordinationPreviewSourceThreadId}
+			sourceThreadLabel={coordinationPreviewSourceThreadLabel}
+			initialPrompt={coordinationPreviewPrompt}
+		/>
 	</div>
 </AppPage>

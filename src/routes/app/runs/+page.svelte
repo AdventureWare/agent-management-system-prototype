@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { buildRunGuidanceHref, buildTaskGuidanceAction } from '$lib/agent-guidance-links';
+	import { buildTaskGuidancePreviewRequest } from '$lib/agent-guidance-preview';
+	import AgentGuidanceCoordinationPreviewDialog from '$lib/components/AgentGuidanceCoordinationPreviewDialog.svelte';
 	import AgentGuidanceHintBadge from '$lib/components/AgentGuidanceHintBadge.svelte';
+	import AgentGuidancePreviewDialog from '$lib/components/AgentGuidancePreviewDialog.svelte';
 	import AppPage from '$lib/components/AppPage.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -31,6 +35,16 @@
 	let selectedModel = $state('all');
 	let selectedCostState = $state('all');
 	let selectedTime = $state<(typeof timeOptions)[number]['value']>('all');
+	let isGuidancePreviewOpen = $state(false);
+	let guidancePreviewTitle = $state('Guidance preview');
+	let guidancePreviewDescription = $state('');
+	let guidancePreviewLoading = $state(false);
+	let guidancePreviewError = $state<string | null>(null);
+	let guidancePreviewResult = $state.raw<Record<string, unknown> | null>(null);
+	let isCoordinationPreviewOpen = $state(false);
+	let coordinationPreviewSourceThreadId = $state<string | null>(null);
+	let coordinationPreviewSourceThreadLabel = $state('');
+	let coordinationPreviewPrompt = $state('');
 
 	function timeWindowMs(value: (typeof timeOptions)[number]['value']) {
 		switch (value) {
@@ -59,6 +73,109 @@
 		}
 
 		return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+
+	function runGuidanceActions(run: (typeof data.runs)[number]) {
+		const actions: Array<{
+			label: string;
+			href?: string;
+			onclick?: () => void | Promise<void>;
+		}> = [];
+		const previewRequest = buildTaskGuidancePreviewRequest(run.taskId, run.agentGuidanceHint, {
+			parentTaskId: run.taskParentTaskId ?? null
+		});
+		const taskAction = buildTaskGuidanceAction(run.taskId, run.agentGuidanceHint);
+		const sourceThreadId = run.agentThreadId ?? run.threadId ?? null;
+
+		if (previewRequest) {
+			actions.push({
+				label: previewRequest.label,
+				onclick: () => runGuidancePreview(previewRequest)
+			});
+		}
+
+		if (run.agentGuidanceHint?.command === 'coordinate_with_another_thread' && sourceThreadId) {
+			actions.push({
+				label: 'Set up preview',
+				onclick: () =>
+					openCoordinationPreview({
+						sourceThreadId,
+						sourceThreadLabel: run.threadName ?? run.id,
+						prompt: `Need coordination on run "${run.id}" for task "${run.taskTitle}".`
+					})
+			});
+		}
+
+		if (taskAction) {
+			actions.push(taskAction);
+		}
+
+		actions.push({
+			label: taskAction ? 'Run context' : 'Open guidance',
+			href: buildRunGuidanceHref(run.id)
+		});
+
+		return actions;
+	}
+
+	async function runGuidancePreview(request: {
+		title: string;
+		description: string;
+		path: string;
+		body: Record<string, unknown>;
+	}) {
+		isGuidancePreviewOpen = true;
+		guidancePreviewTitle = request.title;
+		guidancePreviewDescription = request.description;
+		guidancePreviewLoading = true;
+		guidancePreviewError = null;
+		guidancePreviewResult = null;
+
+		try {
+			const response = await fetch(request.path, {
+				method: 'POST',
+				headers: {
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify(request.body)
+			});
+			const payload = (await response.json().catch(() => null)) as
+				| Record<string, unknown>
+				| { error?: { message?: string } }
+				| null;
+
+			if (!response.ok) {
+				throw new Error(
+					(payload &&
+						typeof payload === 'object' &&
+						'error' in payload &&
+						typeof payload.error === 'object' &&
+						payload.error &&
+						'message' in payload.error &&
+						typeof payload.error.message === 'string' &&
+						payload.error.message) ||
+						'Could not run the guidance preview.'
+				);
+			}
+
+			guidancePreviewResult = (payload as Record<string, unknown>) ?? null;
+		} catch (error) {
+			guidancePreviewError =
+				error instanceof Error ? error.message : 'Could not run the guidance preview.';
+		} finally {
+			guidancePreviewLoading = false;
+		}
+	}
+
+	function openCoordinationPreview(input: {
+		sourceThreadId: string;
+		sourceThreadLabel: string;
+		prompt: string;
+	}) {
+		coordinationPreviewSourceThreadId = input.sourceThreadId;
+		coordinationPreviewSourceThreadLabel = input.sourceThreadLabel;
+		coordinationPreviewPrompt = input.prompt;
+		isCoordinationPreviewOpen = true;
 	}
 
 	function matchesRun(run: (typeof data.runs)[number], term: string) {
@@ -337,7 +454,12 @@
 										</div>
 										<p class="text-sm text-slate-300">{compactText(run.summary || 'No summary')}</p>
 										{#if run.agentGuidanceHint}
-											<AgentGuidanceHintBadge hint={run.agentGuidanceHint} compact class="mt-2" />
+											<AgentGuidanceHintBadge
+												hint={run.agentGuidanceHint}
+												actions={runGuidanceActions(run)}
+												compact
+												class="mt-2"
+											/>
 										{/if}
 									</div>
 								</td>
@@ -422,4 +544,20 @@
 			</div>
 		{/if}
 	</section>
+
+	<AgentGuidancePreviewDialog
+		bind:open={isGuidancePreviewOpen}
+		title={guidancePreviewTitle}
+		description={guidancePreviewDescription}
+		loading={guidancePreviewLoading}
+		error={guidancePreviewError}
+		result={guidancePreviewResult}
+	/>
+
+	<AgentGuidanceCoordinationPreviewDialog
+		bind:open={isCoordinationPreviewOpen}
+		sourceThreadId={coordinationPreviewSourceThreadId}
+		sourceThreadLabel={coordinationPreviewSourceThreadLabel}
+		initialPrompt={coordinationPreviewPrompt}
+	/>
 </AppPage>

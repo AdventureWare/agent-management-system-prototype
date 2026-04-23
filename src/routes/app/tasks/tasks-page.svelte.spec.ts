@@ -82,7 +82,8 @@ function createGoal(overrides: Record<string, unknown> = {}) {
 function renderPage(
 	tasks = [] as ReturnType<typeof createTask>[],
 	form: Record<string, unknown> = {},
-	createTaskPrefill: Record<string, unknown> = {}
+	createTaskPrefill: Record<string, unknown> = {},
+	taskTemplates?: Array<Record<string, unknown>>
 ) {
 	render(Page, {
 		form: form as never,
@@ -133,7 +134,7 @@ function renderPage(
 					updatedAt: '2026-04-01T09:00:00.000Z'
 				}
 			],
-			taskTemplates: [
+			taskTemplates: taskTemplates ?? [
 				{
 					id: 'task_template_research',
 					name: 'Research brief',
@@ -604,6 +605,83 @@ describe('/app/tasks/+page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('warns when a superseded template is selected for new intake', async () => {
+		renderPage([], {}, {}, [
+			{
+				id: 'task_template_legacy',
+				name: 'Legacy brief',
+				summary: 'Older task shape.',
+				projectId: 'project_1',
+				projectName: 'Agent Management System Prototype',
+				goalId: 'goal_1',
+				goalLabel: 'Reduce task intake friction',
+				workflowId: null,
+				workflowName: 'No workflow',
+				taskTitle: 'Run legacy brief',
+				taskSummary: 'Use the legacy instructions.',
+				successCriteria: '',
+				readyCondition: '',
+				expectedOutcome: '',
+				area: 'product',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiredThreadSandbox: null,
+				requiresReview: true,
+				desiredRoleId: 'role_2',
+				desiredRoleName: 'Reviewer',
+				assigneeExecutionSurfaceId: null,
+				assigneeExecutionSurfaceName: 'Leave unassigned',
+				requiredPromptSkillNames: [],
+				requiredCapabilityNames: [],
+				requiredToolNames: [],
+				lifecycleStatus: 'superseded',
+				supersededByTaskTemplateId: 'task_template_research',
+				createdAt: '2026-04-01T09:00:00.000Z',
+				updatedAt: '2026-04-01T09:00:00.000Z'
+			},
+			{
+				id: 'task_template_research',
+				name: 'Research brief',
+				summary: 'Reusable defaults for research requests.',
+				projectId: 'project_1',
+				projectName: 'Agent Management System Prototype',
+				goalId: 'goal_1',
+				goalLabel: 'Reduce task intake friction',
+				workflowId: null,
+				workflowName: 'No workflow',
+				taskTitle: 'Run research brief',
+				taskSummary: 'Investigate the topic and produce a concise report.',
+				successCriteria: '',
+				readyCondition: '',
+				expectedOutcome: '',
+				area: 'product',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiredThreadSandbox: null,
+				requiresReview: true,
+				desiredRoleId: 'role_2',
+				desiredRoleName: 'Reviewer',
+				assigneeExecutionSurfaceId: null,
+				assigneeExecutionSurfaceName: 'Leave unassigned',
+				requiredPromptSkillNames: [],
+				requiredCapabilityNames: [],
+				requiredToolNames: [],
+				lifecycleStatus: 'active',
+				createdAt: '2026-04-01T09:00:00.000Z',
+				updatedAt: '2026-04-01T09:00:00.000Z'
+			}
+		]);
+		await page.getByRole('button', { name: 'Full task' }).click();
+		await page
+			.getByRole('combobox', { name: 'Use task template' })
+			.selectOptions('task_template_legacy');
+
+		await expect.element(page.getByText('This template has been superseded.')).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Research brief' })).toBeInTheDocument();
+	});
+
 	it('renders the linked workflow in queue rows', () => {
 		renderPage([
 			createTask({
@@ -668,6 +746,46 @@ describe('/app/tasks/+page.svelte', () => {
 		expect(
 			document.querySelector('[data-testid="task-mobile-card-task_child_branch"]')
 		).not.toBeNull();
+	});
+
+	it('keeps completed child tasks visible inside an active parent branch', async () => {
+		renderPage([
+			createTask({
+				id: 'task_child_done',
+				title: 'Completed child task',
+				parentTaskId: 'task_parent_mixed',
+				status: 'done',
+				updatedAt: '2026-04-01T11:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_child_active',
+				title: 'Active child task',
+				parentTaskId: 'task_parent_mixed',
+				status: 'in_progress',
+				updatedAt: '2026-04-01T12:00:00.000Z'
+			}),
+			createTask({
+				id: 'task_parent_mixed',
+				title: 'Mixed branch parent',
+				status: 'in_progress',
+				updatedAt: '2026-04-01T10:00:00.000Z'
+			})
+		]);
+
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_parent_mixed"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_child_done"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('[data-testid="task-mobile-card-task_child_active"]')
+		).not.toBeNull();
+
+		await page.getByRole('button', { name: /Completed 0/ }).click();
+
+		expect(document.body.textContent).toContain('No completed tasks match the current filters.');
+		expect(document.body.textContent).not.toContain('Completed child task');
 	});
 
 	it('opts task queue selection checkboxes out of page field persistence', () => {
@@ -1256,8 +1374,69 @@ describe('/app/tasks/+page.svelte', () => {
 
 		expect(document.body.textContent).toContain('Preview first');
 		expect(document.body.textContent).toContain('task:approve-approval');
+		expect(document.body.textContent).toContain('Run preview');
 		expect(document.body.textContent).toContain(
 			'Approval resolution is high-impact. Preview whether the task would close before mutating.'
 		);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) =>
+					link.getAttribute('href') ===
+					'/app/tasks/task_preview?panel=governance#agent-current-context'
+			)
+		).toBe(true);
+	});
+
+	it('shows a direct queue preview for child handoff guidance when the parent task is known', async () => {
+		renderPage([
+			createTask({
+				id: 'task_child',
+				title: 'Finish delegated child task',
+				parentTaskId: 'task_parent',
+				status: 'done',
+				agentGuidanceHint: {
+					resource: 'intent',
+					command: 'accept_child_handoff',
+					reason: 'This delegated child task is done and waiting for parent acceptance.',
+					expectedOutcome: 'Accept the child handoff into the parent task in one intent call.',
+					shouldValidateFirst: true,
+					validationMode: 'validateOnly',
+					validationReason:
+						'Child handoff acceptance changes delegated-work state. Preview eligibility before mutating.'
+				}
+			})
+		]);
+
+		await page.getByRole('button', { name: /Completed 1/ }).click();
+
+		expect(document.body.textContent).toContain('Run preview');
+	});
+
+	it('shows a coordination setup preview on task rows when a source thread is available', async () => {
+		renderPage([
+			createTask({
+				id: 'task_coordination',
+				title: 'Coordinate with another thread',
+				status: 'done',
+				agentThreadId: 'thread_coordination',
+				agentGuidanceHint: {
+					resource: 'intent',
+					command: 'coordinate_with_another_thread',
+					reason:
+						'Route focused context or delegation to another thread without manually resolving and messaging it.',
+					expectedOutcome:
+						'Resolve a target thread, send the contact, and read back contact state in one call.',
+					shouldValidateFirst: true,
+					validationMode: 'validateOnly',
+					validationReason:
+						'Cross-thread routing is coordination-heavy. Preview target resolution and availability first.'
+				}
+			})
+		]);
+
+		await page.getByRole('button', { name: /Completed 1/ }).click();
+
+		expect(document.body.textContent).toContain('Set up preview');
+		expect(document.body.textContent).toContain('intent:coordinate_with_another_thread');
 	});
 });

@@ -1,7 +1,10 @@
 import { error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { loadTaskTemplateDirectoryData } from '$lib/server/task-template-directory';
-import { updateTaskTemplateAction } from '$lib/server/task-template-form-actions';
+import {
+	migrateTaskTemplateReferencesAction,
+	updateTaskTemplateAction
+} from '$lib/server/task-template-form-actions';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const data = await loadTaskTemplateDirectoryData();
@@ -18,5 +21,6 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	updateTaskTemplate: async ({ request }) => updateTaskTemplateAction(request)
+	updateTaskTemplate: async ({ request }) => updateTaskTemplateAction(request),
+	migrateTaskTemplateReferences: async ({ request }) => migrateTaskTemplateReferencesAction(request)
 };

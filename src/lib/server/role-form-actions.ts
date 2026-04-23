@@ -1,6 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { CatalogLifecycleStatus, Role } from '$lib/types/control-plane';
-import { AREA_OPTIONS, CATALOG_LIFECYCLE_STATUS_OPTIONS } from '$lib/types/control-plane';
+import {
+	AREA_OPTIONS,
+	CATALOG_LIFECYCLE_STATUS_OPTIONS,
+	normalizeRoleFamily
+} from '$lib/types/control-plane';
 import {
 	createRole,
 	loadControlPlane,
@@ -38,12 +42,75 @@ function parseLifecycleStatus(value: FormDataEntryValue | null) {
 		: 'active';
 }
 
+function parseRoleFamily(value: FormDataEntryValue | null) {
+	const raw = parseOptionalText(value);
+	return raw ? normalizeRoleFamily(raw) : '';
+}
+
+function validateRoleRelationships(
+	values: ReturnType<typeof readRoleForm>,
+	roles: Role[],
+	mode: 'create' | 'update'
+) {
+	const currentRoleId = mode === 'update' ? values.roleId : '';
+	const sourceRole = values.sourceRoleId
+		? (roles.find((role) => role.id === values.sourceRoleId) ?? null)
+		: null;
+	const successorRole = values.supersededByRoleId
+		? (roles.find((role) => role.id === values.supersededByRoleId) ?? null)
+		: null;
+
+	if (values.sourceRoleId && !sourceRole) {
+		return 'Source role not found.';
+	}
+
+	if (values.supersededByRoleId && !successorRole) {
+		return 'Successor role not found.';
+	}
+
+	if (currentRoleId && values.sourceRoleId === currentRoleId) {
+		return 'A role cannot be forked from itself.';
+	}
+
+	if (currentRoleId && values.supersededByRoleId === currentRoleId) {
+		return 'A role cannot supersede itself.';
+	}
+
+	if (values.lifecycleStatus === 'superseded' && !values.supersededByRoleId) {
+		return 'Select the successor role before marking this role as superseded.';
+	}
+
+	if (
+		successorRole &&
+		(successorRole.lifecycleStatus === 'deprecated' ||
+			successorRole.lifecycleStatus === 'superseded')
+	) {
+		return 'Choose an active or draft successor role, not a deprecated or superseded one.';
+	}
+
+	if (currentRoleId && successorRole) {
+		const seen = new Set<string>([currentRoleId]);
+		let cursor: Role | null = successorRole;
+
+		while (cursor?.supersededByRoleId) {
+			if (seen.has(cursor.id)) {
+				return 'Successor chain cannot loop back to this role.';
+			}
+
+			seen.add(cursor.id);
+			cursor = roles.find((role) => role.id === cursor?.supersededByRoleId) ?? null;
+		}
+	}
+
+	return null;
+}
+
 export function readRoleForm(form: FormData) {
 	return {
 		roleId: form.get('roleId')?.toString().trim() ?? '',
 		name: form.get('name')?.toString().trim() ?? '',
 		area: parseRoleArea(form.get('area')),
-		family: parseOptionalText(form.get('family')),
+		family: parseRoleFamily(form.get('family')),
 		lifecycleStatus: parseLifecycleStatus(form.get('lifecycleStatus')),
 		sourceRoleId: parseOptionalText(form.get('sourceRoleId')),
 		forkReason: parseOptionalText(form.get('forkReason')),
@@ -82,6 +149,16 @@ export async function createRoleAction(request: Request) {
 	const duplicateRole = current.roles.find(
 		(role) => role.name.trim().toLowerCase() === values.name.toLowerCase()
 	);
+
+	const relationshipError = validateRoleRelationships(values, current.roles, 'create');
+
+	if (relationshipError) {
+		return fail(400, {
+			formContext: 'createRole',
+			message: relationshipError,
+			values
+		});
+	}
 
 	if (duplicateRole) {
 		return fail(400, {
@@ -158,6 +235,17 @@ export async function updateRoleAction(request: Request) {
 			role.id !== values.roleId && role.name.trim().toLowerCase() === values.name.toLowerCase()
 	);
 
+	const relationshipError = validateRoleRelationships(values, current.roles, 'update');
+
+	if (relationshipError) {
+		return fail(400, {
+			formContext: 'updateRole',
+			message: relationshipError,
+			roleId: values.roleId,
+			values
+		});
+	}
+
 	if (duplicateRole) {
 		return fail(400, {
 			formContext: 'updateRole',
@@ -209,5 +297,93 @@ export async function updateRoleAction(request: Request) {
 		ok: true,
 		roleId: values.roleId,
 		successAction: 'updateRole'
+	};
+}
+
+export async function migrateRoleReferencesAction(request: Request) {
+	const form = await request.formData();
+	const roleId = form.get('roleId')?.toString().trim() ?? '';
+
+	if (!roleId) {
+		return fail(400, {
+			message: 'Role ID is required to migrate references.'
+		});
+	}
+
+	const current = await loadControlPlane();
+	const role = current.roles.find((candidate) => candidate.id === roleId) ?? null;
+
+	if (!role) {
+		return fail(404, {
+			message: 'Role not found.'
+		});
+	}
+
+	const successorRoleId = role.supersededByRoleId?.trim() ?? '';
+
+	if (!successorRoleId) {
+		return fail(400, {
+			message: 'Set a successor role before migrating references.'
+		});
+	}
+
+	const successorRole = current.roles.find((candidate) => candidate.id === successorRoleId) ?? null;
+
+	if (!successorRole) {
+		return fail(400, {
+			message: 'Successor role not found.'
+		});
+	}
+
+	const taskCount = current.tasks.filter((task) => task.desiredRoleId === roleId).length;
+	const taskTemplateCount = (current.taskTemplates ?? []).filter(
+		(taskTemplate) => taskTemplate.desiredRoleId === roleId
+	).length;
+	const workflowStepCount = (current.workflowSteps ?? []).filter(
+		(workflowStep) => workflowStep.desiredRoleId === roleId
+	).length;
+	const executionSurfaceCount = current.executionSurfaces.filter((executionSurface) =>
+		(executionSurface.supportedRoleIds ?? []).includes(roleId)
+	).length;
+
+	await updateControlPlaneCollections((data) => ({
+		data: {
+			...data,
+			tasks: data.tasks.map((task) =>
+				task.desiredRoleId === roleId ? { ...task, desiredRoleId: successorRoleId } : task
+			),
+			taskTemplates: (data.taskTemplates ?? []).map((taskTemplate) =>
+				taskTemplate.desiredRoleId === roleId
+					? { ...taskTemplate, desiredRoleId: successorRoleId }
+					: taskTemplate
+			),
+			workflowSteps: (data.workflowSteps ?? []).map((workflowStep) =>
+				workflowStep.desiredRoleId === roleId
+					? { ...workflowStep, desiredRoleId: successorRoleId }
+					: workflowStep
+			),
+			executionSurfaces: data.executionSurfaces.map((executionSurface) =>
+				(executionSurface.supportedRoleIds ?? []).includes(roleId)
+					? {
+							...executionSurface,
+							supportedRoleIds: [
+								...new Set(
+									(executionSurface.supportedRoleIds ?? []).map((supportedRoleId) =>
+										supportedRoleId === roleId ? successorRoleId : supportedRoleId
+									)
+								)
+							]
+						}
+					: executionSurface
+			)
+		},
+		changedCollections: ['tasks', 'taskTemplates', 'workflowSteps', 'executionSurfaces']
+	}));
+
+	return {
+		ok: true,
+		roleId,
+		successAction: 'migrateRoleReferences',
+		message: `Migrated ${taskCount + taskTemplateCount + workflowStepCount + executionSurfaceCount} references to ${successorRole.name}.`
 	};
 }

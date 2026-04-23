@@ -284,4 +284,62 @@ describe('roles page server', () => {
 			qualityChecklist: ['accurate', 'concise']
 		});
 	});
+
+	it('requires a successor before marking a role as superseded', async () => {
+		const form = new FormData();
+		form.set('roleId', 'role_writer');
+		form.set('name', 'Technical Writer');
+		form.set('area', 'product');
+		form.set('description', 'Owns documentation.');
+		form.set('lifecycleStatus', 'superseded');
+
+		const result = await actions.updateRole({
+			request: new Request('http://localhost/app/roles', { method: 'POST', body: form })
+		} as never);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: expect.objectContaining({
+				message: 'Select the successor role before marking this role as superseded.'
+			})
+		});
+	});
+
+	it('migrates references to a superseding role', async () => {
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			roles: [
+				{
+					...(controlPlaneState.current as ControlPlaneData).roles[0],
+					lifecycleStatus: 'superseded',
+					supersededByRoleId: 'role_editor'
+				},
+				{
+					id: 'role_editor',
+					name: 'Editor',
+					area: 'product',
+					description: 'Edits and reviews docs.'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('roleId', 'role_writer');
+
+		const result = await actions.migrateRoleReferences({
+			request: new Request('http://localhost/app/roles', { method: 'POST', body: form })
+		} as never);
+
+		expect(result).toMatchObject({
+			ok: true,
+			roleId: 'role_writer',
+			successAction: 'migrateRoleReferences'
+		});
+		expect(controlPlaneState.saved?.tasks[0]?.desiredRoleId).toBe('role_editor');
+		expect(controlPlaneState.saved?.taskTemplates?.[0]?.desiredRoleId).toBe('role_editor');
+		expect(controlPlaneState.saved?.workflowSteps?.[0]?.desiredRoleId).toBe('role_editor');
+		expect(controlPlaneState.saved?.executionSurfaces[0]?.supportedRoleIds).toEqual([
+			'role_editor'
+		]);
+	});
 });

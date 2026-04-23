@@ -61,6 +61,18 @@ export const CATALOG_LIFECYCLE_STATUS_OPTIONS = [
 	'deprecated',
 	'superseded'
 ] as const;
+export const ROLE_FAMILY_OPTIONS = [
+	'Analysis',
+	'Coordination',
+	'Design',
+	'Governance',
+	'Implementation',
+	'Operations',
+	'Planning',
+	'Research',
+	'Review',
+	'Writing'
+] as const;
 export const WORKFLOW_STATUS_OPTIONS = [
 	'draft',
 	'active',
@@ -87,6 +99,7 @@ export type ProviderSetupStatus = (typeof PROVIDER_SETUP_STATUS_OPTIONS)[number]
 export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODE_OPTIONS)[number];
 export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
 export type CatalogLifecycleStatus = (typeof CATALOG_LIFECYCLE_STATUS_OPTIONS)[number];
+export type RoleFamily = (typeof ROLE_FAMILY_OPTIONS)[number];
 export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
@@ -332,6 +345,15 @@ export function formatWorkflowStatusLabel(status: string): string {
 
 export function formatCatalogLifecycleStatusLabel(status: string): string {
 	return formatEnumLabel(status);
+}
+
+export function normalizeRoleFamily(value: string): RoleFamily | string {
+	const normalized = value.trim().toLowerCase();
+	const matchedFamily = ROLE_FAMILY_OPTIONS.find(
+		(family) => family.trim().toLowerCase() === normalized
+	);
+
+	return matchedFamily ?? value.trim();
 }
 
 export function workflowStatusToneClass(status: string): string {

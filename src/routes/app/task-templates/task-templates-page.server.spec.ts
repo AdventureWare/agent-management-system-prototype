@@ -88,6 +88,7 @@ import { loadTaskTemplateDirectoryData } from '$lib/server/task-template-directo
 import {
 	createTaskTemplateAction,
 	deleteTaskTemplateAction,
+	migrateTaskTemplateReferencesAction,
 	updateTaskTemplateAction
 } from '$lib/server/task-template-form-actions';
 
@@ -192,7 +193,34 @@ describe('task template server helpers', () => {
 				}
 			],
 			executionSurfaces: [],
-			tasks: [],
+			tasks: [
+				{
+					id: 'task_from_template',
+					title: 'Research onboarding',
+					summary: 'Kick off research',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: 'goal_1',
+					priority: 'medium',
+					status: 'ready',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiredThreadSandbox: null,
+					requiresReview: true,
+					desiredRoleId: 'role_research',
+					assigneeExecutionSurfaceId: null,
+					taskTemplateId: 'task_template_research',
+					agentThreadId: null,
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 0,
+					latestRunId: null,
+					artifactPath: '/tmp/project/agent_output/tasks/task_from_template',
+					attachments: [],
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				}
+			],
 			runs: [],
 			decisions: [],
 			reviews: [],
@@ -317,6 +345,94 @@ describe('task template server helpers', () => {
 				taskSummary: 'Investigate the topic, then summarize the findings clearly.'
 			})
 		]);
+	});
+
+	it('requires a successor before marking a template as superseded', async () => {
+		const form = new FormData();
+		form.set('taskTemplateId', 'task_template_research');
+		form.set('taskTemplateName', 'Research Brief');
+		form.set('taskTemplateSummary', 'Updated reusable research setup.');
+		form.set('projectId', 'project_1');
+		form.set('goalId', 'goal_1');
+		form.set('name', 'Research [topic]');
+		form.set('instructions', 'Investigate the topic, then summarize the findings clearly.');
+		form.set('lifecycleStatus', 'superseded');
+
+		const result = await updateTaskTemplateAction(
+			new Request('http://localhost/app/task-templates', {
+				method: 'POST',
+				body: form
+			})
+		);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: expect.objectContaining({
+				message: 'Select the successor template before marking this template as superseded.'
+			})
+		});
+	});
+
+	it('migrates downstream task references to a superseding template', async () => {
+		const existingTemplate = (controlPlaneState.current as ControlPlaneData).taskTemplates?.[0];
+
+		if (!existingTemplate) {
+			throw new Error('Expected seed template in test fixture.');
+		}
+
+		controlPlaneState.current = {
+			...(controlPlaneState.current as ControlPlaneData),
+			taskTemplates: [
+				{
+					...existingTemplate,
+					lifecycleStatus: 'superseded',
+					supersededByTaskTemplateId: 'task_template_review'
+				},
+				{
+					id: 'task_template_review',
+					name: 'Review Brief',
+					summary: 'Successor template',
+					projectId: 'project_1',
+					goalId: 'goal_1',
+					workflowId: null,
+					taskTitle: 'Review [topic]',
+					taskSummary: 'Review the topic.',
+					successCriteria: '',
+					readyCondition: '',
+					expectedOutcome: '',
+					area: 'product',
+					priority: 'medium',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiredThreadSandbox: null,
+					requiresReview: true,
+					desiredRoleId: 'role_research',
+					assigneeExecutionSurfaceId: null,
+					requiredPromptSkillNames: [],
+					requiredCapabilityNames: [],
+					requiredToolNames: [],
+					createdAt: '2026-04-15T09:00:00.000Z',
+					updatedAt: '2026-04-15T09:00:00.000Z'
+				}
+			]
+		};
+
+		const form = new FormData();
+		form.set('taskTemplateId', 'task_template_research');
+
+		const result = await migrateTaskTemplateReferencesAction(
+			new Request('http://localhost/app/task-templates', {
+				method: 'POST',
+				body: form
+			})
+		);
+
+		expect(result).toMatchObject({
+			ok: true,
+			taskTemplateId: 'task_template_research',
+			successAction: 'migrateTaskTemplateReferences'
+		});
+		expect(controlPlaneState.saved?.tasks[0]?.taskTemplateId).toBe('task_template_review');
 	});
 
 	it('deletes an existing task template', async () => {

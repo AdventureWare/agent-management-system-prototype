@@ -46,6 +46,12 @@ describe('/app/task-templates/[taskTemplateId]/+page.svelte', () => {
 						id: 'role_research',
 						name: 'Research assistant'
 					},
+					lifecycleStatus: 'active',
+					supersededByTaskTemplateId: 'task_template_review',
+					supersededByTaskTemplate: {
+						id: 'task_template_review',
+						name: 'Review Brief'
+					},
 					assigneeExecutionSurfaceId: 'surface_local',
 					assigneeExecutionSurfaceName: 'Local surface',
 					assigneeExecutionSurface: {
@@ -55,10 +61,115 @@ describe('/app/task-templates/[taskTemplateId]/+page.svelte', () => {
 					requiredPromptSkillNames: ['web-design-guidelines'],
 					requiredCapabilityNames: ['planning'],
 					requiredToolNames: ['codex'],
+					createdTaskCount: 1,
+					createdTasks: [{ id: 'task_1', title: 'Research onboarding', status: 'ready' }],
 					createdAt: '2026-04-15T09:00:00.000Z',
 					updatedAt: '2026-04-15T09:00:00.000Z'
 				},
-				taskTemplates: [],
+				taskTemplates: [
+					{
+						id: 'task_template_research',
+						name: 'Research Brief',
+						summary: 'Reusable research setup.',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						project: {
+							id: 'project_1',
+							name: 'Agent Management System Prototype'
+						},
+						goalId: 'goal_1',
+						goalLabel: 'Reduce task intake friction',
+						goal: {
+							id: 'goal_1',
+							name: 'Reduce task intake friction'
+						},
+						workflowId: 'workflow_1',
+						workflowName: 'Feature development',
+						workflow: {
+							id: 'workflow_1',
+							name: 'Feature development'
+						},
+						taskTitle: 'Research [topic]',
+						taskSummary: 'Investigate the topic and summarize the findings.',
+						successCriteria: 'Provide cited findings.',
+						readyCondition: 'Topic is already approved.',
+						expectedOutcome: 'A concise research brief.',
+						area: 'product',
+						priority: 'medium',
+						riskLevel: 'medium',
+						approvalMode: 'none',
+						requiredThreadSandbox: null,
+						requiresReview: true,
+						desiredRoleId: 'role_research',
+						desiredRoleName: 'Research assistant',
+						desiredRole: {
+							id: 'role_research',
+							name: 'Research assistant'
+						},
+						lifecycleStatus: 'active',
+						assigneeExecutionSurfaceId: 'surface_local',
+						assigneeExecutionSurfaceName: 'Local surface',
+						assigneeExecutionSurface: {
+							id: 'surface_local',
+							name: 'Local surface'
+						},
+						requiredPromptSkillNames: ['web-design-guidelines'],
+						requiredCapabilityNames: ['planning'],
+						requiredToolNames: ['codex'],
+						createdTaskCount: 1,
+						createdTasks: [],
+						createdAt: '2026-04-15T09:00:00.000Z',
+						updatedAt: '2026-04-15T09:00:00.000Z'
+					},
+					{
+						id: 'task_template_review',
+						name: 'Review Brief',
+						summary: 'Variant for review-heavy work.',
+						projectId: 'project_1',
+						projectName: 'Agent Management System Prototype',
+						project: {
+							id: 'project_1',
+							name: 'Agent Management System Prototype'
+						},
+						goalId: 'goal_1',
+						goalLabel: 'Reduce task intake friction',
+						goal: {
+							id: 'goal_1',
+							name: 'Reduce task intake friction'
+						},
+						workflowId: '',
+						workflowName: 'No workflow',
+						workflow: null,
+						taskTitle: 'Review [topic]',
+						taskSummary: 'Review the provided work.',
+						successCriteria: '',
+						readyCondition: '',
+						expectedOutcome: '',
+						area: 'product',
+						priority: 'medium',
+						riskLevel: 'low',
+						approvalMode: 'none',
+						requiredThreadSandbox: null,
+						requiresReview: true,
+						desiredRoleId: 'role_research',
+						desiredRoleName: 'Research assistant',
+						desiredRole: {
+							id: 'role_research',
+							name: 'Research assistant'
+						},
+						lifecycleStatus: 'draft',
+						assigneeExecutionSurfaceId: '',
+						assigneeExecutionSurfaceName: 'Leave unassigned',
+						assigneeExecutionSurface: null,
+						requiredPromptSkillNames: [],
+						requiredCapabilityNames: [],
+						requiredToolNames: ['codex'],
+						createdTaskCount: 0,
+						createdTasks: [],
+						createdAt: '2026-04-15T09:00:00.000Z',
+						updatedAt: '2026-04-15T09:00:00.000Z'
+					}
+				],
 				projects: [
 					{
 						id: 'project_1',
@@ -145,7 +256,11 @@ describe('/app/task-templates/[taskTemplateId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Template purpose and defaults');
 		expect(document.body.textContent).toContain('Linked context');
 		expect(document.body.textContent).toContain('Execution defaults');
+		expect(document.body.textContent).toContain('Compare templates');
+		expect(document.body.textContent).toContain('Migrate downstream tasks');
+		expect(document.body.textContent).toContain('Key contrast');
 		expect(document.querySelector('form[action="?/updateTaskTemplate"]')).not.toBeNull();
+		expect(document.querySelector('form[action="?/migrateTaskTemplateReferences"]')).not.toBeNull();
 		expect(
 			Array.from(document.querySelectorAll('a'))
 				.find((link) => link.textContent?.includes('Back to task templates'))

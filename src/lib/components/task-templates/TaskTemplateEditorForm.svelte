@@ -146,9 +146,30 @@
 			executionRequirementInventory.toolNames
 		)
 	);
+	let sourceTemplateOptions = $derived(
+		taskTemplates.filter((taskTemplate) => taskTemplate.id !== values.taskTemplateId)
+	);
+	let selectedSourceTemplate = $derived(
+		sourceTemplateOptions.find((taskTemplate) => taskTemplate.id === values.sourceTaskTemplateId) ??
+			null
+	);
+	let successorTemplateOptions = $derived(
+		taskTemplates.filter(
+			(taskTemplate) =>
+				taskTemplate.id !== values.taskTemplateId &&
+				(taskTemplate.lifecycleStatus ?? 'active') !== 'deprecated' &&
+				(taskTemplate.lifecycleStatus ?? 'active') !== 'superseded'
+		)
+	);
 	let promptSkillInventoryId = $derived(`${formIdPrefix}-prompt-skill-inventory`);
 	let capabilityInventoryId = $derived(`${formIdPrefix}-capability-inventory`);
 	let toolInventoryId = $derived(`${formIdPrefix}-tool-inventory`);
+
+	function formatTemplateOptionLabel(taskTemplate: TaskTemplateOption) {
+		return taskTemplate.lifecycleStatus && taskTemplate.lifecycleStatus !== 'active'
+			? `${taskTemplate.name} · ${formatCatalogLifecycleStatusLabel(taskTemplate.lifecycleStatus)}`
+			: taskTemplate.name;
+	}
 </script>
 
 <form class="space-y-5" method="POST" {action} data-persist-scope="manual">
@@ -156,6 +177,17 @@
 		<input type="hidden" name="taskTemplateId" value={values.taskTemplateId} />
 	{/if}
 	<input type="hidden" name="area" value={values.area} />
+
+	{#if selectedSourceTemplate}
+		<div class="rounded-2xl border border-sky-900/60 bg-sky-950/20 p-4">
+			<p class="text-sm font-medium text-white">Forking from {selectedSourceTemplate.name}</p>
+			<p class="mt-2 text-sm text-slate-300">
+				Carry forward the defaults that still apply, then use
+				<span class="font-medium text-white">How this differs</span>
+				to explain why this variant should exist separately.
+			</p>
+		</div>
+	{/if}
 
 	<div class="grid gap-4 md:grid-cols-2">
 		<label class="block">
@@ -213,8 +245,8 @@
 				name="sourceTaskTemplateId"
 			>
 				<option value="">No source template</option>
-				{#each taskTemplates.filter((taskTemplate) => taskTemplate.id !== values.taskTemplateId) as taskTemplate (taskTemplate.id)}
-					<option value={taskTemplate.id}>{taskTemplate.name}</option>
+				{#each sourceTemplateOptions as taskTemplate (taskTemplate.id)}
+					<option value={taskTemplate.id}>{formatTemplateOptionLabel(taskTemplate)}</option>
 				{/each}
 			</select>
 		</label>
@@ -238,10 +270,13 @@
 			name="supersededByTaskTemplateId"
 		>
 			<option value="">No successor</option>
-			{#each taskTemplates.filter((taskTemplate) => taskTemplate.id !== values.taskTemplateId) as taskTemplate (taskTemplate.id)}
-				<option value={taskTemplate.id}>{taskTemplate.name}</option>
+			{#each successorTemplateOptions as taskTemplate (taskTemplate.id)}
+				<option value={taskTemplate.id}>{formatTemplateOptionLabel(taskTemplate)}</option>
 			{/each}
 		</select>
+		<span class="mt-2 block text-xs text-slate-500">
+			Successors should stay active or draft so new intake can route to them safely.
+		</span>
 	</label>
 
 	<label class="block">

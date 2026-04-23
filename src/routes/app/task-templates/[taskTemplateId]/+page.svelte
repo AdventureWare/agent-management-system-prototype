@@ -67,9 +67,13 @@
 
 	let taskTemplate = $derived(data.taskTemplate);
 	let editPanelOpen = $state(false);
+	let compareTaskTemplateId = $state('');
 	let editorValues = $state(buildDefaultTaskTemplateEditorValues());
 	let updateTaskTemplateSuccess = $derived(
 		form?.ok && form?.successAction === 'updateTaskTemplate'
+	);
+	let migrateTaskTemplateReferencesSuccess = $derived(
+		form?.ok && form?.successAction === 'migrateTaskTemplateReferences'
 	);
 	let routingDefaultsCount = $derived(
 		[
@@ -92,6 +96,24 @@
 			taskTemplate.requiredToolNames.length
 	);
 	let createdTaskCount = $derived(taskTemplate.createdTaskCount ?? 0);
+	let compareTaskTemplateOptions = $derived(
+		data.taskTemplates.filter((entry) => entry.id !== taskTemplate.id)
+	);
+	let compareTaskTemplate = $derived(
+		compareTaskTemplateOptions.find((entry) => entry.id === compareTaskTemplateId) ??
+			(taskTemplate.sourceTaskTemplateId
+				? (compareTaskTemplateOptions.find(
+						(entry) => entry.id === taskTemplate.sourceTaskTemplateId
+					) ?? null)
+				: null) ??
+			(taskTemplate.supersededByTaskTemplateId
+				? (compareTaskTemplateOptions.find(
+						(entry) => entry.id === taskTemplate.supersededByTaskTemplateId
+					) ?? null)
+				: null) ??
+			compareTaskTemplateOptions[0] ??
+			null
+	);
 
 	$effect(() => {
 		if (updateTaskTemplateSuccess || form?.formContext === 'updateTaskTemplate') {
@@ -142,8 +164,62 @@
 		);
 	});
 
+	$effect(() => {
+		if (!compareTaskTemplateOptions.some((entry) => entry.id === compareTaskTemplateId)) {
+			compareTaskTemplateId =
+				taskTemplate.sourceTaskTemplateId ||
+				taskTemplate.supersededByTaskTemplateId ||
+				compareTaskTemplateOptions[0]?.id ||
+				'';
+		}
+	});
+
 	function formatListField(values?: string[]) {
 		return values?.join(', ') ?? '';
+	}
+
+	function formatTemplateRoutingSummary(template: typeof taskTemplate) {
+		return [
+			template.goal?.name ?? 'No goal linked',
+			template.workflow?.name ?? 'No workflow',
+			template.desiredRole?.name ?? 'No role preference'
+		].join(' · ');
+	}
+
+	function describeTemplateContrast(
+		currentTemplate: typeof taskTemplate,
+		otherTemplate: typeof taskTemplate
+	) {
+		const contrasts: string[] = [];
+
+		if ((currentTemplate.workflow?.id ?? '') !== (otherTemplate.workflow?.id ?? '')) {
+			contrasts.push(
+				currentTemplate.workflow && !otherTemplate.workflow
+					? `${currentTemplate.name} carries a workflow; ${otherTemplate.name} stays single-task.`
+					: !currentTemplate.workflow && otherTemplate.workflow
+						? `${otherTemplate.name} carries a workflow; ${currentTemplate.name} stays single-task.`
+						: 'They route through different workflows.'
+			);
+		}
+
+		if ((currentTemplate.desiredRole?.id ?? '') !== (otherTemplate.desiredRole?.id ?? '')) {
+			contrasts.push(
+				`They default to different roles: ${currentTemplate.desiredRole?.name ?? 'none'} vs ${otherTemplate.desiredRole?.name ?? 'none'}.`
+			);
+		}
+
+		if ((currentTemplate.createdTaskCount ?? 0) !== (otherTemplate.createdTaskCount ?? 0)) {
+			contrasts.push(
+				currentTemplate.createdTaskCount > otherTemplate.createdTaskCount
+					? `${currentTemplate.name} has more recorded downstream use.`
+					: `${otherTemplate.name} has more recorded downstream use.`
+			);
+		}
+
+		return (
+			contrasts[0] ??
+			'The clearest difference is in the summary, instructions, and reusable defaults.'
+		);
 	}
 </script>
 
@@ -190,7 +266,7 @@
 		{/snippet}
 	</DetailHeader>
 
-	{#if form?.message}
+	{#if form?.message && !form?.ok}
 		<p class="ui-notice border border-rose-900/70 bg-rose-950/40 text-rose-200">
 			{form.message}
 		</p>
@@ -199,6 +275,12 @@
 	{#if updateTaskTemplateSuccess}
 		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
 			Task template updated.
+		</p>
+	{/if}
+
+	{#if migrateTaskTemplateReferencesSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			{form?.message || 'Task references migrated.'}
 		</p>
 	{/if}
 
@@ -236,6 +318,52 @@
 			description="Use this page to understand the default task shape first, then edit only when the reusable setup itself should change."
 		>
 			<div class="space-y-5">
+				{#if taskTemplate.supersededByTaskTemplate && createdTaskCount > 0}
+					<div class="rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4">
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div class="max-w-2xl">
+								<p class="text-sm font-medium text-white">Migrate downstream tasks</p>
+								<p class="mt-2 text-sm text-slate-300">
+									This superseded template still owns {createdTaskCount} recorded task{createdTaskCount ===
+									1
+										? ''
+										: 's'}. Move that provenance to
+									<a
+										class="underline decoration-amber-700 underline-offset-4 hover:text-white"
+										href={`/app/task-templates/${taskTemplate.supersededByTaskTemplate.id}`}
+									>
+										{taskTemplate.supersededByTaskTemplate.name}
+									</a>
+									when the replacement becomes the new source of truth.
+								</p>
+							</div>
+
+							<form
+								method="POST"
+								action="?/migrateTaskTemplateReferences"
+								data-persist-scope="manual"
+							>
+								<input type="hidden" name="taskTemplateId" value={taskTemplate.id} />
+								<AppButton
+									type="submit"
+									variant="warning"
+									onclick={(event) => {
+										if (
+											!window.confirm(
+												`Move all recorded tasks from "${taskTemplate.name}" to "${taskTemplate.supersededByTaskTemplate?.name}"?`
+											)
+										) {
+											event.preventDefault();
+										}
+									}}
+								>
+									Migrate tasks
+								</AppButton>
+							</form>
+						</div>
+					</div>
+				{/if}
+
 				<div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
 					<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
 						Default task title
@@ -506,6 +634,77 @@
 					</li>
 				</ul>
 			</DetailSection>
+
+			{#if compareTaskTemplate}
+				<DetailSection
+					title="Compare templates"
+					description="Use this view to decide whether this template should stay distinct from a nearby variant or successor."
+				>
+					<div class="space-y-4">
+						<label class="block max-w-sm">
+							<span
+								class="mb-2 block text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase"
+							>
+								Compare against
+							</span>
+							<select class="select text-white" bind:value={compareTaskTemplateId}>
+								{#each compareTaskTemplateOptions as taskTemplateOption (taskTemplateOption.id)}
+									<option value={taskTemplateOption.id}>{taskTemplateOption.name}</option>
+								{/each}
+							</select>
+						</label>
+
+						<div class="grid gap-4 xl:grid-cols-2">
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+								<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Current template
+								</p>
+								<h3 class="mt-2 text-lg font-semibold text-white">{taskTemplate.name}</h3>
+								<p class="mt-2 text-sm text-slate-300">
+									{taskTemplate.summary || 'No summary saved.'}
+								</p>
+								<div class="mt-4 space-y-2 text-sm text-slate-300">
+									<p>
+										State · {formatCatalogLifecycleStatusLabel(
+											taskTemplate.lifecycleStatus ?? 'active'
+										)}
+									</p>
+									<p>Routing · {formatTemplateRoutingSummary(taskTemplate)}</p>
+									<p>Created tasks · {taskTemplate.createdTaskCount ?? 0}</p>
+								</div>
+							</div>
+
+							<div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+								<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+									Compared template
+								</p>
+								<h3 class="mt-2 text-lg font-semibold text-white">{compareTaskTemplate.name}</h3>
+								<p class="mt-2 text-sm text-slate-300">
+									{compareTaskTemplate.summary || 'No summary saved.'}
+								</p>
+								<div class="mt-4 space-y-2 text-sm text-slate-300">
+									<p>
+										State · {formatCatalogLifecycleStatusLabel(
+											compareTaskTemplate.lifecycleStatus ?? 'active'
+										)}
+									</p>
+									<p>Routing · {formatTemplateRoutingSummary(compareTaskTemplate)}</p>
+									<p>Created tasks · {compareTaskTemplate.createdTaskCount ?? 0}</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+							<p class="text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Key contrast
+							</p>
+							<p class="mt-2 text-sm text-slate-300">
+								{describeTemplateContrast(taskTemplate, compareTaskTemplate)}
+							</p>
+						</div>
+					</div>
+				</DetailSection>
+			{/if}
 
 			<DetailSection
 				title="Downstream usage"

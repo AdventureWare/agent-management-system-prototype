@@ -55,6 +55,7 @@
 	}
 
 	let routerReady = $state(false);
+	let consumedForkRoleId = $state('');
 	let selectedRoleId = $state('');
 	let query = $state('');
 	let selectedArea = $state('all');
@@ -95,6 +96,9 @@
 
 	let createRoleSuccess = $derived(form?.ok && form?.successAction === 'createRole');
 	let updateRoleSuccess = $derived(form?.ok && form?.successAction === 'updateRole');
+	let migrateRoleReferencesSuccess = $derived(
+		form?.ok && form?.successAction === 'migrateRoleReferences'
+	);
 	let taskReferencedRoleCount = $derived(data.roles.filter((role) => role.taskCount > 0).length);
 	let libraryReferencedRoleCount = $derived(
 		data.roles.filter((role) => role.templateCount > 0 || role.workflowCount > 0).length
@@ -105,21 +109,30 @@
 	let activeRoleCount = $derived(
 		data.roles.filter((role) => (role.lifecycleStatus ?? 'active') === 'active').length
 	);
-	let knownFamilies = $derived(
-		[...new Set(data.roles.map((role) => role.family?.trim() ?? '').filter(Boolean))].sort((a, b) =>
-			a.localeCompare(b)
-		)
-	);
+	let knownFamilies = $derived(data.roleFamilyOptions);
 	let createForkSourceRole = $derived(
 		createSourceRoleId ? (data.roles.find((role) => role.id === createSourceRoleId) ?? null) : null
 	);
+	let createForkMode = $derived(Boolean(createForkSourceRole));
 	let updateForkSourceRole = $derived(
 		updateSourceRoleId ? (data.roles.find((role) => role.id === updateSourceRoleId) ?? null) : null
 	);
 	let createSuccessorOptions = $derived(
-		data.roles.filter((role) => role.id !== createSourceRoleId)
+		data.roles.filter(
+			(role) =>
+				role.id !== createSourceRoleId &&
+				(role.lifecycleStatus ?? 'active') !== 'deprecated' &&
+				(role.lifecycleStatus ?? 'active') !== 'superseded'
+		)
 	);
-	let updateSuccessorOptions = $derived(data.roles.filter((role) => role.id !== selectedRole?.id));
+	let updateSuccessorOptions = $derived(
+		data.roles.filter(
+			(role) =>
+				role.id !== selectedRole?.id &&
+				(role.lifecycleStatus ?? 'active') !== 'deprecated' &&
+				(role.lifecycleStatus ?? 'active') !== 'superseded'
+		)
+	);
 	let filteredRoles = $derived.by(() => {
 		const normalizedQuery = query.trim().toLowerCase();
 
@@ -273,6 +286,7 @@
 		if (createRoleSuccess) {
 			resetCreateDraft();
 			createAdvancedOpen = false;
+			consumedForkRoleId = '';
 			return;
 		}
 
@@ -280,6 +294,24 @@
 			applyCreateDraft(form.values);
 			createAdvancedOpen = hasAdvancedValues(form.values);
 		}
+	});
+
+	$effect(() => {
+		const requestedForkRoleId = page.url.searchParams.get('fork')?.trim() ?? '';
+
+		if (!requestedForkRoleId || requestedForkRoleId === consumedForkRoleId) {
+			return;
+		}
+
+		const sourceRole = data.roles.find((role) => role.id === requestedForkRoleId) ?? null;
+
+		if (!sourceRole) {
+			consumedForkRoleId = requestedForkRoleId;
+			return;
+		}
+
+		openCreateFromRole(sourceRole);
+		consumedForkRoleId = requestedForkRoleId;
 	});
 
 	$effect(() => {
@@ -402,7 +434,7 @@
 		applyCreateDraft(null);
 	}
 
-	function seedCreateDraftFromRole(role: RoleDirectoryEntry | null) {
+	function openCreateFromRole(role: RoleDirectoryEntry | null) {
 		if (!role) {
 			return;
 		}
@@ -416,6 +448,10 @@
 			supersededByRoleId: ''
 		});
 		createAdvancedOpen = hasAdvancedValues(role);
+	}
+
+	function formatReferenceCountLabel(count: number, label: string) {
+		return `${count} ${label}${count === 1 ? '' : 's'}`;
 	}
 
 	function updateRoleSelectionUrl(nextUrl: URL) {
@@ -443,7 +479,7 @@
 		description="Browse reusable specialization bundles, compare adjacent roles, and open one only when you need details or to edit its defaults."
 	/>
 
-	{#if form?.message}
+	{#if form?.message && !form?.ok}
 		<p class="ui-notice border border-rose-900/70 bg-rose-950/40 text-rose-200">
 			{form.message}
 		</p>
@@ -458,6 +494,12 @@
 	{#if updateRoleSuccess}
 		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
 			Role updated.
+		</p>
+	{/if}
+
+	{#if migrateRoleReferencesSuccess}
+		<p class="ui-notice border border-emerald-900/70 bg-emerald-950/40 text-emerald-200">
+			{form?.message || 'Role references migrated.'}
 		</p>
 	{/if}
 
@@ -731,6 +773,52 @@
 									</p>
 								</div>
 							{/if}
+						</div>
+					{/if}
+
+					{#if selectedRole.supersededByRole && selectedRoleReferences > 0}
+						<div class="rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="max-w-2xl">
+									<p class="text-sm font-medium text-white">Migrate existing references</p>
+									<p class="mt-2 text-sm text-slate-300">
+										This superseded role is still referenced by
+										{formatReferenceCountLabel(selectedRole.taskCount, 'task')},
+										{formatReferenceCountLabel(selectedRole.templateCount, 'template')},
+										{formatReferenceCountLabel(selectedRole.workflowCount, 'workflow')}, and
+										{formatReferenceCountLabel(
+											selectedRole.executionSurfaceCount,
+											'execution surface'
+										)}. Move those references to
+										<a
+											class="underline decoration-amber-700 underline-offset-4 hover:text-white"
+											href={`/app/roles/${selectedRole.supersededByRole.id}`}
+										>
+											{selectedRole.supersededByRole.name}
+										</a>
+										when the replacement is ready to take over.
+									</p>
+								</div>
+
+								<form method="POST" action="?/migrateRoleReferences" data-persist-scope="manual">
+									<input type="hidden" name="roleId" value={selectedRole.id} />
+									<AppButton
+										type="submit"
+										variant="warning"
+										onclick={(event) => {
+											if (
+												!window.confirm(
+													`Move all references from "${selectedRole.name}" to "${selectedRole.supersededByRole?.name}"?`
+												)
+											) {
+												event.preventDefault();
+											}
+										}}
+									>
+										Migrate references
+									</AppButton>
+								</form>
+							</div>
 						</div>
 					{/if}
 
@@ -1019,6 +1107,9 @@
 											placeholder="Writing"
 											bind:value={updateFamily}
 										/>
+										<span class="mt-2 block text-xs text-slate-500">
+											Choose one of the shared family labels to keep the catalog comparable.
+										</span>
 									</label>
 
 									<label class="block">
@@ -1049,6 +1140,9 @@
 												<option value={roleOption.id}>{roleOption.name}</option>
 											{/each}
 										</select>
+										<span class="mt-2 block text-xs text-slate-500">
+											Successors should stay active or draft so new routing has a safe default.
+										</span>
 									</label>
 								</div>
 
@@ -1210,10 +1304,18 @@
 
 		<div class="flex flex-wrap items-start justify-between gap-4">
 			<div class="max-w-3xl">
-				<h2 class="text-xl font-semibold text-white">Create role</h2>
+				<h2 class="text-xl font-semibold text-white">
+					{createForkMode ? 'Fork role' : 'Create role'}
+				</h2>
 				<p class="mt-2 text-sm text-slate-400">
-					Create a new role only when the existing catalog does not already cover the specialization
-					you need. Start with the role’s purpose, then add defaults that help actors assume it.
+					{#if createForkMode}
+						Start from the existing role below, then name the variant and explain why it needs to
+						exist separately.
+					{:else}
+						Create a new role only when the existing catalog does not already cover the
+						specialization you need. Start with the role’s purpose, then add defaults that help
+						actors assume it.
+					{/if}
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -1221,7 +1323,7 @@
 					type="button"
 					variant="neutral"
 					disabled={!selectedRole}
-					onclick={() => seedCreateDraftFromRole(selectedRole)}
+					onclick={() => openCreateFromRole(selectedRole)}
 				>
 					Fork selected role
 				</AppButton>
@@ -1230,11 +1332,27 @@
 		</div>
 
 		<form class="space-y-4" method="POST" action="?/createRole">
+			{#if createForkSourceRole}
+				<div class="rounded-2xl border border-sky-900/60 bg-sky-950/20 p-4">
+					<p class="text-sm font-medium text-white">Forking from {createForkSourceRole.name}</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Keep the shared defaults that still fit, rename the variant, and use
+						<span class="font-medium text-white">How this differs</span>
+						to explain the split.
+					</p>
+				</div>
+			{/if}
+
 			<div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
 				<p class="text-sm font-medium text-white">Basics</p>
 				<p class="mt-1 text-sm text-slate-400">
-					Define the role’s purpose first. Add defaults only if they help actors assume the role
-					more consistently.
+					{#if createForkMode}
+						Define how this role variant differs first. Keep defaults only where the source role
+						still applies.
+					{:else}
+						Define the role’s purpose first. Add defaults only if they help actors assume the role
+						more consistently.
+					{/if}
 				</p>
 			</div>
 
@@ -1268,6 +1386,9 @@
 						placeholder="Writing"
 						bind:value={createFamily}
 					/>
+					<span class="mt-2 block text-xs text-slate-500">
+						Choose one of the shared family labels to keep the catalog comparable.
+					</span>
 				</label>
 
 				<label class="block">
@@ -1297,6 +1418,9 @@
 							<option value={roleOption.id}>{roleOption.name}</option>
 						{/each}
 					</select>
+					<span class="mt-2 block text-xs text-slate-500">
+						Successors should stay active or draft so new routing has a safe default.
+					</span>
 				</label>
 			</div>
 

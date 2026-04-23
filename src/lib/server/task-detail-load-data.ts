@@ -54,6 +54,18 @@ export type AvailableDependencyTaskView = DependencyTaskView & {
 	isSelected: boolean;
 };
 
+function childTaskIntegrationSortValue(status: ChildTaskView['integrationStatus']) {
+	switch (status) {
+		case 'pending':
+			return 0;
+		case 'not_ready':
+			return 1;
+		case 'accepted':
+		default:
+			return 2;
+	}
+}
+
 export function buildTaskDetailCollections(input: {
 	data: ControlPlaneData;
 	task: Task;
@@ -91,6 +103,7 @@ export function buildTaskDetailCollections(input: {
 
 	const childTasks: ChildTaskView[] = data.tasks
 		.filter((candidate) => candidate.parentTaskId === task.id)
+		.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 		.map((childTask) => {
 			const integrationStatus: ChildTaskView['integrationStatus'] = childTask.delegationAcceptance
 				? 'accepted'
@@ -115,7 +128,17 @@ export function buildTaskDetailCollections(input: {
 				integrationStatus
 			};
 		})
-		.sort((left, right) => left.title.localeCompare(right.title));
+		.sort((left, right) => {
+			const integrationComparison =
+				childTaskIntegrationSortValue(left.integrationStatus) -
+				childTaskIntegrationSortValue(right.integrationStatus);
+
+			if (integrationComparison !== 0) {
+				return integrationComparison;
+			}
+
+			return left.title.localeCompare(right.title);
+		});
 
 	const childTaskStatusCounts = childTasks.reduce(
 		(counts, childTask) => {
