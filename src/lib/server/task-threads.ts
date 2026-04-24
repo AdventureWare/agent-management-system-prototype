@@ -77,6 +77,7 @@ export function buildTaskThreadPrompt(input: {
 		'Look at the manifest playbooks when the intent is ambiguous, especially for create_task, prepare_task_for_review, prepare_task_for_approval, accept_child_handoff, reject_task_approval, request_child_handoff_changes, and coordinate_with_another_thread.',
 		`For the full command map, read ${AMS_CLI_DOCS_PATH}.`,
 		'Use the AMS CLI for task, goal, and project discovery or task updates:',
+		'When only thread context is available inside a managed run, current-task commands can omit [taskId] or [parentTaskId]. The helper resolves the canonical task first and tells you to run context current if no task can be inferred.',
 		buildAmsCliCommand('project list'),
 		buildAmsCliCommand('project create --json \'{"name":"<name>","summary":"<summary>"}\''),
 		buildAmsCliCommand(
@@ -91,27 +92,27 @@ export function buildTaskThreadPrompt(input: {
 		buildAmsCliCommand(
 			'task create --json \'{"title":"<title>","summary":"<summary>","projectId":"<projectId>"}\''
 		),
-		buildAmsCliCommand('task update <taskId> --json \'{"status":"in_progress"}\''),
-		buildAmsCliCommand('task attach <taskId> --json \'{"path":"<absolute-file-path>"}\''),
+		buildAmsCliCommand('task update [taskId] --json \'{"status":"in_progress"}\''),
+		buildAmsCliCommand('task attach [taskId] --json \'{"path":"<absolute-file-path>"}\''),
 		buildAmsCliCommand('task remove-attachment <taskId> <attachmentId>'),
-		buildAmsCliCommand('task request-review <taskId> --json \'{"summary":"Ready for review."}\''),
+		buildAmsCliCommand('task request-review [taskId] --json \'{"summary":"Ready for review."}\''),
 		buildAmsCliCommand(
-			'task request-approval <taskId> --json \'{"summary":"Ready for approval."}\''
+			'task request-approval [taskId] --json \'{"summary":"Ready for approval."}\''
 		),
-		buildAmsCliCommand('task approve-review <taskId>'),
-		buildAmsCliCommand('task request-review-changes <taskId>'),
-		buildAmsCliCommand('task approve-approval <taskId>'),
-		buildAmsCliCommand('task reject-approval <taskId>'),
+		buildAmsCliCommand('task approve-review [taskId]'),
+		buildAmsCliCommand('task request-review-changes [taskId]'),
+		buildAmsCliCommand('task approve-approval [taskId]'),
+		buildAmsCliCommand('task reject-approval [taskId]'),
 		buildAmsCliCommand(
-			'task accept-child-handoff <parentTaskId> --json \'{"childTaskId":"<childTaskId>"}\''
+			'task accept-child-handoff [parentTaskId] --json \'{"childTaskId":"<childTaskId>"}\''
 		),
 		buildAmsCliCommand(
-			'task request-child-handoff-changes <parentTaskId> --json \'{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\''
+			'task request-child-handoff-changes [parentTaskId] --json \'{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}\''
 		),
-		buildAmsCliCommand('task launch-session <taskId>'),
-		buildAmsCliCommand('task recover-session <taskId>'),
+		buildAmsCliCommand('task launch-session [taskId]'),
+		buildAmsCliCommand('task recover-session [taskId]'),
 		buildAmsCliCommand(
-			'task decompose <taskId> --json \'{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}\''
+			'task decompose [taskId] --json \'{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}\''
 		),
 		'If you need instructions, context, or assignment from another thread, you can contact it directly from the shell in this managed run.',
 		'When you list threads, use each thread handle and contact label to infer the right target before sending a message.',

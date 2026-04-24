@@ -46,6 +46,19 @@ npm run app:server:stop
 
 The local server listens on `AMS_APP_HOST` and `AMS_APP_PORT`, which default to `127.0.0.1:3000`.
 
+Operator startup now probes the requested bind before launching the detached server process:
+
+- a busy port returns a direct `EADDRINUSE` message
+- a denied bind returns a direct `EPERM` or `EACCES` message
+- if the next local port is available, the message tells you to retry with `AMS_APP_PORT=<port>`
+- if the next local port fails with the same permission error, the wrapper reports that the current environment appears to block local listeners
+
+Example alternate-port retry:
+
+```sh
+AMS_APP_PORT=3100 npm run app:server:start
+```
+
 ## launchd management
 
 Install the Mac launch agent:

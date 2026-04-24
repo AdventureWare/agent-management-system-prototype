@@ -3387,6 +3387,52 @@ export async function updateAgentThreadSandbox(agentThreadId: string, sandbox: A
 	return updatedSession;
 }
 
+export async function updateAgentThreadModel(
+	agentThreadId: string,
+	model: string | null | undefined
+) {
+	const normalizedModel = model?.trim() ? model.trim() : null;
+	const [db, nativeThread] = await Promise.all([
+		loadAgentThreadsDb(),
+		getNativeCodexThread(agentThreadId)
+	]);
+	const existingSession = db.threads.find((candidate) => candidate.id === agentThreadId) ?? null;
+
+	if (!existingSession && !nativeThread) {
+		throw new Error('Thread not found.');
+	}
+
+	const now = new Date().toISOString();
+	const baseSession = existingSession ?? materializeNativeThread(nativeThread as NativeCodexThread);
+	const updatedSession: AgentThread = {
+		...baseSession,
+		model: normalizedModel,
+		updatedAt: now
+	};
+
+	await updateAgentThreadsDb((current) => {
+		const existingIndex = current.threads.findIndex((candidate) => candidate.id === agentThreadId);
+
+		if (existingIndex >= 0) {
+			return {
+				threads: current.threads.map((candidate) =>
+					candidate.id === agentThreadId ? updatedSession : candidate
+				),
+				runs: current.runs,
+				contacts: current.contacts ?? []
+			};
+		}
+
+		return {
+			threads: [updatedSession, ...current.threads],
+			runs: current.runs,
+			contacts: current.contacts ?? []
+		};
+	});
+
+	return updatedSession;
+}
+
 export async function updateAgentThreadHandleAlias(
 	agentThreadId: string,
 	handleAlias: string | null | undefined

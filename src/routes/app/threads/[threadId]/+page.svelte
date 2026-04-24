@@ -7,6 +7,7 @@
 <ThreadDetailPanel
 	thread={data.thread}
 	sandboxOptions={data.sandboxOptions}
+	modelOptions={data.modelOptions}
 	threadFocusTask={data.threadFocusTask}
 	taskResponseAction={data.taskResponseAction}
 	threadContacts={data.threadContacts}

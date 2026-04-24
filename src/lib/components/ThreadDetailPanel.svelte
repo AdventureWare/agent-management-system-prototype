@@ -131,8 +131,9 @@
 	}
 
 	let {
-		thread: sessionProp,
+		thread: sessionProp = null,
 		sandboxOptions,
+		modelOptions = [],
 		threadFocusTask = null,
 		taskResponseAction = null,
 		threadContacts = [],
@@ -145,8 +146,9 @@
 		readOnly = false,
 		backHref = resolve('/app/threads')
 	} = $props<{
-		thread: AgentThreadDetail;
+		thread?: AgentThreadDetail | null;
 		sandboxOptions: readonly string[];
+		modelOptions?: string[];
 		threadFocusTask?: ThreadFocusTask | null;
 		taskResponseAction?: TaskResponseAction | null;
 		threadContacts?: AgentThreadContact[];
@@ -214,9 +216,13 @@
 	let threadDetailRoot = $state<HTMLElement | null>(null);
 	let threadHeaderShrinkProgress = $state(0);
 	let replyEntryRequested = $state(false);
-	let session = $derived.by<AgentThreadDetail | null>(
-		() => threadStoreState.current.byId[sessionProp.id] ?? sessionProp
-	);
+	let session = $derived.by<AgentThreadDetail | null>(() => {
+		if (!sessionProp?.id) {
+			return null;
+		}
+
+		return threadStoreState.current.byId[sessionProp.id] ?? sessionProp;
+	});
 	let approveTaskResponseSuccess = $derived(
 		form?.ok &&
 			form?.successAction === 'approveTaskResponse' &&
@@ -233,9 +239,31 @@
 	let updateThreadHandleAliasSuccess = $derived(
 		form?.ok && form?.successAction === 'updateThreadHandleAlias' && form?.threadId === session?.id
 	);
+	let updateThreadModelSuccess = $derived(
+		form?.ok && form?.successAction === 'updateThreadModel' && form?.threadId === session?.id
+	);
 	let updateThreadSandboxSuccess = $derived(
 		form?.ok && form?.successAction === 'updateThreadSandbox' && form?.threadId === session?.id
 	);
+	let availableModelOptions = $derived.by(() => {
+		const options = new Set<string>();
+
+		for (const model of modelOptions) {
+			const normalizedModel = model.trim();
+
+			if (normalizedModel) {
+				options.add(normalizedModel);
+			}
+		}
+
+		const currentModel = session?.model?.trim() ?? '';
+
+		if (currentModel) {
+			options.add(currentModel);
+		}
+
+		return [...options].sort((left, right) => left.localeCompare(right));
+	});
 
 	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
@@ -425,11 +453,13 @@
 		}
 	});
 	$effect(() => {
-		if (contactTargetsThreadId === sessionProp.id) {
+		const sessionThreadId = sessionProp?.id ?? '';
+
+		if (!sessionThreadId || contactTargetsThreadId === sessionThreadId) {
 			return;
 		}
 
-		contactTargetsThreadId = sessionProp.id;
+		contactTargetsThreadId = sessionThreadId;
 		threadContactTargetsState = threadContactTargets;
 		isLoadingContactTargets = false;
 		contactTargetsLoadError = '';
@@ -729,7 +759,9 @@
 	});
 
 	$effect(() => {
-		agentThreadStore.seedThread(sessionProp);
+		if (sessionProp) {
+			agentThreadStore.seedThread(sessionProp);
+		}
 	});
 
 	$effect(() => {
@@ -992,7 +1024,7 @@
 	}
 
 	async function loadThreadContactTargets() {
-		const threadId = sessionProp.id;
+		const threadId = sessionProp?.id ?? '';
 
 		if (!threadId || isLoadingContactTargets) {
 			return;
@@ -1014,7 +1046,7 @@
 				targets?: ThreadContactTarget[];
 			};
 
-			if (sessionProp.id !== threadId) {
+			if (sessionProp?.id !== threadId) {
 				return;
 			}
 
@@ -1027,14 +1059,14 @@
 					'';
 			}
 		} catch (err) {
-			if (sessionProp.id !== threadId) {
+			if (sessionProp?.id !== threadId) {
 				return;
 			}
 
 			contactTargetsLoadError =
 				err instanceof Error ? err.message : 'Could not refresh available contact targets.';
 		} finally {
-			if (sessionProp.id === threadId) {
+			if (sessionProp?.id === threadId) {
 				isLoadingContactTargets = false;
 			}
 		}
@@ -2049,6 +2081,14 @@
 					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
 				>
 					Thread sandbox updated. Future follow-up runs will use the new access mode.
+				</p>
+			{/if}
+
+			{#if updateThreadModelSuccess}
+				<p
+					class="ui-wrap-anywhere rounded-xl border border-emerald-900/70 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+				>
+					Thread model updated. Future follow-up runs will use the new model selection.
 				</p>
 			{/if}
 
@@ -3752,6 +3792,35 @@
 												</label>
 												<AppButton type="submit" variant="primary">Update sandbox</AppButton>
 											</div>
+										</div>
+									</DetailSection>
+								</form>
+
+								<form method="POST" action="?/updateThreadModel">
+									<DetailSection
+										eyebrow="Model"
+										title="Model for future follow-up runs"
+										description="Choose which model this thread should use the next time you resume it. Leave it on the default behavior unless this thread needs a specific model."
+									>
+										<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+											<label class="block min-w-[18rem] flex-1">
+												<span class="mb-2 block text-sm font-medium text-slate-200"> Model </span>
+												<select class="select w-full text-white" name="model">
+													<option value="" selected={!session.model?.trim()}>
+														Use default runner behavior
+													</option>
+													{#each availableModelOptions as model (model)}
+														<option value={model} selected={session.model?.trim() === model}>
+															{model}
+														</option>
+													{/each}
+												</select>
+												<p class="mt-2 text-xs text-slate-500">
+													Options come from configured providers and recent runs. This only affects
+													future follow-up work in this thread.
+												</p>
+											</label>
+											<AppButton type="submit" variant="primary">Update model</AppButton>
 										</div>
 									</DetailSection>
 								</form>

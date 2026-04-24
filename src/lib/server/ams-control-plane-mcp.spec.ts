@@ -470,6 +470,51 @@ describe('ams-control-plane-mcp', () => {
 		);
 	});
 
+	it('resolves the current task for task tool calls when taskId is omitted in a managed run', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		vi.stubEnv('AMS_AGENT_THREAD_ID', 'thread_source');
+		vi.stubEnv('AMS_AGENT_TASK_ID', '');
+		vi.stubEnv('AMS_AGENT_RUN_ID', '');
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					resolved: { taskId: 'task_current' }
+				})
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ task: { id: 'task_current', status: 'done' } })
+			});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_task_update', {
+			payload: { status: 'done' }
+		});
+
+		expect(result).toEqual({ task: { id: 'task_current', status: 'done' } });
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			new URL('http://127.0.0.1:3000/api/agent-context/current?threadId=thread_source'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			new URL('http://127.0.0.1:3000/api/tasks/task_current'),
+			expect.objectContaining({
+				method: 'PATCH',
+				body: JSON.stringify({ status: 'done' })
+			})
+		);
+	});
+
 	it('routes task attach tool calls to the attachment endpoint', async () => {
 		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
 		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');

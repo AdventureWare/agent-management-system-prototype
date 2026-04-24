@@ -1114,6 +1114,7 @@ export const actions: Actions = {
 		let agentThreadRunId: string | null;
 		let codexThreadId: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
+		let effectiveModelUsed = provider?.defaultModel?.trim() || null;
 
 		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
@@ -1152,6 +1153,7 @@ export const actions: Actions = {
 			agentThreadId = compatibleAssignedThread.id;
 			codexThreadId = compatibleAssignedThread.threadId;
 			reusedThreadMode = 'assigned';
+			effectiveModelUsed = compatibleAssignedThread.model?.trim() || effectiveModelUsed;
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			try {
 				const sendResult = await sendAgentThreadMessage(compatibleLatestRunThread.id, {
@@ -1171,6 +1173,7 @@ export const actions: Actions = {
 			agentThreadId = compatibleLatestRunThread.id;
 			codexThreadId = compatibleLatestRunThread.threadId;
 			reusedThreadMode = 'latest';
+			effectiveModelUsed = compatibleLatestRunThread.model?.trim() || effectiveModelUsed;
 		} else {
 			let session;
 
@@ -1214,7 +1217,7 @@ export const actions: Actions = {
 			startedAt: new Date().toISOString(),
 			threadId: codexThreadId,
 			agentThreadId,
-			modelUsed: provider?.defaultModel?.trim() || null,
+			modelUsed: effectiveModelUsed,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder

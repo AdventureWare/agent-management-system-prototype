@@ -246,6 +246,36 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Ready for final approval.');
 	});
 
+	it('keeps the task editor ahead of diagnostics and removes the old top agent-use card', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				task: {
+					latestRunId: 'run_1',
+					latestRun: {
+						id: 'run_1'
+					}
+				}
+			}) as never
+		});
+
+		const taskForm = document.querySelector('#task-update-form');
+		const diagnosticsPanel = document.querySelector('#agent-current-context');
+		const exactAgentUseEyebrows = Array.from(document.querySelectorAll('p')).filter(
+			(node) => normalizeText(node.textContent) === 'Agent use'
+		);
+
+		expect(taskForm).not.toBeNull();
+		expect(diagnosticsPanel).not.toBeNull();
+		expect(
+			(taskForm as Node).compareDocumentPosition(diagnosticsPanel as Node) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+		expect(exactAgentUseEyebrows).toHaveLength(0);
+		expect(document.body.textContent).toContain('Managed-run context and recommendations');
+		expect(document.body.textContent).toContain('View task agent use');
+	});
+
 	it('surfaces related child tasks early and groups them clearly in governance', async () => {
 		render(Page, {
 			form: {} as never,
@@ -380,13 +410,37 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 			})
 		});
 
-		expect(document.body.textContent).toContain('Current context recommendations');
+		expect(document.body.textContent).toContain('Managed-run context and recommendations');
 		expect(document.body.textContent).toContain('Preview first');
 		expect(document.body.textContent).toContain(
 			'Approval resolution is high-impact. Preview whether the task would close before mutating.'
 		);
 		expect(document.body.textContent).toContain('task:get');
 		expect(document.body.textContent).toContain('context:current');
+	});
+
+	it('keeps diagnostics below the main workspaces and progressively reveals long skill lists', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				projectInstalledSkills: Array.from({ length: 10 }, (_, index) => ({
+					id: `skill_${index + 1}`,
+					description: `Skill ${index + 1}`,
+					sourceLabel: 'project'
+				}))
+			}) as never
+		});
+
+		const pageText = normalizeText(document.body.textContent);
+		expect(pageText.indexOf('Task workspaces')).toBeLessThan(
+			pageText.indexOf('Operational diagnostics')
+		);
+		expect(document.body.textContent).toContain('Show 2 more skills');
+		expect(document.body.textContent).not.toContain('skill_10');
+
+		await page.getByRole('button', { name: 'Show 2 more skills' }).click();
+
+		expect(document.body.textContent).toContain('skill_10');
 	});
 
 	it('shows the source task template as linked task context when present', async () => {

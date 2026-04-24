@@ -187,12 +187,18 @@
 	let eligibleAssignmentSuggestionCount = $derived(
 		assignmentSuggestions.filter((suggestion) => suggestion.eligible).length
 	);
+	let showAllPromptSkillButtons = $state(false);
+	let visiblePromptSkillButtons = $derived(
+		showAllPromptSkillButtons ? projectInstalledSkills : projectInstalledSkills.slice(0, 8)
+	);
 	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
 	let successCriteriaInput = $state('');
 	let readyConditionInput = $state('');
 	let expectedOutcomeInput = $state('');
+	let dependencySearchInput = $state('');
+	let showAllDependencyOptions = $state(false);
 	let initializedRequirementInputTaskKey = $state('');
 	let unknownPromptSkillNames = $derived(
 		findUnknownExecutionRequirementNames(
@@ -223,6 +229,30 @@
 		getTaskLaunchContractBlockerMessage(taskExecutionContract)
 	);
 	let taskReviewContractGap = $derived(getTaskReviewContractGapMessage(taskExecutionContract));
+	let selectedDependencyTasks = $derived(
+		availableDependencyTasks.filter((dependency) => dependency.isSelected)
+	);
+	let unselectedDependencyTasks = $derived(
+		availableDependencyTasks.filter((dependency) => !dependency.isSelected)
+	);
+	let filteredUnselectedDependencyTasks = $derived.by(() => {
+		const query = dependencySearchInput.trim().toLowerCase();
+
+		if (!query) {
+			return unselectedDependencyTasks;
+		}
+
+		return unselectedDependencyTasks.filter((dependency) =>
+			`${dependency.title} ${dependency.projectName} ${formatTaskStatusLabel(dependency.status)}`
+				.toLowerCase()
+				.includes(query)
+		);
+	});
+	let visibleUnselectedDependencyTasks = $derived(
+		showAllDependencyOptions
+			? filteredUnselectedDependencyTasks
+			: filteredUnselectedDependencyTasks.slice(0, 8)
+	);
 
 	function assignmentSuggestionClass(eligible: boolean) {
 		return eligible
@@ -426,19 +456,242 @@
 		</section>
 
 		<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
+			<input type="hidden" name="dependencyTaskSelection" value="true" />
+
 			<div class="space-y-2">
 				<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
-					Execution settings
+					Routing and governance
 				</p>
-				<h3 class="text-lg font-semibold text-white">Project, status, and assignment</h3>
+				<h3 class="text-lg font-semibold text-white">Queue priority, gates, and blockers</h3>
 				<p class="text-sm text-slate-400">
-					Choose where the task belongs, what state it is in, and who should pick it up.
+					Use the detail page to manage the full task model without bloating the quick-create flow.
 				</p>
 			</div>
 
 			<div
-				class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px_220px]"
+				class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.2fr)]"
 			>
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
+					<select class="select text-white" name="priority">
+						{#each PRIORITY_OPTIONS as priority (priority)}
+							<option value={priority} selected={task.priority === priority}>
+								{formatPriorityLabel(priority)}
+							</option>
+						{/each}
+					</select>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span>
+					<select class="select text-white" name="riskLevel">
+						{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
+							<option value={riskLevel} selected={task.riskLevel === riskLevel}>
+								{formatTaskRiskLevelLabel(riskLevel)}
+							</option>
+						{/each}
+					</select>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Approval mode</span>
+					<select class="select text-white" name="approvalMode">
+						{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
+							<option value={approvalMode} selected={task.approvalMode === approvalMode}>
+								{formatTaskApprovalModeLabel(approvalMode)}
+							</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+
+			<div
+				class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_220px]"
+			>
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Required sandbox</span>
+					<select class="select text-white" name="requiredThreadSandbox">
+						<option value="" selected={!task.requiredThreadSandbox}>
+							Inherit execution-surface and project defaults
+						</option>
+						{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
+							<option value={sandbox} selected={task.requiredThreadSandbox === sandbox}>
+								{formatAgentSandboxLabel(sandbox)}
+							</option>
+						{/each}
+					</select>
+					<p class="mt-2 text-xs text-slate-500">
+						New work threads for this task will use this sandbox when set here.
+					</p>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Requires review</span>
+					<select class="select text-white" name="requiresReview">
+						<option value="true" selected={task.requiresReview}>Yes</option>
+						<option value="false" selected={!task.requiresReview}>No</option>
+					</select>
+				</label>
+				<RolePicker
+					label="Desired role"
+					name="desiredRoleId"
+					inputId="task-detail-desired-role"
+					bind:value={desiredRoleIdInput}
+					helperText="Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills."
+					missingValueLabel={task.desiredRoleName || `${desiredRoleIdInput} (missing role)`}
+					{roles}
+				/>
+			</div>
+
+			<label class="mt-4 block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Blocked reason</span>
+				<textarea
+					class="textarea min-h-28 text-white"
+					name="blockedReason"
+					placeholder="Document the blocker, missing approval, or dependency holding this task."
+					>{task.blockedReason ?? ''}</textarea
+				>
+				<p class="mt-2 text-xs text-slate-500">
+					Record the current blocker explicitly instead of relying on status alone.
+				</p>
+			</label>
+
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Dependencies
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Select the tasks that must be unblocked or completed before this one can move.
+						</p>
+					</div>
+					<span
+						class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
+					>
+						{dependencyTasksCount} selected
+					</span>
+				</div>
+
+				{#if availableDependencyTasks.length === 0}
+					<p class="mt-4 text-sm text-slate-500">
+						No other tasks are available to use as dependencies yet.
+					</p>
+				{:else}
+					{#if selectedDependencyTasks.length > 0}
+						<div class="mt-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Selected dependencies
+							</p>
+							<div class="mt-3 grid gap-3 xl:grid-cols-2">
+								{#each selectedDependencyTasks as dependency (dependency.id)}
+									<label class="rounded-2xl border border-sky-800/70 bg-sky-950/20 p-3 transition">
+										<div class="flex items-start gap-3">
+											<input
+												checked={dependency.isSelected}
+												class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+												name="dependencyTaskIds"
+												type="checkbox"
+												value={dependency.id}
+											/>
+											<div class="min-w-0">
+												<p class="ui-wrap-anywhere text-sm font-medium text-white">
+													{dependency.title}
+												</p>
+												<p class="mt-1 text-xs text-slate-400">
+													{dependency.projectName} · {formatTaskStatusLabel(dependency.status)}
+												</p>
+											</div>
+										</div>
+									</label>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<div class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4">
+						<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+							<label class="block min-w-0 flex-1">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Find available tasks
+								</span>
+								<input
+									bind:value={dependencySearchInput}
+									class="input text-white"
+									placeholder="Search by task title, project, or status"
+									type="search"
+								/>
+							</label>
+							<p class="text-xs text-slate-500">
+								{filteredUnselectedDependencyTasks.length} available match{filteredUnselectedDependencyTasks.length ===
+								1
+									? ''
+									: 'es'}
+							</p>
+						</div>
+
+						{#if filteredUnselectedDependencyTasks.length === 0}
+							<p class="mt-4 text-sm text-slate-500">
+								No additional tasks match the current filter.
+							</p>
+						{:else}
+							<div class="mt-4 grid gap-3 xl:grid-cols-2">
+								{#each visibleUnselectedDependencyTasks as dependency (dependency.id)}
+									<label class="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 transition">
+										<div class="flex items-start gap-3">
+											<input
+												checked={dependency.isSelected}
+												class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
+												name="dependencyTaskIds"
+												type="checkbox"
+												value={dependency.id}
+											/>
+											<div class="min-w-0">
+												<p class="ui-wrap-anywhere text-sm font-medium text-white">
+													{dependency.title}
+												</p>
+												<p class="mt-1 text-xs text-slate-400">
+													{dependency.projectName} · {formatTaskStatusLabel(dependency.status)}
+												</p>
+											</div>
+										</div>
+									</label>
+								{/each}
+							</div>
+							{#if filteredUnselectedDependencyTasks.length > visibleUnselectedDependencyTasks.length}
+								<div class="mt-4">
+									<button
+										type="button"
+										class="btn border border-slate-700 bg-slate-950/70 text-sm text-slate-100"
+										onclick={() => {
+											showAllDependencyOptions = true;
+										}}
+									>
+										Show {filteredUnselectedDependencyTasks.length -
+											visibleUnselectedDependencyTasks.length}
+										more available tasks
+									</button>
+								</div>
+							{/if}
+						{/if}
+					</div>
+				{/if}
+			</div>
+		</section>
+
+		<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
+			<div class="space-y-2">
+				<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+					Execution settings
+				</p>
+				<h3 class="text-lg font-semibold text-white">Project, assignment, and launch inputs</h3>
+				<p class="text-sm text-slate-400">
+					Choose where the task belongs, who should own it, and what launch metadata should travel
+					with the prompt.
+				</p>
+			</div>
+
+			<div class="mt-5 grid gap-4 xl:grid-cols-3">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Project</span>
 					<select class="select text-white" name="projectId" required>
@@ -484,7 +737,9 @@
 						and assignment.
 					</p>
 				</label>
+			</div>
 
+			<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.4fr)]">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 					<select class="select text-white" name="status">
@@ -505,23 +760,24 @@
 						value={task.targetDate ?? ''}
 					/>
 				</label>
-			</div>
 
-			<label class="mt-4 block">
-				<span class="mb-2 block text-sm font-medium text-slate-200">Assigned execution surface</span
-				>
-				<select class="select text-white" name="assigneeExecutionSurfaceId">
-					<option value="" selected={!task.assigneeExecutionSurfaceId}>Unassigned</option>
-					{#each executionSurfaces as executionSurface (executionSurface.id)}
-						<option
-							value={executionSurface.id}
-							selected={task.assigneeExecutionSurfaceId === executionSurface.id}
-						>
-							{executionSurface.name}
-						</option>
-					{/each}
-				</select>
-			</label>
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200"
+						>Assigned execution surface</span
+					>
+					<select class="select text-white" name="assigneeExecutionSurfaceId">
+						<option value="" selected={!task.assigneeExecutionSurfaceId}>Unassigned</option>
+						{#each executionSurfaces as executionSurface (executionSurface.id)}
+							<option
+								value={executionSurface.id}
+								selected={task.assigneeExecutionSurfaceId === executionSurface.id}
+							>
+								{executionSurface.name}
+							</option>
+						{/each}
+					</select>
+				</label>
+			</div>
 
 			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 				<div class="flex flex-wrap items-center justify-between gap-3">
@@ -604,7 +860,7 @@
 				</div>
 			</div>
 
-			<div class="mt-4 grid gap-4 lg:grid-cols-3">
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Requested prompt skills</span>
 					<input
@@ -625,7 +881,7 @@
 						</p>
 					{:else}
 						<div class="mt-3 flex flex-wrap gap-2">
-							{#each projectInstalledSkills as skill (skill.id)}
+							{#each visiblePromptSkillButtons as skill (skill.id)}
 								<button
 									type="button"
 									class="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-200 transition hover:border-sky-700 hover:text-white"
@@ -641,9 +897,20 @@
 								</button>
 							{/each}
 						</div>
-						<p class="mt-2 text-xs text-slate-500">
-							Select a known installed skill to append it from the current project workspace.
-						</p>
+						<div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+							<p>Select a known installed skill to append it from the current project workspace.</p>
+							{#if projectInstalledSkills.length > visiblePromptSkillButtons.length}
+								<button
+									type="button"
+									class="font-medium text-sky-300 transition hover:text-sky-200"
+									onclick={() => {
+										showAllPromptSkillButtons = true;
+									}}
+								>
+									Show {projectInstalledSkills.length - visiblePromptSkillButtons.length} more skills
+								</button>
+							{/if}
+						</div>
 					{/if}
 					{#if projectInstalledSkills.length > 0 && unknownPromptSkillNames.length > 0}
 						<p class="mt-2 text-xs text-amber-300">
@@ -651,8 +918,10 @@
 						</p>
 					{/if}
 				</label>
+			</div>
 
-				<label class="block">
+			<div class="mt-4 grid gap-4 xl:grid-cols-2">
+				<label class="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required capabilities</span>
 					<input
 						bind:value={requiredCapabilityNamesInput}
@@ -699,7 +968,7 @@
 					{/if}
 				</label>
 
-				<label class="block">
+				<label class="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Required tools</span>
 					<input
 						bind:value={requiredToolNamesInput}
@@ -762,159 +1031,6 @@
 					<option value={toolName}></option>
 				{/each}
 			</datalist>
-		</section>
-
-		<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">
-			<input type="hidden" name="dependencyTaskSelection" value="true" />
-
-			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
-					Routing and governance
-				</p>
-				<h3 class="text-lg font-semibold text-white">Queue priority, gates, and blockers</h3>
-				<p class="text-sm text-slate-400">
-					Use the detail page to manage the full task model without bloating the quick-create flow.
-				</p>
-			</div>
-
-			<div class="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Priority</span>
-					<select class="select text-white" name="priority">
-						{#each PRIORITY_OPTIONS as priority (priority)}
-							<option value={priority} selected={task.priority === priority}>
-								{formatPriorityLabel(priority)}
-							</option>
-						{/each}
-					</select>
-				</label>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Risk level</span>
-					<select class="select text-white" name="riskLevel">
-						{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
-							<option value={riskLevel} selected={task.riskLevel === riskLevel}>
-								{formatTaskRiskLevelLabel(riskLevel)}
-							</option>
-						{/each}
-					</select>
-				</label>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Approval mode</span>
-					<select class="select text-white" name="approvalMode">
-						{#each TASK_APPROVAL_MODE_OPTIONS as approvalMode (approvalMode)}
-							<option value={approvalMode} selected={task.approvalMode === approvalMode}>
-								{formatTaskApprovalModeLabel(approvalMode)}
-							</option>
-						{/each}
-					</select>
-				</label>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Required sandbox</span>
-					<select class="select text-white" name="requiredThreadSandbox">
-						<option value="" selected={!task.requiredThreadSandbox}>
-							Inherit execution-surface and project defaults
-						</option>
-						{#each AGENT_SANDBOX_OPTIONS as sandbox (sandbox)}
-							<option value={sandbox} selected={task.requiredThreadSandbox === sandbox}>
-								{formatAgentSandboxLabel(sandbox)}
-							</option>
-						{/each}
-					</select>
-					<p class="mt-2 text-xs text-slate-500">
-						New work threads for this task will use this sandbox when set here.
-					</p>
-				</label>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Requires review</span>
-					<select class="select text-white" name="requiresReview">
-						<option value="true" selected={task.requiresReview}>Yes</option>
-						<option value="false" selected={!task.requiresReview}>No</option>
-					</select>
-				</label>
-			</div>
-
-			<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-				<RolePicker
-					label="Desired role"
-					name="desiredRoleId"
-					inputId="task-detail-desired-role"
-					bind:value={desiredRoleIdInput}
-					helperText="Optional. When set, launch uses the role for routing, prompt instructions, and any role-declared skills."
-					missingValueLabel={task.desiredRoleName || `${desiredRoleIdInput} (missing role)`}
-					{roles}
-				/>
-
-				<label class="block">
-					<span class="mb-2 block text-sm font-medium text-slate-200">Blocked reason</span>
-					<textarea
-						class="textarea min-h-28 text-white"
-						name="blockedReason"
-						placeholder="Document the blocker, missing approval, or dependency holding this task."
-						>{task.blockedReason ?? ''}</textarea
-					>
-					<p class="mt-2 text-xs text-slate-500">
-						Record the current blocker explicitly instead of relying on status alone.
-					</p>
-				</label>
-			</div>
-
-			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-				<div class="flex flex-wrap items-center justify-between gap-3">
-					<div>
-						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-							Dependencies
-						</p>
-						<p class="mt-2 text-sm text-slate-400">
-							Select the tasks that must be unblocked or completed before this one can move.
-						</p>
-					</div>
-					<span
-						class="badge border border-slate-700 bg-slate-950/70 text-[0.7rem] tracking-[0.2em] text-slate-300 uppercase"
-					>
-						{dependencyTasksCount} selected
-					</span>
-				</div>
-
-				{#if availableDependencyTasks.length === 0}
-					<p class="mt-4 text-sm text-slate-500">
-						No other tasks are available to use as dependencies yet.
-					</p>
-				{:else}
-					<div class="mt-4 grid gap-3 xl:grid-cols-2">
-						{#each availableDependencyTasks as dependency (dependency.id)}
-							<label
-								class={`rounded-2xl border p-3 transition ${
-									dependency.isSelected
-										? 'border-sky-800/70 bg-sky-950/20'
-										: 'border-slate-800 bg-slate-900/60'
-								}`}
-							>
-								<div class="flex items-start gap-3">
-									<input
-										checked={dependency.isSelected}
-										class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-400 focus:ring-sky-400"
-										name="dependencyTaskIds"
-										type="checkbox"
-										value={dependency.id}
-									/>
-									<div class="min-w-0">
-										<p class="ui-wrap-anywhere text-sm font-medium text-white">
-											{dependency.title}
-										</p>
-										<p class="mt-1 text-xs text-slate-400">
-											{dependency.projectName} · {formatTaskStatusLabel(dependency.status)}
-										</p>
-									</div>
-								</div>
-							</label>
-						{/each}
-					</div>
-				{/if}
-			</div>
 		</section>
 
 		<section class="rounded-3xl border border-slate-800/90 bg-slate-900/35 p-5">

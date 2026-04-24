@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
+
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { closeSync, existsSync, openSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,8 +13,6 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const OUTPUT_DIR = resolve(REPO_ROOT, 'agent_output', 'operator-server');
 const STATUS_PATH = resolve(OUTPUT_DIR, 'status.json');
 const LOG_PATH = resolve(OUTPUT_DIR, 'server.log');
-const BUILD_ENTRY_PATH = resolve(REPO_ROOT, 'build', 'index.js');
-const BUILD_MANIFEST_PATH = resolve(REPO_ROOT, 'build', 'server', 'manifest.js');
 const DEFAULT_HOST = process.env.AMS_APP_HOST?.trim() || '127.0.0.1';
 const DEFAULT_PORT = Number.parseInt(process.env.AMS_APP_PORT ?? '3000', 10);
 
@@ -51,18 +52,97 @@ function createLocalUrl(hostname, port) {
 	return `http://${hostname}:${port}`;
 }
 
-function isPortReachable(hostname, port) {
-	return new Promise((resolvePromise) => {
-		const socket = net.createConnection({ host: hostname, port });
+function isPermissionDeniedBindError(error) {
+	return error?.code === 'EPERM' || error?.code === 'EACCES';
+}
 
-		socket.once('connect', () => {
-			socket.destroy();
-			resolvePromise(true);
+function formatBindTarget(hostname, port) {
+	return `${hostname}:${port}`;
+}
+
+function formatAlternatePortCommand(port) {
+	return `AMS_APP_PORT=${port} npm run app:server:start`;
+}
+
+function chooseAlternatePort(port) {
+	if (!Number.isInteger(port) || port < 0 || port >= 65_535) {
+		return 0;
+	}
+
+	return port + 1;
+}
+
+export async function probeListenTarget(hostname, port) {
+	return new Promise((resolvePromise) => {
+		const server = net.createServer();
+		let settled = false;
+
+		const finish = (result) => {
+			if (settled) {
+				return;
+			}
+
+			settled = true;
+			resolvePromise(result);
+		};
+
+		server.once('error', (error) => {
+			finish({
+				ok: false,
+				error: {
+					code: error?.code ?? 'UNKNOWN',
+					message: error instanceof Error ? error.message : String(error),
+					errno: error?.errno ?? null,
+					syscall: error?.syscall ?? 'listen',
+					address: error?.address ?? hostname,
+					port: error?.port ?? port
+				}
+			});
 		});
-		socket.once('error', () => {
-			resolvePromise(false);
+
+		server.listen({ host: hostname, port }, () => {
+			server.close(() => {
+				finish({ ok: true });
+			});
 		});
 	});
+}
+
+export function formatBindFailureMessage(
+	hostname,
+	port,
+	bindResult,
+	alternatePort,
+	alternateResult
+) {
+	const target = formatBindTarget(hostname, port);
+	const code = bindResult?.error?.code ?? 'UNKNOWN';
+
+	if (code === 'EADDRINUSE') {
+		const alternateHint =
+			alternatePort > 0
+				? ` If you want a second local instance, try \`${formatAlternatePortCommand(alternatePort)}\`.`
+				: '';
+		return `Port ${target} is already in use.${alternateHint}`;
+	}
+
+	if (isPermissionDeniedBindError(bindResult?.error)) {
+		if (alternateResult?.ok && alternatePort > 0) {
+			return `Binding to ${target} is not permitted (${code}), but ${formatBindTarget(hostname, alternatePort)} is available. Restart on an alternate port with \`${formatAlternatePortCommand(alternatePort)}\`.`;
+		}
+
+		if (isPermissionDeniedBindError(alternateResult?.error) && alternatePort > 0) {
+			return `Binding to ${target} is not permitted (${code}). Probing ${formatBindTarget(hostname, alternatePort)} failed with the same restriction, which suggests this environment blocks local listeners for the operator.`;
+		}
+
+		if (alternateResult?.error?.code === 'EADDRINUSE' && alternatePort > 0) {
+			return `Binding to ${target} is not permitted (${code}). ${formatBindTarget(hostname, alternatePort)} is already in use, so pick another \`AMS_APP_PORT\` or run the operator in a less restricted environment.`;
+		}
+
+		return `Binding to ${target} is not permitted (${code}). ${bindResult?.error?.message ?? 'The local listener could not be created.'}`;
+	}
+
+	return `Could not bind the operator server to ${target}. ${bindResult?.error?.message ?? 'The local listener probe failed.'}`;
 }
 
 function createServerEnv(hostname, port) {
@@ -103,6 +183,22 @@ function createServerEnv(hostname, port) {
 function createModuleUrl(path) {
 	return `${pathToFileURL(path).href}?t=${Date.now()}`;
 }
+
+function resolveBuildPaths(repoRoot = REPO_ROOT) {
+	const buildRoot = resolve(repoRoot, 'build');
+	return {
+		repoRoot,
+		buildRoot,
+		buildClientRoot: resolve(buildRoot, 'client'),
+		buildEntryPath: resolve(buildRoot, 'index.js'),
+		buildHandlerPath: resolve(buildRoot, 'handler.js'),
+		buildServerIndexPath: resolve(buildRoot, 'server', 'index.js'),
+		buildManifestPath: resolve(buildRoot, 'server', 'manifest.js')
+	};
+}
+
+const BUILD_PATHS = resolveBuildPaths();
+const { buildEntryPath: BUILD_ENTRY_PATH } = BUILD_PATHS;
 
 async function ensureOutputDir() {
 	await mkdir(OUTPUT_DIR, { recursive: true });
@@ -152,6 +248,35 @@ function readProcessArgs(pid) {
 function isExpectedOperatorProcess(pid) {
 	const args = readProcessArgs(pid);
 	return args.includes(BUILD_ENTRY_PATH);
+}
+
+function formatBuildValidationError(error) {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
+function findMissingBuildArtifact(...paths) {
+	return paths.find((path) => !existsSync(path)) ?? null;
+}
+
+function collectManifestClientAssets(manifest) {
+	const client = manifest?._?.client;
+	const assetPaths = [
+		client?.start,
+		client?.app,
+		...(Array.isArray(client?.imports) ? client.imports : []),
+		...(Array.isArray(client?.stylesheets) ? client.stylesheets : []),
+		...(Array.isArray(client?.fonts) ? client.fonts : [])
+	];
+
+	return [...new Set(assetPaths.filter((value) => typeof value === 'string' && value.length > 0))];
+}
+
+async function importBuildModule(path) {
+	return import(createModuleUrl(path));
 }
 
 async function writeStatus(status) {
@@ -236,16 +361,59 @@ async function stopProcessGroup(pid) {
 	}
 }
 
-async function validateBuildArtifacts() {
-	if (!existsSync(BUILD_ENTRY_PATH) || !existsSync(BUILD_MANIFEST_PATH)) {
+export async function validateBuildArtifacts(buildPaths = BUILD_PATHS) {
+	const {
+		buildClientRoot,
+		buildEntryPath,
+		buildHandlerPath,
+		buildServerIndexPath,
+		buildManifestPath
+	} = buildPaths;
+
+	const missingArtifact = findMissingBuildArtifact(
+		buildEntryPath,
+		buildHandlerPath,
+		buildServerIndexPath,
+		buildManifestPath
+	);
+
+	if (missingArtifact) {
 		return {
 			ok: false,
-			reason: `Missing build artifacts at ${BUILD_ENTRY_PATH} or ${BUILD_MANIFEST_PATH}.`
+			reason: `Missing build artifact at ${missingArtifact}.`
 		};
 	}
 
 	try {
-		const { manifest } = await import(createModuleUrl(BUILD_MANIFEST_PATH));
+		await importBuildModule(buildHandlerPath);
+	} catch (error) {
+		return {
+			ok: false,
+			reason: `Build startup imports are invalid: ${formatBuildValidationError(error)}`
+		};
+	}
+
+	let manifest;
+	try {
+		({ manifest } = await importBuildModule(buildManifestPath));
+	} catch (error) {
+		return {
+			ok: false,
+			reason: `Failed to import the server manifest: ${formatBuildValidationError(error)}`
+		};
+	}
+
+	for (const clientAssetPath of collectManifestClientAssets(manifest)) {
+		const resolvedClientAssetPath = resolve(buildClientRoot, clientAssetPath);
+		if (!existsSync(resolvedClientAssetPath)) {
+			return {
+				ok: false,
+				reason: `Server manifest references a missing client asset at ${resolvedClientAssetPath}.`
+			};
+		}
+	}
+
+	try {
 		const nodeLoaders = Array.isArray(manifest?._?.nodes) ? manifest._.nodes : [];
 		const endpointLoaders = Array.isArray(manifest?._?.routes)
 			? manifest._.routes
@@ -265,7 +433,7 @@ async function validateBuildArtifacts() {
 	} catch (error) {
 		return {
 			ok: false,
-			reason: error instanceof Error ? error.message : String(error)
+			reason: `Server manifest imports are invalid: ${formatBuildValidationError(error)}`
 		};
 	}
 }
@@ -301,6 +469,12 @@ async function startServer() {
 	const currentStatus = await readJson(STATUS_PATH);
 
 	if (currentStatus && processIsAlive(currentStatus.pid)) {
+		if (currentStatus.host !== hostname || currentStatus.port !== port) {
+			failWithMessage(
+				`Operator server is already running on ${currentStatus.localUrl}. Stop it before starting a different bind target at ${localUrl}.`
+			);
+		}
+
 		printHeader('Operator server already running');
 		process.stdout.write(`Local: ${currentStatus.localUrl}\n`);
 		process.stdout.write(`Log: ${currentStatus.logPath}\n`);
@@ -320,9 +494,14 @@ async function startServer() {
 		return;
 	}
 
-	if (await isPortReachable(probeHost, port)) {
+	const bindProbe = await probeListenTarget(hostname, port);
+
+	if (!bindProbe.ok) {
+		const alternatePort = chooseAlternatePort(port);
+		const alternateProbe =
+			alternatePort !== port ? await probeListenTarget(hostname, alternatePort) : null;
 		failWithMessage(
-			`Port ${probeHost}:${port} is already in use by another process. Stop that process before starting the operator server.`
+			formatBindFailureMessage(hostname, port, bindProbe, alternatePort, alternateProbe)
 		);
 	}
 
@@ -428,21 +607,29 @@ async function runForegroundServer() {
 	});
 }
 
-const command = process.argv[2] ?? 'status';
+async function main() {
+	const command = process.argv[2] ?? 'status';
 
-switch (command) {
-	case 'run':
-		await runForegroundServer();
-		break;
-	case 'start':
-		await startServer();
-		break;
-	case 'stop':
-		await stopServer();
-		break;
-	case 'status':
-		await showStatus();
-		break;
-	default:
-		failWithMessage('Unknown command. Use run, start, stop, or status.');
+	switch (command) {
+		case 'run':
+			await runForegroundServer();
+			break;
+		case 'start':
+			await startServer();
+			break;
+		case 'stop':
+			await stopServer();
+			break;
+		case 'status':
+			await showStatus();
+			break;
+		default:
+			failWithMessage('Unknown command. Use run, start, stop, or status.');
+	}
+}
+
+const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
+
+if (invokedPath && fileURLToPath(import.meta.url) === invokedPath) {
+	await main();
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -34,22 +36,22 @@ function printHelp() {
 			'',
 			'Resources:',
 			'  task list [--q <text>] [--project <projectId>] [--goal <goalId>] [--status <status>] [--limit <n>]',
-			'  task get <taskId>',
+			'  task get [taskId]',
 			'  task create --json <payload> | --file <path>',
-			'  task update <taskId> --json <payload> | --file <path>',
-			'  task attach <taskId> --json <payload> | --file <path>',
+			'  task update [taskId] --json <payload> | --file <path>',
+			'  task attach [taskId] --json <payload> | --file <path>',
 			'  task remove-attachment <taskId> <attachmentId>',
-			'  task request-review <taskId> --json <payload> | --file <path>',
-			'  task request-approval <taskId> --json <payload> | --file <path>',
-			'  task approve-review <taskId> [--validate-only true]',
-			'  task request-review-changes <taskId> [--validate-only true]',
-			'  task approve-approval <taskId> [--validate-only true]',
-			'  task reject-approval <taskId> [--validate-only true]',
-			'  task accept-child-handoff <parentTaskId> --json <payload> | --file <path>',
-			'  task request-child-handoff-changes <parentTaskId> --json <payload> | --file <path>',
-			'  task launch-session <taskId>',
-			'  task recover-session <taskId>',
-			'  task decompose <taskId> --json <payload> | --file <path>',
+			'  task request-review [taskId] --json <payload> | --file <path>',
+			'  task request-approval [taskId] --json <payload> | --file <path>',
+			'  task approve-review [taskId] [--validate-only true]',
+			'  task request-review-changes [taskId] [--validate-only true]',
+			'  task approve-approval [taskId] [--validate-only true]',
+			'  task reject-approval [taskId] [--validate-only true]',
+			'  task accept-child-handoff [parentTaskId] --json <payload> | --file <path>',
+			'  task request-child-handoff-changes [parentTaskId] --json <payload> | --file <path>',
+			'  task launch-session [taskId]',
+			'  task recover-session [taskId]',
+			'  task decompose [taskId] --json <payload> | --file <path>',
 			'  goal get <goalId>',
 			'  goal list [--q <text>] [--project <projectId>] [--status <status>] [--limit <n>]',
 			'  goal create --json <payload> | --file <path>',
@@ -65,7 +67,8 @@ function printHelp() {
 			'  AMS_AGENT_API_TOKEN     Bearer token for the AMS API',
 			'',
 			'Notes:',
-			'  Use payload.validateOnly=true on supported approval, decomposition, and coordination commands to preview checks without mutating state.'
+			'  Use payload.validateOnly=true on supported approval, decomposition, and coordination commands to preview checks without mutating state.',
+			'  In managed runs, current-task commands can omit [taskId] when AMS_AGENT_THREAD_ID or AMS_AGENT_RUN_ID is available. The CLI resolves the canonical task first and errors clearly if no task can be inferred.'
 		].join('\n') + '\n'
 	);
 }
@@ -121,7 +124,8 @@ async function request(path, init = {}) {
 	} catch (error) {
 		if (error instanceof Error) {
 			throw new Error(
-				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`
+				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`,
+				{ cause: error }
 			);
 		}
 
@@ -141,6 +145,52 @@ async function request(path, init = {}) {
 	}
 
 	return payload;
+}
+
+function buildManagedContextParams(overrides = {}) {
+	const params = new URLSearchParams();
+	const threadId = overrides.threadId?.trim() || process.env.AMS_AGENT_THREAD_ID?.trim() || '';
+	const taskId = overrides.taskId?.trim() || process.env.AMS_AGENT_TASK_ID?.trim() || '';
+	const runId = overrides.runId?.trim() || process.env.AMS_AGENT_RUN_ID?.trim() || '';
+
+	if (threadId) {
+		params.set('threadId', threadId);
+	}
+
+	if (taskId) {
+		params.set('taskId', taskId);
+	}
+
+	if (runId) {
+		params.set('runId', runId);
+	}
+
+	return params;
+}
+
+async function loadManagedContext(overrides = {}) {
+	const params = buildManagedContextParams(overrides);
+	return request(`/api/agent-context/current${params.size > 0 ? `?${params.toString()}` : ''}`);
+}
+
+async function resolveManagedTaskId(explicitTaskId, label = 'task id') {
+	const normalizedTaskId = explicitTaskId?.trim() ?? '';
+
+	if (normalizedTaskId) {
+		return normalizedTaskId;
+	}
+
+	const context = await loadManagedContext();
+	const resolvedTaskId =
+		typeof context?.resolved?.taskId === 'string' ? context.resolved.taskId.trim() : '';
+
+	if (resolvedTaskId) {
+		return resolvedTaskId;
+	}
+
+	throw new Error(
+		`A ${label} is required. No task could be resolved from the current managed-run context. Run \`node scripts/ams-cli.mjs context current\` to inspect the available thread/task/run ids or pass the id explicitly.`
+	);
 }
 
 function buildSearchParams(options) {
@@ -209,8 +259,8 @@ async function runThreadPassthrough(args) {
 	});
 }
 
-async function run() {
-	const [, , resource, command, ...argv] = process.argv;
+export async function runCli(argvInput = process.argv.slice(2)) {
+	const [resource, command, ...argv] = argvInput;
 
 	if (!resource || resource === 'help' || resource === '--help' || resource === '-h') {
 		printHelp();
@@ -265,22 +315,11 @@ async function run() {
 		}
 
 		const { options } = parseArgs(argv);
-		const params = new URLSearchParams();
-		const threadId = options.thread?.trim() || process.env.AMS_AGENT_THREAD_ID?.trim() || '';
-		const taskId = options.task?.trim() || process.env.AMS_AGENT_TASK_ID?.trim() || '';
-		const runId = options.run?.trim() || process.env.AMS_AGENT_RUN_ID?.trim() || '';
-
-		if (threadId) {
-			params.set('threadId', threadId);
-		}
-
-		if (taskId) {
-			params.set('taskId', taskId);
-		}
-
-		if (runId) {
-			params.set('runId', runId);
-		}
+		const params = buildManagedContextParams({
+			threadId: options.thread,
+			taskId: options.task,
+			runId: options.run
+		});
 
 		printJson(
 			await request(`/api/agent-context/current${params.size > 0 ? `?${params.toString()}` : ''}`)
@@ -328,11 +367,7 @@ async function run() {
 		}
 
 		case 'task:get': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(await request(`/api/tasks/${encodeURIComponent(taskId)}`));
 			return;
@@ -351,11 +386,7 @@ async function run() {
 		}
 
 		case 'task:update': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -369,11 +400,7 @@ async function run() {
 		}
 
 		case 'task:attach': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -406,11 +433,7 @@ async function run() {
 		}
 
 		case 'task:request-review': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -424,11 +447,7 @@ async function run() {
 		}
 
 		case 'task:request-approval': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -442,11 +461,7 @@ async function run() {
 		}
 
 		case 'task:approve-review': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/review-decision`, {
@@ -462,11 +477,7 @@ async function run() {
 		}
 
 		case 'task:request-review-changes': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/review-decision`, {
@@ -482,11 +493,7 @@ async function run() {
 		}
 
 		case 'task:approve-approval': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/approval-decision`, {
@@ -502,11 +509,7 @@ async function run() {
 		}
 
 		case 'task:reject-approval': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/approval-decision`, {
@@ -522,11 +525,7 @@ async function run() {
 		}
 
 		case 'task:accept-child-handoff': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A parent task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'parent task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -540,11 +539,7 @@ async function run() {
 		}
 
 		case 'task:request-child-handoff-changes': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A parent task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'parent task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -558,11 +553,7 @@ async function run() {
 		}
 
 		case 'task:launch-session': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/session-launch`, {
@@ -573,11 +564,7 @@ async function run() {
 		}
 
 		case 'task:recover-session': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			printJson(
 				await request(`/api/tasks/${encodeURIComponent(taskId)}/session-recover`, {
@@ -588,11 +575,7 @@ async function run() {
 		}
 
 		case 'task:decompose': {
-			const taskId = positionals[0]?.trim();
-
-			if (!taskId) {
-				throw new Error('A task id is required.');
-			}
+			const taskId = await resolveManagedTaskId(positionals[0], 'task id');
 
 			const payload = await readPayload(options);
 			printJson(
@@ -704,7 +687,12 @@ async function run() {
 	}
 }
 
-run().catch((error) => {
-	process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-	process.exit(1);
-});
+const isDirectExecution =
+	process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+	runCli().catch((error) => {
+		process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+		process.exit(1);
+	});
+}

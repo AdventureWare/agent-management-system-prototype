@@ -9,6 +9,7 @@ import {
 	sendAgentThreadMessage,
 	startAgentThread,
 	updateAgentThreadHandleAlias,
+	updateAgentThreadModel,
 	updateAgentThreadSandbox
 } from '$lib/server/agent-threads';
 import {
@@ -305,6 +306,43 @@ function getLatestThreadPrompt(thread: NonNullable<Awaited<ReturnType<typeof get
 	return prompt;
 }
 
+function collectThreadModelOptions(input: {
+	data: ControlPlaneData;
+	thread: NonNullable<Awaited<ReturnType<typeof getAgentThread>>>;
+}) {
+	const options = new Set<string>();
+
+	if (input.thread.model?.trim()) {
+		options.add(input.thread.model.trim());
+	}
+
+	for (const run of input.thread.runs) {
+		if (run.modelUsed?.trim()) {
+			options.add(run.modelUsed.trim());
+		}
+	}
+
+	for (const provider of input.data.providers) {
+		if (provider.defaultModel?.trim()) {
+			options.add(provider.defaultModel.trim());
+		}
+
+		for (const pricing of provider.modelPricing ?? []) {
+			if (pricing.model?.trim()) {
+				options.add(pricing.model.trim());
+			}
+		}
+	}
+
+	for (const run of input.data.runs) {
+		if (run.modelUsed?.trim()) {
+			options.add(run.modelUsed.trim());
+		}
+	}
+
+	return [...options].sort((left, right) => left.localeCompare(right));
+}
+
 function getTasksToCarryForward(data: ControlPlaneData, threadId: string) {
 	const directlyAssignedTasks = data.tasks.filter(
 		(task) => task.agentThreadId === threadId && task.status !== 'done'
@@ -486,6 +524,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		thread,
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
+		modelOptions: collectThreadModelOptions({ data, thread }),
 		threadFocusTask: buildThreadFocusTask({
 			threadId: params.threadId,
 			thread,
@@ -557,6 +596,24 @@ export const actions: Actions = {
 		return {
 			ok: true,
 			successAction: 'updateThreadSandbox',
+			threadId: params.threadId
+		};
+	},
+
+	updateThreadModel: async ({ params, request }) => {
+		const form = await request.formData();
+		const nextModel = form.get('model')?.toString() ?? '';
+		const thread = await getAgentThread(params.threadId);
+
+		if (!thread) {
+			return fail(404, { message: 'Thread not found.' });
+		}
+
+		await updateAgentThreadModel(params.threadId, nextModel);
+
+		return {
+			ok: true,
+			successAction: 'updateThreadModel',
 			threadId: params.threadId
 		};
 	},

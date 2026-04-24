@@ -40,6 +40,12 @@ The current-context helper is available at `/api/agent-context/current`.
 - `AMS_AGENT_TASK_ID`
 - `AMS_AGENT_RUN_ID`
 
+Current-task CLI and MCP mutations also fall back to managed-run context when task or run ids are absent from the environment:
+
+- Commands such as `task get`, `task update`, `task request-review`, `task request-approval`, `task approve-review`, `task approve-approval`, and `task reject-approval` can omit `[taskId]` inside a managed run.
+- The helper resolves the canonical task from `AMS_AGENT_THREAD_ID`, `AMS_AGENT_TASK_ID`, and `AMS_AGENT_RUN_ID` before issuing the task-scoped API call.
+- If no task can be resolved, the command fails with an explicit instruction to run `node scripts/ams-cli.mjs context current` or pass the task id manually.
+
 Each `summary.recommendedNextActions` item now includes:
 
 - `reason`: the short recommendation
@@ -105,39 +111,39 @@ node scripts/ams-cli.mjs goal update <goalId> --json '{"status":"running"}'
 
 ```bash
 node scripts/ams-cli.mjs task create --json '{"title":"<title>","summary":"<summary>","projectId":"<projectId>"}'
-node scripts/ams-cli.mjs task update <taskId> --json '{"status":"in_progress"}'
-node scripts/ams-cli.mjs task attach <taskId> --json '{"path":"<absolute-file-path>"}'
+node scripts/ams-cli.mjs task update [taskId] --json '{"status":"in_progress"}'
+node scripts/ams-cli.mjs task attach [taskId] --json '{"path":"<absolute-file-path>"}'
 node scripts/ams-cli.mjs task remove-attachment <taskId> <attachmentId>
 ```
 
 ## Governance
 
 ```bash
-node scripts/ams-cli.mjs task request-review <taskId> --json '{"summary":"Ready for review."}'
-node scripts/ams-cli.mjs task request-review <taskId> --json '{"summary":"Ready for review.","validateOnly":true}'
-node scripts/ams-cli.mjs task approve-review <taskId>
-node scripts/ams-cli.mjs task approve-review <taskId> --validate-only true
-node scripts/ams-cli.mjs task request-review-changes <taskId>
-node scripts/ams-cli.mjs task request-review-changes <taskId> --validate-only true
-node scripts/ams-cli.mjs task request-approval <taskId> --json '{"summary":"Ready for approval."}'
-node scripts/ams-cli.mjs task request-approval <taskId> --json '{"summary":"Ready for approval.","validateOnly":true}'
-node scripts/ams-cli.mjs task approve-approval <taskId>
-node scripts/ams-cli.mjs task approve-approval <taskId> --validate-only true
-node scripts/ams-cli.mjs task reject-approval <taskId>
-node scripts/ams-cli.mjs task reject-approval <taskId> --validate-only true
+node scripts/ams-cli.mjs task request-review [taskId] --json '{"summary":"Ready for review."}'
+node scripts/ams-cli.mjs task request-review [taskId] --json '{"summary":"Ready for review.","validateOnly":true}'
+node scripts/ams-cli.mjs task approve-review [taskId]
+node scripts/ams-cli.mjs task approve-review [taskId] --validate-only true
+node scripts/ams-cli.mjs task request-review-changes [taskId]
+node scripts/ams-cli.mjs task request-review-changes [taskId] --validate-only true
+node scripts/ams-cli.mjs task request-approval [taskId] --json '{"summary":"Ready for approval."}'
+node scripts/ams-cli.mjs task request-approval [taskId] --json '{"summary":"Ready for approval.","validateOnly":true}'
+node scripts/ams-cli.mjs task approve-approval [taskId]
+node scripts/ams-cli.mjs task approve-approval [taskId] --validate-only true
+node scripts/ams-cli.mjs task reject-approval [taskId]
+node scripts/ams-cli.mjs task reject-approval [taskId] --validate-only true
 ```
 
 ## Delegation and sessions
 
 ```bash
-node scripts/ams-cli.mjs task decompose <taskId> --json '{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}'
-node scripts/ams-cli.mjs task decompose <taskId> --json '{"validateOnly":true,"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}'
-node scripts/ams-cli.mjs task accept-child-handoff <parentTaskId> --json '{"childTaskId":"<childTaskId>"}'
-node scripts/ams-cli.mjs task accept-child-handoff <parentTaskId> --json '{"childTaskId":"<childTaskId>","validateOnly":true}'
-node scripts/ams-cli.mjs task request-child-handoff-changes <parentTaskId> --json '{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}'
-node scripts/ams-cli.mjs task request-child-handoff-changes <parentTaskId> --json '{"childTaskId":"<childTaskId>","summary":"<follow-up summary>","validateOnly":true}'
-node scripts/ams-cli.mjs task launch-session <taskId>
-node scripts/ams-cli.mjs task recover-session <taskId>
+node scripts/ams-cli.mjs task decompose [taskId] --json '{"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}'
+node scripts/ams-cli.mjs task decompose [taskId] --json '{"validateOnly":true,"children":[{"title":"<child title>","instructions":"<brief>","desiredRoleId":"<roleId>","delegationObjective":"<objective>","delegationDoneCondition":"<done condition>"}]}'
+node scripts/ams-cli.mjs task accept-child-handoff [parentTaskId] --json '{"childTaskId":"<childTaskId>"}'
+node scripts/ams-cli.mjs task accept-child-handoff [parentTaskId] --json '{"childTaskId":"<childTaskId>","validateOnly":true}'
+node scripts/ams-cli.mjs task request-child-handoff-changes [parentTaskId] --json '{"childTaskId":"<childTaskId>","summary":"<follow-up summary>"}'
+node scripts/ams-cli.mjs task request-child-handoff-changes [parentTaskId] --json '{"childTaskId":"<childTaskId>","summary":"<follow-up summary>","validateOnly":true}'
+node scripts/ams-cli.mjs task launch-session [taskId]
+node scripts/ams-cli.mjs task recover-session [taskId]
 ```
 
 ## Thread coordination

@@ -436,29 +436,23 @@
 		followUpTaskInstructions={createFollowUpTaskInstructions()}
 	/>
 
-	<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
-		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-			<div>
-				<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">Agent use</p>
-				<p class="mt-1 text-sm text-slate-400">
-					Jump straight into filtered MCP telemetry for this task{#if data.task.latestRunId}, or for
-						its latest run{/if}.
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-3">
-				<AppButton href={buildAgentUseHref({ task: data.task.id })} variant="neutral">
-					View task agent use
-				</AppButton>
-				{#if data.task.latestRunId}
-					<AppButton href={buildAgentUseHref({ run: data.task.latestRunId })} variant="ghost">
-						View latest run agent use
-					</AppButton>
-				{/if}
-			</div>
-		</div>
-	</section>
-
-	<AgentCurrentContextPanel context={data.agentCurrentContext} />
+	{#if !embedded}
+		<TaskDetailEditorForm
+			task={data.task}
+			projects={data.projects}
+			goals={data.goals}
+			workflows={data.workflows}
+			statusOptions={data.statusOptions}
+			executionSurfaces={data.executionSurfaces}
+			assignmentSuggestions={data.assignmentSuggestions}
+			roles={data.roles ?? []}
+			dependencyTasksCount={data.dependencyTasks.length}
+			availableDependencyTasks={data.availableDependencyTasks ?? []}
+			executionRequirementInventory={data.executionRequirementInventory}
+			projectInstalledSkills={data.projectInstalledSkills}
+			{actionBasePath}
+		/>
+	{/if}
 
 	{#if data.parentTask || data.childTasks.length > 0}
 		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
@@ -584,105 +578,114 @@
 		stalledRecovery={data.stalledRecovery}
 	/>
 
-	<div class="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-		{#if !embedded}
-			<TaskDetailEditorForm
-				task={data.task}
-				projects={data.projects}
-				goals={data.goals}
-				workflows={data.workflows}
-				statusOptions={data.statusOptions}
-				executionSurfaces={data.executionSurfaces}
-				assignmentSuggestions={data.assignmentSuggestions}
-				roles={data.roles ?? []}
-				dependencyTasksCount={data.dependencyTasks.length}
-				availableDependencyTasks={data.availableDependencyTasks ?? []}
-				executionRequirementInventory={data.executionRequirementInventory}
-				projectInstalledSkills={data.projectInstalledSkills}
+	<div class="space-y-6">
+		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+				<div>
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+						Task workspaces
+					</p>
+					<p class="mt-1 text-sm text-slate-400">
+						Switch between supporting materials, execution continuity, governance, and cleanup
+						without scanning the entire page.
+					</p>
+				</div>
+				<PageTabs
+					ariaLabel="Task detail panels"
+					bind:value={selectedDetailPanel}
+					items={[
+						{ id: 'resources', label: 'Resources', badge: data.task.attachments.length },
+						{ id: 'execution', label: 'Execution', badge: data.relatedRuns.length },
+						{ id: 'governance', label: 'Governance', badge: governanceSignalCount },
+						...(embedded ? [] : [{ id: 'danger', label: 'Danger zone', tone: 'danger' as const }])
+					]}
+					panelIdPrefix="task-detail"
+				/>
+			</div>
+		</section>
+
+		{#if selectedDetailPanel === 'resources'}
+			<TaskResourcesPanel
+				taskId={data.task.id}
+				attachments={data.task.attachments}
+				attachmentRoot={data.attachmentRoot}
+				artifactBrowser={data.artifactBrowser}
 				{actionBasePath}
+				readOnly={embedded}
 			/>
+		{:else if selectedDetailPanel === 'execution'}
+			<TaskExecutionPanel
+				task={data.task}
+				executionPreflight={data.executionPreflight}
+				launchContext={data.launchContext}
+				retrievedKnowledgeItems={data.retrievedKnowledgeItems ?? []}
+				suggestedThread={data.suggestedThread}
+				candidateThreads={data.candidateThreads}
+				relatedRuns={data.relatedRuns}
+				threadActionLabel={threadActionLabel()}
+				{actionBasePath}
+				readOnly={embedded}
+			/>
+		{:else if selectedDetailPanel === 'governance'}
+			<TaskGovernancePanel
+				task={data.task}
+				parentTask={data.parentTask}
+				childTaskRollup={data.childTaskRollup}
+				childTasks={data.childTasks}
+				roles={data.roles ?? []}
+				dependencyTasks={data.dependencyTasks}
+				recentDecisions={data.recentDecisions}
+				{actionBasePath}
+				readOnly={embedded}
+			/>
+		{:else}
+			<div id="task-detail-panel-danger" role="tabpanel" aria-labelledby="task-detail-tab-danger">
+				<DetailSection
+					id="danger-zone"
+					eyebrow="Danger zone"
+					title="Delete task"
+					description="This removes the task from the control plane, drops its related runs, reviews, and approvals, and detaches it from dependency lists on other tasks."
+					tone="rose"
+				>
+					<form class="mt-5" method="POST" action={taskAction('deleteTask')}>
+						<button
+							class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
+							type="submit"
+						>
+							Delete task
+						</button>
+					</form>
+				</DetailSection>
+			</div>
 		{/if}
-
-		<div class="space-y-6">
-			<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
-				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-					<div>
-						<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
-							Task workspaces
-						</p>
-						<p class="mt-1 text-sm text-slate-400">
-							Switch between supporting materials, execution continuity, governance, and cleanup
-							without scanning the entire page.
-						</p>
-					</div>
-					<PageTabs
-						ariaLabel="Task detail panels"
-						bind:value={selectedDetailPanel}
-						items={[
-							{ id: 'resources', label: 'Resources', badge: data.task.attachments.length },
-							{ id: 'execution', label: 'Execution', badge: data.relatedRuns.length },
-							{ id: 'governance', label: 'Governance', badge: governanceSignalCount },
-							...(embedded ? [] : [{ id: 'danger', label: 'Danger zone', tone: 'danger' as const }])
-						]}
-						panelIdPrefix="task-detail"
-					/>
-				</div>
-			</section>
-
-			{#if selectedDetailPanel === 'resources'}
-				<TaskResourcesPanel
-					taskId={data.task.id}
-					attachments={data.task.attachments}
-					attachmentRoot={data.attachmentRoot}
-					artifactBrowser={data.artifactBrowser}
-					{actionBasePath}
-					readOnly={embedded}
-				/>
-			{:else if selectedDetailPanel === 'execution'}
-				<TaskExecutionPanel
-					task={data.task}
-					executionPreflight={data.executionPreflight}
-					launchContext={data.launchContext}
-					retrievedKnowledgeItems={data.retrievedKnowledgeItems ?? []}
-					suggestedThread={data.suggestedThread}
-					candidateThreads={data.candidateThreads}
-					relatedRuns={data.relatedRuns}
-					threadActionLabel={threadActionLabel()}
-					{actionBasePath}
-					readOnly={embedded}
-				/>
-			{:else if selectedDetailPanel === 'governance'}
-				<TaskGovernancePanel
-					task={data.task}
-					parentTask={data.parentTask}
-					childTaskRollup={data.childTaskRollup}
-					childTasks={data.childTasks}
-					roles={data.roles ?? []}
-					dependencyTasks={data.dependencyTasks}
-					recentDecisions={data.recentDecisions}
-					{actionBasePath}
-					readOnly={embedded}
-				/>
-			{:else}
-				<div id="task-detail-panel-danger" role="tabpanel" aria-labelledby="task-detail-tab-danger">
-					<DetailSection
-						id="danger-zone"
-						eyebrow="Danger zone"
-						title="Delete task"
-						description="This removes the task from the control plane, drops its related runs, reviews, and approvals, and detaches it from dependency lists on other tasks."
-						tone="rose"
-					>
-						<form class="mt-5" method="POST" action={taskAction('deleteTask')}>
-							<button
-								class="btn border border-rose-800/70 bg-rose-950/40 font-semibold text-rose-200"
-								type="submit"
-							>
-								Delete task
-							</button>
-						</form>
-					</DetailSection>
-				</div>
-			{/if}
-		</div>
 	</div>
+
+	<section class="space-y-6">
+		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+				<div>
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+						Operational diagnostics
+					</p>
+					<p class="mt-1 max-w-2xl text-sm text-slate-400">
+						These panels are mainly useful when debugging routing, managed-run state, or agent
+						behavior. They stay below the main editing surfaces so the task brief remains the
+						primary focus.
+					</p>
+				</div>
+				<div class="flex flex-wrap gap-3">
+					<AppButton href={buildAgentUseHref({ task: data.task.id })} variant="neutral">
+						View task agent use
+					</AppButton>
+					{#if data.task.latestRunId}
+						<AppButton href={buildAgentUseHref({ run: data.task.latestRunId })} variant="ghost">
+							View latest run agent use
+						</AppButton>
+					{/if}
+				</div>
+			</div>
+		</section>
+
+		<AgentCurrentContextPanel context={data.agentCurrentContext} />
+	</section>
 </section>

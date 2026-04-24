@@ -1,0 +1,4 @@
+interface:
+  display_name: "Examples and Checks"
+  short_description: "Worked examples and learning checks"
+  default_prompt: "Use $worked-examples-and-checks to build examples, misconception probes, and quick checks for this topic."

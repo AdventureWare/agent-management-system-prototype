@@ -50,9 +50,9 @@
 {#if context}
 	<DetailSection
 		id="agent-current-context"
-		eyebrow="Agent guidance"
-		title="Current context recommendations"
-		description="Operator-facing view of the same structured current-context guidance returned to managed agents."
+		eyebrow="Operational diagnostics"
+		title="Managed-run context and recommendations"
+		description="This mirrors the structured context returned to managed agents so you can inspect why the system is suggesting a next action."
 		tone="amber"
 		class={className}
 	>

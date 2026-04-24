@@ -12,6 +12,8 @@ const appPort = process.env.AMS_APP_PORT?.trim() || '3000';
 const apiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
 const apiToken = process.env.AMS_AGENT_API_TOKEN?.trim() || '';
 const currentThreadId = process.env.AMS_AGENT_THREAD_ID?.trim() || '';
+const currentTaskId = process.env.AMS_AGENT_TASK_ID?.trim() || '';
+const currentRunId = process.env.AMS_AGENT_RUN_ID?.trim() || '';
 
 const SPECIAL_TOOLS = [
 	{
@@ -174,14 +176,12 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		status: { type: 'string' },
 		limit: { type: 'number' }
 	}),
-	'task:get': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:get': buildObjectSchema({ taskId: { type: 'string' } }),
 	'task:create': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
 	'task:update': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
-		'taskId',
 		'payload'
 	]),
 	'task:attach': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
-		'taskId',
 		'payload'
 	]),
 	'task:remove-attachment': buildObjectSchema(
@@ -190,42 +190,41 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 	),
 	'task:request-review': buildObjectSchema(
 		{ taskId: { type: 'string' }, payload: { type: 'object' } },
-		['taskId', 'payload']
+		['payload']
 	),
-	'task:approve-review': buildObjectSchema(
-		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
-		['taskId']
-	),
-	'task:request-review-changes': buildObjectSchema(
-		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
-		['taskId']
-	),
+	'task:approve-review': buildObjectSchema({
+		taskId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'task:request-review-changes': buildObjectSchema({
+		taskId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
 	'task:request-approval': buildObjectSchema(
 		{ taskId: { type: 'string' }, payload: { type: 'object' } },
-		['taskId', 'payload']
+		['payload']
 	),
-	'task:approve-approval': buildObjectSchema(
-		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
-		['taskId']
-	),
-	'task:reject-approval': buildObjectSchema(
-		{ taskId: { type: 'string' }, validateOnly: { type: 'boolean' } },
-		['taskId']
-	),
+	'task:approve-approval': buildObjectSchema({
+		taskId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'task:reject-approval': buildObjectSchema({
+		taskId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
 	'task:decompose': buildObjectSchema({ taskId: { type: 'string' }, payload: { type: 'object' } }, [
-		'taskId',
 		'payload'
 	]),
 	'task:accept-child-handoff': buildObjectSchema(
 		{ parentTaskId: { type: 'string' }, payload: { type: 'object' } },
-		['parentTaskId', 'payload']
+		['payload']
 	),
 	'task:request-child-handoff-changes': buildObjectSchema(
 		{ parentTaskId: { type: 'string' }, payload: { type: 'object' } },
-		['parentTaskId', 'payload']
+		['payload']
 	),
-	'task:launch-session': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
-	'task:recover-session': buildObjectSchema({ taskId: { type: 'string' } }, ['taskId']),
+	'task:launch-session': buildObjectSchema({ taskId: { type: 'string' } }),
+	'task:recover-session': buildObjectSchema({ taskId: { type: 'string' } }),
 	'goal:list': buildObjectSchema({
 		q: { type: 'string' },
 		projectId: { type: 'string' },
@@ -297,6 +296,24 @@ function buildSearchParams(input = {}) {
 	return params;
 }
 
+function buildManagedContextParams() {
+	const params = new URLSearchParams();
+
+	if (currentThreadId) {
+		params.set('threadId', currentThreadId);
+	}
+
+	if (currentTaskId) {
+		params.set('taskId', currentTaskId);
+	}
+
+	if (currentRunId) {
+		params.set('runId', currentRunId);
+	}
+
+	return params;
+}
+
 async function request(path, init = {}) {
 	const response = await requestRaw(path, init);
 	return response.json().catch(() => ({}));
@@ -326,6 +343,11 @@ async function requestRaw(path, init = {}) {
 	}
 
 	return response;
+}
+
+async function loadManagedContext() {
+	const params = buildManagedContextParams();
+	return request(`/api/agent-context/current${params.size > 0 ? `?${params.toString()}` : ''}`);
 }
 
 function requireThreadId(threadId) {
@@ -368,9 +390,64 @@ const GENERATED_TOOL_COMMANDS = new Map(
 		command
 	]).filter(([toolName]) => !(toolName in MANUAL_TOOL_HANDLERS))
 );
+const CURRENT_TASK_FALLBACK_COMMAND_KEYS = new Set([
+	'task:get',
+	'task:update',
+	'task:attach',
+	'task:request-review',
+	'task:approve-review',
+	'task:request-review-changes',
+	'task:request-approval',
+	'task:approve-approval',
+	'task:reject-approval',
+	'task:decompose',
+	'task:accept-child-handoff',
+	'task:request-child-handoff-changes',
+	'task:launch-session',
+	'task:recover-session'
+]);
 
 function buildCommandKey(resource, command) {
 	return `${resource}:${command}`;
+}
+
+function getManagedTaskArgName(command) {
+	return command.command === 'accept-child-handoff' ||
+		command.command === 'request-child-handoff-changes'
+		? 'parentTaskId'
+		: 'taskId';
+}
+
+async function withResolvedManagedTaskArgs(command, args = {}) {
+	const commandKey = buildCommandKey(command.resource, command.command);
+
+	if (!CURRENT_TASK_FALLBACK_COMMAND_KEYS.has(commandKey)) {
+		return args;
+	}
+
+	const taskArgName = getManagedTaskArgName(command);
+	const explicitTaskId = normalizeOptionalString(args[taskArgName]);
+
+	if (explicitTaskId) {
+		return {
+			...args,
+			[taskArgName]: explicitTaskId
+		};
+	}
+
+	const context = await loadManagedContext();
+	const resolvedTaskId = normalizeOptionalString(context?.resolved?.taskId);
+
+	if (!resolvedTaskId) {
+		throw new Error(
+			`${taskArgName} is required. No task could be resolved from the current managed-run context. Call ams_context_current first or pass the task id explicitly.`
+		);
+	}
+
+	return {
+		...args,
+		[taskArgName]: resolvedTaskId
+	};
 }
 
 function resolveCommandMetadataValue(spec = {}, args = {}, label = 'value') {
@@ -531,7 +608,8 @@ async function invokeGeneratedTool(command, args = {}) {
 		);
 	}
 
-	const { path, remainingArgs } = consumePathArgs(command.path, args, command);
+	const resolvedArgs = await withResolvedManagedTaskArgs(command, args);
+	const { path, remainingArgs } = consumePathArgs(command.path, resolvedArgs, command);
 	const method = command.method.toUpperCase();
 
 	if (method === 'GET') {

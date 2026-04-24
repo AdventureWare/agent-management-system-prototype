@@ -505,6 +505,7 @@ export async function launchTaskFromPlan(
 	let agentThreadRunId: string | null;
 	let codexThreadId: string | null;
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
+	let effectiveModelUsed = plan.provider?.defaultModel?.trim() || null;
 
 	if (plan.compatibleAssignedThread?.canResume) {
 		const sendResult = await sendAgentThreadMessage(plan.compatibleAssignedThread.id, {
@@ -518,6 +519,7 @@ export async function launchTaskFromPlan(
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
+		effectiveModelUsed = plan.compatibleAssignedThread.model?.trim() || effectiveModelUsed;
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
 		const sendResult = await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, {
 			prompt: plan.prompt,
@@ -530,6 +532,7 @@ export async function launchTaskFromPlan(
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleLatestRunThread.threadId;
 		reusedThreadMode = 'latest';
+		effectiveModelUsed = plan.compatibleLatestRunThread.model?.trim() || effectiveModelUsed;
 	} else {
 		const session = await startAgentThread({
 			name: buildTaskThreadName({
@@ -571,7 +574,7 @@ export async function launchTaskFromPlan(
 		startedAt: now,
 		threadId: codexThreadId,
 		agentThreadId,
-		modelUsed: plan.provider?.defaultModel?.trim() || null,
+		modelUsed: effectiveModelUsed,
 		promptDigest: buildPromptDigest(plan.prompt),
 		artifactPaths:
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder

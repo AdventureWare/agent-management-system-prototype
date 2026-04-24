@@ -84,6 +84,12 @@ npm run app:server:start
 
 `npm run app:server:start` now validates the production build and automatically rebuilds it if the existing `build/` output is missing or internally inconsistent.
 
+If the default local bind is unavailable, startup now fails with a specific bind message before the detached child is launched:
+
+- `EADDRINUSE` tells you the requested host and port are already occupied.
+- `EPERM` or `EACCES` tells you whether an alternate port is available or whether the current environment appears to block local listeners entirely.
+- To retry on another port, run `AMS_APP_PORT=3100 npm run app:server:start`.
+
 Enable remote access through the vendor-neutral wrapper:
 
 ```sh

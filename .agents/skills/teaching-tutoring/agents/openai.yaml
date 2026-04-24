@@ -1,0 +1,4 @@
+interface:
+  display_name: "Teaching Tutor"
+  short_description: "Adaptive teaching and tutoring"
+  default_prompt: "Use $teaching-tutoring to teach this topic accurately at the learner's level."

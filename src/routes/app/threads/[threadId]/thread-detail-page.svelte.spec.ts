@@ -103,6 +103,7 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 					]
 				},
 				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				modelOptions: ['gpt-5.4', 'gpt-5.5'],
 				threadFocusTask: {
 					id: 'task_1',
 					title: 'Task info pane in thread detail page',
@@ -192,6 +193,71 @@ describe('/app/threads/[threadId]/+page.svelte', () => {
 		expect(document.body.textContent).not.toContain(
 			'This is the task the thread is currently anchored to while you review or reply.'
 		);
+	});
+
+	it('renders model selection as a bounded picker with a default option', async () => {
+		render(Page, {
+			form: {} as never,
+			data: {
+				thread: {
+					id: 'thread_1',
+					name: 'UI implementation thread',
+					cwd: '/tmp/project',
+					additionalWritableRoots: [],
+					sandbox: 'workspace-write',
+					model: 'gpt-5.4',
+					threadId: 'codex_thread_1',
+					attachments: [],
+					archivedAt: null,
+					createdAt: '2026-04-07T12:00:00.000Z',
+					updatedAt: '2026-04-07T12:05:00.000Z',
+					origin: 'managed',
+					handle: 'frontend.project-1.task-1',
+					contactLabel: 'Frontend · task_1 · ready',
+					topicLabels: [],
+					threadState: 'ready',
+					latestRunStatus: 'completed',
+					hasActiveRun: false,
+					canResume: true,
+					runCount: 1,
+					lastActivityAt: '2026-04-07T12:05:00.000Z',
+					lastActivityLabel: 'just now',
+					threadSummary: 'Thread is ready for a follow-up decision.',
+					lastExitCode: 0,
+					runTimeline: [],
+					relatedTasks: [],
+					latestRun: null,
+					runs: []
+				},
+				sandboxOptions: ['read-only', 'workspace-write', 'danger-full-access'],
+				modelOptions: ['gpt-5.4', 'gpt-5.5'],
+				threadFocusTask: null,
+				threadContactTargets: [],
+				threadContacts: [],
+				taskResponseAction: null,
+				responseContextArtifacts: []
+			} as never
+		});
+
+		const detailsTab = Array.from(document.querySelectorAll('button[role="tab"]')).find((tab) =>
+			tab.textContent?.includes('Thread details')
+		);
+
+		expect(detailsTab).not.toBeUndefined();
+		(detailsTab as HTMLButtonElement).click();
+		await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+		const modelSelect = document.querySelector('select[name="model"]') as HTMLSelectElement | null;
+
+		expect(modelSelect).not.toBeNull();
+		expect(Array.from(modelSelect?.options ?? []).map((option) => option.value)).toEqual([
+			'',
+			'gpt-5.4',
+			'gpt-5.5'
+		]);
+		expect(modelSelect?.value).toBe('gpt-5.4');
+		expect(document.querySelector('datalist#thread-model-options')).toBeNull();
+		expect(document.body.textContent).toContain('Use default runner behavior');
 	});
 
 	it('focuses the follow-up composer when reply entry is requested', async () => {

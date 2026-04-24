@@ -343,4 +343,31 @@ describe('agent-threads memory-safe detail loading', () => {
 		expect(detail?.latestRun?.prompt).toBe('Investigate crash');
 		expect(detail?.latestRun?.lastMessage).toBe('Imported native reply');
 	});
+
+	it('updates the stored thread model for future follow-up runs', async () => {
+		const root = createTempDir();
+		const agentThreadId = 'thread_managed';
+		const runId = 'run_model_update';
+		const runDir = resolve(root, 'data', 'agent-threads', agentThreadId, 'runs', runId);
+		const statePath = resolve(runDir, 'state.json');
+		const logPath = resolve(runDir, 'codex.log');
+		const messagePath = resolve(runDir, 'last-message.txt');
+
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'json');
+		vi.stubEnv('CODEX_HOME', resolve(root, '.codex'));
+		mkdirSync(runDir, { recursive: true });
+		writeControlPlane(root);
+		writeAgentThreads(root, { agentThreadId, runId, statePath, logPath, messagePath });
+
+		const { loadAgentThreadsDb, updateAgentThreadModel } = await importAgentThreadsModule();
+
+		await updateAgentThreadModel(agentThreadId, 'gpt-5.5');
+		let db = await loadAgentThreadsDb();
+		expect(db.threads[0]?.model).toBe('gpt-5.5');
+
+		await updateAgentThreadModel(agentThreadId, '   ');
+		db = await loadAgentThreadsDb();
+		expect(db.threads[0]?.model).toBeNull();
+	});
 });

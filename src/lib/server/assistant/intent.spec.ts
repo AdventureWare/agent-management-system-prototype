@@ -201,7 +201,7 @@ describe('interpretAssistantRequest', () => {
 		expect(result.kind).toBe('plan');
 		if (result.kind !== 'plan') return;
 		expect(result.plan.action).toBe('create_task');
-		expect(result.plan.payload.title).toBe('I need something to track improving this page');
+		expect(result.plan.payload.title).toBe('Track improving this page');
 		expect(result.plan.payload.projectId).toBe('project_onboarding');
 		expect(result.plan.contextUsed.pageType).toBe('workflow_detail');
 	});
@@ -223,6 +223,6 @@ describe('interpretAssistantRequest', () => {
 		if (result.kind !== 'plan') return;
 		expect(result.plan.action).toBe('create_task');
 		expect(result.plan.payload.projectId).toBe('project_content_os');
-		expect(result.plan.payload.title).toContain('Content Critic role');
+		expect(result.plan.payload.title).toBe('Review the content_units in the kwipoo folder');
 	});
 });

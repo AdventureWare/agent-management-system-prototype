@@ -3,7 +3,6 @@ import type {
 	AssistantAction,
 	AssistantActionPlan,
 	AssistantClarification,
-	AssistantContextObject,
 	AssistantContextSnapshot,
 	AssistantPlanPayload,
 	AssistantPlanResponse
@@ -104,6 +103,38 @@ function extractName(input: string, objectWords: string[]) {
 	}
 
 	return '';
+}
+
+function extractTaskTitle(input: string) {
+	const namedTitle = firstMatch(input, [
+		/\b(?:called|named)\s+["“]([^"”]+)["”]/i,
+		/\b(?:called|named)\s+([^.;,]+?)(?:\s+with\s+instructions?|\s+that\s+|[.;,]|$)/i
+	]);
+
+	if (namedTitle) {
+		return titleFromPhrase(namedTitle);
+	}
+
+	const workPhrase =
+		firstMatch(input, [
+			/\b(?:task|todo|to-do)\b.*?\bto\s+([^.;,]+(?:,[^.;,]+)*)/i,
+			/\b(?:need|needs|needed)\s+something\s+to\s+([^.;,]+)/i
+		]) || '';
+
+	if (workPhrase) {
+		return titleFromPhrase(workPhrase);
+	}
+
+	return (
+		titleFromPhrase(
+			firstMatch(input, [
+				/\b(?:task|todo|to-do)\s+(?:under|in|on)\s+(?:this|the current)\s+project\s+(?:to|for|about)\s+([^.;,]+)/i,
+				/\b(?:task|todo|to-do)\s+(?:to|for|about)\s+([^.;,]+)/i
+			])
+		) ||
+		titleFromPhrase(stripObjectRequestPrefix(input, ['task', 'todo', 'to-do', 'child task'])) ||
+		'New Task'
+	);
 }
 
 function detectAction(input: string, context: AssistantContextSnapshot): AssistantAction | null {
@@ -359,16 +390,7 @@ function buildTaskPlan(
 	context: AssistantContextSnapshot,
 	data: ControlPlaneData
 ): AssistantPlanResponse {
-	const title =
-		extractName(rawInput, ['task', 'todo', 'to-do', 'child task']) ||
-		titleFromPhrase(
-			firstMatch(rawInput, [
-				/\b(?:task|todo|to-do)\s+(?:under|in|on)\s+(?:this|the current)\s+project\s+(?:to|for|about)\s+([^.;,]+)/i,
-				/\b(?:task|todo|to-do)\s+(?:to|for|about)\s+([^.;,]+)/i
-			])
-		) ||
-		titleFromPhrase(stripObjectRequestPrefix(rawInput, ['task', 'todo', 'to-do', 'child task'])) ||
-		'New Task';
+	const title = extractTaskTitle(rawInput);
 	const instructions = extractInstructions(rawInput);
 	const projectId = inferProjectId(rawInput, context, data);
 	const goalId = inferGoalId(context, data);
