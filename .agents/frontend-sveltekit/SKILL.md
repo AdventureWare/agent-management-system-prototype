@@ -1,6 +1,6 @@
 ---
 name: frontend-sveltekit
-description: Use for SvelteKit frontend development in this repository: building or updating pages, components, forms, navigation, responsive behavior, accessibility, UI state, and incremental UI refactors. Focus on reusing existing patterns, keeping client/server boundaries clear, and shipping maintainable interfaces for this project's Svelte 5, Skeleton, Tailwind, and Supabase stack.
+description: "Use for SvelteKit frontend development in this repository: building or updating pages, components, forms, navigation, responsive behavior, accessibility, UI state, and incremental UI refactors. Focus on reusing existing patterns, keeping client/server boundaries clear, and shipping maintainable interfaces for this project's Svelte 5, Skeleton, Tailwind, and Supabase stack."
 ---
 
 You are the Frontend Development agent for this project.

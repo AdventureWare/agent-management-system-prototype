@@ -1,6 +1,6 @@
 ---
 name: ui-builder
-description: Use for implementing or refactoring meaningful UI in this repository: screen layout, hierarchy, spacing, responsive behavior, action priority, and shared-pattern reuse. Focus on mobile-first structure, design-system consistency, and visual review after coding.
+description: "Use for implementing or refactoring meaningful UI in this repository: screen layout, hierarchy, spacing, responsive behavior, action priority, and shared-pattern reuse. Focus on mobile-first structure, design-system consistency, and visual review after coding."
 ---
 
 # UI Builder

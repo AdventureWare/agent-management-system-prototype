@@ -101,7 +101,7 @@ async function ensureTelemetryStore() {
 async function loadTelemetryStore() {
 	await ensureTelemetryStore();
 	const telemetryFile = getTelemetryFilePath();
-	const parsed = JSON.parse(await readFile(telemetryFile, 'utf8'));
+	const { parsed, recovered } = parseTelemetryStoreContent(await readFile(telemetryFile, 'utf8'));
 	const store = {
 		events: Array.isArray(parsed.events)
 			? parsed.events.filter((event) => Boolean(event) && typeof event === 'object')
@@ -109,11 +109,84 @@ async function loadTelemetryStore() {
 	};
 	const normalizedStore = pruneTelemetryStore(store);
 
-	if (normalizedStore.didPrune) {
+	if (normalizedStore.didPrune || recovered) {
 		await writeTelemetryStore(normalizedStore);
 	}
 
 	return normalizedStore;
+}
+
+function parseTelemetryStoreContent(content) {
+	try {
+		return { parsed: JSON.parse(content), recovered: false };
+	} catch (error) {
+		if (!(error instanceof SyntaxError)) {
+			throw error;
+		}
+
+		const jsonEndIndex = findFirstJsonValueEnd(content);
+
+		if (jsonEndIndex === -1) {
+			return { parsed: defaultTelemetryStore(), recovered: true };
+		}
+
+		try {
+			return { parsed: JSON.parse(content.slice(0, jsonEndIndex)), recovered: true };
+		} catch {
+			return { parsed: defaultTelemetryStore(), recovered: true };
+		}
+	}
+}
+
+function findFirstJsonValueEnd(content) {
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	let started = false;
+
+	for (let index = 0; index < content.length; index += 1) {
+		const character = content[index];
+
+		if (!started) {
+			if (/\s/.test(character)) {
+				continue;
+			}
+
+			if (character !== '{' && character !== '[') {
+				return -1;
+			}
+
+			started = true;
+		}
+
+		if (inString) {
+			if (escaped) {
+				escaped = false;
+			} else if (character === '\\') {
+				escaped = true;
+			} else if (character === '"') {
+				inString = false;
+			}
+			continue;
+		}
+
+		if (character === '"') {
+			inString = true;
+			continue;
+		}
+
+		if (character === '{' || character === '[') {
+			depth += 1;
+		} else if (character === '}' || character === ']') {
+			depth -= 1;
+
+			if (depth === 0) {
+				return index + 1;
+			}
+		}
+	}
+
+	return -1;
 }
 
 async function writeTelemetryStore(store) {

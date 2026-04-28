@@ -31,6 +31,7 @@ import {
 	parseTaskApprovalMode,
 	parseTaskRiskLevel,
 	parseTaskStatus,
+	normalizeTaskBlockedReasonForStatus,
 	updateControlPlaneCollections,
 	wouldCreateProjectCycle
 } from '$lib/server/control-plane';
@@ -1938,6 +1939,7 @@ export async function createAgentApiTask(input: AgentCreateTaskInput) {
 
 	const executionRequirementInventory = buildExecutionRequirementInventory(current);
 	const installedPromptSkills = listInstalledCodexSkills(project.projectRootFolder);
+	const status = parseTaskStatus(readTrimmedString(input.status), 'ready');
 	const task = createTask({
 		title,
 		summary,
@@ -1950,7 +1952,7 @@ export async function createAgentApiTask(input: AgentCreateTaskInput) {
 		parentTaskId,
 		area: parseArea(readTrimmedString(input.area), 'product'),
 		priority: parsePriority(readTrimmedString(input.priority), 'medium'),
-		status: parseTaskStatus(readTrimmedString(input.status), 'ready'),
+		status,
 		riskLevel: parseTaskRiskLevel(readTrimmedString(input.riskLevel), 'medium'),
 		approvalMode: parseTaskApprovalMode(readTrimmedString(input.approvalMode), 'none'),
 		requiredThreadSandbox: normalizeOptionalSandbox(input.requiredThreadSandbox) ?? null,
@@ -1958,7 +1960,10 @@ export async function createAgentApiTask(input: AgentCreateTaskInput) {
 		desiredRoleId: desiredRoleId ?? '',
 		assigneeExecutionSurfaceId,
 		agentThreadId,
-		blockedReason: readTrimmedString(input.blockedReason),
+		blockedReason: normalizeTaskBlockedReasonForStatus(
+			status,
+			readTrimmedString(input.blockedReason)
+		),
 		dependencyTaskIds,
 		targetDate,
 		artifactPath:
@@ -2069,6 +2074,14 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 	const updatedTask = await updateTaskRecord({
 		taskId: normalizedTaskId,
 		update: (task) => {
+			const status =
+				input.status !== undefined
+					? parseTaskStatus(readTrimmedString(input.status), task.status)
+					: task.status;
+			const requestedBlockedReason =
+				input.blockedReason !== undefined
+					? readTrimmedString(input.blockedReason)
+					: task.blockedReason;
 			const nextTask: Task = {
 				...task,
 				title:
@@ -2093,10 +2106,7 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 					input.priority !== undefined
 						? parsePriority(readTrimmedString(input.priority), task.priority)
 						: task.priority,
-				status:
-					input.status !== undefined
-						? parseTaskStatus(readTrimmedString(input.status), task.status)
-						: task.status,
+				status,
 				area:
 					input.area !== undefined
 						? parseArea(readTrimmedString(input.area), task.area)
@@ -2123,10 +2133,7 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 						: task.assigneeExecutionSurfaceId,
 				agentThreadId:
 					input.agentThreadId !== undefined ? agentThreadId || null : task.agentThreadId,
-				blockedReason:
-					input.blockedReason !== undefined
-						? readTrimmedString(input.blockedReason)
-						: task.blockedReason,
+				blockedReason: normalizeTaskBlockedReasonForStatus(status, requestedBlockedReason),
 				dependencyTaskIds:
 					dependencyTaskIds !== undefined ? dependencyTaskIds : task.dependencyTaskIds,
 				targetDate: targetDate !== undefined ? targetDate : task.targetDate,

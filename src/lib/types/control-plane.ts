@@ -130,6 +130,10 @@ export function normalizeTaskStatus(value: string): TaskStatus | null {
 	}
 }
 
+export function normalizeTaskBlockedReasonForStatus(status: TaskStatus, blockedReason: string) {
+	return status === 'blocked' ? blockedReason.trim() : '';
+}
+
 function formatEnumLabel(value: string): string {
 	return value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }

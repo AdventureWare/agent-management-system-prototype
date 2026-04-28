@@ -247,7 +247,7 @@ describe('agent-control-plane-api', () => {
 		}));
 
 		await agentApiModule.updateAgentApiTask('task_primary', {
-			status: 'in_progress',
+			status: 'blocked',
 			blockedReason: 'Waiting on fixture',
 			dependencyTaskIds: ['task_dep'],
 			targetDate: '2026-04-25'
@@ -257,7 +257,7 @@ describe('agent-control-plane-api', () => {
 
 		expect(updatedTask).toEqual(
 			expect.objectContaining({
-				status: 'in_progress',
+				status: 'blocked',
 				blockedReason: 'Waiting on fixture',
 				dependencyTaskIds: ['task_dep'],
 				targetDate: '2026-04-25'
@@ -268,6 +268,58 @@ describe('agent-control-plane-api', () => {
 				taskId: 'task_primary',
 				decisionType: 'task_plan_updated',
 				summary: expect.stringContaining('status')
+			})
+		);
+	});
+
+	it('clears stale blocker text when the agent API moves a task out of blocked', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const agentApiModule = await importAgentApiModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = controlPlaneModule.createTask({
+			id: 'task_blocked',
+			title: 'Blocked task',
+			summary: 'Primary summary',
+			projectId: project.id,
+			goalId: '',
+			priority: 'medium',
+			status: 'blocked',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			blockedReason: 'The linked work thread exited with code -1.',
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task]
+		}));
+
+		await agentApiModule.updateAgentApiTask('task_blocked', {
+			status: 'ready'
+		});
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(loaded.tasks.find((candidate) => candidate.id === 'task_blocked')).toEqual(
+			expect.objectContaining({
+				status: 'ready',
+				blockedReason: ''
 			})
 		);
 	});

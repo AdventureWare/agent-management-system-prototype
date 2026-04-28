@@ -4,6 +4,7 @@ import {
 	formatTaskApprovalModeLabel,
 	formatTaskRiskLevelLabel,
 	formatTaskStatusLabel,
+	normalizeTaskBlockedReasonForStatus,
 	type ControlPlaneData,
 	type Goal,
 	type Priority,
@@ -311,7 +312,10 @@ export function resolveTaskPlanUpdate(input: {
 	const nextRequiredToolNames = form.hasRequiredToolNames
 		? form.requiredToolNames
 		: (task.requiredToolNames ?? []);
-	const nextBlockedReason = form.hasBlockedReason ? form.blockedReason : task.blockedReason;
+	const nextBlockedReason = normalizeTaskBlockedReasonForStatus(
+		nextStatus,
+		form.hasBlockedReason ? form.blockedReason : task.blockedReason
+	);
 	const nextDependencyTaskIds = form.hasDependencyTaskSelection
 		? form.dependencyTaskIds
 		: task.dependencyTaskIds;

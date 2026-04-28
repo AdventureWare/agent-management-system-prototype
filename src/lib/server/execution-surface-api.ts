@@ -6,6 +6,7 @@ import {
 	createRun,
 	getExecutionSurfaces,
 	getPendingApprovalForTask,
+	normalizeTaskBlockedReasonForStatus,
 	syncTaskExecutionState,
 	syncGovernanceQueues,
 	taskHasUnmetDependencies
@@ -581,6 +582,10 @@ export function updateTaskFromExecutionSurface(
 					? {
 							...candidate,
 							status: input.status,
+							blockedReason: normalizeTaskBlockedReasonForStatus(
+								input.status,
+								candidate.blockedReason
+							),
 							updatedAt: new Date().toISOString()
 						}
 					: candidate

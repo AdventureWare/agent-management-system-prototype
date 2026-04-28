@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -249,6 +249,48 @@ describe('agent-use-telemetry', () => {
 			})
 		);
 		expect(summary.threadCounts).toEqual([{ threadId: 'thread_recent', count: 1 }]);
+		vi.useRealTimers();
+	});
+
+	it('recovers telemetry files with trailing duplicated JSON content', async () => {
+		const telemetryFile = await prepareTelemetryFileEnv();
+		await writeFile(
+			telemetryFile,
+			`${JSON.stringify({
+				events: [
+					{
+						id: 'agent_tool_use_recovered',
+						recordedAt: '2026-04-21T12:00:00.000Z',
+						threadId: 'thread_recovered',
+						runId: null,
+						taskId: null,
+						toolName: 'ams_manifest',
+						resource: 'manifest',
+						command: 'manifest',
+						outcome: 'success',
+						argKeys: ['resource'],
+						errorMessage: null
+					}
+				]
+			})}\n        "resource"\n      ]\n}`,
+			'utf8'
+		);
+		const { summarizeAgentToolUse } = await import('./agent-use-telemetry.js');
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-22T12:00:00.000Z'));
+
+		const summary = await summarizeAgentToolUse({ threadId: 'thread_recovered' });
+		const repairedContent = await readFile(telemetryFile, 'utf8');
+
+		expect(summary.totalEvents).toBe(1);
+		expect(summary.recentEvents[0]).toEqual(
+			expect.objectContaining({
+				id: 'agent_tool_use_recovered',
+				threadId: 'thread_recovered'
+			})
+		);
+		expect(() => JSON.parse(repairedContent)).not.toThrow();
+		expect(repairedContent).not.toContain('"resource"\n      ]\n}');
 		vi.useRealTimers();
 	});
 

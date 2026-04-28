@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { resolveMaybeInternalPath } from '$lib/app-paths';
 	import type { Snippet } from 'svelte';
 
 	type ButtonVariant =
@@ -63,6 +63,7 @@
 	let variantClass = $derived(`ui-button-${variant}`);
 	let sizeClass = $derived(`ui-button-${size}`);
 	let classes = $derived(['ui-button', variantClass, sizeClass, className]);
+	let resolvedHref = $derived(href ? resolveMaybeInternalPath(href) : undefined);
 </script>
 
 {#snippet content()}
@@ -81,7 +82,7 @@
 {#if href}
 	<a
 		class={classes}
-		href={disabled ? undefined : resolve(href)}
+		href={disabled ? undefined : resolvedHref}
 		aria-disabled={disabled ? 'true' : undefined}
 		tabindex={disabled ? -1 : undefined}
 		{target}

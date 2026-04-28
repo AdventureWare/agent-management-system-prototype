@@ -198,6 +198,7 @@
 	let readyConditionInput = $state('');
 	let expectedOutcomeInput = $state('');
 	let dependencySearchInput = $state('');
+	let showAvailableDependencyOptions = $state(false);
 	let showAllDependencyOptions = $state(false);
 	let initializedRequirementInputTaskKey = $state('');
 	let unknownPromptSkillNames = $derived(
@@ -248,6 +249,9 @@
 				.includes(query)
 		);
 	});
+	let dependencyPickerIsOpen = $derived(
+		showAvailableDependencyOptions || dependencySearchInput.trim().length > 0
+	);
 	let visibleUnselectedDependencyTasks = $derived(
 		showAllDependencyOptions
 			? filteredUnselectedDependencyTasks
@@ -622,15 +626,32 @@
 									type="search"
 								/>
 							</label>
-							<p class="text-xs text-slate-500">
-								{filteredUnselectedDependencyTasks.length} available match{filteredUnselectedDependencyTasks.length ===
-								1
-									? ''
-									: 'es'}
-							</p>
+							<div class="flex flex-wrap items-center gap-3">
+								<p class="text-xs text-slate-500">
+									{filteredUnselectedDependencyTasks.length} available match{filteredUnselectedDependencyTasks.length ===
+									1
+										? ''
+										: 'es'}
+								</p>
+								{#if !dependencyPickerIsOpen && unselectedDependencyTasks.length > 0}
+									<button
+										type="button"
+										class="btn border border-slate-700 bg-slate-950/70 text-sm text-slate-100"
+										onclick={() => {
+											showAvailableDependencyOptions = true;
+										}}
+									>
+										Browse available tasks
+									</button>
+								{/if}
+							</div>
 						</div>
 
-						{#if filteredUnselectedDependencyTasks.length === 0}
+						{#if !dependencyPickerIsOpen}
+							<p class="mt-4 text-sm text-slate-500">
+								Search or browse to add another dependency without expanding the whole task list.
+							</p>
+						{:else if filteredUnselectedDependencyTasks.length === 0}
 							<p class="mt-4 text-sm text-slate-500">
 								No additional tasks match the current filter.
 							</p>

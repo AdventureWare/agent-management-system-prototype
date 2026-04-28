@@ -1,6 +1,6 @@
 ---
 name: marketing-strategy-architecture
-description: Use when defining or repairing a product's marketing strategy: audience focus, positioning, offer framing, funnel bottlenecks, channel priorities, sequencing, and decision-linked measurement.
+description: "Use when defining or repairing a product's marketing strategy: audience focus, positioning, offer framing, funnel bottlenecks, channel priorities, sequencing, and decision-linked measurement."
 ---
 
 # marketing-strategy-architecture

@@ -221,4 +221,29 @@ describe('task-plan-updates', () => {
 		expect(result.decisionSummary).toContain('set priority to High');
 		expect(result.decisionSummary).toContain('cleared dependencies');
 	});
+
+	it('clears stale blocker text when a blocked task is moved back to ready', () => {
+		const blockedTask: Task = {
+			...task,
+			status: 'blocked',
+			blockedReason: 'The linked work thread exited with code -1.'
+		};
+		const result = resolveTaskPlanUpdate({
+			current: createCurrentState(),
+			task: blockedTask,
+			status: 'ready',
+			form: createFormInput({
+				blockedReason: blockedTask.blockedReason,
+				hasBlockedReason: true
+			}),
+			project,
+			goal: null,
+			assignedExecutionSurface: null
+		});
+
+		expect(result.nextStatus).toBe('ready');
+		expect(result.nextBlockedReason).toBe('');
+		expect(result.decisionSummary).toContain('set status to Ready');
+		expect(result.decisionSummary).toContain('cleared the blocked reason');
+	});
 });

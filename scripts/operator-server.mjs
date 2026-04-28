@@ -31,7 +31,7 @@ function sleep(ms) {
 	});
 }
 
-function processIsAlive(pid) {
+export function processIsAlive(pid) {
 	if (!pid) {
 		return false;
 	}
@@ -39,7 +39,11 @@ function processIsAlive(pid) {
 	try {
 		process.kill(pid, 0);
 		return true;
-	} catch {
+	} catch (error) {
+		if (error?.code === 'EPERM') {
+			return true;
+		}
+
 		return false;
 	}
 }
@@ -212,6 +216,14 @@ async function readJson(path) {
 	}
 }
 
+async function readText(path) {
+	try {
+		return await readFile(path, 'utf8');
+	} catch {
+		return '';
+	}
+}
+
 function readCommandOutput(command, args) {
 	try {
 		return execFileSync(command, args, {
@@ -250,12 +262,94 @@ function isExpectedOperatorProcess(pid) {
 	return args.includes(BUILD_ENTRY_PATH);
 }
 
+export function hasMissingBuildChunkError(logText) {
+	const latestStartupIndex = logText.lastIndexOf('Listening on ');
+	const latestRuntimeLog = latestStartupIndex >= 0 ? logText.slice(latestStartupIndex) : logText;
+	return /Cannot find module '.+\/build\/server\/chunks\/[^']+'/.test(latestRuntimeLog);
+}
+
 function formatBuildValidationError(error) {
 	if (error instanceof Error) {
 		return error.message;
 	}
 
 	return String(error);
+}
+
+function formatErrorMessage(error) {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
+export function isNativeModuleVersionMismatch(error) {
+	const message = formatErrorMessage(error);
+
+	return (
+		message.includes('NODE_MODULE_VERSION') &&
+		message.includes('compiled against a different Node.js version')
+	);
+}
+
+export function formatNativeDependencyRecoveryMessage(validation, options = {}) {
+	const rebuildAttempted = options.rebuildAttempted === true;
+	const runtimeDescription = `Node ${validation.nodeVersion} (NODE_MODULE_VERSION ${validation.nodeModuleVersion})`;
+	const rebuildCommand = 'npm rebuild better-sqlite3';
+	const installCommand = 'npm install';
+	const reason = validation.reason ?? 'better-sqlite3 could not be loaded.';
+
+	if (validation.kind === 'node_module_version_mismatch') {
+		const prefix = rebuildAttempted
+			? 'better-sqlite3 is still incompatible after an automatic rebuild.'
+			: 'better-sqlite3 was built for a different Node runtime.';
+		return `${prefix} Current runtime: ${runtimeDescription}. ${reason} Run \`${rebuildCommand}\` from ${REPO_ROOT}, or run \`${installCommand}\` to reinstall dependencies for the active Node version, then retry \`npm run app:server:start\`.`;
+	}
+
+	return `better-sqlite3 failed runtime validation before operator startup. Current runtime: ${runtimeDescription}. ${reason} Run \`${rebuildCommand}\` from ${REPO_ROOT}, or run \`${installCommand}\` if dependencies were installed under another Node version, then retry \`npm run app:server:start\`.`;
+}
+
+export async function validateBetterSqliteRuntime(options = {}) {
+	const importBetterSqlite = options.importBetterSqlite ?? (() => import('better-sqlite3'));
+	const nodeVersion = options.nodeVersion ?? process.version;
+	const nodeModuleVersion = options.nodeModuleVersion ?? process.versions.modules ?? 'unknown';
+
+	try {
+		const module = await importBetterSqlite();
+		const Database = module.default ?? module;
+		const db = new Database(':memory:');
+
+		try {
+			const row = db.prepare('select 1 as value').get();
+
+			if (row?.value !== 1) {
+				return {
+					ok: false,
+					kind: 'validation_failed',
+					nodeVersion,
+					nodeModuleVersion,
+					reason: 'In-memory sqlite validation query returned an unexpected result.'
+				};
+			}
+		} finally {
+			db.close();
+		}
+
+		return {
+			ok: true,
+			nodeVersion,
+			nodeModuleVersion
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			kind: isNativeModuleVersionMismatch(error) ? 'node_module_version_mismatch' : 'load_failed',
+			nodeVersion,
+			nodeModuleVersion,
+			reason: formatErrorMessage(error)
+		};
+	}
 }
 
 function findMissingBuildArtifact(...paths) {
@@ -284,6 +378,12 @@ async function writeStatus(status) {
 }
 
 async function resolveLiveOperatorStatus(hostname, port) {
+	const logText = await readText(LOG_PATH);
+
+	if (hasMissingBuildChunkError(logText)) {
+		return null;
+	}
+
 	const probeHost = resolveProbeHost(hostname);
 	const localUrl = createLocalUrl(probeHost, port);
 	const livePids = findListeningPids(port);
@@ -302,6 +402,26 @@ async function resolveLiveOperatorStatus(hostname, port) {
 			await writeStatus(status);
 			return status;
 		}
+	}
+
+	return null;
+}
+
+async function readCurrentOrRecoveredStatus(hostname, port) {
+	const storedStatus = await readJson(STATUS_PATH);
+
+	if (storedStatus && processIsAlive(storedStatus.pid)) {
+		return storedStatus;
+	}
+
+	const recoveredStatus = await resolveLiveOperatorStatus(hostname, port);
+
+	if (recoveredStatus) {
+		return recoveredStatus;
+	}
+
+	if (storedStatus) {
+		await rm(STATUS_PATH, { force: true });
 	}
 
 	return null;
@@ -458,7 +578,64 @@ async function ensureBuildReady() {
 	failWithMessage(`Operator build is still invalid after rebuild: ${revalidatedBuild.reason}`);
 }
 
+async function rebuildBetterSqlite() {
+	await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['rebuild', 'better-sqlite3']);
+}
+
+export async function recoverBetterSqliteRuntime(options = {}) {
+	const validateRuntime = options.validateRuntime ?? validateBetterSqliteRuntime;
+	const rebuildNativeDependency = options.rebuildNativeDependency ?? rebuildBetterSqlite;
+	const validation = await validateRuntime();
+
+	if (validation.ok) {
+		return { ok: true, recovered: false, validation };
+	}
+
+	if (validation.kind !== 'node_module_version_mismatch') {
+		return { ok: false, rebuildAttempted: false, validation };
+	}
+
+	await rebuildNativeDependency();
+	const revalidated = await validateRuntime();
+
+	if (revalidated.ok) {
+		return {
+			ok: true,
+			recovered: true,
+			validation: revalidated,
+			initialValidation: validation
+		};
+	}
+
+	return {
+		ok: false,
+		rebuildAttempted: true,
+		validation: revalidated,
+		initialValidation: validation
+	};
+}
+
+async function ensureNativeDependenciesReady() {
+	const result = await recoverBetterSqliteRuntime();
+
+	if (result.ok) {
+		if (result.recovered) {
+			printHeader('Rebuilt native database dependency');
+			process.stdout.write('better-sqlite3 now matches the active Node runtime.\n');
+		}
+
+		return;
+	}
+
+	failWithMessage(
+		formatNativeDependencyRecoveryMessage(result.validation, {
+			rebuildAttempted: result.rebuildAttempted
+		})
+	);
+}
+
 async function startServer() {
+	await ensureNativeDependenciesReady();
 	await ensureBuildReady();
 	await ensureOutputDir();
 
@@ -553,10 +730,15 @@ async function startServer() {
 }
 
 async function stopServer() {
-	const status =
-		(await readJson(STATUS_PATH)) ?? (await resolveLiveOperatorStatus(DEFAULT_HOST, DEFAULT_PORT));
+	const status = await readCurrentOrRecoveredStatus(DEFAULT_HOST, DEFAULT_PORT);
 
 	if (!status) {
+		process.stdout.write('Operator server is not running.\n');
+		return;
+	}
+
+	if (!processIsAlive(status.pid)) {
+		await rm(STATUS_PATH, { force: true });
 		process.stdout.write('Operator server is not running.\n');
 		return;
 	}
@@ -567,8 +749,7 @@ async function stopServer() {
 }
 
 async function showStatus() {
-	const status =
-		(await readJson(STATUS_PATH)) ?? (await resolveLiveOperatorStatus(DEFAULT_HOST, DEFAULT_PORT));
+	const status = await readCurrentOrRecoveredStatus(DEFAULT_HOST, DEFAULT_PORT);
 
 	if (!status) {
 		process.stdout.write('Operator server is not running.\n');
@@ -588,6 +769,7 @@ async function showStatus() {
 }
 
 async function runForegroundServer() {
+	await ensureNativeDependenciesReady();
 	await ensureBuildReady();
 	await ensureOutputDir();
 

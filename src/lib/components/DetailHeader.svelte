@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { resolveMaybeInternalPath } from '$lib/app-paths';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import type { Snippet } from 'svelte';
 
@@ -34,7 +34,7 @@
 	{#if backHref}
 		<a
 			class="inline-flex items-center gap-2 text-xs font-medium tracking-[0.18em] text-sky-300 uppercase transition hover:text-sky-200"
-			href={resolve(backHref)}
+			href={resolveMaybeInternalPath(backHref)}
 		>
 			{backLabel}
 		</a>

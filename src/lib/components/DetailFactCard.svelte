@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { resolveMaybeInternalPath } from '$lib/app-paths';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -48,7 +48,7 @@
 	{#if href && hrefLabel}
 		<a
 			class="mt-2 inline-flex text-sm text-sky-300 transition hover:text-sky-200"
-			href={resolve(href)}
+			href={resolveMaybeInternalPath(href)}
 		>
 			{hrefLabel}
 		</a>

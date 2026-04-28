@@ -927,6 +927,12 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 			)?.checked
 		).toBe(true);
 		expect(document.body.textContent).toContain('Finalize API contract');
+		expect(document.body.textContent).toContain('Search or browse to add another dependency');
+		expect(document.body.textContent).not.toContain('Ship docs update');
+
+		await page.getByRole('searchbox', { name: 'Find available tasks' }).fill('docs');
+
+		expect(document.body.textContent).toContain('Ship docs update');
 	});
 
 	it('clamps long title and instructions at the top of the page until expanded', async () => {

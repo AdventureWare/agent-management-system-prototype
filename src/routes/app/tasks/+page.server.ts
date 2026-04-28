@@ -10,6 +10,7 @@ import {
 	createTaskTemplate,
 	getPendingApprovalForTask,
 	loadControlPlane,
+	normalizeTaskBlockedReasonForStatus,
 	parseTaskStatus,
 	resolveThreadSandbox,
 	selectExecutionProvider,
@@ -990,6 +991,7 @@ export const actions: Actions = {
 				summary: instructions,
 				projectId: project.id,
 				status,
+				blockedReason: normalizeTaskBlockedReasonForStatus(status, task.blockedReason),
 				requiredThreadSandbox,
 				assigneeExecutionSurfaceId: assignedExecutionSurface?.id ?? null,
 				targetDate: targetDate || null,
@@ -1246,6 +1248,7 @@ export const actions: Actions = {
 				artifactPath:
 					candidate.artifactPath || project.defaultArtifactRoot || project.projectRootFolder || '',
 				status: 'in_progress',
+				blockedReason: '',
 				updatedAt: new Date().toISOString()
 			}),
 			prependRuns: [run]

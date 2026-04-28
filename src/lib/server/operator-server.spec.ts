@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
 	formatBindFailureMessage,
+	formatNativeDependencyRecoveryMessage,
+	hasMissingBuildChunkError,
+	isNativeModuleVersionMismatch,
+	processIsAlive,
 	probeListenTarget,
+	recoverBetterSqliteRuntime,
+	validateBetterSqliteRuntime,
 	validateBuildArtifacts
 } from '../../../scripts/operator-server.mjs';
 
@@ -103,6 +109,22 @@ afterEach(async () => {
 });
 
 describe('operator-server build validation', () => {
+	it('recognizes stale operator logs from missing build chunks', () => {
+		expect.assertions(3);
+
+		expect(
+			hasMissingBuildChunkError(
+				"Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/repo/build/server/chunks/_server.ts-BZNqMPja.js' imported from /repo/build/server/manifest.js"
+			)
+		).toBe(true);
+		expect(
+			hasMissingBuildChunkError(
+				"Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/repo/build/server/chunks/_server.ts-BZNqMPja.js'\nListening on http://127.0.0.1:3000"
+			)
+		).toBe(false);
+		expect(hasMissingBuildChunkError('Listening on http://127.0.0.1:3000')).toBe(false);
+	});
+
 	it('fails when a startup server chunk is missing even if the manifest loaders remain valid', async () => {
 		expect.assertions(3);
 
@@ -132,15 +154,153 @@ describe('operator-server build validation', () => {
 	});
 });
 
-describe('operator-server bind probing', () => {
-	it('reports EADDRINUSE when the requested local port is already occupied', async () => {
-		expect.assertions(2);
+describe('operator-server native dependency validation', () => {
+	it('recognizes Node module ABI mismatch errors from native addons', () => {
+		expect.assertions(1);
 
-		const server = net.createServer();
-		await new Promise((resolvePromise, reject) => {
-			server.once('error', reject);
-			server.listen({ host: '127.0.0.1', port: 0 }, () => resolvePromise(undefined));
+		const error = new Error(
+			"The module 'better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version of Node.js requires NODE_MODULE_VERSION 137."
+		);
+
+		expect(isNativeModuleVersionMismatch(error)).toBe(true);
+	});
+
+	it('returns a guided recovery message for better-sqlite3 ABI mismatches', () => {
+		expect.assertions(4);
+
+		const message = formatNativeDependencyRecoveryMessage({
+			ok: false,
+			kind: 'node_module_version_mismatch',
+			nodeVersion: 'v24.14.1',
+			nodeModuleVersion: '137',
+			reason:
+				"The module 'better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version of Node.js requires NODE_MODULE_VERSION 137."
 		});
+
+		expect(message).toContain('better-sqlite3 was built for a different Node runtime');
+		expect(message).toContain('Node v24.14.1 (NODE_MODULE_VERSION 137)');
+		expect(message).toContain('npm rebuild better-sqlite3');
+		expect(message).toContain('npm run app:server:start');
+	});
+
+	it('validates sqlite by opening an in-memory database before startup', async () => {
+		expect.assertions(1);
+
+		class FixtureDatabase {
+			prepare() {
+				return {
+					get() {
+						return { value: 1 };
+					}
+				};
+			}
+
+			close() {}
+		}
+
+		const validation = await validateBetterSqliteRuntime({
+			importBetterSqlite: async () => ({ default: FixtureDatabase }),
+			nodeVersion: 'v24.14.1',
+			nodeModuleVersion: '137'
+		});
+
+		expect(validation).toMatchObject({
+			ok: true,
+			nodeVersion: 'v24.14.1',
+			nodeModuleVersion: '137'
+		});
+	});
+
+	it('attempts one rebuild for ABI mismatch and verifies the dependency again', async () => {
+		expect.assertions(4);
+
+		const mismatchValidation = {
+			ok: false,
+			kind: 'node_module_version_mismatch',
+			nodeVersion: 'v24.14.1',
+			nodeModuleVersion: '137',
+			reason:
+				'The module was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version of Node.js requires NODE_MODULE_VERSION 137.'
+		};
+		const validValidation = { ok: true, nodeVersion: 'v24.14.1', nodeModuleVersion: '137' };
+		const validations = [mismatchValidation, validValidation];
+		let rebuildCount = 0;
+
+		const result = await recoverBetterSqliteRuntime({
+			validateRuntime: async () => validations.shift(),
+			rebuildNativeDependency: async () => {
+				rebuildCount += 1;
+			}
+		});
+
+		expect(rebuildCount).toBe(1);
+		expect(result.ok).toBe(true);
+		expect(result.recovered).toBe(true);
+		expect(result.validation).toBe(validValidation);
+	});
+
+	it('does not rebuild for non-ABI load failures', async () => {
+		expect.assertions(3);
+
+		let rebuildCount = 0;
+		const validation = {
+			ok: false,
+			kind: 'load_failed',
+			nodeVersion: 'v24.14.1',
+			nodeModuleVersion: '137',
+			reason: 'Cannot find module better-sqlite3'
+		};
+
+		const result = await recoverBetterSqliteRuntime({
+			validateRuntime: async () => validation,
+			rebuildNativeDependency: async () => {
+				rebuildCount += 1;
+			}
+		});
+
+		expect(rebuildCount).toBe(0);
+		expect(result.ok).toBe(false);
+		expect(result.validation).toBe(validation);
+	});
+});
+
+describe('operator-server bind probing', () => {
+	it('treats permission-denied process probes as alive', () => {
+		expect.assertions(1);
+
+		const originalKill = process.kill;
+		process.kill = (() => {
+			const error = new Error('kill EPERM');
+			(error as NodeJS.ErrnoException).code = 'EPERM';
+			throw error;
+		}) as typeof process.kill;
+
+		try {
+			expect(processIsAlive(12345)).toBe(true);
+		} finally {
+			process.kill = originalKill;
+		}
+	});
+
+	it('reports EADDRINUSE when the requested local port is already occupied', async () => {
+		const server = net.createServer();
+		const fixtureStarted = await new Promise<boolean>((resolvePromise, reject) => {
+			server.once('error', reject);
+			server.listen({ host: '127.0.0.1', port: 0 }, () => resolvePromise(true));
+		}).catch((error: NodeJS.ErrnoException) => {
+			if (error.code === 'EPERM' || error.code === 'EACCES') {
+				return false;
+			}
+
+			throw error;
+		});
+
+		if (!fixtureStarted) {
+			const probe = await probeListenTarget('127.0.0.1', 0);
+			expect(probe.ok).toBe(false);
+			expect(probe.error?.code).toMatch(/^(EPERM|EACCES)$/);
+			return;
+		}
 
 		try {
 			const address = server.address();

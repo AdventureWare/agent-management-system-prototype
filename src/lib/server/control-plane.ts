@@ -30,6 +30,7 @@ import {
 	WORKFLOW_STATUS_OPTIONS,
 	EXECUTION_SURFACE_LOCATION_OPTIONS,
 	EXECUTION_SURFACE_STATUS_OPTIONS,
+	normalizeTaskBlockedReasonForStatus,
 	normalizeTaskStatus,
 	type Approval,
 	type ApprovalStatus,
@@ -71,6 +72,8 @@ import {
 	type ExecutionSurfaceLocation,
 	type ExecutionSurfaceStatus
 } from '$lib/types/control-plane';
+
+export { normalizeTaskBlockedReasonForStatus } from '$lib/types/control-plane';
 
 const DATA_FILE = resolve(process.cwd(), 'data', 'control-plane.json');
 
@@ -2663,6 +2666,8 @@ export function createTask(input: {
 	const now = new Date().toISOString();
 	const area = input.area ?? 'product';
 
+	const status = input.status ?? 'ready';
+
 	return {
 		id: input.id ?? createTaskId(),
 		title: input.title,
@@ -2679,7 +2684,7 @@ export function createTask(input: {
 		delegationPacket: normalizeDelegationPacket(input.delegationPacket ?? null),
 		delegationAcceptance: normalizeDelegationAcceptance(input.delegationAcceptance ?? null),
 		priority: input.priority,
-		status: input.status ?? 'ready',
+		status,
 		riskLevel: input.riskLevel,
 		approvalMode: input.approvalMode,
 		requiredThreadSandbox: input.requiredThreadSandbox ?? null,
@@ -2690,7 +2695,7 @@ export function createTask(input: {
 		requiredPromptSkillNames: input.requiredPromptSkillNames ?? [],
 		requiredCapabilityNames: input.requiredCapabilityNames ?? [],
 		requiredToolNames: input.requiredToolNames ?? [],
-		blockedReason: input.blockedReason ?? '',
+		blockedReason: normalizeTaskBlockedReasonForStatus(status, input.blockedReason ?? ''),
 		dependencyTaskIds: input.dependencyTaskIds ?? [],
 		estimateHours: input.estimateHours ?? null,
 		targetDate: input.targetDate ?? null,
