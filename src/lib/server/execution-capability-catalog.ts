@@ -19,11 +19,50 @@ export type ProjectSkillCatalogEntry = {
 	}>;
 	installedSkills: Array<{
 		id: string;
+		description: string;
+		global: boolean;
+		project: boolean;
 		sourceLabel: string;
+		availability: 'default' | 'enabled' | 'disabled';
+		availabilityLabel: string;
+		availabilityNotes: string;
 	}>;
 	previewSkills: Array<{
 		id: string;
+		description: string;
+		global: boolean;
+		project: boolean;
 		sourceLabel: string;
+		availability: 'default' | 'enabled' | 'disabled';
+		availabilityLabel: string;
+		availabilityNotes: string;
+	}>;
+};
+
+export type SkillAvailabilityCatalogEntry = {
+	id: string;
+	description: string;
+	availableProjectCount: number;
+	projectLocalProjectCount: number;
+	globalProjectCount: number;
+	requestedProjectCount: number;
+	requestingTaskCount: number;
+	missingProjectCount: number;
+	tasksMissingRequestedSkillCount: number;
+	projects: Array<{
+		projectId: string;
+		projectName: string;
+		projectHref: string;
+		installed: boolean;
+		projectLocal: boolean;
+		global: boolean;
+		sourceLabel: string;
+		description: string;
+		availability: 'default' | 'enabled' | 'disabled';
+		availabilityLabel: string;
+		availabilityNotes: string;
+		requestingTaskCount: number;
+		missing: boolean;
 	}>;
 };
 
@@ -46,6 +85,7 @@ export type ToolCatalogEntry = {
 
 export type ExecutionCapabilityCatalog = {
 	projectSkills: ProjectSkillCatalogEntry[];
+	skills: SkillAvailabilityCatalogEntry[];
 	capabilities: CapabilityCatalogEntry[];
 	tools: ToolCatalogEntry[];
 };
@@ -147,6 +187,44 @@ function finalizeToolEntries(entries: Map<string, ToolAccumulator>) {
 		.sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function getProjectSkillAvailabilityPolicy(
+	project: Pick<ControlPlaneData['projects'][number], 'skillAvailabilityPolicies'>,
+	skillId: string
+) {
+	const normalizedSkillId = normalizeExecutionRequirementName(skillId);
+
+	return (
+		project.skillAvailabilityPolicies?.find(
+			(policy) => normalizeExecutionRequirementName(policy.skillId) === normalizedSkillId
+		) ?? null
+	);
+}
+
+function getProjectSkillAvailabilityLabel(input: {
+	availability: 'default' | 'enabled' | 'disabled';
+	project: boolean;
+	global: boolean;
+	installed: boolean;
+}) {
+	if (input.availability === 'enabled') {
+		return 'Enabled for project';
+	}
+
+	if (input.availability === 'disabled') {
+		return 'Disabled for project';
+	}
+
+	if (input.project) {
+		return 'Project-local';
+	}
+
+	if (input.global) {
+		return 'Inherited global';
+	}
+
+	return input.installed ? 'Available' : 'Default';
+}
+
 export function buildExecutionCapabilityCatalog(
 	data: Pick<ControlPlaneData, 'projects' | 'providers' | 'executionSurfaces' | 'tasks'>
 ): ExecutionCapabilityCatalog {
@@ -221,86 +299,266 @@ export function buildExecutionCapabilityCatalog(
 		}
 	}
 
-	return {
-		projectSkills: [...data.projects]
-			.map((project) => {
-				const installedSkills = listInstalledCodexSkills(project.projectRootFolder);
-				const installedSkillNames = new Set(
-					installedSkills
-						.map((skill) => normalizeExecutionRequirementName(skill.id))
-						.filter((skillName): skillName is string => Boolean(skillName))
+	const projectSkills = [...data.projects]
+		.map((project) => {
+			const installedSkills = listInstalledCodexSkills(project.projectRootFolder);
+			const installedSkillNames = new Set(
+				installedSkills
+					.map((skill) => normalizeExecutionRequirementName(skill.id))
+					.filter((skillName): skillName is string => Boolean(skillName))
+			);
+			const requestedSkillEntries = new Map<
+				string,
+				{
+					id: string;
+					requestingTaskIds: Set<string>;
+				}
+			>();
+
+			for (const task of data.tasks.filter((candidate) => candidate.projectId === project.id)) {
+				for (const promptSkillName of task.requiredPromptSkillNames ?? []) {
+					const normalizedSkillName = normalizeExecutionRequirementName(promptSkillName);
+
+					if (!normalizedSkillName) {
+						continue;
+					}
+
+					const existingEntry = requestedSkillEntries.get(normalizedSkillName) ?? {
+						id: promptSkillName.trim(),
+						requestingTaskIds: new Set<string>()
+					};
+					existingEntry.requestingTaskIds.add(task.id);
+					requestedSkillEntries.set(normalizedSkillName, existingEntry);
+				}
+			}
+
+			const missingRequestedSkillEntries = [...requestedSkillEntries.entries()]
+				.filter(([normalizedSkillName]) => !installedSkillNames.has(normalizedSkillName))
+				.map(([, entry]) => entry);
+			const missingRequestedSkills = missingRequestedSkillEntries
+				.map((entry) => ({
+					id: entry.id,
+					requestingTaskCount: entry.requestingTaskIds.size
+				}))
+				.sort(
+					(left, right) =>
+						right.requestingTaskCount - left.requestingTaskCount || left.id.localeCompare(right.id)
 				);
-				const requestedSkillEntries = new Map<
-					string,
-					{
-						id: string;
-						requestingTaskIds: Set<string>;
-					}
-				>();
+			const requestingTaskCount = new Set(
+				[...requestedSkillEntries.values()].flatMap((entry) => [...entry.requestingTaskIds])
+			).size;
+			const tasksMissingRequestedSkillCount = new Set(
+				missingRequestedSkillEntries.flatMap((entry) => [...entry.requestingTaskIds])
+			).size;
 
-				for (const task of data.tasks.filter((candidate) => candidate.projectId === project.id)) {
-					for (const promptSkillName of task.requiredPromptSkillNames ?? []) {
-						const normalizedSkillName = normalizeExecutionRequirementName(promptSkillName);
+			return {
+				projectId: project.id,
+				projectName: project.name,
+				projectHref: `/app/projects/${project.id}`,
+				totalCount: installedSkills.length,
+				projectCount: installedSkills.filter((skill) => skill.project).length,
+				globalCount: installedSkills.filter((skill) => skill.global).length,
+				requestedSkillCount: requestedSkillEntries.size,
+				requestingTaskCount,
+				missingRequestedSkillCount: missingRequestedSkills.length,
+				tasksMissingRequestedSkillCount,
+				missingRequestedSkills: missingRequestedSkills.slice(0, 8),
+				installedSkills: installedSkills.map((skill) => ({
+					id: skill.id,
+					description: skill.description,
+					global: skill.global,
+					project: skill.project,
+					sourceLabel: skill.sourceLabel,
+					availability:
+						getProjectSkillAvailabilityPolicy(project, skill.id)?.availability ?? 'default',
+					availabilityLabel: getProjectSkillAvailabilityLabel({
+						availability:
+							getProjectSkillAvailabilityPolicy(project, skill.id)?.availability ?? 'default',
+						project: skill.project,
+						global: skill.global,
+						installed: true
+					}),
+					availabilityNotes: getProjectSkillAvailabilityPolicy(project, skill.id)?.notes ?? ''
+				})),
+				previewSkills: installedSkills.slice(0, 8).map((skill) => ({
+					id: skill.id,
+					description: skill.description,
+					global: skill.global,
+					project: skill.project,
+					sourceLabel: skill.sourceLabel,
+					availability:
+						getProjectSkillAvailabilityPolicy(project, skill.id)?.availability ?? 'default',
+					availabilityLabel: getProjectSkillAvailabilityLabel({
+						availability:
+							getProjectSkillAvailabilityPolicy(project, skill.id)?.availability ?? 'default',
+						project: skill.project,
+						global: skill.global,
+						installed: true
+					}),
+					availabilityNotes: getProjectSkillAvailabilityPolicy(project, skill.id)?.notes ?? ''
+				}))
+			};
+		})
+		.sort(
+			(left, right) =>
+				right.totalCount - left.totalCount || left.projectName.localeCompare(right.projectName)
+		);
 
-						if (!normalizedSkillName) {
-							continue;
-						}
+	const skillsById = new Map<string, SkillAvailabilityCatalogEntry>();
 
-						const existingEntry = requestedSkillEntries.get(normalizedSkillName) ?? {
-							id: promptSkillName.trim(),
-							requestingTaskIds: new Set<string>()
-						};
-						existingEntry.requestingTaskIds.add(task.id);
-						requestedSkillEntries.set(normalizedSkillName, existingEntry);
-					}
+	for (const project of projectSkills) {
+		const requestedSkillsById = new Map<string, { id: string; requestingTaskCount: number }>();
+		const requestingTaskIdsBySkillId = new Map<string, Set<string>>();
+
+		for (const task of data.tasks.filter(
+			(candidate) => candidate.projectId === project.projectId
+		)) {
+			for (const skillName of task.requiredPromptSkillNames ?? []) {
+				const normalizedSkillName = normalizeExecutionRequirementName(skillName);
+
+				if (!normalizedSkillName) {
+					continue;
 				}
 
-				const missingRequestedSkillEntries = [...requestedSkillEntries.entries()]
-					.filter(([normalizedSkillName]) => !installedSkillNames.has(normalizedSkillName))
-					.map(([, entry]) => entry);
-				const missingRequestedSkills = missingRequestedSkillEntries
-					.map((entry) => ({
-						id: entry.id,
-						requestingTaskCount: entry.requestingTaskIds.size
-					}))
-					.sort(
-						(left, right) =>
-							right.requestingTaskCount - left.requestingTaskCount ||
-							left.id.localeCompare(right.id)
-					);
-				const requestingTaskCount = new Set(
-					[...requestedSkillEntries.values()].flatMap((entry) => [...entry.requestingTaskIds])
-				).size;
-				const tasksMissingRequestedSkillCount = new Set(
-					missingRequestedSkillEntries.flatMap((entry) => [...entry.requestingTaskIds])
-				).size;
+				const requestingTaskIds = requestingTaskIdsBySkillId.get(normalizedSkillName) ?? new Set();
+				requestingTaskIds.add(task.id);
+				requestingTaskIdsBySkillId.set(normalizedSkillName, requestingTaskIds);
+				requestedSkillsById.set(normalizedSkillName, {
+					id: skillName.trim(),
+					requestingTaskCount: requestingTaskIds.size
+				});
+			}
+		}
 
-				return {
-					projectId: project.id,
-					projectName: project.name,
-					projectHref: `/app/projects/${project.id}`,
-					totalCount: installedSkills.length,
-					projectCount: installedSkills.filter((skill) => skill.project).length,
-					globalCount: installedSkills.filter((skill) => skill.global).length,
-					requestedSkillCount: requestedSkillEntries.size,
-					requestingTaskCount,
-					missingRequestedSkillCount: missingRequestedSkills.length,
-					tasksMissingRequestedSkillCount,
-					missingRequestedSkills: missingRequestedSkills.slice(0, 8),
-					installedSkills: installedSkills.map((skill) => ({
-						id: skill.id,
-						sourceLabel: skill.sourceLabel
-					})),
-					previewSkills: installedSkills.slice(0, 8).map((skill) => ({
-						id: skill.id,
-						sourceLabel: skill.sourceLabel
-					}))
-				};
-			})
-			.sort(
-				(left, right) =>
-					right.totalCount - left.totalCount || left.projectName.localeCompare(right.projectName)
-			),
+		for (const installedSkill of project.installedSkills) {
+			const normalizedSkillName = normalizeExecutionRequirementName(installedSkill.id);
+
+			if (!normalizedSkillName) {
+				continue;
+			}
+
+			const entry =
+				skillsById.get(normalizedSkillName) ??
+				({
+					id: installedSkill.id,
+					description: installedSkill.description,
+					availableProjectCount: 0,
+					projectLocalProjectCount: 0,
+					globalProjectCount: 0,
+					requestedProjectCount: 0,
+					requestingTaskCount: 0,
+					missingProjectCount: 0,
+					tasksMissingRequestedSkillCount: 0,
+					projects: []
+				} satisfies SkillAvailabilityCatalogEntry);
+			const requestedSkill = requestedSkillsById.get(normalizedSkillName);
+
+			entry.projects.push({
+				projectId: project.projectId,
+				projectName: project.projectName,
+				projectHref: project.projectHref,
+				installed: true,
+				projectLocal: installedSkill.project,
+				global: installedSkill.global,
+				sourceLabel: installedSkill.sourceLabel,
+				description: installedSkill.description,
+				availability: installedSkill.availability,
+				availabilityLabel: installedSkill.availabilityLabel,
+				availabilityNotes: installedSkill.availabilityNotes,
+				requestingTaskCount: requestedSkill?.requestingTaskCount ?? 0,
+				missing: false
+			});
+			skillsById.set(normalizedSkillName, entry);
+			requestedSkillsById.delete(normalizedSkillName);
+		}
+
+		for (const missingSkill of requestedSkillsById.values()) {
+			const normalizedSkillName = normalizeExecutionRequirementName(missingSkill.id);
+
+			if (!normalizedSkillName) {
+				continue;
+			}
+
+			const entry =
+				skillsById.get(normalizedSkillName) ??
+				({
+					id: missingSkill.id,
+					description: '',
+					availableProjectCount: 0,
+					projectLocalProjectCount: 0,
+					globalProjectCount: 0,
+					requestedProjectCount: 0,
+					requestingTaskCount: 0,
+					missingProjectCount: 0,
+					tasksMissingRequestedSkillCount: 0,
+					projects: []
+				} satisfies SkillAvailabilityCatalogEntry);
+
+			entry.projects.push({
+				projectId: project.projectId,
+				projectName: project.projectName,
+				projectHref: project.projectHref,
+				installed: false,
+				projectLocal: false,
+				global: false,
+				sourceLabel: 'Missing',
+				description: '',
+				availability: 'default',
+				availabilityLabel: 'Missing',
+				availabilityNotes: '',
+				requestingTaskCount: missingSkill.requestingTaskCount,
+				missing: true
+			});
+			skillsById.set(normalizedSkillName, entry);
+		}
+	}
+
+	const skills = [...skillsById.values()]
+		.map((skill) => {
+			const availableProjects = skill.projects.filter((project) => project.installed);
+			const requestedProjects = skill.projects.filter((project) => project.requestingTaskCount > 0);
+			const missingProjects = skill.projects.filter((project) => project.missing);
+
+			return {
+				...skill,
+				description:
+					skill.description ||
+					availableProjects.find((project) => project.description)?.description ||
+					'No installed skill description recorded.',
+				availableProjectCount: availableProjects.length,
+				projectLocalProjectCount: availableProjects.filter((project) => project.projectLocal)
+					.length,
+				globalProjectCount: availableProjects.filter((project) => project.global).length,
+				requestedProjectCount: requestedProjects.length,
+				requestingTaskCount: requestedProjects.reduce(
+					(total, project) => total + project.requestingTaskCount,
+					0
+				),
+				missingProjectCount: missingProjects.length,
+				tasksMissingRequestedSkillCount: missingProjects.reduce(
+					(total, project) => total + project.requestingTaskCount,
+					0
+				),
+				projects: [...skill.projects].sort(
+					(left, right) =>
+						Number(right.missing) - Number(left.missing) ||
+						Number(right.installed) - Number(left.installed) ||
+						right.requestingTaskCount - left.requestingTaskCount ||
+						left.projectName.localeCompare(right.projectName)
+				)
+			};
+		})
+		.sort(
+			(left, right) =>
+				right.missingProjectCount - left.missingProjectCount ||
+				right.requestingTaskCount - left.requestingTaskCount ||
+				right.availableProjectCount - left.availableProjectCount ||
+				left.id.localeCompare(right.id)
+		);
+
+	return {
+		projectSkills,
+		skills,
 		capabilities: finalizeCapabilityEntries(capabilityEntries),
 		tools: finalizeToolEntries(toolEntries)
 	};

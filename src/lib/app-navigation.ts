@@ -1,6 +1,7 @@
 export type AppNavigationLinkId =
 	| 'governance'
 	| 'access'
+	| 'skills'
 	| 'tasks'
 	| 'threads'
 	| 'runs'
@@ -17,6 +18,7 @@ export type AppNavigationLinkId =
 export type AppNavigationRoute =
 	| '/app/governance'
 	| '/app/access'
+	| '/app/skills'
 	| '/app/tasks'
 	| '/app/threads'
 	| '/app/runs'
@@ -50,7 +52,8 @@ export const appNavigationSections: AppNavigationSection[] = [
 		description: 'Project, outcome, and planning structure',
 		links: [
 			{ id: 'projects', label: 'Projects', href: '/app/projects' },
-			{ id: 'goals', label: 'Goals', href: '/app/goals' }
+			{ id: 'goals', label: 'Goals', href: '/app/goals' },
+			{ id: 'skills', label: 'Skills', href: '/app/skills' }
 		]
 	},
 	{

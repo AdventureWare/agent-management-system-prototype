@@ -24,6 +24,7 @@ function printHelp() {
 			'Usage: node scripts/ams-cli.mjs <resource> <command> [options]',
 			'',
 			'Discovery:',
+			'  doctor',
 			'  manifest [--resource <context|intent|task|goal|project|thread>] [--command <name>]',
 			'  context current [--thread <threadId>] [--task <taskId>] [--run <runId>]',
 			'  telemetry summary [--thread <threadId>] [--task <taskId>] [--run <runId>] [--tool <toolName>] [--outcome <success|error>] [--since <1h|24h|7d|30d>]',
@@ -71,6 +72,142 @@ function printHelp() {
 			'  In managed runs, current-task commands can omit [taskId] when AMS_AGENT_THREAD_ID or AMS_AGENT_RUN_ID is available. The CLI resolves the canonical task first and errors clearly if no task can be inferred.'
 		].join('\n') + '\n'
 	);
+}
+
+async function fetchJsonForDoctor(path) {
+	const requestUrl = new URL(path, apiBaseUrl);
+	const startedAt = Date.now();
+	let response;
+
+	try {
+		response = await fetch(requestUrl, {
+			headers: apiToken ? { authorization: `Bearer ${apiToken}` } : {}
+		});
+	} catch (error) {
+		return {
+			ok: false,
+			url: requestUrl.href,
+			durationMs: Date.now() - startedAt,
+			error: error instanceof Error ? error.message : 'Unable to reach the AMS operator API.'
+		};
+	}
+
+	const payload = await response.json().catch(() => ({}));
+
+	return {
+		ok: response.ok,
+		url: requestUrl.href,
+		status: response.status,
+		durationMs: Date.now() - startedAt,
+		payload
+	};
+}
+
+async function runDoctor() {
+	const checks = [
+		{
+			name: 'api_base_url',
+			ok: Boolean(apiBaseUrl),
+			detail: `Using ${apiBaseUrl}.`
+		},
+		{
+			name: 'api_token',
+			ok: Boolean(apiToken),
+			detail: apiToken
+				? 'AMS API token is available from the environment.'
+				: 'AMS_AGENT_API_TOKEN, AMS_OPERATOR_SESSION_SECRET, or AMS_OPERATOR_PASSWORD is required for agent API calls.'
+		}
+	];
+
+	const suggestedNextCommands = [];
+
+	if (!apiToken) {
+		suggestedNextCommands.push('export AMS_AGENT_API_TOKEN=<token>');
+	}
+
+	if (apiToken) {
+		const manifestResult = await fetchJsonForDoctor('/api/agent-capabilities');
+
+		if (manifestResult.ok) {
+			checks.push({
+				name: 'manifest',
+				ok: true,
+				detail: `Capability manifest reachable in ${manifestResult.durationMs}ms.`,
+				version: manifestResult.payload?.version,
+				commandCount: Array.isArray(manifestResult.payload?.commands)
+					? manifestResult.payload.commands.length
+					: null
+			});
+		} else {
+			checks.push({
+				name: 'manifest',
+				ok: false,
+				detail:
+					manifestResult.error ??
+					manifestResult.payload?.error ??
+					`Capability manifest request failed with HTTP ${manifestResult.status}.`,
+				status: manifestResult.status ?? null
+			});
+			suggestedNextCommands.push('npm run app:server:start');
+		}
+
+		const managedContextParams = buildManagedContextParams();
+		const hasManagedContext = managedContextParams.size > 0;
+
+		if (hasManagedContext) {
+			const contextResult = await fetchJsonForDoctor(
+				`/api/agent-context/current?${managedContextParams.toString()}`
+			);
+
+			checks.push({
+				name: 'current_context',
+				ok: contextResult.ok,
+				detail: contextResult.ok
+					? 'Current managed-run context resolved.'
+					: (contextResult.error ??
+						contextResult.payload?.error ??
+						`Current context request failed with HTTP ${contextResult.status}.`),
+				status: contextResult.status ?? null,
+				resolved: contextResult.payload?.resolved ?? null
+			});
+
+			if (!contextResult.ok) {
+				suggestedNextCommands.push('node scripts/ams-cli.mjs context current');
+			}
+		} else {
+			checks.push({
+				name: 'current_context',
+				ok: true,
+				skipped: true,
+				detail:
+					'No AMS_AGENT_THREAD_ID, AMS_AGENT_TASK_ID, or AMS_AGENT_RUN_ID is set, so managed-run context resolution was skipped.'
+			});
+		}
+	} else {
+		checks.push({
+			name: 'manifest',
+			ok: false,
+			skipped: true,
+			detail: 'Capability manifest check skipped because no AMS API token is available.'
+		});
+		checks.push({
+			name: 'current_context',
+			ok: true,
+			skipped: true,
+			detail: 'Current context check skipped because no AMS API token is available.'
+		});
+	}
+
+	if (suggestedNextCommands.length === 0) {
+		suggestedNextCommands.push('node scripts/ams-cli.mjs manifest');
+	}
+
+	printJson({
+		ok: checks.every((check) => check.ok),
+		apiBaseUrl,
+		checks,
+		suggestedNextCommands: [...new Set(suggestedNextCommands)]
+	});
 }
 
 function parseArgs(argv) {
@@ -264,6 +401,11 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 
 	if (!resource || resource === 'help' || resource === '--help' || resource === '-h') {
 		printHelp();
+		return;
+	}
+
+	if (resource === 'doctor') {
+		await runDoctor();
 		return;
 	}
 

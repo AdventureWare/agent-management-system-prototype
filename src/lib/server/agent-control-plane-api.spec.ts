@@ -687,10 +687,24 @@ describe('agent-control-plane-api', () => {
 		const loaded = await controlPlaneModule.loadControlPlane();
 		const updatedTask = loaded.tasks.find((candidate) => candidate.id === task.id);
 
+		expect(attachResult).toEqual(
+			expect.objectContaining({
+				taskId: task.id,
+				attachmentId: expect.any(String),
+				attachmentCount: 1,
+				attachments: [
+					expect.objectContaining({
+						id: attachResult.attachmentId
+					})
+				]
+			})
+		);
 		expect(removeResult).toEqual(
 			expect.objectContaining({
 				taskId: task.id,
-				attachmentId: attachResult.attachmentId
+				attachmentId: attachResult.attachmentId,
+				attachmentCount: 0,
+				attachments: []
 			})
 		);
 		expect(updatedTask?.attachments).toEqual([]);

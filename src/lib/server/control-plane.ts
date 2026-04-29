@@ -21,6 +21,7 @@ import {
 	PROVIDER_AUTH_MODE_OPTIONS,
 	PROVIDER_KIND_OPTIONS,
 	PROVIDER_SETUP_STATUS_OPTIONS,
+	PROJECT_SKILL_AVAILABILITY_OPTIONS,
 	PLANNING_CONFIDENCE_OPTIONS,
 	PRIORITY_OPTIONS,
 	REVIEW_STATUS_OPTIONS,
@@ -51,6 +52,9 @@ import {
 	type ProviderKind,
 	type ProviderSetupStatus,
 	type Project,
+	type ProjectSkillAvailability,
+	type ProjectSkillAvailabilityPolicyEvent,
+	type ProjectSkillAvailabilityPolicy,
 	type Priority,
 	type Role,
 	type Review,
@@ -145,6 +149,10 @@ function isWorkflowStatus(value: string): value is WorkflowStatus {
 	return WORKFLOW_STATUS_OPTIONS.includes(value as WorkflowStatus);
 }
 
+function isProjectSkillAvailability(value: string): value is ProjectSkillAvailability {
+	return PROJECT_SKILL_AVAILABILITY_OPTIONS.includes(value as ProjectSkillAvailability);
+}
+
 function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
 }
@@ -176,6 +184,8 @@ type LegacyProject = Partial<Project> & {
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
 	additionalWritableRoots?: unknown;
+	skillAvailabilityPolicies?: unknown;
+	skillAvailabilityPolicyEvents?: unknown;
 };
 
 type LegacyProvider = Partial<Provider> & {
@@ -840,8 +850,89 @@ function normalizeProject(
 		defaultBranch:
 			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : '',
 		additionalWritableRoots,
-		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox)
+		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox),
+		skillAvailabilityPolicies: normalizeProjectSkillAvailabilityPolicies(
+			legacyProject.skillAvailabilityPolicies
+		),
+		skillAvailabilityPolicyEvents: normalizeProjectSkillAvailabilityPolicyEvents(
+			legacyProject.skillAvailabilityPolicyEvents
+		)
 	};
+}
+
+function normalizeProjectSkillAvailabilityPolicies(
+	value: unknown
+): ProjectSkillAvailabilityPolicy[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	const policiesBySkillId = new Map<string, ProjectSkillAvailabilityPolicy>();
+
+	for (const candidate of value) {
+		if (!candidate || typeof candidate !== 'object') {
+			continue;
+		}
+
+		const row = candidate as Record<string, unknown>;
+		const skillId = typeof row.skillId === 'string' ? row.skillId.trim() : '';
+		const availabilityValue = typeof row.availability === 'string' ? row.availability : '';
+
+		if (!skillId || !isProjectSkillAvailability(availabilityValue)) {
+			continue;
+		}
+
+		policiesBySkillId.set(skillId.toLowerCase(), {
+			skillId,
+			availability: availabilityValue,
+			notes: typeof row.notes === 'string' ? row.notes.trim() : '',
+			updatedAt:
+				typeof row.updatedAt === 'string' && row.updatedAt.trim()
+					? row.updatedAt
+					: new Date().toISOString()
+		});
+	}
+
+	return [...policiesBySkillId.values()].sort((left, right) =>
+		left.skillId.localeCompare(right.skillId)
+	);
+}
+
+function normalizeProjectSkillAvailabilityPolicyEvents(
+	value: unknown
+): ProjectSkillAvailabilityPolicyEvent[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.flatMap((candidate): ProjectSkillAvailabilityPolicyEvent[] => {
+			if (!candidate || typeof candidate !== 'object') {
+				return [];
+			}
+
+			const row = candidate as Record<string, unknown>;
+			const id = typeof row.id === 'string' ? row.id.trim() : '';
+			const skillId = typeof row.skillId === 'string' ? row.skillId.trim() : '';
+			const availabilityValue = typeof row.availability === 'string' ? row.availability : '';
+			const changedAt =
+				typeof row.changedAt === 'string' && row.changedAt.trim() ? row.changedAt : '';
+
+			if (!id || !skillId || !changedAt || !isProjectSkillAvailability(availabilityValue)) {
+				return [];
+			}
+
+			return [
+				{
+					id,
+					skillId,
+					availability: availabilityValue,
+					notes: typeof row.notes === 'string' ? row.notes.trim() : '',
+					changedAt
+				}
+			];
+		})
+		.sort((left, right) => right.changedAt.localeCompare(left.changedAt));
 }
 
 function normalizeProjectHierarchy(projects: Project[]) {

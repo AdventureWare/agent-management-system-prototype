@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import {
 	invalidateProjectCodexSkillCache,
+	listInstalledCodexSkillInstallations,
 	listInstalledCodexSkills
 } from '$lib/server/codex-skills';
 
@@ -8,6 +9,15 @@ export type ExternalSkillSearchResult = {
 	packageSpec: string;
 	url: string | null;
 	installCountLabel: string | null;
+};
+
+export type InstalledExternalSkillResult = {
+	id: string;
+	description: string;
+	sourceLabel: string;
+	global: boolean;
+	project: boolean;
+	skillFilePath: string;
 };
 
 const ANSI_ESCAPE_PATTERN =
@@ -132,6 +142,13 @@ export function sanitizeExternalSkillsOutput(output: string) {
 		.trim();
 }
 
+export function inferExternalSkillIdFromPackageSpec(packageSpec: string) {
+	const normalizedPackageSpec = packageSpec.trim();
+	const skillSegment = normalizedPackageSpec.match(/@([^@\s/]+)$/)?.[1]?.trim() ?? '';
+
+	return skillSegment || null;
+}
+
 export async function searchExternalSkills(query: string, cwd: string) {
 	const normalizedQuery = query.trim();
 
@@ -163,16 +180,37 @@ export async function installExternalSkillToProject(input: {
 		throw new Error('Package spec is required.');
 	}
 
-	const installedBefore = new Set(
-		listInstalledCodexSkills(projectRootFolder).map((skill) => skill.id)
-	);
+	const installedBefore = listInstalledCodexSkills(projectRootFolder);
+	const installedBeforeIds = new Set(installedBefore.map((skill) => skill.id));
+	const requestedSkillId = inferExternalSkillIdFromPackageSpec(packageSpec);
+
+	if (requestedSkillId && installedBeforeIds.has(requestedSkillId)) {
+		throw new Error(
+			`Skill "${requestedSkillId}" is already installed for this project. Review the existing skill before installing a package with the same skill ID.`
+		);
+	}
+
 	await runSkillsCli(['add', packageSpec, '-y'], projectRootFolder);
 	invalidateProjectCodexSkillCache(projectRootFolder);
 	const installedAfter = listInstalledCodexSkills(projectRootFolder);
+	const installedAfterInstallations = listInstalledCodexSkillInstallations(projectRootFolder);
+	const installedSkillIds = installedAfter
+		.map((skill) => skill.id)
+		.filter((skillId) => !installedBeforeIds.has(skillId));
 
 	return {
-		installedSkillIds: installedAfter
-			.map((skill) => skill.id)
-			.filter((skillId) => !installedBefore.has(skillId))
+		installedSkillIds,
+		installedSkills: installedAfterInstallations
+			.filter((skill) => installedSkillIds.includes(skill.id))
+			.map(
+				(skill): InstalledExternalSkillResult => ({
+					id: skill.id,
+					description: skill.description,
+					sourceLabel: skill.sourceLabel,
+					global: skill.global,
+					project: skill.project,
+					skillFilePath: skill.skillFilePath
+				})
+			)
 	};
 }

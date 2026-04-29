@@ -1273,7 +1273,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "danger-full-access"
+      "defaultThreadSandbox": "danger-full-access",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_dad8a3fc-1fb7-48b8-ba63-b9751bdca986",
@@ -1286,7 +1288,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "workspace-write"
+      "defaultThreadSandbox": "workspace-write",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_592bf216-d452-4109-a18b-3255cca58eeb",
@@ -1299,7 +1303,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "workspace-write"
+      "defaultThreadSandbox": "workspace-write",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_cc8890b7-cb7d-4981-9fca-63f787a13895",
@@ -1312,7 +1318,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "danger-full-access"
+      "defaultThreadSandbox": "danger-full-access",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_0c1ad65b-9538-40f7-84b9-4108336470f5",
@@ -1325,7 +1333,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "danger-full-access"
+      "defaultThreadSandbox": "danger-full-access",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_28ceb721-f391-4ca2-a0e5-56c84bfbc71e",
@@ -1338,7 +1348,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "danger-full-access"
+      "defaultThreadSandbox": "danger-full-access",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_e133e364-2a20-4a99-98a9-6d414e0e9098",
@@ -1351,7 +1363,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "develop-spider-monkey",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "workspace-write"
+      "defaultThreadSandbox": "workspace-write",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_ac8530fd-dd43-4dd5-a5f0-b44e035f6f17",
@@ -1364,7 +1378,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": null
+      "defaultThreadSandbox": null,
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_7d69aa33-a7af-4aee-95ef-d31436ba2b48",
@@ -1377,7 +1393,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": "danger-full-access"
+      "defaultThreadSandbox": "danger-full-access",
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_1ef6aafb-6d6b-4384-943e-ecc0ea93c4b6",
@@ -1390,7 +1408,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": null
+      "defaultThreadSandbox": null,
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
@@ -1403,7 +1423,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": null
+      "defaultThreadSandbox": null,
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_dd367528-853b-4b02-b4dc-db7c8ba9c481",
@@ -1416,7 +1438,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": null
+      "defaultThreadSandbox": null,
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     },
     {
       "id": "project_textile_inocrowd",
@@ -1429,7 +1453,9 @@
       "defaultRepoUrl": "",
       "defaultBranch": "",
       "additionalWritableRoots": [],
-      "defaultThreadSandbox": null
+      "defaultThreadSandbox": null,
+      "skillAvailabilityPolicies": [],
+      "skillAvailabilityPolicyEvents": []
     }
   ],
   "goals": [
@@ -2310,6 +2336,82 @@
   ],
   "tasks": [
     {
+      "id": "task_854fc468-9408-4bc4-82ca-8e36a1cb13e4",
+      "title": "Ability to clear task creation form",
+      "summary": "If you started creating a task but then stop for some reason, the task form keeps reopening when you reload/navigate to the tasks page as if to finish creating the task that was started to be created. This is because of the functionality of keeping the form values the user has inputted in case the page reloads or something, so they don't lose work. But as a result, there's the bug I mentioned. So need a way to clear the form if needed, as well as ideally like understanding the design flaws that are causing this bug and address them, improve the design/implementation of the funcitonality.",
+      "successCriteria": "",
+      "readyCondition": "",
+      "expectedOutcome": "",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "area": "product",
+      "goalId": "",
+      "taskTemplateId": null,
+      "workflowId": null,
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "done",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": null,
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_e836d487-09af-4f76-b4f6-1d736d33955e",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": null,
+      "runCount": 1,
+      "latestRunId": "run_9932860e-28cf-4da5-b910-03220a8ad142",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-29T13:37:56.286Z",
+      "updatedAt": "2026-04-29T14:41:41.528Z"
+    },
+    {
+      "id": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "title": "Improve UI and organization/information architecture/management of agent skills in agent management system",
+      "summary": "It's difficult to determine what all agent skills are available/installed, and understanding which projects/threads/etc. they're available to be used with. So we need to research and analyze a better way to manage this within the app, to make it easier for users to manage which skills they have installed/available, and look at the skills and review them and such. Please use the appropriate agent skills and tools for this task.",
+      "successCriteria": "",
+      "readyCondition": "",
+      "expectedOutcome": "",
+      "projectId": "project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1",
+      "area": "product",
+      "goalId": "",
+      "taskTemplateId": null,
+      "workflowId": null,
+      "parentTaskId": null,
+      "delegationPacket": null,
+      "delegationAcceptance": null,
+      "priority": "medium",
+      "status": "in_progress",
+      "riskLevel": "medium",
+      "approvalMode": "none",
+      "requiredThreadSandbox": null,
+      "requiresReview": true,
+      "desiredRoleId": "",
+      "assigneeExecutionSurfaceId": null,
+      "agentThreadId": "thread_1b8e9c17-c657-49b1-8eee-df810d22a1da",
+      "requiredPromptSkillNames": [],
+      "requiredCapabilityNames": [],
+      "requiredToolNames": [],
+      "blockedReason": "",
+      "dependencyTaskIds": [],
+      "estimateHours": null,
+      "targetDate": null,
+      "runCount": 1,
+      "latestRunId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "artifactPath": "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output",
+      "attachments": [],
+      "createdAt": "2026-04-29T12:16:17.973Z",
+      "updatedAt": "2026-04-29T15:13:46.452Z"
+    },
+    {
       "id": "task_f63964ae-2c10-4b8b-965d-29aca32133c2",
       "title": "Fix the AMS operator API",
       "summary": "The AMS operator API has been having issues, threads keep having problems reaching it. Latest one:\r\n\r\nGaps:\r\n\r\nAMS task state could not be updated because the AMS operator API was unreachable.",
@@ -2673,6 +2775,30 @@
       "artifactPath": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault",
       "attachments": [
         {
+          "id": "attachment_093d7b70-a46e-4408-ad5c-86a8a8853fc1",
+          "name": "2026-04-29-Research-Memo-Speech-to-Text-Production-Operations.md",
+          "path": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault/task-attachments/task_fb644ec1-3bea-4a1c-8f89-69c653782c2c/attachment_093d7b70-a46e-4408-ad5c-86a8a8853fc1-2026-04-29-Research-Memo-Speech-to-Text-Production-Operations.md",
+          "contentType": "application/octet-stream",
+          "sizeBytes": 6225,
+          "attachedAt": "2026-04-29T14:50:52.789Z"
+        },
+        {
+          "id": "attachment_4a610aae-1416-431a-b640-ee49e4d12183",
+          "name": "2026-04-29-Research-Memo-Audio-Signal-Processing-Foundations-for-ASR.md",
+          "path": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault/task-attachments/task_fb644ec1-3bea-4a1c-8f89-69c653782c2c/attachment_4a610aae-1416-431a-b640-ee49e4d12183-2026-04-29-Research-Memo-Audio-Signal-Processing-Foundations-for-ASR.md",
+          "contentType": "application/octet-stream",
+          "sizeBytes": 5641,
+          "attachedAt": "2026-04-29T13:07:54.781Z"
+        },
+        {
+          "id": "attachment_8f788f88-15d3-422d-82d4-5667d3d1c9e0",
+          "name": "2026-04-29-Research-Memo-Audio-AI-Product-Integration-and-Governance.md",
+          "path": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault/task-attachments/task_fb644ec1-3bea-4a1c-8f89-69c653782c2c/attachment_8f788f88-15d3-422d-82d4-5667d3d1c9e0-2026-04-29-Research-Memo-Audio-AI-Product-Integration-and-Governance.md",
+          "contentType": "application/octet-stream",
+          "sizeBytes": 7549,
+          "attachedAt": "2026-04-29T13:01:13.074Z"
+        },
+        {
           "id": "attachment_37017d1c-b40c-4b82-a898-6788b72703ab",
           "name": "2026-04-24-Research-Memo-Audio-AI-Evaluation-and-Detection-Tasks.md",
           "path": "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault/task-attachments/task_fb644ec1-3bea-4a1c-8f89-69c653782c2c/attachment_37017d1c-b40c-4b82-a898-6788b72703ab-2026-04-24-Research-Memo-Audio-AI-Evaluation-and-Detection-Tasks.md",
@@ -2706,7 +2832,7 @@
         }
       ],
       "createdAt": "2026-04-24T22:37:02.460Z",
-      "updatedAt": "2026-04-25T00:33:04.427Z"
+      "updatedAt": "2026-04-29T14:51:04.811Z"
     },
     {
       "id": "task_397b6248-999b-40c9-8b64-347f7135faea",
@@ -2888,7 +3014,7 @@
         }
       ],
       "createdAt": "2026-04-24T14:27:58.170Z",
-      "updatedAt": "2026-04-25T00:33:10.677Z"
+      "updatedAt": "2026-04-29T14:22:33.248Z"
     },
     {
       "id": "task_e1423959-78f9-464a-a2b0-534ba08bf302",
@@ -5350,7 +5476,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
       "attachments": [],
       "createdAt": "2026-04-20T19:10:09.030Z",
-      "updatedAt": "2026-04-21T19:18:47.278Z"
+      "updatedAt": "2026-04-29T13:57:56.475Z"
     },
     {
       "id": "task_37685bb1-5a4f-48f7-9c5b-a58dd4605f51",
@@ -5625,7 +5751,7 @@
       "artifactPath": "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments",
       "attachments": [],
       "createdAt": "2026-04-20T19:10:09.031Z",
-      "updatedAt": "2026-04-21T19:18:17.884Z"
+      "updatedAt": "2026-04-29T13:57:35.725Z"
     },
     {
       "id": "task_53988cc6-19fd-48f9-aaf0-6ced681724df",
@@ -13955,7 +14081,7 @@
       "delegationPacket": null,
       "delegationAcceptance": null,
       "priority": "medium",
-      "status": "review",
+      "status": "done",
       "riskLevel": "low",
       "approvalMode": "none",
       "requiredThreadSandbox": null,
@@ -13977,7 +14103,7 @@
       "artifactPath": "/Users/colinfreed/Inbox",
       "attachments": [],
       "createdAt": "2026-04-15T18:08:00.000Z",
-      "updatedAt": "2026-04-28T16:03:17.810Z"
+      "updatedAt": "2026-04-29T12:21:37.252Z"
     },
     {
       "id": "task_kwipoo_investigate_things_offline_spec_failure",
@@ -14139,6 +14265,66 @@
     }
   ],
   "runs": [
+    {
+      "id": "run_9932860e-28cf-4da5-b910-03220a8ad142",
+      "taskId": "task_854fc468-9408-4bc4-82ca-8e36a1cb13e4",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_ea645675-4c46-4d1c-aa33-991f751c8b57",
+      "status": "completed",
+      "createdAt": "2026-04-29T13:37:56.608Z",
+      "updatedAt": "2026-04-29T14:41:41.559Z",
+      "startedAt": "2026-04-29T13:37:56.608Z",
+      "endedAt": "2026-04-29T13:43:47.454Z",
+      "threadId": null,
+      "agentThreadId": "thread_e836d487-09af-4f76-b4f6-1d736d33955e",
+      "promptDigest": "22d4e7a15675b279",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-29T13:42:42.132Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 1801783,
+      "cachedInputTokens": 1711744,
+      "outputTokens": 8647,
+      "uncachedInputTokens": 90039,
+      "usageCapturedAt": "2026-04-29T13:43:47.239Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
+    {
+      "id": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "executionSurfaceId": null,
+      "providerId": "provider_local_codex",
+      "agentThreadRunId": "run_9e9db9ea-75a6-44ca-9326-4dcb2a9836c1",
+      "status": "running",
+      "createdAt": "2026-04-29T12:16:18.363Z",
+      "updatedAt": "2026-04-29T15:13:46.452Z",
+      "startedAt": "2026-04-29T12:16:18.362Z",
+      "endedAt": null,
+      "threadId": null,
+      "agentThreadId": "thread_1b8e9c17-c657-49b1-8eee-df810d22a1da",
+      "promptDigest": "ccf790784c55ea28",
+      "artifactPaths": [
+        "/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/agent_output"
+      ],
+      "summary": "Linked work thread is actively running.",
+      "lastHeartbeatAt": "2026-04-29T15:13:46.452Z",
+      "errorSummary": "",
+      "usageSource": "provider_reported",
+      "inputTokens": 4157447,
+      "cachedInputTokens": 3902080,
+      "outputTokens": 12654,
+      "uncachedInputTokens": 255367,
+      "usageCapturedAt": "2026-04-29T12:22:51.154Z",
+      "estimatedCostUsd": null,
+      "costSource": "missing_pricing",
+      "pricingVersion": null
+    },
     {
       "id": "run_b2f8a167-f4f4-4433-b971-0fb53f7a054d",
       "taskId": "task_108ac5b8-bae4-487f-ae9c-304738c16531",
@@ -14423,9 +14609,9 @@
       "agentThreadRunId": "run_7cac09f6-609d-4dff-a196-956135bc8a02",
       "status": "completed",
       "createdAt": "2026-04-24T22:37:02.668Z",
-      "updatedAt": "2026-04-25T00:33:04.427Z",
+      "updatedAt": "2026-04-29T14:51:04.811Z",
       "startedAt": "2026-04-24T22:37:02.668Z",
-      "endedAt": "2026-04-25T00:33:04.427Z",
+      "endedAt": "2026-04-29T14:51:04.811Z",
       "threadId": null,
       "agentThreadId": "thread_d1382396-b7f8-4c6f-9fb9-165edb5b807a",
       "promptDigest": "0430a1bae22556df",
@@ -14433,7 +14619,7 @@
         "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-25T00:32:52.732Z",
+      "lastHeartbeatAt": "2026-04-29T14:50:52.428Z",
       "errorSummary": "",
       "usageSource": "provider_reported",
       "inputTokens": 482381,
@@ -14543,9 +14729,9 @@
       "agentThreadRunId": "run_e2437d4b-f842-444c-b1da-74b5b8ace9ae",
       "status": "completed",
       "createdAt": "2026-04-24T20:25:16.514Z",
-      "updatedAt": "2026-04-25T00:33:10.677Z",
+      "updatedAt": "2026-04-29T14:22:33.248Z",
       "startedAt": "2026-04-24T20:25:16.514Z",
-      "endedAt": "2026-04-25T00:33:10.677Z",
+      "endedAt": "2026-04-29T14:22:33.248Z",
       "threadId": "019dbfe3-eff4-7831-886a-e6e26e1b58be",
       "agentThreadId": "thread_40b11cf5-9fa4-4ace-9af7-9c32f86791f2",
       "promptDigest": "f9ef9d531d3e7450",
@@ -14553,7 +14739,7 @@
         "/Users/colinfreed/Library/Mobile Documents/iCloud~md~obsidian/Documents/My Vault"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-25T00:30:28.465Z",
+      "lastHeartbeatAt": "2026-04-29T14:20:45.472Z",
       "errorSummary": "",
       "usageSource": "provider_reported",
       "inputTokens": 14088754,
@@ -14574,17 +14760,17 @@
       "agentThreadRunId": "run_74ad5f18-62d2-4f23-bf0f-b253f78d04eb",
       "status": "completed",
       "createdAt": "2026-04-24T20:00:06.781Z",
-      "updatedAt": "2026-04-28T16:03:17.810Z",
+      "updatedAt": "2026-04-29T12:21:37.277Z",
       "startedAt": "2026-04-24T20:00:06.781Z",
-      "endedAt": "2026-04-28T16:03:17.810Z",
+      "endedAt": "2026-04-29T12:17:15.724Z",
       "threadId": null,
       "agentThreadId": "thread_044d9d09-558d-4136-8b5c-8f8cf86760bf",
       "promptDigest": "0593e6d42145952f",
       "artifactPaths": [
         "/Users/colinfreed/Inbox"
       ],
-      "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-28T16:02:46.080Z",
+      "summary": "Task approved and completed from the thread detail page.",
+      "lastHeartbeatAt": "2026-04-29T12:16:54.666Z",
       "errorSummary": "",
       "usageSource": "provider_reported",
       "inputTokens": 481373,
@@ -16922,9 +17108,9 @@
       "agentThreadRunId": "run_04b69a95-a9cd-4ad6-8344-a68dea9b70a2",
       "status": "completed",
       "createdAt": "2026-04-21T00:23:31.930Z",
-      "updatedAt": "2026-04-21T19:18:17.884Z",
+      "updatedAt": "2026-04-29T13:57:35.725Z",
       "startedAt": "2026-04-21T00:23:31.930Z",
-      "endedAt": "2026-04-21T19:18:17.884Z",
+      "endedAt": "2026-04-29T13:57:35.725Z",
       "threadId": null,
       "agentThreadId": "thread_21f6d718-ef81-4a40-af7b-ae33bea4e84d",
       "promptDigest": "784b4ff1176a8420",
@@ -16932,7 +17118,7 @@
         "/Users/colinfreed/Projects/AdventureWare/Products/Kwipoo/agent_output/task-attachments"
       ],
       "summary": "Task run finished and is ready for review.",
-      "lastHeartbeatAt": "2026-04-21T19:16:27.597Z",
+      "lastHeartbeatAt": "2026-04-29T13:57:12.322Z",
       "errorSummary": "",
       "usageSource": "provider_reported",
       "inputTokens": 3929216,
@@ -23604,6 +23790,102 @@
   ],
   "reviews": [
     {
+      "id": "review_8d6fc3cb-06f3-4c6d-bf91-df32c2221e65",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "status": "open",
+      "createdAt": "2026-04-29T15:13:29.014Z",
+      "updatedAt": "2026-04-29T15:13:29.014Z",
+      "resolvedAt": null,
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Ready for review after the follow-up skill-management polish: availability history view, external install result review, duplicate package conflict handling, loading/empty import states, improved skill detail guard, and focused server/browser tests."
+    },
+    {
+      "id": "review_a6816929-5da4-4882-8217-26106ed2ff67",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "status": "open",
+      "createdAt": "2026-04-29T14:50:52.905Z",
+      "updatedAt": "2026-04-29T14:50:52.905Z",
+      "resolvedAt": null,
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Ready for review after continued expansion. Added a speech-to-text production operations memo plus six notes covering transcription job queues, webhooks, transcript artifact modeling, observability, correction workflows, and cost controls; expanded pipeline, governance, evaluation, latency, cost, and observability notes."
+    },
+    {
+      "id": "review_5e9f677c-704d-45cf-afe1-a3fba5664f60",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "status": "dismissed",
+      "createdAt": "2026-04-29T14:39:03.232Z",
+      "updatedAt": "2026-04-29T14:47:18.755Z",
+      "resolvedAt": "2026-04-29T14:47:18.755Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_69193576-f1e8-455e-a1a1-ed1a42f73ea7",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "status": "dismissed",
+      "createdAt": "2026-04-29T14:15:16.023Z",
+      "updatedAt": "2026-04-29T14:17:09.650Z",
+      "resolvedAt": "2026-04-29T14:17:09.650Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_d2065c2c-3d7a-4723-b396-ee3002940d79",
+      "taskId": "task_854fc468-9408-4bc4-82ca-8e36a1cb13e4",
+      "runId": "run_9932860e-28cf-4da5-b910-03220a8ad142",
+      "status": "approved",
+      "createdAt": "2026-04-29T13:46:20.015Z",
+      "updatedAt": "2026-04-29T14:41:41.528Z",
+      "resolvedAt": "2026-04-29T14:41:41.528Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Approved from the thread detail page while completing the task."
+    },
+    {
+      "id": "review_2ed720e0-30e5-4fa5-a5eb-c7ba7856fd75",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "status": "dismissed",
+      "createdAt": "2026-04-29T13:07:54.941Z",
+      "updatedAt": "2026-04-29T14:47:44.950Z",
+      "resolvedAt": "2026-04-29T14:47:44.950Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_68d57228-d068-4d8e-b9d9-109a07b9878a",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "status": "dismissed",
+      "createdAt": "2026-04-29T13:01:13.226Z",
+      "updatedAt": "2026-04-29T13:05:12.959Z",
+      "resolvedAt": "2026-04-29T13:05:12.959Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
+      "id": "review_31ec2d53-394a-4342-8c2b-9008ac708119",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "status": "dismissed",
+      "createdAt": "2026-04-29T12:35:22.789Z",
+      "updatedAt": "2026-04-29T12:57:12.282Z",
+      "resolvedAt": "2026-04-29T12:57:12.282Z",
+      "requestedByExecutionSurfaceId": null,
+      "reviewerExecutionSurfaceId": null,
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
+    },
+    {
       "id": "review_02b2dead-c0c3-4ed5-bc02-b8036d9af723",
       "taskId": "task_f63964ae-2c10-4b8b-965d-29aca32133c2",
       "runId": "run_5afa4945-c632-4a4c-919f-d821b33bcfff",
@@ -23835,13 +24117,13 @@
       "id": "review_4c1349d2-5e09-45b5-a4a7-07115ae6d2d0",
       "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
       "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
-      "status": "open",
+      "status": "dismissed",
       "createdAt": "2026-04-25T00:32:53.381Z",
-      "updatedAt": "2026-04-25T00:32:53.381Z",
-      "resolvedAt": null,
+      "updatedAt": "2026-04-29T12:58:06.340Z",
+      "resolvedAt": "2026-04-29T12:58:06.340Z",
       "requestedByExecutionSurfaceId": null,
       "reviewerExecutionSurfaceId": null,
-      "summary": "Ready for review after continued expansion. Added a fourth research memo on audio AI evaluation and detection tasks plus six notes covering audio AI evaluation, speech datasets, speaker recognition, keyword spotting, sound event detection, and audio segmentation; linked them into the existing speech/audio branch."
+      "summary": "Dismissed after follow-up work was queued in the linked thread."
     },
     {
       "id": "review_ef16cad6-8d8e-460c-8268-b2c5a4b85d0d",
@@ -27359,6 +27641,110 @@
     }
   ],
   "decisions": [
+    {
+      "id": "decision_06c513f4-31d2-4127-957a-25317c107fd7",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "goalId": null,
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "reviewId": "review_8d6fc3cb-06f3-4c6d-bf91-df32c2221e65",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review after the follow-up skill-management polish: availability history view, external install result review, duplicate package conflict handling, loading/empty import states, improved skill detail guard, and focused server/browser tests.",
+      "createdAt": "2026-04-29T15:13:28.989Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_0251296a-fb3e-4fae-ac2d-56ce0066e315",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "goalId": null,
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "reviewId": "review_a6816929-5da4-4882-8217-26106ed2ff67",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review after continued expansion. Added a speech-to-text production operations memo plus six notes covering transcription job queues, webhooks, transcript artifact modeling, observability, correction workflows, and cost controls; expanded pipeline, governance, evaluation, latency, cost, and observability notes.",
+      "createdAt": "2026-04-29T14:50:52.873Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_1356ebf8-1b16-4081-92ac-cafe0ff67f8a",
+      "taskId": "task_854fc468-9408-4bc4-82ca-8e36a1cb13e4",
+      "goalId": null,
+      "runId": "run_9932860e-28cf-4da5-b910-03220a8ad142",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-29T14:41:41.528Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_1737657f-d614-4cf0-8f6d-29891146dc19",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "goalId": null,
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "reviewId": "review_5e9f677c-704d-45cf-afe1-a3fba5664f60",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review after implementing the remaining skill management suggestions: external skill import/install UI, shared availability policy handling with audit events, cleanup of skill management from Access, improved rendered SKILL.md display, and route/component coverage.",
+      "createdAt": "2026-04-29T14:39:03.201Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_375a483e-1284-4fc0-9e52-dab496b80ad1",
+      "taskId": "task_05a72ff5-9890-468a-914d-65da1d718014",
+      "goalId": null,
+      "runId": "run_1fef9543-053a-4a9f-8958-9945810a70ef",
+      "reviewId": "review_69193576-f1e8-455e-a1a1-ed1a42f73ea7",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review. Implemented dedicated Skills server load/actions, explicit per-project skill availability policies, safer skill detail editing, compact skill list cards, and browser-verified list/detail layouts.",
+      "createdAt": "2026-04-29T14:15:15.993Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_5264d93a-97f7-4638-9e77-13e48a2ea6bf",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "goalId": null,
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "reviewId": "review_2ed720e0-30e5-4fa5-a5eb-c7ba7856fd75",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review after continued expansion. Added an audio signal processing foundations memo plus seven notes covering waveform, digital sampling, spectrograms, STFT, mel spectrograms, MFCCs, and audio feature extraction; linked them into ASR, preprocessing, formats, and Speech/audio AI notes.",
+      "createdAt": "2026-04-29T13:07:54.907Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_0ef01ed9-d5c9-4870-b98c-3464378ffee9",
+      "taskId": "task_fb644ec1-3bea-4a1c-8f89-69c653782c2c",
+      "goalId": null,
+      "runId": "run_58a3e7e7-0692-4f64-8e1e-ad9ad559a873",
+      "reviewId": "review_68d57228-d068-4d8e-b9d9-109a07b9878a",
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_plan_updated",
+      "summary": "Ready for review after continued expansion. Added an audio AI product integration and governance memo plus six notes covering audio capture, browser audio capture, telephony transcription, transcription formats, audio data governance, and caption accessibility; linked these into the existing speech/audio branch and pipeline notes.",
+      "createdAt": "2026-04-29T13:01:13.184Z",
+      "decidedByExecutionSurfaceId": null
+    },
+    {
+      "id": "decision_bb90bf04-509e-4ce3-abf5-94957b4ceb8b",
+      "taskId": "task_capture_durable_learnings_from_recent_work",
+      "goalId": null,
+      "runId": "run_e763a7c1-67ce-4417-a0ab-ae05a869336b",
+      "reviewId": null,
+      "approvalId": null,
+      "planningSessionId": null,
+      "decisionType": "task_completed",
+      "summary": "Approved the thread response and completed the task from the thread detail page.",
+      "createdAt": "2026-04-29T12:21:37.252Z",
+      "decidedByExecutionSurfaceId": null
+    },
     {
       "id": "decision_e35c5667-69ff-4e57-9d48-034bd0da0bb2",
       "taskId": "task_f63964ae-2c10-4b8b-965d-29aca32133c2",

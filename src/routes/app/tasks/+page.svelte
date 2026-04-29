@@ -13,7 +13,12 @@
 		getHiddenCollapsedRowCount,
 		getHiddenTaskViewNotice
 	} from '$lib/client/collection-visibility';
-	import { clearFormDraft, readFormDraft, writeFormDraft } from '$lib/client/form-drafts';
+	import {
+		clearFormDraft,
+		isFormDraftEmpty,
+		readFormDraft,
+		writeFormDraft
+	} from '$lib/client/form-drafts';
 	import { agentThreadStore } from '$lib/client/agent-thread-store';
 	import { buildTaskGuidanceAction } from '$lib/agent-guidance-links';
 	import {
@@ -102,6 +107,38 @@
 		label: string;
 		title: string;
 		variant: 'success' | 'warning';
+	};
+	type CreateTaskDraft = {
+		open?: boolean;
+		projectId?: string;
+		parentTaskId?: string;
+		delegationObjective?: string;
+		delegationInputContext?: string;
+		delegationExpectedDeliverable?: string;
+		delegationDoneCondition?: string;
+		delegationIntegrationNotes?: string;
+		name?: string;
+		instructions?: string;
+		successCriteria?: string;
+		readyCondition?: string;
+		expectedOutcome?: string;
+		assigneeExecutionSurfaceId?: string;
+		targetDate?: string;
+		goalId?: string;
+		taskTemplateId?: string;
+		workflowId?: string;
+		area?: string;
+		priority?: string;
+		riskLevel?: string;
+		approvalMode?: string;
+		requiredThreadSandbox?: string;
+		requiresReview?: boolean;
+		desiredRoleId?: string;
+		blockedReason?: string;
+		dependencyTaskIds?: string[];
+		requiredPromptSkillNames?: string;
+		requiredCapabilityNames?: string;
+		requiredToolNames?: string;
 	};
 
 	let query = $state('');
@@ -1902,42 +1939,7 @@
 		isCreateModalOpen = true;
 	}
 
-	function hasCreateTaskDraftContent(
-		draft:
-			| {
-					projectId?: string;
-					parentTaskId?: string;
-					delegationObjective?: string;
-					delegationInputContext?: string;
-					delegationExpectedDeliverable?: string;
-					delegationDoneCondition?: string;
-					delegationIntegrationNotes?: string;
-					name?: string;
-					instructions?: string;
-					successCriteria?: string;
-					readyCondition?: string;
-					expectedOutcome?: string;
-					assigneeExecutionSurfaceId?: string;
-					targetDate?: string;
-					goalId?: string;
-					taskTemplateId?: string;
-					workflowId?: string;
-					area?: string;
-					priority?: string;
-					riskLevel?: string;
-					approvalMode?: string;
-					requiredThreadSandbox?: string;
-					requiresReview?: boolean;
-					desiredRoleId?: string;
-					blockedReason?: string;
-					dependencyTaskIds?: string[];
-					requiredPromptSkillNames?: string;
-					requiredCapabilityNames?: string;
-					requiredToolNames?: string;
-			  }
-			| null
-			| undefined
-	) {
+	function hasCreateTaskDraftContent(draft: CreateTaskDraft | null | undefined) {
 		if (!draft) {
 			return false;
 		}
@@ -2075,6 +2077,20 @@
 		createTaskFlowMode = 'quick';
 	}
 
+	function resetCreateTaskForm() {
+		createTaskProjectId = data.projects.length === 1 ? (data.projects[0]?.id ?? '') : '';
+		createTaskAssigneeExecutionSurfaceId = '';
+		createTaskName = '';
+		createTaskInstructions = '';
+		resetCreateTaskMetadata();
+		clearPendingCreateAttachments();
+	}
+
+	function clearCreateTaskDraft() {
+		clearFormDraft(CREATE_TASK_DRAFT_KEY);
+		resetCreateTaskForm();
+	}
+
 	$effect(() => {
 		if (form?.formContext === 'taskCreate') {
 			createTaskProjectId = createTaskFormValues.projectId;
@@ -2181,37 +2197,7 @@
 			return cleanup;
 		}
 
-		const savedDraft = readFormDraft<{
-			projectId: string;
-			parentTaskId: string;
-			delegationObjective: string;
-			delegationInputContext: string;
-			delegationExpectedDeliverable: string;
-			delegationDoneCondition: string;
-			delegationIntegrationNotes: string;
-			name: string;
-			instructions: string;
-			successCriteria: string;
-			readyCondition: string;
-			expectedOutcome: string;
-			assigneeExecutionSurfaceId: string;
-			targetDate: string;
-			goalId: string;
-			taskTemplateId: string;
-			workflowId: string;
-			area: string;
-			priority: string;
-			riskLevel: string;
-			approvalMode: string;
-			requiredThreadSandbox: string;
-			requiresReview: boolean;
-			desiredRoleId: string;
-			blockedReason: string;
-			dependencyTaskIds: string[];
-			requiredPromptSkillNames: string;
-			requiredCapabilityNames: string;
-			requiredToolNames: string;
-		}>(CREATE_TASK_DRAFT_KEY);
+		const savedDraft = readFormDraft<CreateTaskDraft>(CREATE_TASK_DRAFT_KEY);
 
 		if (savedDraft && hasCreateTaskDraftContent(savedDraft)) {
 			createTaskProjectId = savedDraft.projectId ?? '';
@@ -2278,7 +2264,7 @@
 				blockedReason: createTaskBlockedReason,
 				dependencyTaskIds: createTaskDependencyTaskIds
 			});
-			isCreateModalOpen = true;
+			isCreateModalOpen = savedDraft.open === true;
 		} else if (savedDraft) {
 			clearFormDraft(CREATE_TASK_DRAFT_KEY);
 		}
@@ -2295,7 +2281,7 @@
 
 		const defaultProjectId = data.projects.length === 1 ? (data.projects[0]?.id ?? '') : '';
 
-		writeFormDraft(CREATE_TASK_DRAFT_KEY, {
+		const draftValues = {
 			projectId: createTaskProjectId === defaultProjectId ? '' : createTaskProjectId,
 			parentTaskId: createTaskParentTaskId,
 			delegationObjective: createTaskDelegationObjective,
@@ -2325,6 +2311,16 @@
 			requiredPromptSkillNames: createTaskRequiredPromptSkillNames,
 			requiredCapabilityNames: createTaskRequiredCapabilityNames,
 			requiredToolNames: createTaskRequiredToolNames
+		};
+
+		if (isFormDraftEmpty(draftValues)) {
+			clearFormDraft(CREATE_TASK_DRAFT_KEY);
+			return;
+		}
+
+		writeFormDraft(CREATE_TASK_DRAFT_KEY, {
+			open: isCreateModalOpen ? true : false,
+			...draftValues
 		});
 	});
 </script>
@@ -4707,6 +4703,13 @@
 									Create and run
 								</button>
 							{/if}
+							<button
+								class="btn border border-slate-700 font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white"
+								type="button"
+								onclick={clearCreateTaskDraft}
+							>
+								Clear form
+							</button>
 							<p class="text-sm text-slate-400">
 								{createTaskFlowMode === 'quick'
 									? createTaskUsesWorkflowTemplate

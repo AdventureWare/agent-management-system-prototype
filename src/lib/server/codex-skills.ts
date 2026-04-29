@@ -13,6 +13,13 @@ export type InstalledCodexSkill = {
 type SkillMetadata = {
 	id: string;
 	description: string;
+	skillDirectory: string;
+	skillFilePath: string;
+};
+
+export type InstalledCodexSkillInstallation = InstalledCodexSkill & {
+	skillDirectory: string;
+	skillFilePath: string;
 };
 
 export type CreatedProjectCodexSkill = {
@@ -77,7 +84,9 @@ function readSkillMetadata(skillFilePath: string) {
 		const frontmatter = frontmatterMatch[1] ?? '';
 		return {
 			id: parseYamlScalar(frontmatter, 'name') || basename(resolve(skillFilePath, '..')),
-			description: parseYamlScalar(frontmatter, 'description')
+			description: parseYamlScalar(frontmatter, 'description'),
+			skillDirectory: resolve(skillFilePath, '..'),
+			skillFilePath
 		};
 	} catch {
 		return null;
@@ -580,4 +589,65 @@ export function listInstalledCodexSkills(
 	}
 
 	return [...skillMap.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function listInstalledCodexSkillInstallations(
+	cwd: string | null | undefined,
+	codexHome = process.env.CODEX_HOME?.trim() || resolve(homedir(), '.codex')
+) {
+	const sources = [
+		{
+			global: false,
+			project: Boolean(cwd),
+			root: cwd ? resolve(cwd, '.agents') : ''
+		},
+		{
+			global: false,
+			project: Boolean(cwd),
+			root: cwd ? resolve(cwd, '.agents', 'skills') : ''
+		},
+		{
+			global: false,
+			project: Boolean(cwd),
+			root: cwd ? resolve(cwd, 'agents') : ''
+		},
+		{
+			global: false,
+			project: Boolean(cwd),
+			root: cwd ? resolve(cwd, 'agents', 'skills') : ''
+		},
+		{
+			global: true,
+			project: false,
+			root: resolve(codexHome, 'skills')
+		}
+	];
+	const installations: InstalledCodexSkillInstallation[] = [];
+	const seenFilePaths = new Set<string>();
+
+	for (const source of sources) {
+		for (const metadata of listSkillMetadata(source.root)) {
+			if (seenFilePaths.has(metadata.skillFilePath)) {
+				continue;
+			}
+
+			seenFilePaths.add(metadata.skillFilePath);
+			installations.push({
+				id: metadata.id,
+				description: metadata.description,
+				global: source.global,
+				project: source.project,
+				sourceLabel: source.project ? 'Project' : 'Global',
+				skillDirectory: metadata.skillDirectory,
+				skillFilePath: metadata.skillFilePath
+			});
+		}
+	}
+
+	return installations.sort(
+		(left, right) =>
+			left.id.localeCompare(right.id) ||
+			left.sourceLabel.localeCompare(right.sourceLabel) ||
+			left.skillFilePath.localeCompare(right.skillFilePath)
+	);
 }

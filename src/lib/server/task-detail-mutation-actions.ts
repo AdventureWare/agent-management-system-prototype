@@ -64,12 +64,13 @@ export async function attachTaskFileFromPath(input: {
 	}
 
 	const now = new Date().toISOString();
+	const attachments = [nextAttachment, ...task.attachments];
 
 	const updatedTaskAfterAttach = await updateTaskRecord({
 		taskId: input.taskId,
 		update: (candidate) => ({
 			...candidate,
-			attachments: [nextAttachment, ...candidate.attachments],
+			attachments,
 			updatedAt: now
 		})
 	});
@@ -83,7 +84,9 @@ export async function attachTaskFileFromPath(input: {
 		successAction: 'attachTaskFile' as const,
 		taskId: input.taskId,
 		attachmentId: nextAttachment.id,
-		attachment: nextAttachment
+		attachment: nextAttachment,
+		attachments,
+		attachmentCount: attachments.length
 	};
 }
 
@@ -116,12 +119,13 @@ export async function attachTaskFile(taskId: string, form: FormData) {
 		uploads: [upload]
 	});
 	const now = new Date().toISOString();
+	const attachments = [nextAttachment, ...task.attachments];
 
 	const updatedTaskAfterAttach = await updateTaskRecord({
 		taskId,
 		update: (candidate) => ({
 			...candidate,
-			attachments: [nextAttachment, ...candidate.attachments],
+			attachments,
 			updatedAt: now
 		})
 	});
@@ -135,7 +139,9 @@ export async function attachTaskFile(taskId: string, form: FormData) {
 		successAction: 'attachTaskFile' as const,
 		taskId,
 		attachmentId: nextAttachment.id,
-		attachment: nextAttachment
+		attachment: nextAttachment,
+		attachments,
+		attachmentCount: attachments.length
 	};
 }
 
@@ -161,12 +167,13 @@ export async function removeTaskAttachmentById(taskId: string, attachmentId: str
 	}
 
 	const now = new Date().toISOString();
+	const attachments = task.attachments.filter((attachment) => attachment.id !== attachmentId);
 
 	const updatedTaskAfterRemoval = await updateTaskRecord({
 		taskId,
 		update: (candidate) => ({
 			...candidate,
-			attachments: candidate.attachments.filter((attachment) => attachment.id !== attachmentId),
+			attachments,
 			updatedAt: now
 		})
 	});
@@ -179,7 +186,9 @@ export async function removeTaskAttachmentById(taskId: string, attachmentId: str
 		ok: true,
 		successAction: 'removeTaskAttachment' as const,
 		taskId,
-		attachmentId
+		attachmentId,
+		attachments,
+		attachmentCount: attachments.length
 	};
 }
 

@@ -434,7 +434,34 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		cli: 'node scripts/ams-cli.mjs task attach [taskId] --json <payload> | --file <path>',
 		method: 'POST',
 		path: '/api/tasks/:taskId/attachments',
-		payloadMode: 'json_or_file'
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a managed run produced an artifact that should be preserved on the task before review, approval, or handoff.'
+		],
+		readAfter: ['task:get'],
+		nextCommands: ['task:get', 'task:request-review', 'intent:prepare_task_for_review'],
+		examples: [
+			{
+				title: 'Attach a generated artifact and read back the attachment count',
+				input: {
+					taskId: 'task_123',
+					payload: {
+						path: '/absolute/path/to/report.md'
+					}
+				},
+				output: {
+					taskId: 'task_123',
+					attachmentId: 'attachment_123',
+					attachmentCount: 1,
+					attachments: [
+						{
+							id: 'attachment_123',
+							name: 'report.md'
+						}
+					]
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',
@@ -443,7 +470,25 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		cli: 'node scripts/ams-cli.mjs task remove-attachment <taskId> <attachmentId>',
 		method: 'DELETE',
 		path: '/api/tasks/:taskId/attachments/:attachmentId',
-		payloadMode: 'none'
+		payloadMode: 'none',
+		whenToUse: ['Use when a task attachment points to the wrong artifact or should be detached.'],
+		readAfter: ['task:get'],
+		nextCommands: ['task:get', 'task:attach'],
+		examples: [
+			{
+				title: 'Remove an obsolete attachment and read back the remaining attachment count',
+				input: {
+					taskId: 'task_123',
+					attachmentId: 'attachment_123'
+				},
+				output: {
+					taskId: 'task_123',
+					attachmentId: 'attachment_123',
+					attachmentCount: 0,
+					attachments: []
+				}
+			}
+		]
 	},
 	{
 		resource: 'task',

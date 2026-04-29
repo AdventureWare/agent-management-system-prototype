@@ -81,6 +81,7 @@ export const WORKFLOW_STATUS_OPTIONS = [
 	'done',
 	'canceled'
 ] as const;
+export const PROJECT_SKILL_AVAILABILITY_OPTIONS = ['default', 'enabled', 'disabled'] as const;
 
 export type Area = (typeof AREA_OPTIONS)[number];
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
@@ -101,6 +102,7 @@ export type PlanningConfidence = (typeof PLANNING_CONFIDENCE_OPTIONS)[number];
 export type CatalogLifecycleStatus = (typeof CATALOG_LIFECYCLE_STATUS_OPTIONS)[number];
 export type RoleFamily = (typeof ROLE_FAMILY_OPTIONS)[number];
 export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
+export type ProjectSkillAvailability = (typeof PROJECT_SKILL_AVAILABILITY_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
 
@@ -464,6 +466,23 @@ export type Project = {
 	defaultBranch: string;
 	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
+	skillAvailabilityPolicies?: ProjectSkillAvailabilityPolicy[];
+	skillAvailabilityPolicyEvents?: ProjectSkillAvailabilityPolicyEvent[];
+};
+
+export type ProjectSkillAvailabilityPolicy = {
+	skillId: string;
+	availability: ProjectSkillAvailability;
+	notes: string;
+	updatedAt: string;
+};
+
+export type ProjectSkillAvailabilityPolicyEvent = {
+	id: string;
+	skillId: string;
+	availability: ProjectSkillAvailability;
+	notes: string;
+	changedAt: string;
 };
 
 export type ExecutionSurface = {

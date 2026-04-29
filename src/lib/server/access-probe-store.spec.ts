@@ -15,6 +15,7 @@ describe('access probe store', () => {
 				},
 				executionCatalog: {
 					projectSkills: [],
+					skills: [],
 					capabilities: [],
 					tools: []
 				},

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base, resolve } from '$app/paths';
+	import { resolveMaybeInternalPath } from '$lib/app-paths';
 	import {
 		artifactDownloadHref,
 		artifactFileHref,
@@ -571,7 +572,7 @@
 				label: artifact.label,
 				detail: artifact.sourceLabel,
 				path: artifact.path,
-				href: artifact.href ? resolve(artifact.href) : null,
+				href: artifact.href ? resolveMaybeInternalPath(artifact.href) : null,
 				defaultSelected: false
 			});
 		}

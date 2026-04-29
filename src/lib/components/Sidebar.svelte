@@ -3,6 +3,7 @@
 	import { appNavigationSections, type AppNavigationLinkId } from '$lib/app-navigation';
 	import {
 		ActivityIcon,
+		BookOpenIcon,
 		BriefcaseBusinessIcon,
 		CalendarRangeIcon,
 		CpuIcon,
@@ -28,6 +29,7 @@
 	const iconByLinkId: Record<AppNavigationLinkId, typeof LayoutDashboardIcon> = {
 		governance: GavelIcon,
 		access: ShieldCheckIcon,
+		skills: BookOpenIcon,
 		tasks: ListTodoIcon,
 		threads: MessagesSquareIcon,
 		runs: ActivityIcon,

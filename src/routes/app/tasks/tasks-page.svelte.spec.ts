@@ -1024,6 +1024,7 @@ describe('/app/tasks/+page.svelte', () => {
 		window.localStorage.setItem(
 			'ams:create-task',
 			JSON.stringify({
+				open: true,
 				projectId: 'project_1',
 				name: 'Keep my draft',
 				instructions: 'Persist this between reloads.',
@@ -1084,6 +1085,61 @@ describe('/app/tasks/+page.svelte', () => {
 			)?.value
 		).toBe('Waiting on review environment access.');
 		await expect.element(page.getByText('Existing dependency task')).toBeInTheDocument();
+	});
+
+	it('keeps a closed saved create-task draft from reopening after reload', async () => {
+		window.localStorage.setItem(
+			'ams:create-task',
+			JSON.stringify({
+				open: false,
+				projectId: 'project_1',
+				name: 'Closed draft',
+				instructions: 'Keep this around without forcing the dialog open.'
+			})
+		);
+
+		renderPage();
+
+		await expect.element(page.getByRole('dialog', { name: 'Quick task' })).not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Quick task' }).click();
+
+		const nameInput = document.querySelector(
+			'form[action="?/createTask"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const instructionsInput = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(nameInput?.value).toBe('Closed draft');
+		expect(instructionsInput?.value).toBe('Keep this around without forcing the dialog open.');
+	});
+
+	it('clears the visible create-task form and saved draft on request', async () => {
+		window.localStorage.setItem(
+			'ams:create-task',
+			JSON.stringify({
+				open: true,
+				projectId: 'project_1',
+				name: 'Draft to discard',
+				instructions: 'This should be removed.'
+			})
+		);
+
+		renderPage();
+
+		await page.getByRole('button', { name: 'Clear form' }).click();
+
+		const nameInput = document.querySelector(
+			'form[action="?/createTask"] input[name="name"]'
+		) as HTMLInputElement | null;
+		const instructionsInput = document.querySelector(
+			'form[action="?/createTask"] textarea[name="instructions"]'
+		) as HTMLTextAreaElement | null;
+
+		expect(nameInput?.value).toBe('');
+		expect(instructionsInput?.value).toBe('');
+		expect(window.localStorage.getItem('ams:create-task')).toBeNull();
 	});
 
 	it('opens the create dialog from a prefilled deep link', async () => {

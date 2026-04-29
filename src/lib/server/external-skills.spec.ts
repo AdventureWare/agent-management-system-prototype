@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseExternalSkillSearchOutput, sanitizeExternalSkillsOutput } from './external-skills';
+import {
+	inferExternalSkillIdFromPackageSpec,
+	parseExternalSkillSearchOutput,
+	sanitizeExternalSkillsOutput
+} from './external-skills';
 
 describe('parseExternalSkillSearchOutput', () => {
 	it('extracts package specs and URLs from skills CLI output', () => {
@@ -54,5 +58,17 @@ describe('sanitizeExternalSkillsOutput', () => {
 				'\u001b[38;5;145mvercel-labs/agent-skills@docs-writer\u001b[0m 261 installs'
 			)
 		).toBe('vercel-labs/agent-skills@docs-writer 261 installs');
+	});
+});
+
+describe('inferExternalSkillIdFromPackageSpec', () => {
+	it('infers the requested skill id from an external package spec', () => {
+		expect(
+			inferExternalSkillIdFromPackageSpec('vercel-labs/agent-skills@vercel-react-best-practices')
+		).toBe('vercel-react-best-practices');
+	});
+
+	it('returns null when the package spec does not name a skill segment', () => {
+		expect(inferExternalSkillIdFromPackageSpec('vercel-labs/agent-skills')).toBeNull();
 	});
 });

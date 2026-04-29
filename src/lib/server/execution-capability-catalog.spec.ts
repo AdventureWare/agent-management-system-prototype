@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildExecutionCapabilityCatalog } from './execution-capability-catalog';
 
 describe('buildExecutionCapabilityCatalog', () => {
@@ -171,5 +174,74 @@ describe('buildExecutionCapabilityCatalog', () => {
 				onlineExecutionSurfaceCount: 1
 			}
 		]);
+	});
+
+	it('carries explicit project skill availability policies into the skill catalog', () => {
+		const projectRoot = mkdtempSync(join(tmpdir(), 'ams-skill-catalog-'));
+		const skillDir = join(projectRoot, '.agents', 'skills', 'docs-writer');
+		mkdirSync(skillDir, { recursive: true });
+		writeFileSync(
+			join(skillDir, 'SKILL.md'),
+			[
+				'---',
+				'name: docs-writer',
+				'description: Write project docs',
+				'---',
+				'',
+				'## When to use',
+				'',
+				'- Use this skill for docs.',
+				'',
+				'## Workflow',
+				'',
+				'1. Read source material.'
+			].join('\n')
+		);
+
+		const catalog = buildExecutionCapabilityCatalog({
+			projects: [
+				{
+					id: 'project_app',
+					name: 'App',
+					summary: '',
+					projectRootFolder: projectRoot,
+					defaultArtifactRoot: '',
+					defaultRepoPath: '',
+					defaultRepoUrl: '',
+					defaultBranch: 'main',
+					skillAvailabilityPolicies: [
+						{
+							skillId: 'docs-writer',
+							availability: 'disabled',
+							notes: 'Use only after docs cleanup.',
+							updatedAt: '2026-04-29T00:00:00.000Z'
+						}
+					]
+				}
+			],
+			providers: [],
+			executionSurfaces: [],
+			tasks: []
+		});
+
+		const projectSkill = catalog.projectSkills[0]?.installedSkills.find(
+			(skill) => skill.id === 'docs-writer'
+		);
+		const catalogSkillProject = catalog.skills
+			.find((skill) => skill.id === 'docs-writer')
+			?.projects.find((project) => project.projectId === 'project_app');
+
+		expect(projectSkill).toMatchObject({
+			id: 'docs-writer',
+			availability: 'disabled',
+			availabilityLabel: 'Disabled for project',
+			availabilityNotes: 'Use only after docs cleanup.'
+		});
+		expect(catalogSkillProject).toMatchObject({
+			projectId: 'project_app',
+			availability: 'disabled',
+			availabilityLabel: 'Disabled for project',
+			availabilityNotes: 'Use only after docs cleanup.'
+		});
 	});
 });

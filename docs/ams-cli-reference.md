@@ -6,6 +6,7 @@ If you are in a managed run launched from another project, use the helper CLI pa
 ## Discovery
 
 ```bash
+node scripts/ams-cli.mjs doctor
 node scripts/ams-cli.mjs manifest
 node scripts/ams-cli.mjs manifest --resource task
 node scripts/ams-cli.mjs context current
@@ -33,6 +34,10 @@ node scripts/ams-cli.mjs task get <taskId>
 
 The same machine-readable manifest is available over the bearer-token API at `/api/agent-capabilities`.
 The current-context helper is available at `/api/agent-context/current`.
+Run `node scripts/ams-cli.mjs doctor` or `npm run app:doctor` before a managed run depends on
+AMS helper commands. The doctor reports operator API reachability, token availability, manifest
+access, managed-run context resolution when environment ids are present, and concrete next commands
+such as `npm run app:server:start`.
 
 `node scripts/ams-cli.mjs context current` automatically falls back to managed-run env vars when present:
 
@@ -115,6 +120,10 @@ node scripts/ams-cli.mjs task update [taskId] --json '{"status":"in_progress"}'
 node scripts/ams-cli.mjs task attach [taskId] --json '{"path":"<absolute-file-path>"}'
 node scripts/ams-cli.mjs task remove-attachment <taskId> <attachmentId>
 ```
+
+Attachment mutations return structured readback fields including `taskId`, `attachmentId`,
+`attachments`, and `attachmentCount`. Run `task get` afterward when you need the full current
+task state before opening a review, approval, or handoff.
 
 ## Governance
 
