@@ -165,6 +165,7 @@
 		availableDependencyTasks,
 		executionRequirementInventory,
 		projectInstalledSkills,
+		modelOptions,
 		actionBasePath = ''
 	}: {
 		task: TaskEditorView;
@@ -179,6 +180,7 @@
 		availableDependencyTasks: AvailableDependencyTaskView[];
 		executionRequirementInventory: ExecutionRequirementInventory;
 		projectInstalledSkills: InstalledSkillOption[];
+		modelOptions: string[];
 		actionBasePath?: string;
 	} = $props();
 
@@ -760,7 +762,9 @@
 				</label>
 			</div>
 
-			<div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.4fr)]">
+			<div
+				class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)]"
+			>
 				<label class="block">
 					<span class="mb-2 block text-sm font-medium text-slate-200">Status</span>
 					<select class="select text-white" name="status">
@@ -780,6 +784,16 @@
 						type="date"
 						value={task.targetDate ?? ''}
 					/>
+				</label>
+
+				<label class="block">
+					<span class="mb-2 block text-sm font-medium text-slate-200">Launch model</span>
+					<select class="select text-white" name="launchModel">
+						<option value="">Resolved default</option>
+						{#each modelOptions as model (model)}
+							<option value={model}>{model}</option>
+						{/each}
+					</select>
 				</label>
 
 				<label class="block">

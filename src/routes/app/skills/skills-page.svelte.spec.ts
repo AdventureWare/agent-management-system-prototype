@@ -43,6 +43,34 @@ function renderPage(form: Record<string, unknown> = {}) {
 								missing: false
 							}
 						]
+					},
+					{
+						id: 'release-runner',
+						description: 'Run release tasks',
+						availableProjectCount: 0,
+						projectLocalProjectCount: 0,
+						globalProjectCount: 0,
+						requestedProjectCount: 1,
+						requestingTaskCount: 1,
+						missingProjectCount: 1,
+						tasksMissingRequestedSkillCount: 1,
+						projects: [
+							{
+								projectId: 'project_app',
+								projectName: 'Agent Management System Prototype',
+								projectHref: '/app/projects/project_app',
+								installed: false,
+								projectLocal: false,
+								global: false,
+								sourceLabel: 'Missing',
+								description: '',
+								availability: 'default',
+								availabilityLabel: 'Missing',
+								availabilityNotes: '',
+								requestingTaskCount: 1,
+								missing: true
+							}
+						]
 					}
 				],
 				projectSkills: [
@@ -93,5 +121,33 @@ describe('/app/skills/+page.svelte', () => {
 			.element(page.getByRole('link', { name: 'docs-writer', exact: true }))
 			.toHaveAttribute('href', '/app/skills/docs-writer');
 		await expect.element(page.getByRole('button', { name: 'Search Skills' })).toBeVisible();
+	});
+
+	it('filters the inventory by search text and status', async () => {
+		renderPage();
+
+		await expect.element(page.getByText('Showing 2 of 2')).toBeVisible();
+
+		await page.getByLabelText('Search').fill('release');
+
+		await expect
+			.element(page.getByRole('link', { name: 'release-runner', exact: true }))
+			.toBeVisible();
+		await expect.element(page.getByText('Showing 1 of 2')).toBeVisible();
+		expect(window.location.search).toContain('q=release');
+		expect(
+			[...document.querySelectorAll('a')].some((link) => link.textContent?.trim() === 'docs-writer')
+		).toBe(false);
+
+		await page.getByLabelText('Search').fill('');
+		await page.getByLabelText('Status').selectOptions('missing');
+		expect(window.location.search).toContain('status=missing');
+
+		await expect
+			.element(page.getByRole('link', { name: 'release-runner', exact: true }))
+			.toBeVisible();
+		expect(
+			[...document.querySelectorAll('a')].some((link) => link.textContent?.trim() === 'docs-writer')
+		).toBe(false);
 	});
 });

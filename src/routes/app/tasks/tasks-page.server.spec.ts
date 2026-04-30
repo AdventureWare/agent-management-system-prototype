@@ -1236,7 +1236,7 @@ describe('tasks page server actions', () => {
 			additionalWritableRoots: [],
 			prompt: 'task prompt',
 			sandbox: 'workspace-write',
-			model: null,
+			model: 'gpt-5',
 			launchContext: {
 				controlPlaneRunId: 'run_generated',
 				taskId: 'task_create_and_run_from_the_task_form'
@@ -1253,6 +1253,8 @@ describe('tasks page server actions', () => {
 				providerId: 'provider_local',
 				status: 'running',
 				agentThreadId: 'session_created',
+				modelUsed: 'gpt-5',
+				modelSource: 'provider_default',
 				promptDigest: 'digest_create_and_run',
 				artifactPaths: ['/tmp/project/agent_output']
 			})

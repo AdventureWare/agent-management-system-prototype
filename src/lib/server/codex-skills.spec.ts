@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+	archiveProjectCodexSkill,
 	createProjectCodexSkill,
 	listInstalledCodexSkills,
 	normalizeCodexSkillId,
@@ -191,5 +192,29 @@ describe('createProjectCodexSkill', () => {
 		expect(readFileSync(createdSkill.referenceFilePaths[0], 'utf8')).toContain('Launch details.');
 		expect(createdSkill.scriptFilePaths).toHaveLength(1);
 		expect(readFileSync(createdSkill.scriptFilePaths[0], 'utf8')).toContain('checking context');
+	});
+
+	it('archives a project-local skill and invalidates discovery', () => {
+		const codexHome = createTempRoot();
+		const projectRoot = createTempRoot();
+
+		createProjectCodexSkill({
+			projectRootFolder: projectRoot,
+			skillId: 'docs-writer',
+			description: 'Project-specific documentation workflow guidance.'
+		});
+
+		expect(listInstalledCodexSkills(projectRoot, codexHome)).toHaveLength(1);
+
+		const archived = archiveProjectCodexSkill({
+			projectRootFolder: projectRoot,
+			skillId: 'docs-writer'
+		});
+
+		expect(archived.archiveDirectory).toContain('skills-archive/docs-writer-');
+		expect(readFileSync(resolve(archived.archiveDirectory, 'SKILL.md'), 'utf8')).toContain(
+			'name: docs-writer'
+		);
+		expect(listInstalledCodexSkills(projectRoot, codexHome)).toEqual([]);
 	});
 });

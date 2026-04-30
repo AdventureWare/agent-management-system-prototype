@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
+import { buildExecutionCapabilityCatalog } from '$lib/server/execution-capability-catalog';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
 import { normalizePathInput, normalizePathListInput } from '$lib/server/path-tools';
 import { buildProjectPermissionSurface } from '$lib/server/project-access';
@@ -98,6 +99,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	const parentProject = project.parentProjectId
 		? (projectMap.get(project.parentProjectId) ?? null)
 		: null;
+	const skillCatalog = buildExecutionCapabilityCatalog(data);
+	const projectSkillInventory =
+		skillCatalog.projectSkills.find((candidate) => candidate.projectId === project.id) ?? null;
 
 	return {
 		project,
@@ -113,6 +117,7 @@ export const load: PageServerLoad = async ({ params }) => {
 					.join(' / ')
 			})),
 		childProjects,
+		projectSkillInventory,
 		permissionSurface: buildProjectPermissionSurface(project),
 		relatedGoals,
 		relatedTasks,

@@ -130,6 +130,7 @@ function createFormInput(overrides: Partial<TaskDetailFormInput> = {}): TaskDeta
 		delegationDoneCondition: '',
 		delegationIntegrationNotes: '',
 		assigneeExecutionSurfaceId: '',
+		launchModel: '',
 		targetDate: '',
 		goalId: '',
 		area: 'product',

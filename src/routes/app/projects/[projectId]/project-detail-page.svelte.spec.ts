@@ -41,6 +41,32 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 						goalCount: 1
 					}
 				],
+				projectSkillInventory: {
+					projectId: 'project_1',
+					projectName: 'Agent Management System Prototype',
+					projectHref: '/app/projects/project_1',
+					totalCount: 1,
+					projectCount: 1,
+					globalCount: 0,
+					requestedSkillCount: 2,
+					requestingTaskCount: 1,
+					missingRequestedSkillCount: 1,
+					tasksMissingRequestedSkillCount: 1,
+					missingRequestedSkills: [{ id: 'release-runner', requestingTaskCount: 1 }],
+					installedSkills: [
+						{
+							id: 'docs-writer',
+							description: 'Write project docs',
+							global: false,
+							project: true,
+							sourceLabel: 'Project',
+							availability: 'enabled',
+							availabilityLabel: 'Enabled for project',
+							availabilityNotes: 'Required by docs tasks.'
+						}
+					],
+					previewSkills: []
+				},
 				permissionSurface: {
 					effectiveSandbox: 'workspace-write',
 					sandboxSource: 'Fallback until an execution surface or provider override is chosen',
@@ -133,6 +159,9 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 		});
 
 		expect(document.body.textContent).toContain('Parent and subproject context');
+		expect(document.body.textContent).toContain('Project skill inventory');
+		expect(document.body.textContent).toContain('docs-writer');
+		expect(document.body.textContent).toContain('release-runner');
 		expect(document.body.textContent).toContain('Kwipoo website');
 		expect(document.body.textContent).toContain('Delete project');
 		expect(document.body.textContent).toContain('Local access and sandbox coverage');

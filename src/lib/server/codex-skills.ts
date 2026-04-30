@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+	writeFileSync
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 
@@ -508,6 +515,41 @@ export function updateProjectCodexSkill(input: {
 	scriptFiles?: ProjectCodexScriptFile[];
 }) {
 	return saveProjectCodexSkill(input, 'update');
+}
+
+export function archiveProjectCodexSkill(input: { projectRootFolder: string; skillId: string }) {
+	const projectRootFolder = input.projectRootFolder.trim();
+	const skillId = normalizeCodexSkillId(input.skillId);
+
+	if (!projectRootFolder) {
+		throw new Error('Project root folder is required to archive a project skill.');
+	}
+
+	if (!skillId) {
+		throw new Error('Skill ID is required.');
+	}
+
+	const { projectAgentsRoot, skillDirectory, skillFilePath } = getProjectCodexSkillPaths(
+		projectRootFolder,
+		skillId
+	);
+
+	if (!existsSync(skillFilePath)) {
+		throw new Error(`Project skill "${skillId}" does not exist.`);
+	}
+
+	const archiveRoot = resolve(projectAgentsRoot, 'skills-archive');
+	const archivedAt = new Date().toISOString().replace(/[:.]/g, '-');
+	const archiveDirectory = resolve(archiveRoot, `${skillId}-${archivedAt}`);
+	mkdirSync(archiveRoot, { recursive: true });
+	renameSync(skillDirectory, archiveDirectory);
+	invalidateProjectCodexSkillCache(projectRootFolder);
+
+	return {
+		skillId,
+		skillDirectory,
+		archiveDirectory
+	};
 }
 
 export function createProjectCodexSkill(input: {

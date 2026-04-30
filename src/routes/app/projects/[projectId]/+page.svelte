@@ -186,6 +186,68 @@
 			</DetailSection>
 
 			<DetailSection
+				eyebrow="Skills"
+				title="Project skill inventory"
+				description="Prompt skills installed for this project workspace, plus any task-requested skills that are missing."
+				bodyClass="space-y-4"
+			>
+				{#if !data.projectSkillInventory || data.projectSkillInventory.totalCount === 0}
+					<p
+						class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+					>
+						No installed skills were discovered for this project workspace.
+					</p>
+				{:else}
+					<div class="grid gap-3 md:grid-cols-2">
+						{#each data.projectSkillInventory.installedSkills as skill (skill.id)}
+							<a
+								class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 transition hover:border-sky-400/40"
+								href={resolve(`/app/skills/${encodeURIComponent(skill.id)}`)}
+							>
+								<div class="flex flex-wrap items-center gap-2">
+									<p class="ui-wrap-anywhere font-medium text-white">{skill.id}</p>
+									<span
+										class="badge border border-slate-700 bg-slate-950/70 text-[0.72rem] tracking-[0.18em] text-slate-300 uppercase"
+									>
+										{skill.sourceLabel}
+									</span>
+									{#if skill.availability !== 'default'}
+										<span
+											class="badge border border-sky-800/70 bg-sky-950/40 text-[0.72rem] tracking-[0.18em] text-sky-200 uppercase"
+										>
+											{skill.availabilityLabel}
+										</span>
+									{/if}
+								</div>
+								<p class="ui-clamp-2 mt-2 text-sm text-slate-400">{skill.description}</p>
+								{#if skill.availabilityNotes}
+									<p class="mt-2 text-xs text-slate-500">{skill.availabilityNotes}</p>
+								{/if}
+							</a>
+						{/each}
+					</div>
+				{/if}
+
+				{#if data.projectSkillInventory?.missingRequestedSkills.length}
+					<div class="rounded-2xl border border-amber-900/70 bg-amber-950/20 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-amber-300 uppercase">Missing requested</p>
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#each data.projectSkillInventory.missingRequestedSkills as skill (skill.id)}
+								<a
+									class="rounded-full border border-amber-900/70 bg-amber-950/40 px-3 py-1 text-xs text-amber-100 transition hover:border-amber-700"
+									href={resolve(
+										`/app/skills?q=${encodeURIComponent(skill.id)}&project=${encodeURIComponent(data.project.id)}&status=missing`
+									)}
+								>
+									{skill.id} · {skill.requestingTaskCount}
+								</a>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</DetailSection>
+
+			<DetailSection
 				eyebrow="Project details"
 				title="Edit defaults and repo context"
 				description="Collection pages help you find the project. This page holds the actual project setup."

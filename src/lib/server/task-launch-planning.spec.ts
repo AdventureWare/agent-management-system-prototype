@@ -25,6 +25,7 @@ function buildTaskDetailInput(overrides: Partial<TaskDetailFormInput> = {}): Tas
 		delegationDoneCondition: '',
 		delegationIntegrationNotes: '',
 		assigneeExecutionSurfaceId: '',
+		launchModel: '',
 		targetDate: '',
 		goalId: '',
 		area: 'product',
@@ -269,5 +270,17 @@ describe('buildTaskLaunchPlan', () => {
 		const plan = await buildTaskLaunchPlan(current, current.tasks[0]!, buildTaskDetailInput());
 
 		expect(plan.effectiveExecutionSurface?.id).toBe('worker_builder');
+	});
+
+	it('carries an explicit launch model override into the launch plan', async () => {
+		const { current, task } = buildFixture();
+
+		const plan = await buildTaskLaunchPlan(
+			current,
+			task,
+			buildTaskDetailInput({ launchModel: 'gpt-5.5' })
+		);
+
+		expect(plan.launchModelOverride).toBe('gpt-5.5');
 	});
 });

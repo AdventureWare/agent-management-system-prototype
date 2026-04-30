@@ -4,6 +4,7 @@
 	import AppPage from '$lib/components/AppPage.svelte';
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import { onMount } from 'svelte';
 	import type { ActionData, PageData, SubmitFunction } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -42,6 +43,99 @@
 
 	function skillDetailHref(skillId: string) {
 		return `/app/skills/${encodeURIComponent(skillId)}`;
+	}
+
+	function normalizedSearchText(value: string) {
+		return value.trim().toLowerCase();
+	}
+
+	function skillMatchesSearch(
+		skill: PageData['executionCatalog']['skills'][number],
+		query: string
+	) {
+		const normalizedQuery = normalizedSearchText(query);
+
+		if (!normalizedQuery) {
+			return true;
+		}
+
+		const searchableText = [
+			skill.id,
+			skill.description,
+			skillAvailabilityStatus(skill).label,
+			...skill.projects.flatMap((project) => [
+				project.projectName,
+				project.sourceLabel,
+				project.availabilityLabel,
+				project.availabilityNotes
+			])
+		]
+			.join(' ')
+			.toLowerCase();
+
+		return searchableText.includes(normalizedQuery);
+	}
+
+	function skillMatchesProject(
+		skill: PageData['executionCatalog']['skills'][number],
+		projectId: string
+	) {
+		return !projectId || skill.projects.some((project) => project.projectId === projectId);
+	}
+
+	function skillMatchesScope(skill: PageData['executionCatalog']['skills'][number], scope: string) {
+		switch (scope) {
+			case 'missing':
+				return skill.missingProjectCount > 0;
+			case 'project-local':
+				return skill.projectLocalProjectCount > 0;
+			case 'global':
+				return skill.globalProjectCount > 0;
+			case 'requested':
+				return skill.requestedProjectCount > 0;
+			case 'enabled':
+				return skill.projects.some((project) => project.availability === 'enabled');
+			case 'disabled':
+				return skill.projects.some((project) => project.availability === 'disabled');
+			case 'available':
+				return skill.availableProjectCount > 0;
+			case 'all':
+			default:
+				return true;
+		}
+	}
+
+	function sourceDetailHref(skillId: string, skillFilePath: string) {
+		return `${skillDetailHref(skillId)}?source=${encodeURIComponent(skillFilePath)}`;
+	}
+
+	function buildLineDiff(before: string, after: string) {
+		const beforeLines = before.replace(/\r\n/g, '\n').split('\n');
+		const afterLines = after.replace(/\r\n/g, '\n').split('\n');
+		const rows: Array<{ type: 'same' | 'removed' | 'added'; line: string }> = [];
+		const maxLength = Math.max(beforeLines.length, afterLines.length);
+
+		for (let index = 0; index < maxLength; index += 1) {
+			const beforeLine = beforeLines[index];
+			const afterLine = afterLines[index];
+
+			if (beforeLine === afterLine) {
+				if (beforeLine !== undefined) {
+					rows.push({ type: 'same', line: beforeLine });
+				}
+				continue;
+			}
+
+			if (beforeLine !== undefined) {
+				rows.push({ type: 'removed', line: beforeLine });
+			}
+
+			if (afterLine !== undefined) {
+				rows.push({ type: 'added', line: afterLine });
+			}
+		}
+
+		return rows.slice(0, 160);
 	}
 
 	let createProjectSkillSuccess = $derived(
@@ -228,12 +322,34 @@
 	);
 	let externalSkillSearchPending = $state(false);
 	let installExternalSkillPending = $state(false);
+	let skillSearchQuery = $state('');
+	let skillProjectFilter = $state('');
+	let skillScopeFilter = $state('all');
+	let skillFiltersHydrated = $state(false);
 	let installedExternalSkillProjectName = $derived.by(() => {
 		const projectId =
 			form && 'projectId' in form && typeof form.projectId === 'string' ? form.projectId : '';
 
 		return data.projects.find((project) => project.id === projectId)?.name ?? 'Selected project';
 	});
+	let filteredSkills = $derived.by(() =>
+		data.executionCatalog.skills.filter(
+			(skill) =>
+				skillMatchesSearch(skill, skillSearchQuery) &&
+				skillMatchesProject(skill, skillProjectFilter) &&
+				skillMatchesScope(skill, skillScopeFilter)
+		)
+	);
+	let filtersActive = $derived(
+		Boolean(skillSearchQuery.trim() || skillProjectFilter || skillScopeFilter !== 'all')
+	);
+	let generatedRefinementDiffRows = $derived(
+		previewRefinedProjectSkillSuccess &&
+			refinementCurrentSkillContent &&
+			generatedProjectSkillPreview.body
+			? buildLineDiff(refinementCurrentSkillContent, generatedProjectSkillPreview.body)
+			: []
+	);
 	const searchExternalSkillsEnhance: SubmitFunction = () => {
 		externalSkillSearchPending = true;
 
@@ -250,6 +366,47 @@
 			installExternalSkillPending = false;
 		};
 	};
+
+	onMount(() => {
+		const params = new URLSearchParams(window.location.search);
+		skillSearchQuery = params.get('q') ?? '';
+		skillProjectFilter = params.get('project') ?? '';
+		skillScopeFilter = params.get('status') ?? 'all';
+		skillFiltersHydrated = true;
+	});
+
+	$effect(() => {
+		if (!skillFiltersHydrated || typeof window === 'undefined') {
+			return;
+		}
+
+		const url = new URL(window.location.href);
+		const params = url.searchParams;
+
+		if (skillSearchQuery.trim()) {
+			params.set('q', skillSearchQuery.trim());
+		} else {
+			params.delete('q');
+		}
+
+		if (skillProjectFilter) {
+			params.set('project', skillProjectFilter);
+		} else {
+			params.delete('project');
+		}
+
+		if (skillScopeFilter !== 'all') {
+			params.set('status', skillScopeFilter);
+		} else {
+			params.delete('status');
+		}
+
+		const nextUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
+
+		if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+			window.history.replaceState(window.history.state, '', nextUrl);
+		}
+	});
 </script>
 
 <AppPage width="full">
@@ -319,88 +476,159 @@
 						No installed or task-requested prompt skills were found across tracked projects.
 					</p>
 				{:else}
-					{#each data.executionCatalog.skills as skill (skill.id)}
-						<article class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-							<div class="flex flex-wrap items-start justify-between gap-3">
-								<div class="min-w-0 flex-1">
-									<div class="flex flex-wrap items-center gap-2">
-										<a
-											class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
-											href={skillDetailHref(skill.id)}
-										>
-											{skill.id}
-										</a>
-										<span
-											class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${inventoryStatusClass(skillAvailabilityStatus(skill).tone)}`}
-										>
-											{skillAvailabilityStatus(skill).label}
-										</span>
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+						<div
+							class="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,0.55fr)_minmax(12rem,0.55fr)]"
+						>
+							<label class="block">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Search
+								</span>
+								<input
+									class="input text-white"
+									placeholder="skill, project, availability…"
+									bind:value={skillSearchQuery}
+									autocomplete="off"
+								/>
+							</label>
+							<label class="block">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Project
+								</span>
+								<select class="select text-white" bind:value={skillProjectFilter}>
+									<option value="">All projects</option>
+									{#each data.projects as project (project.id)}
+										<option value={project.id}>{project.name}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="block">
+								<span class="mb-2 block text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Status
+								</span>
+								<select class="select text-white" bind:value={skillScopeFilter}>
+									<option value="all">All skills</option>
+									<option value="missing">Missing where requested</option>
+									<option value="project-local">Project-local</option>
+									<option value="global">Global</option>
+									<option value="requested">Requested by tasks</option>
+									<option value="available">Installed or inherited</option>
+									<option value="enabled">Explicitly enabled</option>
+									<option value="disabled">Explicitly disabled</option>
+								</select>
+							</label>
+						</div>
+						<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+							<p class="text-sm text-slate-400">
+								Showing <span class="text-white">{filteredSkills.length}</span> of
+								<span class="text-white">{data.executionCatalog.skills.length}</span>
+							</p>
+							{#if filtersActive}
+								<AppButton
+									type="button"
+									variant="ghost"
+									onclick={() => {
+										skillSearchQuery = '';
+										skillProjectFilter = '';
+										skillScopeFilter = 'all';
+									}}
+								>
+									Clear filters
+								</AppButton>
+							{/if}
+						</div>
+					</div>
+
+					{#if filteredSkills.length === 0}
+						<p
+							class="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+						>
+							No skills match the current filters.
+						</p>
+					{:else}
+						{#each filteredSkills as skill (skill.id)}
+							<article class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-2">
+											<a
+												class="ui-wrap-anywhere font-medium text-white transition hover:text-sky-200"
+												href={skillDetailHref(skill.id)}
+											>
+												{skill.id}
+											</a>
+											<span
+												class={`badge border text-[0.72rem] tracking-[0.18em] uppercase ${inventoryStatusClass(skillAvailabilityStatus(skill).tone)}`}
+											>
+												{skillAvailabilityStatus(skill).label}
+											</span>
+										</div>
+										<p class="ui-clamp-2 mt-2 text-sm text-slate-400">{skill.description}</p>
 									</div>
-									<p class="ui-clamp-2 mt-2 text-sm text-slate-400">{skill.description}</p>
 								</div>
-							</div>
 
-							<div class="mt-4 flex flex-wrap gap-2 text-xs">
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Available: <span class="text-white">{skill.availableProjectCount}</span>
-								</span>
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Project-local: <span class="text-white">{skill.projectLocalProjectCount}</span>
-								</span>
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Global: <span class="text-white">{skill.globalProjectCount}</span>
-								</span>
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Requested: <span class="text-white">{skill.requestedProjectCount}</span>
-								</span>
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Tasks: <span class="text-white">{skill.requestingTaskCount}</span>
-								</span>
-								<span
-									class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
-								>
-									Gaps: <span class="text-white">{skill.missingProjectCount}</span>
-								</span>
-							</div>
-
-							<div class="mt-4 flex flex-wrap gap-2">
-								{#each skill.projects as project (`${skill.id}:${project.projectId}`)}
-									<a
-										class={`rounded-full border px-3 py-1 text-xs transition hover:border-sky-600 hover:text-white ${
-											project.availability === 'disabled'
-												? 'border-rose-900/70 bg-rose-950/40 text-rose-100'
-												: project.missing
-													? 'border-amber-900/70 bg-amber-950/40 text-amber-100'
-													: project.projectLocal
-														? 'border-sky-800/70 bg-sky-950/40 text-sky-100'
-														: 'border-slate-700 bg-slate-950/80 text-slate-200'
-										}`}
-										href={project.projectHref}
-										title={project.missing
-											? `${project.requestingTaskCount} task${project.requestingTaskCount === 1 ? '' : 's'} request this missing skill`
-											: project.availabilityLabel}
+								<div class="mt-4 flex flex-wrap gap-2 text-xs">
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
 									>
-										{project.projectName}
-										{#if project.requestingTaskCount > 0}
-											<span class="text-slate-400"> · {project.requestingTaskCount}</span>
-										{:else if project.availability !== 'default'}
-											<span class="text-slate-400"> · {project.availabilityLabel}</span>
-										{/if}
-									</a>
-								{/each}
-							</div>
-						</article>
-					{/each}
+										Available: <span class="text-white">{skill.availableProjectCount}</span>
+									</span>
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
+									>
+										Project-local: <span class="text-white">{skill.projectLocalProjectCount}</span>
+									</span>
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
+									>
+										Global: <span class="text-white">{skill.globalProjectCount}</span>
+									</span>
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
+									>
+										Requested: <span class="text-white">{skill.requestedProjectCount}</span>
+									</span>
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
+									>
+										Tasks: <span class="text-white">{skill.requestingTaskCount}</span>
+									</span>
+									<span
+										class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-slate-300"
+									>
+										Gaps: <span class="text-white">{skill.missingProjectCount}</span>
+									</span>
+								</div>
+
+								<div class="mt-4 flex flex-wrap gap-2">
+									{#each skill.projects as project (`${skill.id}:${project.projectId}`)}
+										<a
+											class={`rounded-full border px-3 py-1 text-xs transition hover:border-sky-600 hover:text-white ${
+												project.availability === 'disabled'
+													? 'border-rose-900/70 bg-rose-950/40 text-rose-100'
+													: project.missing
+														? 'border-amber-900/70 bg-amber-950/40 text-amber-100'
+														: project.projectLocal
+															? 'border-sky-800/70 bg-sky-950/40 text-sky-100'
+															: 'border-slate-700 bg-slate-950/80 text-slate-200'
+											}`}
+											href={project.projectHref}
+											title={project.missing
+												? `${project.requestingTaskCount} task${project.requestingTaskCount === 1 ? '' : 's'} request this missing skill`
+												: project.availabilityLabel}
+										>
+											{project.projectName}
+											{#if project.requestingTaskCount > 0}
+												<span class="text-slate-400"> · {project.requestingTaskCount}</span>
+											{:else if project.availability !== 'default'}
+												<span class="text-slate-400"> · {project.availabilityLabel}</span>
+											{/if}
+										</a>
+									{/each}
+								</div>
+							</article>
+						{/each}
+					{/if}
 				{/if}
 			</DetailSection>
 
@@ -634,7 +862,7 @@
 										<div class="flex flex-wrap items-center gap-2">
 											<a
 												class="ui-wrap-anywhere font-mono text-sm text-white transition hover:text-sky-200"
-												href={skillDetailHref(skill.id)}
+												href={sourceDetailHref(skill.id, skill.skillFilePath)}
 											>
 												{skill.id}
 											</a>
@@ -917,6 +1145,33 @@
 									name="bodyMarkdown">{generatedProjectSkillPreview.body}</textarea
 								>
 							</label>
+						</div>
+						<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+									Refinement diff
+								</p>
+								<p class="text-xs text-slate-500">
+									{generatedRefinementDiffRows.filter((row) => row.type !== 'same').length}
+									changed line{generatedRefinementDiffRows.filter((row) => row.type !== 'same')
+										.length === 1
+										? ''
+										: 's'}
+								</p>
+							</div>
+							<pre
+								class="mt-3 max-h-80 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 font-mono text-xs leading-6 text-slate-400">{#each generatedRefinementDiffRows as row, index (`${index}:${row.type}`)}<span
+										class={row.type === 'added'
+											? 'block text-emerald-200'
+											: row.type === 'removed'
+												? 'block text-rose-200'
+												: 'block text-slate-500'}
+										>{row.type === 'added'
+											? '+ '
+											: row.type === 'removed'
+												? '- '
+												: '  '}{row.line || ' '}</span
+									>{/each}</pre>
 						</div>
 					{:else}
 						<label class="block">

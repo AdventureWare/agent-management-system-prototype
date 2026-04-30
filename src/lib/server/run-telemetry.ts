@@ -271,6 +271,7 @@ function runTelemetryChanged(run: Run, next: Partial<Run>) {
 	return (
 		run.agentThreadRunId !== next.agentThreadRunId ||
 		run.modelUsed !== next.modelUsed ||
+		run.modelSource !== next.modelSource ||
 		run.usageSource !== next.usageSource ||
 		run.inputTokens !== next.inputTokens ||
 		run.cachedInputTokens !== next.cachedInputTokens ||
@@ -297,13 +298,17 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 			const snapshot = await readManagedRunTelemetrySnapshot({
 				agentThreadId: run.agentThreadId,
 				agentThreadRunId: run.agentThreadRunId,
-				fallbackModel: run.modelUsed ?? provider?.defaultModel ?? null
+				fallbackModel: run.modelUsed ?? null
 			});
-			const modelUsed =
-				run.modelUsed?.trim() ||
-				snapshot.modelUsed?.trim() ||
-				provider?.defaultModel?.trim() ||
-				null;
+			const modelUsed = run.modelUsed?.trim() || snapshot.modelUsed?.trim() || null;
+			const modelSource =
+				run.modelSource && run.modelSource !== 'unknown'
+					? run.modelSource
+					: snapshot.modelUsed?.trim()
+						? 'runner_reported'
+						: modelUsed
+							? 'unknown'
+							: 'runner_default_unverified';
 			const usageSource =
 				snapshot.usageSource === 'provider_reported'
 					? snapshot.usageSource
@@ -336,6 +341,7 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 			const nextRun = {
 				...run,
 				modelUsed,
+				modelSource,
 				usageSource,
 				inputTokens,
 				cachedInputTokens,

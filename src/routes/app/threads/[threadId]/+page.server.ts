@@ -424,6 +424,7 @@ function reopenTasksForThreadRetry(input: {
 			threadId: input.threadId,
 			agentThreadId: input.targetThreadId,
 			modelUsed: latestRun?.modelUsed ?? null,
+			modelSource: latestRun?.modelSource ?? 'unknown',
 			promptDigest: buildPromptDigest(input.prompt),
 			artifactPaths: latestRun?.artifactPaths.length
 				? latestRun.artifactPaths

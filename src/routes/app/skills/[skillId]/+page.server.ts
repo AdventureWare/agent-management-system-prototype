@@ -1,7 +1,8 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { readFileSync } from 'node:fs';
 import { normalizeExecutionRequirementName } from '$lib/execution-requirements';
 import {
+	archiveProjectCodexSkill,
 	listInstalledCodexSkillInstallations,
 	readProjectCodexSkill,
 	updateProjectCodexSkill
@@ -34,9 +35,10 @@ function stripSkillFrontmatter(content: string) {
 	return content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '').trim();
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	const requestedSkillId = decodeSkillId(params.skillId);
 	const normalizedSkillId = normalizeExecutionRequirementName(requestedSkillId);
+	const requestedSource = url.searchParams.get('source') ?? '';
 
 	if (!normalizedSkillId) {
 		error(404, 'Skill not found.');
@@ -155,6 +157,7 @@ export const load: PageServerLoad = async ({ params }) => {
 				left.projectName.localeCompare(right.projectName) ||
 				left.skillFilePath.localeCompare(right.skillFilePath)
 		),
+		selectedSkillFilePath: installationByFilePath.has(requestedSource) ? requestedSource : '',
 		requestingTasks,
 		availabilityEvents,
 		projects: data.projects
@@ -249,5 +252,45 @@ export const actions: Actions = {
 			skillId,
 			availability
 		};
+	},
+
+	archiveProjectSkill: async ({ request }) => {
+		const form = await request.formData();
+		const projectId = form.get('projectId')?.toString().trim() ?? '';
+		const skillId = form.get('skillId')?.toString().trim() ?? '';
+
+		if (!projectId || !skillId) {
+			return {
+				ok: false,
+				message: 'Project and skill ID are required.'
+			};
+		}
+
+		const data = await loadControlPlane();
+		const project = data.projects.find((candidate) => candidate.id === projectId) ?? null;
+
+		if (!project?.projectRootFolder) {
+			return {
+				ok: false,
+				message: 'Project root folder is required before a project-local skill can be archived.'
+			};
+		}
+
+		try {
+			archiveProjectCodexSkill({
+				projectRootFolder: project.projectRootFolder,
+				skillId
+			});
+		} catch (caughtError) {
+			return {
+				ok: false,
+				message:
+					caughtError instanceof Error
+						? caughtError.message
+						: 'Could not archive the project skill.'
+			};
+		}
+
+		throw redirect(303, `/app/skills?archivedSkill=${encodeURIComponent(skillId)}`);
 	}
 };

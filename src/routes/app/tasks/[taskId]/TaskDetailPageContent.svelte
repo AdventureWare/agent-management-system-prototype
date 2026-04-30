@@ -450,6 +450,7 @@
 			availableDependencyTasks={data.availableDependencyTasks ?? []}
 			executionRequirementInventory={data.executionRequirementInventory}
 			projectInstalledSkills={data.projectInstalledSkills}
+			modelOptions={data.modelOptions}
 			{actionBasePath}
 		/>
 	{/if}

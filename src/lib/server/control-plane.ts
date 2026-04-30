@@ -61,6 +61,7 @@ import {
 	type ReviewStatus,
 	type Run,
 	type RunCostSource,
+	type RunModelSource,
 	type RunStatus,
 	type RunUsageSource,
 	type TaskApprovalMode,
@@ -332,6 +333,7 @@ type LegacyRun = Partial<Run> & {
 	artifactPaths?: unknown;
 	agentThreadRunId?: unknown;
 	modelUsed?: unknown;
+	modelSource?: unknown;
 	usageSource?: unknown;
 	inputTokens?: unknown;
 	cachedInputTokens?: unknown;
@@ -515,6 +517,17 @@ function isRunUsageSource(value: unknown): value is RunUsageSource {
 function isRunCostSource(value: unknown): value is RunCostSource {
 	return (
 		value === 'configured_model_pricing' || value === 'missing_pricing' || value === 'missing_usage'
+	);
+}
+
+function isRunModelSource(value: unknown): value is RunModelSource {
+	return (
+		value === 'explicit_launch_override' ||
+		value === 'thread_setting' ||
+		value === 'provider_default' ||
+		value === 'runner_reported' ||
+		value === 'runner_default_unverified' ||
+		value === 'unknown'
 	);
 }
 
@@ -1032,6 +1045,7 @@ function normalizeRun(run: LegacyRun): Run {
 					modelUsed: run.modelUsed.trim() ? run.modelUsed : null
 				}
 			: {}),
+		modelSource: isRunModelSource(run.modelSource) ? run.modelSource : 'unknown',
 		usageSource: isRunUsageSource(run.usageSource) ? run.usageSource : 'missing',
 		inputTokens: normalizeNonNegativeNumber(run.inputTokens),
 		cachedInputTokens: normalizeNonNegativeNumber(run.cachedInputTokens),
@@ -2817,6 +2831,7 @@ export function createRun(input: {
 	lastHeartbeatAt?: string | null;
 	errorSummary?: string;
 	modelUsed?: string | null;
+	modelSource?: RunModelSource;
 	usageSource?: RunUsageSource;
 	inputTokens?: number | null;
 	cachedInputTokens?: number | null;
@@ -2851,6 +2866,7 @@ export function createRun(input: {
 		lastHeartbeatAt: input.lastHeartbeatAt ?? null,
 		errorSummary: input.errorSummary ?? '',
 		modelUsed: input.modelUsed ?? null,
+		modelSource: input.modelSource ?? 'unknown',
 		usageSource: input.usageSource ?? 'missing',
 		inputTokens: input.inputTokens ?? null,
 		cachedInputTokens: input.cachedInputTokens ?? null,

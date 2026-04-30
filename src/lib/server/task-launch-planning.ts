@@ -10,7 +10,8 @@ import { updateTaskRecord } from '$lib/server/control-plane-repository';
 import {
 	getAgentThread,
 	sendAgentThreadMessage,
-	startAgentThread
+	startAgentThread,
+	updateAgentThreadModel
 } from '$lib/server/agent-threads';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
@@ -31,6 +32,7 @@ import {
 } from '$lib/task-execution-contract';
 import { describeDirectProviderTaskFit } from '$lib/server/direct-provider-task-fit';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
+import { resolveLaunchModel } from '$lib/server/task-launch-model';
 import {
 	describeExecutionSurfaceTaskFit,
 	getExecutionSurfaceAssignmentSuggestions
@@ -72,6 +74,7 @@ export type TaskLaunchPlan = {
 	effectiveRequiredToolNames: string[];
 	effectiveDependencyTaskIds: string[];
 	effectiveTargetDate: string | null;
+	launchModelOverride: string | null;
 	provider: ControlPlaneData['providers'][number] | null;
 	prompt: string;
 	retrievedKnowledgeItems: Awaited<ReturnType<typeof loadRelevantSelfImprovementKnowledgeItems>>;
@@ -487,6 +490,7 @@ export async function buildTaskLaunchPlan(
 		effectiveRequiredToolNames: normalizedRequiredToolNames,
 		effectiveDependencyTaskIds,
 		effectiveTargetDate,
+		launchModelOverride: input.launchModel || null,
 		provider,
 		prompt,
 		retrievedKnowledgeItems: taskKnowledge,
@@ -505,9 +509,22 @@ export async function launchTaskFromPlan(
 	let agentThreadRunId: string | null;
 	let codexThreadId: string | null;
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
-	let effectiveModelUsed = plan.provider?.defaultModel?.trim() || null;
+	let launchModel = resolveLaunchModel({
+		explicitModel: plan.launchModelOverride,
+		provider: plan.provider
+	});
 
 	if (plan.compatibleAssignedThread?.canResume) {
+		launchModel = resolveLaunchModel({
+			explicitModel: plan.launchModelOverride,
+			thread: plan.compatibleAssignedThread,
+			provider: plan.provider
+		});
+
+		if (plan.launchModelOverride) {
+			await updateAgentThreadModel(plan.compatibleAssignedThread.id, launchModel.model);
+		}
+
 		const sendResult = await sendAgentThreadMessage(plan.compatibleAssignedThread.id, {
 			prompt: plan.prompt,
 			launchContext: {
@@ -519,8 +536,17 @@ export async function launchTaskFromPlan(
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleAssignedThread.threadId;
 		reusedThreadMode = 'assigned';
-		effectiveModelUsed = plan.compatibleAssignedThread.model?.trim() || effectiveModelUsed;
 	} else if (!plan.compatibleAssignedThread && plan.compatibleLatestRunThread?.canResume) {
+		launchModel = resolveLaunchModel({
+			explicitModel: plan.launchModelOverride,
+			thread: plan.compatibleLatestRunThread,
+			provider: plan.provider
+		});
+
+		if (plan.launchModelOverride) {
+			await updateAgentThreadModel(plan.compatibleLatestRunThread.id, launchModel.model);
+		}
+
 		const sendResult = await sendAgentThreadMessage(plan.compatibleLatestRunThread.id, {
 			prompt: plan.prompt,
 			launchContext: {
@@ -532,8 +558,11 @@ export async function launchTaskFromPlan(
 		agentThreadRunId = sendResult.runId;
 		codexThreadId = plan.compatibleLatestRunThread.threadId;
 		reusedThreadMode = 'latest';
-		effectiveModelUsed = plan.compatibleLatestRunThread.model?.trim() || effectiveModelUsed;
 	} else {
+		launchModel = resolveLaunchModel({
+			explicitModel: plan.launchModelOverride,
+			provider: plan.provider
+		});
 		const session = await startAgentThread({
 			name: buildTaskThreadName({
 				projectName: plan.project.name,
@@ -549,7 +578,7 @@ export async function launchTaskFromPlan(
 				project: plan.project,
 				provider: plan.provider
 			}),
-			model: null,
+			model: launchModel.model,
 			launchContext: {
 				taskId,
 				controlPlaneRunId
@@ -574,7 +603,8 @@ export async function launchTaskFromPlan(
 		startedAt: now,
 		threadId: codexThreadId,
 		agentThreadId,
-		modelUsed: effectiveModelUsed,
+		modelUsed: launchModel.model,
+		modelSource: launchModel.source,
 		promptDigest: buildPromptDigest(plan.prompt),
 		artifactPaths:
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder

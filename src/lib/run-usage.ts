@@ -5,6 +5,7 @@ type RunUsageLike = {
 	uncachedInputTokens?: number | null;
 	estimatedCostUsd?: number | null;
 	modelUsed?: string | null;
+	modelSource?: string | null;
 };
 
 export function getRunTotalTokens(run: RunUsageLike) {
@@ -75,6 +76,30 @@ export function formatRunTokenSummary(run: RunUsageLike) {
 	return parts.length > 0 ? parts.join(' · ') : 'Usage unavailable';
 }
 
-export function formatRunModelLabel(run: Pick<RunUsageLike, 'modelUsed'>) {
-	return run.modelUsed?.trim() || 'Model unavailable';
+function formatRunModelSource(source: string | null | undefined) {
+	switch (source) {
+		case 'explicit_launch_override':
+			return 'explicit selection';
+		case 'thread_setting':
+			return 'thread setting';
+		case 'provider_default':
+			return 'provider default';
+		case 'runner_reported':
+			return 'runner reported';
+		case 'runner_default_unverified':
+			return 'runner default';
+		default:
+			return '';
+	}
+}
+
+export function formatRunModelLabel(run: Pick<RunUsageLike, 'modelUsed' | 'modelSource'>) {
+	const model = run.modelUsed?.trim();
+	const source = formatRunModelSource(run.modelSource);
+
+	if (!model) {
+		return source ? `Model unavailable · ${source}` : 'Model unavailable';
+	}
+
+	return source ? `${model} · ${source}` : model;
 }

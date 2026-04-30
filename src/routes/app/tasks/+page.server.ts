@@ -48,6 +48,7 @@ import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { describeExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
+import { resolveLaunchModel } from '$lib/server/task-launch-model';
 import { appendGoalTaskRelationships } from '$lib/server/goal-relationships';
 import { buildTaskTemplateDraft, decorateTaskTemplates } from '$lib/server/task-templates';
 import {
@@ -697,6 +698,7 @@ export const actions: Actions = {
 
 		let session;
 		const controlPlaneRunId = createRunId();
+		const launchModel = resolveLaunchModel({ provider });
 
 		try {
 			session = await startAgentThread({
@@ -709,7 +711,7 @@ export const actions: Actions = {
 				additionalWritableRoots: project.additionalWritableRoots ?? [],
 				prompt,
 				sandbox,
-				model: null,
+				model: launchModel.model,
 				launchContext: {
 					taskId: createdTask.id,
 					controlPlaneRunId
@@ -734,7 +736,8 @@ export const actions: Actions = {
 			startedAt: now,
 			threadId: null,
 			agentThreadId: session.agentThreadId,
-			modelUsed: provider?.defaultModel?.trim() || null,
+			modelUsed: launchModel.model,
+			modelSource: launchModel.source,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
@@ -1116,7 +1119,7 @@ export const actions: Actions = {
 		let agentThreadRunId: string | null;
 		let codexThreadId: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
-		let effectiveModelUsed = provider?.defaultModel?.trim() || null;
+		let launchModel = resolveLaunchModel({ provider });
 
 		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
@@ -1137,6 +1140,11 @@ export const actions: Actions = {
 		}
 
 		if (compatibleAssignedThread?.canResume) {
+			launchModel = resolveLaunchModel({
+				thread: compatibleAssignedThread,
+				provider
+			});
+
 			try {
 				const sendResult = await sendAgentThreadMessage(compatibleAssignedThread.id, {
 					prompt,
@@ -1155,8 +1163,12 @@ export const actions: Actions = {
 			agentThreadId = compatibleAssignedThread.id;
 			codexThreadId = compatibleAssignedThread.threadId;
 			reusedThreadMode = 'assigned';
-			effectiveModelUsed = compatibleAssignedThread.model?.trim() || effectiveModelUsed;
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
+			launchModel = resolveLaunchModel({
+				thread: compatibleLatestRunThread,
+				provider
+			});
+
 			try {
 				const sendResult = await sendAgentThreadMessage(compatibleLatestRunThread.id, {
 					prompt,
@@ -1175,9 +1187,9 @@ export const actions: Actions = {
 			agentThreadId = compatibleLatestRunThread.id;
 			codexThreadId = compatibleLatestRunThread.threadId;
 			reusedThreadMode = 'latest';
-			effectiveModelUsed = compatibleLatestRunThread.model?.trim() || effectiveModelUsed;
 		} else {
 			let session;
+			launchModel = resolveLaunchModel({ provider });
 
 			try {
 				session = await startAgentThread({
@@ -1190,7 +1202,7 @@ export const actions: Actions = {
 					additionalWritableRoots: project.additionalWritableRoots ?? [],
 					prompt,
 					sandbox,
-					model: null,
+					model: launchModel.model,
 					launchContext: {
 						taskId,
 						controlPlaneRunId
@@ -1219,7 +1231,8 @@ export const actions: Actions = {
 			startedAt: new Date().toISOString(),
 			threadId: codexThreadId,
 			agentThreadId,
-			modelUsed: effectiveModelUsed,
+			modelUsed: launchModel.model,
+			modelSource: launchModel.source,
 			promptDigest: buildPromptDigest(prompt),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder

@@ -105,6 +105,35 @@
 			.replace(/^ {4}/gm, '');
 	}
 
+	function buildLineDiff(before: string, after: string) {
+		const beforeLines = before.replace(/\r\n/g, '\n').split('\n');
+		const afterLines = after.replace(/\r\n/g, '\n').split('\n');
+		const rows: Array<{ type: 'same' | 'removed' | 'added'; line: string }> = [];
+		const maxLength = Math.max(beforeLines.length, afterLines.length);
+
+		for (let index = 0; index < maxLength; index += 1) {
+			const beforeLine = beforeLines[index];
+			const afterLine = afterLines[index];
+
+			if (beforeLine === afterLine) {
+				if (beforeLine !== undefined) {
+					rows.push({ type: 'same', line: beforeLine });
+				}
+				continue;
+			}
+
+			if (beforeLine !== undefined) {
+				rows.push({ type: 'removed', line: beforeLine });
+			}
+
+			if (afterLine !== undefined) {
+				rows.push({ type: 'added', line: afterLine });
+			}
+		}
+
+		return rows.slice(0, 160);
+	}
+
 	function qualityIssues(installation: {
 		content: string;
 		bodyMarkdown: string;
@@ -171,6 +200,7 @@
 	let editDescription = $state('');
 	let editBodyMarkdown = $state('');
 	let editBaselineKey = $state('');
+	let archiveConfirmSkillFilePath = $state('');
 	let selectedInstallation = $derived(
 		data.installations.find(
 			(installation) => installation.skillFilePath === selectedSkillFilePath
@@ -186,6 +216,9 @@
 		selectedInstallation ? qualityIssues(selectedInstallation) : []
 	);
 	let availabilityEvents = $derived(data.availabilityEvents ?? []);
+	let editDiffRows = $derived(
+		selectedInstallation ? buildLineDiff(selectedInstallation.bodyMarkdown, editBodyMarkdown) : []
+	);
 	let editDirty = $derived(
 		Boolean(
 			selectedInstallation &&
@@ -196,6 +229,10 @@
 	);
 
 	$effect(() => {
+		if (!selectedSkillFilePath && data.selectedSkillFilePath) {
+			selectedSkillFilePath = data.selectedSkillFilePath;
+		}
+
 		if (!selectedSkillFilePath && data.installations[0]) {
 			selectedSkillFilePath = data.installations[0].skillFilePath;
 		}
@@ -372,6 +409,46 @@
 												path={selectedInstallation.skillFilePath}
 												className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-wait disabled:opacity-70"
 											/>
+											{#if selectedInstallation.project}
+												{#if archiveConfirmSkillFilePath === selectedInstallation.skillFilePath}
+													<form
+														method="POST"
+														action="?/archiveProjectSkill"
+														class="flex flex-wrap gap-2"
+													>
+														<input
+															name="projectId"
+															type="hidden"
+															value={selectedInstallation.projectId}
+														/>
+														<input name="skillId" type="hidden" value={selectedInstallation.id} />
+														<AppButton type="submit" variant="danger" size="sm">
+															Confirm archive
+														</AppButton>
+														<AppButton
+															type="button"
+															variant="ghost"
+															size="sm"
+															onclick={() => {
+																archiveConfirmSkillFilePath = '';
+															}}
+														>
+															Cancel
+														</AppButton>
+													</form>
+												{:else}
+													<button
+														class="rounded-full border border-rose-900/70 px-3 py-1.5 text-xs text-rose-200 transition hover:border-rose-700 hover:text-rose-100"
+														type="button"
+														onclick={() => {
+															archiveConfirmSkillFilePath =
+																selectedInstallation?.skillFilePath ?? '';
+														}}
+													>
+														Archive
+													</button>
+												{/if}
+											{/if}
 										</div>
 									</div>
 								</div>
@@ -549,6 +626,33 @@
 													Frontmatter is managed by AMS from the description field.
 												</p>
 											</label>
+											<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+												<div class="flex flex-wrap items-center justify-between gap-3">
+													<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+														Change diff
+													</p>
+													<p class="text-xs text-slate-500">
+														{editDiffRows.filter((row) => row.type !== 'same').length} changed line{editDiffRows.filter(
+															(row) => row.type !== 'same'
+														).length === 1
+															? ''
+															: 's'}
+													</p>
+												</div>
+												<pre
+													class="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 font-mono text-xs leading-6 text-slate-400">{#each editDiffRows as row, index (`${index}:${row.type}`)}<span
+															class={row.type === 'added'
+																? 'block text-emerald-200'
+																: row.type === 'removed'
+																	? 'block text-rose-200'
+																	: 'block text-slate-500'}
+															>{row.type === 'added'
+																? '+ '
+																: row.type === 'removed'
+																	? '- '
+																	: '  '}{row.line || ' '}</span
+														>{/each}</pre>
+											</div>
 											<div class="flex flex-wrap items-center justify-between gap-3">
 												{#if editDirty}
 													<p class="text-xs text-amber-200">Unsaved changes</p>

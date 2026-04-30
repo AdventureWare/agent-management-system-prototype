@@ -172,6 +172,7 @@ describe('run telemetry', () => {
 
 		expect(run).toMatchObject({
 			modelUsed: 'gpt-5.4',
+			modelSource: 'runner_reported',
 			usageSource: 'provider_reported',
 			inputTokens: 120000,
 			cachedInputTokens: 90000,
@@ -196,7 +197,8 @@ describe('run telemetry', () => {
 		const run = next.runs[0];
 
 		expect(run).toMatchObject({
-			modelUsed: 'gpt-5.4',
+			modelUsed: null,
+			modelSource: 'runner_default_unverified',
 			usageSource: 'provider_reported',
 			inputTokens: 200000,
 			cachedInputTokens: 50000,

@@ -1,5 +1,6 @@
 import { resolveThreadSandbox, selectExecutionProvider } from '$lib/server/control-plane';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
+import { resolveLaunchModel } from '$lib/server/task-launch-model';
 import { resolveTaskRolePromptContext } from '$lib/server/task-role-context';
 import {
 	buildTaskExecutionContractStatus,
@@ -31,6 +32,12 @@ export type TaskLaunchContextSummary = {
 		launcher: string;
 		capabilityNames: string[];
 	} | null;
+	model: {
+		effective: string | null;
+		source: string;
+		label: string;
+		providerDefault: string | null;
+	};
 	sandbox: {
 		effective: AgentSandbox;
 		taskRequirement: AgentSandbox | null;
@@ -94,6 +101,7 @@ export function buildTaskLaunchContextSummary(
 			projectRootFolder: input.project?.projectRootFolder ?? '',
 			taskPromptSkillNames: input.task.requiredPromptSkillNames ?? []
 		});
+	const launchModel = resolveLaunchModel({ provider });
 
 	return {
 		role: role
@@ -123,6 +131,12 @@ export function buildTaskLaunchContextSummary(
 					capabilityNames: [...(provider.capabilities ?? [])]
 				}
 			: null,
+		model: {
+			effective: launchModel.model,
+			source: launchModel.source,
+			label: launchModel.label,
+			providerDefault: provider?.defaultModel?.trim() || null
+		},
 		sandbox: {
 			effective: resolveThreadSandbox({
 				task: input.task,

@@ -105,6 +105,13 @@ export type WorkflowStatus = (typeof WORKFLOW_STATUS_OPTIONS)[number];
 export type ProjectSkillAvailability = (typeof PROJECT_SKILL_AVAILABILITY_OPTIONS)[number];
 export type RunUsageSource = 'provider_reported' | 'missing';
 export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'missing_usage';
+export type RunModelSource =
+	| 'explicit_launch_override'
+	| 'thread_setting'
+	| 'provider_default'
+	| 'runner_reported'
+	| 'runner_default_unverified'
+	| 'unknown';
 
 export type StatusTone = 'neutral' | 'ready' | 'progress' | 'decision' | 'success' | 'attention';
 
@@ -631,6 +638,7 @@ export type Run = {
 	lastHeartbeatAt: string | null;
 	errorSummary: string;
 	modelUsed?: string | null;
+	modelSource?: RunModelSource;
 	usageSource?: RunUsageSource;
 	inputTokens?: number | null;
 	cachedInputTokens?: number | null;

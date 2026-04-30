@@ -13,6 +13,7 @@ import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-impr
 import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
 import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-surface-api';
 import { buildTaskExecutionPreflight } from '$lib/server/task-execution-preflight';
+import { collectLaunchModelOptions } from '$lib/server/task-launch-model';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	buildAssignmentSuggestionViews,
@@ -164,6 +165,11 @@ export async function loadTaskDetailPageData(taskId: string) {
 		roles: [...data.roles].sort((a, b) => a.name.localeCompare(b.name)),
 		executionSurfaces: [...data.executionSurfaces].sort((a, b) => a.name.localeCompare(b.name)),
 		assignmentSuggestions,
+		modelOptions: collectLaunchModelOptions({
+			providers: data.providers,
+			modelsFromRuns: data.runs.map((run) => run.modelUsed),
+			modelsFromThreads: sessions.map((thread) => thread.model)
+		}),
 		executionPreflight,
 		executionRequirementInventory,
 		recentDecisions,

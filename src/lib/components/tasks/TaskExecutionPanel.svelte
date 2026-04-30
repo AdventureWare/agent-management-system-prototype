@@ -98,6 +98,7 @@
 		agentThreadId: string | null;
 		threadId: string | null;
 		modelUsed?: string | null;
+		modelSource?: string | null;
 		estimatedCostUsd?: number | null;
 		costSource?: string;
 		inputTokens?: number | null;
@@ -124,6 +125,12 @@
 			launcher: string;
 			capabilityNames: string[];
 		} | null;
+		model: {
+			effective: string | null;
+			source: string;
+			label: string;
+			providerDefault: string | null;
+		};
 		sandbox: {
 			effective: AgentSandbox;
 			taskRequirement: AgentSandbox | null;
@@ -456,6 +463,12 @@
 						{launchContext.provider
 							? `${launchContext.provider.name} · ${launchContext.provider.launcher}`
 							: 'No provider resolved'}
+					</p>
+					<p class="mt-2 text-sm text-slate-300">
+						Model:
+						{launchContext.model.effective
+							? `${launchContext.model.effective} · ${launchContext.model.label}`
+							: `${launchContext.model.label} · not selected by AMS`}
 					</p>
 					<p class="mt-2 text-sm text-slate-300">
 						Effective sandbox: {formatAgentSandboxLabel(launchContext.sandbox.effective)}
