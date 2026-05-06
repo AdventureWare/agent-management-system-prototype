@@ -223,6 +223,20 @@ function findProviderModelPricing(provider: Provider | null, modelUsed: string |
 	);
 }
 
+function buildModelMismatchSummary(input: {
+	requestedModel: string | null;
+	observedModel: string | null;
+}) {
+	const requestedModel = input.requestedModel?.trim() || null;
+	const observedModel = input.observedModel?.trim() || null;
+
+	if (!requestedModel || !observedModel || requestedModel === observedModel) {
+		return null;
+	}
+
+	return `Requested ${requestedModel}, but runner reported ${observedModel}.`;
+}
+
 function estimateRunCostUsd(input: {
 	modelPricing: ProviderModelPricing | null;
 	usage: Pick<
@@ -272,6 +286,8 @@ function runTelemetryChanged(run: Run, next: Partial<Run>) {
 		run.agentThreadRunId !== next.agentThreadRunId ||
 		run.modelUsed !== next.modelUsed ||
 		run.modelSource !== next.modelSource ||
+		run.observedModelUsed !== next.observedModelUsed ||
+		run.modelMismatchSummary !== next.modelMismatchSummary ||
 		run.usageSource !== next.usageSource ||
 		run.inputTokens !== next.inputTokens ||
 		run.cachedInputTokens !== next.cachedInputTokens ||
@@ -298,9 +314,10 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 			const snapshot = await readManagedRunTelemetrySnapshot({
 				agentThreadId: run.agentThreadId,
 				agentThreadRunId: run.agentThreadRunId,
-				fallbackModel: run.modelUsed ?? null
+				fallbackModel: null
 			});
-			const modelUsed = run.modelUsed?.trim() || snapshot.modelUsed?.trim() || null;
+			const observedModelUsed = snapshot.modelUsed?.trim() || run.observedModelUsed?.trim() || null;
+			const modelUsed = run.modelUsed?.trim() || observedModelUsed;
 			const modelSource =
 				run.modelSource && run.modelSource !== 'unknown'
 					? run.modelSource
@@ -309,6 +326,10 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 						: modelUsed
 							? 'unknown'
 							: 'runner_default_unverified';
+			const modelMismatchSummary = buildModelMismatchSummary({
+				requestedModel: modelUsed,
+				observedModel: observedModelUsed
+			});
 			const usageSource =
 				snapshot.usageSource === 'provider_reported'
 					? snapshot.usageSource
@@ -329,7 +350,7 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 						: (run.uncachedInputTokens ?? null);
 			const usageCapturedAt = snapshot.usageCapturedAt ?? run.usageCapturedAt ?? null;
 			const cost = estimateRunCostUsd({
-				modelPricing: findProviderModelPricing(provider, modelUsed),
+				modelPricing: findProviderModelPricing(provider, observedModelUsed ?? modelUsed),
 				usage: {
 					inputTokens,
 					cachedInputTokens,
@@ -342,6 +363,8 @@ export async function syncControlPlaneRunTelemetry(data: ControlPlaneData) {
 				...run,
 				modelUsed,
 				modelSource,
+				observedModelUsed,
+				modelMismatchSummary,
 				usageSource,
 				inputTokens,
 				cachedInputTokens,

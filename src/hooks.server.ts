@@ -1,6 +1,7 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import {
 	OPERATOR_SESSION_COOKIE,
+	getOperatorLoginNextPath,
 	getOperatorAuthConfig,
 	isOperatorAuthPublicPath,
 	isValidAgentApiToken,
@@ -44,7 +45,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	const nextPath = `${event.url.pathname}${event.url.search}`;
+	const nextPath = getOperatorLoginNextPath(event.url);
 
 	if (event.url.pathname.startsWith('/api/')) {
 		return new Response(JSON.stringify({ error: 'Remote access login required.' }), {

@@ -698,7 +698,11 @@ export const actions: Actions = {
 
 		let session;
 		const controlPlaneRunId = createRunId();
-		const launchModel = resolveLaunchModel({ provider });
+		const launchModel = resolveLaunchModel({
+			executionSurface: assignedExecutionSurface,
+			project,
+			provider
+		});
 
 		try {
 			session = await startAgentThread({
@@ -1119,7 +1123,11 @@ export const actions: Actions = {
 		let agentThreadRunId: string | null;
 		let codexThreadId: string | null;
 		let reusedThreadMode: 'assigned' | 'latest' | null = null;
-		let launchModel = resolveLaunchModel({ provider });
+		let launchModel = resolveLaunchModel({
+			executionSurface: effectiveExecutionSurface,
+			project,
+			provider
+		});
 
 		if (compatibleAssignedThread?.hasActiveRun) {
 			return fail(409, {
@@ -1142,6 +1150,8 @@ export const actions: Actions = {
 		if (compatibleAssignedThread?.canResume) {
 			launchModel = resolveLaunchModel({
 				thread: compatibleAssignedThread,
+				executionSurface: effectiveExecutionSurface,
+				project,
 				provider
 			});
 
@@ -1166,6 +1176,8 @@ export const actions: Actions = {
 		} else if (!compatibleAssignedThread && compatibleLatestRunThread?.canResume) {
 			launchModel = resolveLaunchModel({
 				thread: compatibleLatestRunThread,
+				executionSurface: effectiveExecutionSurface,
+				project,
 				provider
 			});
 
@@ -1189,7 +1201,11 @@ export const actions: Actions = {
 			reusedThreadMode = 'latest';
 		} else {
 			let session;
-			launchModel = resolveLaunchModel({ provider });
+			launchModel = resolveLaunchModel({
+				executionSurface: effectiveExecutionSurface,
+				project,
+				provider
+			});
 
 			try {
 				session = await startAgentThread({

@@ -380,6 +380,16 @@
 									{/each}
 								</select>
 							</label>
+
+							<label class="block w-full max-w-xs">
+								<span class="mb-2 block text-sm font-medium text-slate-200"> Default model </span>
+								<input
+									class="input text-white placeholder:text-slate-500"
+									name="defaultModel"
+									placeholder="Inherit provider default"
+									value={data.project.defaultModel ?? ''}
+								/>
+							</label>
 						</div>
 
 						<button class="btn preset-filled-primary-500 font-semibold" type="submit">

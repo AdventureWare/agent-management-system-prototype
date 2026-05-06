@@ -319,6 +319,22 @@
 			</div>
 
 			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Model override</span>
+				<input
+					class="input text-white placeholder:text-slate-500"
+					name="modelOverride"
+					placeholder={data.executionSurface.providerDefaultModel
+						? `Use provider default (${data.executionSurface.providerDefaultModel})`
+						: 'Use provider or project default'}
+					value={data.executionSurface.modelOverride ?? ''}
+				/>
+				<p class="mt-2 text-xs text-slate-500">
+					Applies when this execution surface starts a new managed thread. Existing threads keep
+					their saved model until you change them directly.
+				</p>
+			</label>
+
+			<label class="block">
 				<span class="mb-2 block text-sm font-medium text-slate-200">Thread sandbox override</span>
 				<select class="select text-white" name="threadSandboxOverride">
 					<option value="" selected={data.executionSurface.threadSandboxOverride === null}>

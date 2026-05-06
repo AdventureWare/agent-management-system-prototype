@@ -185,6 +185,7 @@ type LegacyProject = Partial<Project> & {
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
 	additionalWritableRoots?: unknown;
+	defaultModel?: unknown;
 	skillAvailabilityPolicies?: unknown;
 	skillAvailabilityPolicyEvents?: unknown;
 };
@@ -220,6 +221,7 @@ type LegacyExecutionSurface = Partial<ExecutionSurface> & {
 	focusFactor?: unknown;
 	maxConcurrentRuns?: unknown;
 	threadSandboxOverride?: unknown;
+	modelOverride?: unknown;
 	authTokenHash?: unknown;
 };
 
@@ -334,6 +336,8 @@ type LegacyRun = Partial<Run> & {
 	agentThreadRunId?: unknown;
 	modelUsed?: unknown;
 	modelSource?: unknown;
+	observedModelUsed?: unknown;
+	modelMismatchSummary?: unknown;
 	usageSource?: unknown;
 	inputTokens?: unknown;
 	cachedInputTokens?: unknown;
@@ -524,6 +528,8 @@ function isRunModelSource(value: unknown): value is RunModelSource {
 	return (
 		value === 'explicit_launch_override' ||
 		value === 'thread_setting' ||
+		value === 'execution_surface_default' ||
+		value === 'project_default' ||
 		value === 'provider_default' ||
 		value === 'runner_reported' ||
 		value === 'runner_default_unverified' ||
@@ -666,6 +672,7 @@ function normalizeExecutionSurface(surface: LegacyExecutionSurface): ExecutionSu
 		focusFactor,
 		maxConcurrentRuns: normalizePositiveNumber(surface.maxConcurrentRuns),
 		threadSandboxOverride: normalizeOptionalAgentSandbox(surface.threadSandboxOverride),
+		modelOverride: normalizeOptionalText(surface.modelOverride),
 		authTokenHash: typeof surface.authTokenHash === 'string' ? surface.authTokenHash : ''
 	};
 }
@@ -864,6 +871,7 @@ function normalizeProject(
 			typeof legacyProject.defaultBranch === 'string' ? legacyProject.defaultBranch : '',
 		additionalWritableRoots,
 		defaultThreadSandbox: normalizeOptionalAgentSandbox(legacyProject.defaultThreadSandbox),
+		defaultModel: normalizeOptionalText(legacyProject.defaultModel),
 		skillAvailabilityPolicies: normalizeProjectSkillAvailabilityPolicies(
 			legacyProject.skillAvailabilityPolicies
 		),
@@ -1046,6 +1054,8 @@ function normalizeRun(run: LegacyRun): Run {
 				}
 			: {}),
 		modelSource: isRunModelSource(run.modelSource) ? run.modelSource : 'unknown',
+		observedModelUsed: normalizeOptionalText(run.observedModelUsed),
+		modelMismatchSummary: normalizeOptionalText(run.modelMismatchSummary),
 		usageSource: isRunUsageSource(run.usageSource) ? run.usageSource : 'missing',
 		inputTokens: normalizeNonNegativeNumber(run.inputTokens),
 		cachedInputTokens: normalizeNonNegativeNumber(run.cachedInputTokens),
@@ -2528,6 +2538,7 @@ export function createProject(input: {
 	defaultBranch?: string;
 	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
+	defaultModel?: string | null;
 }): Project {
 	return {
 		id: createProjectId(),
@@ -2540,7 +2551,8 @@ export function createProject(input: {
 		defaultRepoUrl: input.defaultRepoUrl ?? '',
 		defaultBranch: input.defaultBranch ?? '',
 		additionalWritableRoots: normalizePathListInput(input.additionalWritableRoots),
-		defaultThreadSandbox: input.defaultThreadSandbox ?? null
+		defaultThreadSandbox: input.defaultThreadSandbox ?? null,
+		defaultModel: normalizeOptionalText(input.defaultModel)
 	};
 }
 
@@ -2832,6 +2844,8 @@ export function createRun(input: {
 	errorSummary?: string;
 	modelUsed?: string | null;
 	modelSource?: RunModelSource;
+	observedModelUsed?: string | null;
+	modelMismatchSummary?: string | null;
 	usageSource?: RunUsageSource;
 	inputTokens?: number | null;
 	cachedInputTokens?: number | null;
@@ -2867,6 +2881,8 @@ export function createRun(input: {
 		errorSummary: input.errorSummary ?? '',
 		modelUsed: input.modelUsed ?? null,
 		modelSource: input.modelSource ?? 'unknown',
+		observedModelUsed: input.observedModelUsed ?? null,
+		modelMismatchSummary: input.modelMismatchSummary ?? null,
 		usageSource: input.usageSource ?? 'missing',
 		inputTokens: input.inputTokens ?? null,
 		cachedInputTokens: input.cachedInputTokens ?? null,
@@ -3073,6 +3089,7 @@ export function createExecutionSurface(input: {
 	focusFactor?: number;
 	maxConcurrentRuns?: number | null;
 	threadSandboxOverride?: AgentSandbox | null;
+	modelOverride?: string | null;
 }): ExecutionSurface {
 	const supportedRoleIds = Array.from(
 		new Set(normalizeStringList(input.supportedRoleIds).filter(Boolean))
@@ -3095,6 +3112,7 @@ export function createExecutionSurface(input: {
 		focusFactor: input.focusFactor ?? 1,
 		maxConcurrentRuns: input.maxConcurrentRuns ?? null,
 		threadSandboxOverride: input.threadSandboxOverride ?? null,
+		modelOverride: normalizeOptionalText(input.modelOverride),
 		authTokenHash: ''
 	};
 }

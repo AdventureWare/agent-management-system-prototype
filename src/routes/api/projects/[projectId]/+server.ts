@@ -42,6 +42,10 @@ export const PATCH = async ({ params, request }) => {
 			defaultThreadSandbox:
 				typeof body.defaultThreadSandbox === 'string' || body.defaultThreadSandbox === null
 					? (body.defaultThreadSandbox as string | null)
+					: undefined,
+			defaultModel:
+				typeof body.defaultModel === 'string' || body.defaultModel === null
+					? (body.defaultModel as string | null)
 					: undefined
 		});
 

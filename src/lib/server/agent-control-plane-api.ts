@@ -149,6 +149,7 @@ export type AgentCreateProjectInput = {
 	defaultBranch?: string;
 	additionalWritableRoots?: string[] | string;
 	defaultThreadSandbox?: AgentSandbox | string | null;
+	defaultModel?: string | null;
 };
 
 export type AgentUpdateProjectInput = {
@@ -162,6 +163,7 @@ export type AgentUpdateProjectInput = {
 	defaultBranch?: string;
 	additionalWritableRoots?: string[] | string;
 	defaultThreadSandbox?: AgentSandbox | string | null;
+	defaultModel?: string | null;
 };
 
 export type AgentUpdateTaskInput = {
@@ -885,7 +887,8 @@ export async function createAgentApiProject(input: AgentCreateProjectInput): Pro
 		defaultRepoUrl: readTrimmedString(input.defaultRepoUrl),
 		defaultBranch: readTrimmedString(input.defaultBranch),
 		additionalWritableRoots: normalizePathListInput(input.additionalWritableRoots),
-		defaultThreadSandbox: normalizeOptionalSandbox(input.defaultThreadSandbox) ?? null
+		defaultThreadSandbox: normalizeOptionalSandbox(input.defaultThreadSandbox) ?? null,
+		defaultModel: readNullableString(input.defaultModel ?? null)
 	});
 
 	await updateControlPlaneCollections((data) => ({
@@ -986,7 +989,11 @@ export async function updateAgentApiProject(
 					defaultThreadSandbox:
 						input.defaultThreadSandbox !== undefined
 							? (normalizeOptionalSandbox(input.defaultThreadSandbox) ?? null)
-							: project.defaultThreadSandbox
+							: project.defaultThreadSandbox,
+					defaultModel:
+						input.defaultModel !== undefined
+							? readNullableString(input.defaultModel)
+							: project.defaultModel
 				};
 
 				return updatedProject;

@@ -511,6 +511,8 @@ export async function launchTaskFromPlan(
 	let reusedThreadMode: 'assigned' | 'latest' | null = null;
 	let launchModel = resolveLaunchModel({
 		explicitModel: plan.launchModelOverride,
+		executionSurface: plan.effectiveExecutionSurface,
+		project: plan.project,
 		provider: plan.provider
 	});
 
@@ -518,6 +520,8 @@ export async function launchTaskFromPlan(
 		launchModel = resolveLaunchModel({
 			explicitModel: plan.launchModelOverride,
 			thread: plan.compatibleAssignedThread,
+			executionSurface: plan.effectiveExecutionSurface,
+			project: plan.project,
 			provider: plan.provider
 		});
 
@@ -540,6 +544,8 @@ export async function launchTaskFromPlan(
 		launchModel = resolveLaunchModel({
 			explicitModel: plan.launchModelOverride,
 			thread: plan.compatibleLatestRunThread,
+			executionSurface: plan.effectiveExecutionSurface,
+			project: plan.project,
 			provider: plan.provider
 		});
 
@@ -561,6 +567,8 @@ export async function launchTaskFromPlan(
 	} else {
 		launchModel = resolveLaunchModel({
 			explicitModel: plan.launchModelOverride,
+			executionSurface: plan.effectiveExecutionSurface,
+			project: plan.project,
 			provider: plan.provider
 		});
 		const session = await startAgentThread({

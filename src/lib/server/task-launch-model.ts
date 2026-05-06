@@ -15,6 +15,8 @@ function normalizeModel(value: string | null | undefined) {
 export function resolveLaunchModel(input: {
 	explicitModel?: string | null;
 	thread?: Pick<AgentThreadDetail, 'model'> | null;
+	executionSurface?: { modelOverride?: string | null } | null;
+	project?: { defaultModel?: string | null } | null;
 	provider?: Pick<Provider, 'defaultModel'> | null;
 }): LaunchModelResolution {
 	const explicitModel = normalizeModel(input.explicitModel);
@@ -37,6 +39,26 @@ export function resolveLaunchModel(input: {
 		};
 	}
 
+	const executionSurfaceModel = normalizeModel(input.executionSurface?.modelOverride);
+
+	if (executionSurfaceModel) {
+		return {
+			model: executionSurfaceModel,
+			source: 'execution_surface_default',
+			label: 'Execution surface default'
+		};
+	}
+
+	const projectModel = normalizeModel(input.project?.defaultModel);
+
+	if (projectModel) {
+		return {
+			model: projectModel,
+			source: 'project_default',
+			label: 'Project default'
+		};
+	}
+
 	const providerModel = normalizeModel(input.provider?.defaultModel);
 
 	if (providerModel) {
@@ -56,6 +78,8 @@ export function resolveLaunchModel(input: {
 
 export function collectLaunchModelOptions(input: {
 	providers: Array<Pick<Provider, 'defaultModel' | 'modelPricing'>>;
+	modelsFromProjects?: Array<string | null | undefined>;
+	modelsFromExecutionSurfaces?: Array<string | null | undefined>;
 	modelsFromRuns?: Array<string | null | undefined>;
 	modelsFromThreads?: Array<string | null | undefined>;
 }) {
@@ -74,6 +98,22 @@ export function collectLaunchModelOptions(input: {
 			if (pricingModel) {
 				options.add(pricingModel);
 			}
+		}
+	}
+
+	for (const model of input.modelsFromProjects ?? []) {
+		const normalized = normalizeModel(model);
+
+		if (normalized) {
+			options.add(normalized);
+		}
+	}
+
+	for (const model of input.modelsFromExecutionSurfaces ?? []) {
+		const normalized = normalizeModel(model);
+
+		if (normalized) {
+			options.add(normalized);
 		}
 	}
 

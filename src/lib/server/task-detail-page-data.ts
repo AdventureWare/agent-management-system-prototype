@@ -167,7 +167,11 @@ export async function loadTaskDetailPageData(taskId: string) {
 		assignmentSuggestions,
 		modelOptions: collectLaunchModelOptions({
 			providers: data.providers,
-			modelsFromRuns: data.runs.map((run) => run.modelUsed),
+			modelsFromProjects: data.projects.map((project) => project.defaultModel),
+			modelsFromExecutionSurfaces: data.executionSurfaces.map(
+				(executionSurface) => executionSurface.modelOverride
+			),
+			modelsFromRuns: data.runs.flatMap((run) => [run.modelUsed, run.observedModelUsed]),
 			modelsFromThreads: sessions.map((thread) => thread.model)
 		}),
 		executionPreflight,

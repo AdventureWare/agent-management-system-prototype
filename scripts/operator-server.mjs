@@ -13,6 +13,7 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const OUTPUT_DIR = resolve(REPO_ROOT, 'agent_output', 'operator-server');
 const STATUS_PATH = resolve(OUTPUT_DIR, 'status.json');
 const LOG_PATH = resolve(OUTPUT_DIR, 'server.log');
+const LAUNCHD_LOG_PATH = resolve(OUTPUT_DIR, 'launchd.log');
 const DEFAULT_HOST = process.env.AMS_APP_HOST?.trim() || '127.0.0.1';
 const DEFAULT_PORT = Number.parseInt(process.env.AMS_APP_PORT ?? '3000', 10);
 
@@ -224,6 +225,15 @@ async function readText(path) {
 	}
 }
 
+async function readRuntimeLogText() {
+	const [serverLogText, launchdLogText] = await Promise.all([
+		readText(LOG_PATH),
+		readText(LAUNCHD_LOG_PATH)
+	]);
+
+	return `${serverLogText}\n${launchdLogText}`;
+}
+
 function readCommandOutput(command, args) {
 	try {
 		return execFileSync(command, args, {
@@ -378,7 +388,7 @@ async function writeStatus(status) {
 }
 
 async function resolveLiveOperatorStatus(hostname, port) {
-	const logText = await readText(LOG_PATH);
+	const logText = await readRuntimeLogText();
 
 	if (hasMissingBuildChunkError(logText)) {
 		return null;
@@ -479,6 +489,32 @@ async function stopProcessGroup(pid) {
 			// Ignore already-stopped processes.
 		}
 	}
+}
+
+async function stopUnhealthyOperatorIfNeeded(port) {
+	const logText = await readRuntimeLogText();
+
+	if (!hasMissingBuildChunkError(logText)) {
+		return false;
+	}
+
+	let stopped = false;
+
+	for (const pid of findListeningPids(port)) {
+		if (!isExpectedOperatorProcess(pid)) {
+			continue;
+		}
+
+		await stopProcessGroup(pid);
+		stopped = true;
+	}
+
+	if (stopped) {
+		await rm(STATUS_PATH, { force: true });
+		await sleep(1000);
+	}
+
+	return stopped;
 }
 
 export async function validateBuildArtifacts(buildPaths = BUILD_PATHS) {
@@ -643,6 +679,7 @@ async function startServer() {
 	const port = DEFAULT_PORT;
 	const probeHost = resolveProbeHost(hostname);
 	const localUrl = createLocalUrl(probeHost, port);
+	await stopUnhealthyOperatorIfNeeded(port);
 	const currentStatus = await readJson(STATUS_PATH);
 
 	if (currentStatus && processIsAlive(currentStatus.pid)) {

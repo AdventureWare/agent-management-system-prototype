@@ -39,7 +39,8 @@ function readProjectForm(form: FormData) {
 		additionalWritableRoots: normalizePathListInput(
 			form.get('additionalWritableRoots')?.toString()
 		),
-		defaultThreadSandbox: readProjectThreadSandbox(form.get('defaultThreadSandbox'))
+		defaultThreadSandbox: readProjectThreadSandbox(form.get('defaultThreadSandbox')),
+		defaultModel: form.get('defaultModel')?.toString().trim() || null
 	};
 }
 

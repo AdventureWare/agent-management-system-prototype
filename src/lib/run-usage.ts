@@ -6,6 +6,8 @@ type RunUsageLike = {
 	estimatedCostUsd?: number | null;
 	modelUsed?: string | null;
 	modelSource?: string | null;
+	observedModelUsed?: string | null;
+	modelMismatchSummary?: string | null;
 };
 
 export function getRunTotalTokens(run: RunUsageLike) {
@@ -82,6 +84,10 @@ function formatRunModelSource(source: string | null | undefined) {
 			return 'explicit selection';
 		case 'thread_setting':
 			return 'thread setting';
+		case 'execution_surface_default':
+			return 'execution surface default';
+		case 'project_default':
+			return 'project default';
 		case 'provider_default':
 			return 'provider default';
 		case 'runner_reported':
@@ -93,13 +99,22 @@ function formatRunModelSource(source: string | null | undefined) {
 	}
 }
 
-export function formatRunModelLabel(run: Pick<RunUsageLike, 'modelUsed' | 'modelSource'>) {
+export function formatRunModelLabel(
+	run: Pick<
+		RunUsageLike,
+		'modelUsed' | 'modelSource' | 'observedModelUsed' | 'modelMismatchSummary'
+	>
+) {
 	const model = run.modelUsed?.trim();
 	const source = formatRunModelSource(run.modelSource);
+	const observedModel = run.observedModelUsed?.trim();
+	const observedSuffix =
+		observedModel && model && observedModel !== model ? ` · observed ${observedModel}` : '';
+	const mismatchSuffix = run.modelMismatchSummary ? ' · mismatch' : '';
 
 	if (!model) {
 		return source ? `Model unavailable · ${source}` : 'Model unavailable';
 	}
 
-	return source ? `${model} · ${source}` : model;
+	return `${source ? `${model} · ${source}` : model}${observedSuffix}${mismatchSuffix}`;
 }

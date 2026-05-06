@@ -108,6 +108,8 @@ export type RunCostSource = 'configured_model_pricing' | 'missing_pricing' | 'mi
 export type RunModelSource =
 	| 'explicit_launch_override'
 	| 'thread_setting'
+	| 'execution_surface_default'
+	| 'project_default'
 	| 'provider_default'
 	| 'runner_reported'
 	| 'runner_default_unverified'
@@ -473,6 +475,7 @@ export type Project = {
 	defaultBranch: string;
 	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
+	defaultModel?: string | null;
 	skillAvailabilityPolicies?: ProjectSkillAvailabilityPolicy[];
 	skillAvailabilityPolicyEvents?: ProjectSkillAvailabilityPolicyEvent[];
 };
@@ -509,6 +512,7 @@ export type ExecutionSurface = {
 	focusFactor?: number;
 	maxConcurrentRuns?: number | null;
 	threadSandboxOverride: AgentSandbox | null;
+	modelOverride?: string | null;
 	authTokenHash: string;
 };
 
@@ -639,6 +643,8 @@ export type Run = {
 	errorSummary: string;
 	modelUsed?: string | null;
 	modelSource?: RunModelSource;
+	observedModelUsed?: string | null;
+	modelMismatchSummary?: string | null;
 	usageSource?: RunUsageSource;
 	inputTokens?: number | null;
 	cachedInputTokens?: number | null;

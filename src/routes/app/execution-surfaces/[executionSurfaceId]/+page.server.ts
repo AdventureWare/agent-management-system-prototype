@@ -66,7 +66,8 @@ function readExecutionSurfaceForm(form: FormData) {
 		maxConcurrentRuns: parsePositiveInteger(form.get('maxConcurrentRuns')),
 		location: parseExecutionSurfaceLocation(form.get('location')?.toString() ?? '', 'cloud'),
 		status: parseExecutionSurfaceStatus(form.get('status')?.toString() ?? '', 'idle'),
-		threadSandboxOverride: readThreadSandboxOverride(form.get('threadSandboxOverride'))
+		threadSandboxOverride: readThreadSandboxOverride(form.get('threadSandboxOverride')),
+		modelOverride: form.get('modelOverride')?.toString().trim() || null
 	};
 }
 
@@ -114,6 +115,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		...executionSurface,
 		providerName: provider?.name ?? 'Unknown provider',
 		providerDefaultThreadSandbox: provider?.defaultThreadSandbox ?? 'workspace-write',
+		providerDefaultModel: provider?.defaultModel?.trim() || null,
 		roleName: supportedRoleNames[0] ?? 'Unknown role',
 		supportedRoleIds,
 		supportedRoleNames,

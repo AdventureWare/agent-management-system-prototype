@@ -437,21 +437,24 @@ describe('agent-control-plane-api', () => {
 			defaultArtifactRoot: resolve(root, 'app', 'agent_output'),
 			defaultRepoPath: resolve(root, 'app', 'repo'),
 			additionalWritableRoots: [resolve(root, 'shared')],
-			defaultThreadSandbox: 'danger-full-access'
+			defaultThreadSandbox: 'danger-full-access',
+			defaultModel: ' gpt-5.4 '
 		});
 
 		expect(createdProject).toEqual(
 			expect.objectContaining({
 				name: 'Agent App',
 				parentProjectId: 'project_platform',
-				defaultThreadSandbox: 'danger-full-access'
+				defaultThreadSandbox: 'danger-full-access',
+				defaultModel: 'gpt-5.4'
 			})
 		);
 
 		const updatedProject = await agentApiModule.updateAgentApiProject(createdProject.id, {
 			defaultBranch: 'main',
 			defaultRepoUrl: 'https://example.com/agent-app.git',
-			defaultThreadSandbox: null
+			defaultThreadSandbox: null,
+			defaultModel: null
 		});
 		const loaded = await controlPlaneModule.loadControlPlane();
 
@@ -460,7 +463,8 @@ describe('agent-control-plane-api', () => {
 				id: createdProject.id,
 				defaultBranch: 'main',
 				defaultRepoUrl: 'https://example.com/agent-app.git',
-				defaultThreadSandbox: null
+				defaultThreadSandbox: null,
+				defaultModel: null
 			})
 		);
 		expect(loaded.projects).toEqual(

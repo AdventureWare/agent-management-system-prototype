@@ -121,6 +121,14 @@ export function operatorLoginRedirect(nextPath?: string | null) {
 	return `${OPERATOR_LOGIN_PATH}?next=${encodedNext}`;
 }
 
+export function getOperatorLoginNextPath(url: URL) {
+	if (url.search.startsWith('?/')) {
+		return url.pathname;
+	}
+
+	return `${url.pathname}${url.search}`;
+}
+
 export function sanitizeNextPath(nextPath?: string | null) {
 	if (!nextPath || !nextPath.startsWith('/')) {
 		return DEFAULT_REDIRECT_PATH;

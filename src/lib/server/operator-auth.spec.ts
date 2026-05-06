@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	createOperatorSessionValue,
 	getAgentApiToken,
+	getOperatorLoginNextPath,
 	isOperatorAuthPublicPath,
 	isValidAgentApiToken,
 	isValidOperatorSession,
@@ -36,6 +37,15 @@ describe('operator auth', () => {
 		);
 		expect(sanitizeNextPath('//evil.example')).toBe('/app/tasks');
 		expect(sanitizeNextPath('/auth/login?next=%2Fapp%2Ftasks')).toBe('/app/tasks');
+	});
+
+	it('does not preserve SvelteKit action queries as login destinations', () => {
+		expect(getOperatorLoginNextPath(new URL('http://localhost/app/tasks?/createTask'))).toBe(
+			'/app/tasks'
+		);
+		expect(getOperatorLoginNextPath(new URL('http://localhost/app/tasks?status=ready'))).toBe(
+			'/app/tasks?status=ready'
+		);
 	});
 
 	it('only exposes auth and static assets without login', () => {

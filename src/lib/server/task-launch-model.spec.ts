@@ -28,6 +28,29 @@ describe('resolveLaunchModel', () => {
 		});
 	});
 
+	it('uses execution-surface and project defaults before the provider default', () => {
+		expect(
+			resolveLaunchModel({
+				executionSurface: { modelOverride: 'gpt-5.4-mini' },
+				project: { defaultModel: 'gpt-5.4' },
+				provider: { defaultModel: 'gpt-5.3' }
+			})
+		).toMatchObject({
+			model: 'gpt-5.4-mini',
+			source: 'execution_surface_default'
+		});
+
+		expect(
+			resolveLaunchModel({
+				project: { defaultModel: 'gpt-5.4' },
+				provider: { defaultModel: 'gpt-5.3' }
+			})
+		).toMatchObject({
+			model: 'gpt-5.4',
+			source: 'project_default'
+		});
+	});
+
 	it('marks missing model selection as an unverified runner default', () => {
 		expect(resolveLaunchModel({ provider: { defaultModel: '' } })).toEqual({
 			model: null,
@@ -64,9 +87,11 @@ describe('collectLaunchModelOptions', () => {
 						]
 					}
 				],
+				modelsFromProjects: ['gpt-5.2'],
+				modelsFromExecutionSurfaces: ['gpt-5.1'],
 				modelsFromRuns: ['gpt-5.4', 'o3'],
 				modelsFromThreads: ['gpt-5.5', 'gpt-5.3']
 			})
-		).toEqual(['gpt-5.3', 'gpt-5.4', 'gpt-5.5', 'o3']);
+		).toEqual(['gpt-5.1', 'gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'gpt-5.5', 'o3']);
 	});
 });

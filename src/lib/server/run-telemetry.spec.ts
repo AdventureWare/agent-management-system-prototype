@@ -207,6 +207,41 @@ describe('run telemetry', () => {
 		});
 	});
 
+	it('preserves the requested model when the runner reports a different observed model', async () => {
+		existsSync.mockImplementation((path?: string) => Boolean(path?.endsWith('/summary.json')));
+		readFile.mockResolvedValue(
+			JSON.stringify({
+				modelUsed: 'gpt-5.4',
+				usage: {
+					inputTokens: 120000,
+					cachedInputTokens: 90000,
+					outputTokens: 4500,
+					uncachedInputTokens: 30000,
+					usageCapturedAt: '2026-04-10T11:00:00.000Z'
+				}
+			})
+		);
+
+		const data = createData();
+		data.runs[0] = {
+			...data.runs[0],
+			modelUsed: 'gpt-5.3',
+			modelSource: 'explicit_launch_override'
+		};
+
+		const next = await syncControlPlaneRunTelemetry(data);
+		const run = next.runs[0];
+
+		expect(run).toMatchObject({
+			modelUsed: 'gpt-5.3',
+			modelSource: 'explicit_launch_override',
+			observedModelUsed: 'gpt-5.4',
+			modelMismatchSummary: 'Requested gpt-5.3, but runner reported gpt-5.4.',
+			costSource: 'configured_model_pricing'
+		});
+		expect(run?.estimatedCostUsd ?? 0).toBeCloseTo(0.09375, 6);
+	});
+
 	it('builds spend rollups by provider, actor, project, and goal', () => {
 		const summary = buildRunUsageCostSummary({
 			...createData(),

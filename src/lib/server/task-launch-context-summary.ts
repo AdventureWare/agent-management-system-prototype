@@ -101,7 +101,11 @@ export function buildTaskLaunchContextSummary(
 			projectRootFolder: input.project?.projectRootFolder ?? '',
 			taskPromptSkillNames: input.task.requiredPromptSkillNames ?? []
 		});
-	const launchModel = resolveLaunchModel({ provider });
+	const launchModel = resolveLaunchModel({
+		executionSurface: input.executionSurface,
+		project: input.project,
+		provider
+	});
 
 	return {
 		role: role

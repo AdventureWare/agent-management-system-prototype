@@ -99,6 +99,8 @@
 		threadId: string | null;
 		modelUsed?: string | null;
 		modelSource?: string | null;
+		observedModelUsed?: string | null;
+		modelMismatchSummary?: string | null;
 		estimatedCostUsd?: number | null;
 		costSource?: string;
 		inputTokens?: number | null;
