@@ -102,15 +102,13 @@
 	let compareTaskTemplate = $derived(
 		compareTaskTemplateOptions.find((entry) => entry.id === compareTaskTemplateId) ??
 			(taskTemplate.sourceTaskTemplateId
-				? (compareTaskTemplateOptions.find(
-						(entry) => entry.id === taskTemplate.sourceTaskTemplateId
-					) ?? null)
-				: null) ??
+				? compareTaskTemplateOptions.find((entry) => entry.id === taskTemplate.sourceTaskTemplateId)
+				: undefined) ??
 			(taskTemplate.supersededByTaskTemplateId
-				? (compareTaskTemplateOptions.find(
+				? compareTaskTemplateOptions.find(
 						(entry) => entry.id === taskTemplate.supersededByTaskTemplateId
-					) ?? null)
-				: null) ??
+					)
+				: undefined) ??
 			compareTaskTemplateOptions[0] ??
 			null
 	);

@@ -278,18 +278,18 @@ function buildCapturedSuggestionOpportunities(
 	capturedSuggestions: SelfImprovementCapturedSuggestion[]
 ) {
 	return capturedSuggestions.map((suggestion) => {
-		const goal =
-			(suggestion.goalId
-				? (data.goals.find((candidate) => candidate.id === suggestion.goalId) ?? null)
-				: null) ?? null;
+		const goal = suggestion.goalId
+			? (data.goals.find((candidate) => candidate.id === suggestion.goalId) ?? null)
+			: null;
 		const goalProjectIds = goal?.projectIds ?? [];
 		const project =
 			(suggestion.projectId
-				? (data.projects.find((candidate) => candidate.id === suggestion.projectId) ?? null)
-				: null) ??
+				? data.projects.find((candidate) => candidate.id === suggestion.projectId)
+				: undefined) ??
 			(goalProjectIds.length === 1
-				? (data.projects.find((candidate) => candidate.id === goalProjectIds[0]) ?? null)
-				: null);
+				? data.projects.find((candidate) => candidate.id === goalProjectIds[0])
+				: undefined) ??
+			null;
 
 		return {
 			id: `captured_suggestions:${suggestion.id}`,

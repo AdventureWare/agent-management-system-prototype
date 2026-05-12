@@ -660,16 +660,17 @@ export const actions: Actions = {
 
 		const matchedProject =
 			(recoveryDraft.projectRootFolder
-				? (current.projects.find(
+				? current.projects.find(
 						(project) => project.projectRootFolder === recoveryDraft.projectRootFolder
-					) ?? null)
-				: null) ??
+					)
+				: undefined) ??
 			(thread.cwd
-				? (current.projects.find((project) => project.projectRootFolder === thread.cwd) ?? null)
-				: null) ??
+				? current.projects.find((project) => project.projectRootFolder === thread.cwd)
+				: undefined) ??
 			(recoveryDraft.projectName
-				? (current.projects.find((project) => project.name === recoveryDraft.projectName) ?? null)
-				: null);
+				? current.projects.find((project) => project.name === recoveryDraft.projectName)
+				: undefined) ??
+			null;
 
 		if (!matchedProject) {
 			return fail(409, {
