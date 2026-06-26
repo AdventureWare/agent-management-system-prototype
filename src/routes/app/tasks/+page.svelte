@@ -58,10 +58,16 @@
 	import {
 		PRIORITY_OPTIONS,
 		TASK_APPROVAL_MODE_OPTIONS,
+		TASK_AUTONOMY_LEVEL_OPTIONS,
+		TASK_READINESS_LEVEL_OPTIONS,
+		TASK_REVIEW_REQUIREMENT_OPTIONS,
 		TASK_RISK_LEVEL_OPTIONS,
 		formatCatalogLifecycleStatusLabel,
 		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskAutonomyLevelLabel,
+		formatTaskReadinessLevelLabel,
+		formatTaskReviewRequirementLabel,
 		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		taskStatusToneClass
@@ -86,6 +92,14 @@
 	type TaskSortDirection = 'asc' | 'desc';
 	type TaskQueueFocus = 'all' | 'needsAttention';
 	type TaskQueuePresetId = 'open' | 'needsAttention' | 'completed';
+	type DelegationReadinessMode =
+		| 'CAPTURED'
+		| 'NEEDS_CLARIFICATION'
+		| 'NEEDS_PLANNING'
+		| 'NEEDS_RESEARCH'
+		| 'READY_FOR_EXECUTION'
+		| 'AWAITING_REVIEW'
+		| 'AUTOMATION_CANDIDATE';
 	type TaskQueueRow = TaskRow & {
 		depth: number;
 		visibleChildCount: number;
@@ -122,6 +136,13 @@
 		successCriteria?: string;
 		readyCondition?: string;
 		expectedOutcome?: string;
+		scope?: string;
+		nonGoals?: string;
+		validationSteps?: string;
+		readinessLevel?: string;
+		autonomyLevel?: string;
+		allowedActionNames?: string;
+		reviewRequirement?: string;
 		assigneeExecutionSurfaceId?: string;
 		targetDate?: string;
 		goalId?: string;
@@ -144,6 +165,11 @@
 	let query = $state('');
 	let selectedStatus = $state('all');
 	let selectedWorkflowId = $state('all');
+	let selectedReadinessLevel = $state('all');
+	let selectedAutonomyLevel = $state('all');
+	let selectedRiskLevel = $state('all');
+	let selectedBlockedFilter = $state<'all' | 'blocked' | 'unblocked'>('all');
+	let selectedDelegationMode = $state<'all' | DelegationReadinessMode>('all');
 	let selectedTaskView = $state<'active' | 'completed'>('active');
 	let selectedSortField = $state<TaskSortField>('updated');
 	let selectedSortDirection = $state<TaskSortDirection>('desc');
@@ -183,6 +209,15 @@
 
 	const CREATE_TASK_DRAFT_KEY = 'ams:create-task';
 	const ROOT_TASK_PARENT_KEY = '__root__';
+	const DELEGATION_MODE_OPTIONS: Array<{ id: DelegationReadinessMode; label: string }> = [
+		{ id: 'CAPTURED', label: 'Quick capture' },
+		{ id: 'NEEDS_CLARIFICATION', label: 'Needs clarification' },
+		{ id: 'NEEDS_PLANNING', label: 'Needs planning' },
+		{ id: 'NEEDS_RESEARCH', label: 'Needs research' },
+		{ id: 'READY_FOR_EXECUTION', label: 'Ready for execution' },
+		{ id: 'AWAITING_REVIEW', label: 'Awaiting review' },
+		{ id: 'AUTOMATION_CANDIDATE', label: 'Automation candidate' }
+	];
 	const threadStoreState = fromStore(agentThreadStore);
 	const taskRecordState = fromStore(taskRecordStore);
 
@@ -734,6 +769,90 @@
 		return task.workflowId === selectedWorkflowId;
 	}
 
+	function matchesMetadataFilters(task: TaskRow) {
+		const readinessLevel = task.readinessLevel ?? 'R1_FRAMED';
+		const autonomyLevel = task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+
+		if (selectedReadinessLevel !== 'all' && readinessLevel !== selectedReadinessLevel) {
+			return false;
+		}
+
+		if (selectedAutonomyLevel !== 'all' && autonomyLevel !== selectedAutonomyLevel) {
+			return false;
+		}
+
+		if (selectedRiskLevel !== 'all' && task.riskLevel !== selectedRiskLevel) {
+			return false;
+		}
+
+		if (
+			selectedBlockedFilter === 'blocked' &&
+			task.status !== 'blocked' &&
+			!task.blockedReason?.trim()
+		) {
+			return false;
+		}
+
+		if (
+			selectedBlockedFilter === 'unblocked' &&
+			(task.status === 'blocked' || Boolean(task.blockedReason?.trim()))
+		) {
+			return false;
+		}
+
+		if (
+			selectedDelegationMode !== 'all' &&
+			task.delegationReadiness?.recommendedMode !== selectedDelegationMode
+		) {
+			return false;
+		}
+
+		return true;
+	}
+
+	function metadataBadgeClass(kind: 'readiness' | 'autonomy' | 'risk' | 'review', value: string) {
+		if (kind === 'risk') {
+			switch (value) {
+				case 'critical':
+				case 'high':
+					return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+				case 'medium':
+					return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+				default:
+					return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
+			}
+		}
+
+		if (kind === 'autonomy') {
+			return 'border-violet-900/70 bg-violet-950/40 text-violet-200';
+		}
+
+		if (kind === 'readiness') {
+			return 'border-sky-900/70 bg-sky-950/40 text-sky-200';
+		}
+
+		return 'border-slate-700 bg-slate-950/70 text-slate-300';
+	}
+
+	function delegationModeBadgeClass(mode: string | null | undefined) {
+		switch (mode) {
+			case 'READY_FOR_EXECUTION':
+				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
+			case 'AWAITING_REVIEW':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			case 'AUTOMATION_CANDIDATE':
+				return 'border-sky-900/70 bg-sky-950/40 text-sky-200';
+			case 'NEEDS_CLARIFICATION':
+			case 'NEEDS_RESEARCH':
+				return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+			case 'NEEDS_PLANNING':
+				return 'border-violet-900/70 bg-violet-950/40 text-violet-200';
+			case 'CAPTURED':
+			default:
+				return 'border-slate-700 bg-slate-950/70 text-slate-300';
+		}
+	}
+
 	function taskNeedsAttention(task: TaskRow) {
 		return (
 			task.status === 'blocked' ||
@@ -749,6 +868,11 @@
 		query = '';
 		selectedStatus = 'all';
 		selectedWorkflowId = 'all';
+		selectedReadinessLevel = 'all';
+		selectedAutonomyLevel = 'all';
+		selectedRiskLevel = 'all';
+		selectedBlockedFilter = 'all';
+		selectedDelegationMode = 'all';
 
 		switch (presetId) {
 			case 'needsAttention':
@@ -780,6 +904,7 @@
 					!query.trim() &&
 					selectedStatus === 'all' &&
 					selectedWorkflowId === 'all' &&
+					selectedDelegationMode === 'all' &&
 					selectedTaskView === 'active' &&
 					selectedSortField === 'targetDate' &&
 					selectedSortDirection === 'asc' &&
@@ -790,6 +915,7 @@
 					!query.trim() &&
 					selectedStatus === 'all' &&
 					selectedWorkflowId === 'all' &&
+					selectedDelegationMode === 'all' &&
 					selectedTaskView === 'completed' &&
 					selectedSortField === 'updated' &&
 					selectedSortDirection === 'desc' &&
@@ -801,6 +927,7 @@
 					!query.trim() &&
 					selectedStatus === 'all' &&
 					selectedWorkflowId === 'all' &&
+					selectedDelegationMode === 'all' &&
 					selectedTaskView === 'active' &&
 					selectedSortField === 'updated' &&
 					selectedSortDirection === 'desc' &&
@@ -892,6 +1019,7 @@
 		query.trim().length > 0 ||
 			selectedStatus !== 'all' ||
 			selectedWorkflowId !== 'all' ||
+			selectedDelegationMode !== 'all' ||
 			selectedQueueFocus !== 'all'
 	);
 
@@ -1189,6 +1317,10 @@
 				continue;
 			}
 
+			if (!matchesMetadataFilters(task)) {
+				continue;
+			}
+
 			if (selectedQueueFocus === 'needsAttention' && !taskNeedsAttention(task)) {
 				continue;
 			}
@@ -1380,6 +1512,15 @@
 					successCriteria: form.successCriteria?.toString() ?? '',
 					readyCondition: form.readyCondition?.toString() ?? '',
 					expectedOutcome: form.expectedOutcome?.toString() ?? '',
+					scope: form.scope?.toString() ?? '',
+					nonGoals: form.nonGoals?.toString() ?? '',
+					validationSteps: form.validationSteps?.toString() ?? '',
+					readinessLevel: form.readinessLevel?.toString() ?? 'R1_FRAMED',
+					autonomyLevel: form.autonomyLevel?.toString() ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+					allowedActionNames: Array.isArray(form.allowedActionNames)
+						? form.allowedActionNames.join(', ')
+						: '',
+					reviewRequirement: form.reviewRequirement?.toString() ?? 'SUMMARY_REVIEW',
 					assigneeExecutionSurfaceId: form.assigneeExecutionSurfaceId?.toString() ?? '',
 					targetDate: form.targetDate?.toString() ?? '',
 					goalId: form.goalId?.toString() ?? '',
@@ -1428,6 +1569,13 @@
 					successCriteria: '',
 					readyCondition: '',
 					expectedOutcome: '',
+					scope: '',
+					nonGoals: '',
+					validationSteps: '',
+					readinessLevel: 'R1_FRAMED',
+					autonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+					allowedActionNames: '',
+					reviewRequirement: 'SUMMARY_REVIEW',
 					assigneeExecutionSurfaceId: '',
 					targetDate: '',
 					goalId: '',
@@ -1460,6 +1608,13 @@
 	let createTaskSuccessCriteria = $state('');
 	let createTaskReadyCondition = $state('');
 	let createTaskExpectedOutcome = $state('');
+	let createTaskScope = $state('');
+	let createTaskNonGoals = $state('');
+	let createTaskValidationSteps = $state('');
+	let createTaskReadinessLevel = $state('R1_FRAMED');
+	let createTaskAutonomyLevel = $state('A1_AGENT_MAY_ANALYZE_AND_PROPOSE');
+	let createTaskAllowedActionNames = $state('');
+	let createTaskReviewRequirement = $state('SUMMARY_REVIEW');
 	let createTaskAssigneeExecutionSurfaceId = $state('');
 	let createTaskTargetDate = $state('');
 	let createTaskGoalId = $state('');
@@ -1702,6 +1857,22 @@
 			parts.push('Expected outcome set');
 		}
 
+		if (createTaskScope.trim()) {
+			parts.push('Scope set');
+		}
+
+		if (createTaskValidationSteps.trim()) {
+			parts.push('Validation steps set');
+		}
+
+		if (createTaskReadinessLevel !== 'R1_FRAMED') {
+			parts.push(formatTaskReadinessLevelLabel(createTaskReadinessLevel));
+		}
+
+		if (createTaskAutonomyLevel !== 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE') {
+			parts.push(formatTaskAutonomyLevelLabel(createTaskAutonomyLevel));
+		}
+
 		if (createTaskRequiredPromptSkillNames.trim()) {
 			parts.push('Prompt skills requested');
 		}
@@ -1775,6 +1946,13 @@
 				successCriteria: createTaskSuccessCriteria,
 				readyCondition: createTaskReadyCondition,
 				expectedOutcome: createTaskExpectedOutcome,
+				scope: createTaskScope,
+				nonGoals: createTaskNonGoals,
+				validationSteps: createTaskValidationSteps,
+				readinessLevel: createTaskReadinessLevel,
+				autonomyLevel: createTaskAutonomyLevel,
+				allowedActionNames: createTaskAllowedActionNames,
+				reviewRequirement: createTaskReviewRequirement,
 				priority: createTaskPriority,
 				riskLevel: createTaskRiskLevel,
 				approvalMode: createTaskApprovalMode,
@@ -1795,6 +1973,13 @@
 		successCriteria?: string;
 		readyCondition?: string;
 		expectedOutcome?: string;
+		scope?: string;
+		nonGoals?: string;
+		validationSteps?: string;
+		readinessLevel?: string;
+		autonomyLevel?: string;
+		allowedActionNames?: string;
+		reviewRequirement?: string;
 		priority?: string;
 		riskLevel?: string;
 		approvalMode?: string;
@@ -1808,6 +1993,14 @@
 			Boolean(input.successCriteria?.trim()) ||
 			Boolean(input.readyCondition?.trim()) ||
 			Boolean(input.expectedOutcome?.trim()) ||
+			Boolean(input.scope?.trim()) ||
+			Boolean(input.nonGoals?.trim()) ||
+			Boolean(input.validationSteps?.trim()) ||
+			(input.readinessLevel ?? 'R1_FRAMED') !== 'R1_FRAMED' ||
+			(input.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE') !==
+				'A1_AGENT_MAY_ANALYZE_AND_PROPOSE' ||
+			Boolean(input.allowedActionNames?.trim()) ||
+			(input.reviewRequirement ?? 'SUMMARY_REVIEW') !== 'SUMMARY_REVIEW' ||
 			(input.priority ?? 'medium') !== 'medium' ||
 			(input.riskLevel ?? 'medium') !== 'medium' ||
 			(input.approvalMode ?? 'none') !== 'none' ||
@@ -1838,6 +2031,13 @@
 		successCriteria?: string;
 		readyCondition?: string;
 		expectedOutcome?: string;
+		scope?: string;
+		nonGoals?: string;
+		validationSteps?: string;
+		readinessLevel?: string;
+		autonomyLevel?: string;
+		allowedActionNames?: string;
+		reviewRequirement?: string;
 		priority?: string;
 		riskLevel?: string;
 		approvalMode?: string;
@@ -1882,6 +2082,13 @@
 		createTaskSuccessCriteria = taskTemplate.successCriteria;
 		createTaskReadyCondition = taskTemplate.readyCondition;
 		createTaskExpectedOutcome = taskTemplate.expectedOutcome;
+		createTaskScope = taskTemplate.scope ?? '';
+		createTaskNonGoals = taskTemplate.nonGoals ?? '';
+		createTaskValidationSteps = taskTemplate.validationSteps ?? '';
+		createTaskReadinessLevel = taskTemplate.readinessLevel ?? 'R1_FRAMED';
+		createTaskAutonomyLevel = taskTemplate.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+		createTaskAllowedActionNames = (taskTemplate.allowedActionNames ?? []).join(', ');
+		createTaskReviewRequirement = taskTemplate.reviewRequirement ?? 'SUMMARY_REVIEW';
 		createTaskAssigneeExecutionSurfaceId = taskTemplate.assigneeExecutionSurfaceId ?? '';
 		createTaskGoalId = taskTemplate.goalId ?? '';
 		createTaskWorkflowId = createTaskParentTaskId ? '' : (taskTemplate.workflowId ?? '');
@@ -1901,6 +2108,13 @@
 			successCriteria: taskTemplate.successCriteria,
 			readyCondition: taskTemplate.readyCondition,
 			expectedOutcome: taskTemplate.expectedOutcome,
+			scope: taskTemplate.scope ?? '',
+			nonGoals: taskTemplate.nonGoals ?? '',
+			validationSteps: taskTemplate.validationSteps ?? '',
+			readinessLevel: taskTemplate.readinessLevel ?? 'R1_FRAMED',
+			autonomyLevel: taskTemplate.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+			allowedActionNames: (taskTemplate.allowedActionNames ?? []).join(', '),
+			reviewRequirement: taskTemplate.reviewRequirement ?? 'SUMMARY_REVIEW',
 			priority: taskTemplate.priority,
 			riskLevel: taskTemplate.riskLevel,
 			approvalMode: taskTemplate.approvalMode,
@@ -1957,6 +2171,10 @@
 			Boolean(draft.successCriteria?.trim()) ||
 			Boolean(draft.readyCondition?.trim()) ||
 			Boolean(draft.expectedOutcome?.trim()) ||
+			Boolean(draft.scope?.trim()) ||
+			Boolean(draft.nonGoals?.trim()) ||
+			Boolean(draft.validationSteps?.trim()) ||
+			Boolean(draft.allowedActionNames?.trim()) ||
 			Boolean(draft.assigneeExecutionSurfaceId?.trim()) ||
 			Boolean(draft.targetDate?.trim()) ||
 			Boolean(draft.goalId?.trim()) ||
@@ -1967,6 +2185,9 @@
 			Boolean(draft.requiredToolNames?.trim()) ||
 			shouldOpenCreateTaskAdvancedIntake({
 				priority: draft.priority,
+				readinessLevel: draft.readinessLevel,
+				autonomyLevel: draft.autonomyLevel,
+				reviewRequirement: draft.reviewRequirement,
 				riskLevel: draft.riskLevel,
 				approvalMode: draft.approvalMode,
 				requiredThreadSandbox: draft.requiredThreadSandbox,
@@ -1993,6 +2214,13 @@
 		createTaskSuccessCriteria = prefill?.successCriteria ?? '';
 		createTaskReadyCondition = prefill?.readyCondition ?? '';
 		createTaskExpectedOutcome = prefill?.expectedOutcome ?? '';
+		createTaskScope = prefill?.scope ?? '';
+		createTaskNonGoals = prefill?.nonGoals ?? '';
+		createTaskValidationSteps = prefill?.validationSteps ?? '';
+		createTaskReadinessLevel = prefill?.readinessLevel ?? 'R1_FRAMED';
+		createTaskAutonomyLevel = prefill?.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+		createTaskAllowedActionNames = prefill?.allowedActionNames ?? '';
+		createTaskReviewRequirement = prefill?.reviewRequirement ?? 'SUMMARY_REVIEW';
 		createTaskAssigneeExecutionSurfaceId = prefill?.assigneeExecutionSurfaceId ?? '';
 		createTaskTargetDate = prefill?.targetDate ?? '';
 		createTaskGoalId = prefill?.goalId ?? '';
@@ -2015,6 +2243,13 @@
 			successCriteria: createTaskSuccessCriteria,
 			readyCondition: createTaskReadyCondition,
 			expectedOutcome: createTaskExpectedOutcome,
+			scope: createTaskScope,
+			nonGoals: createTaskNonGoals,
+			validationSteps: createTaskValidationSteps,
+			readinessLevel: createTaskReadinessLevel,
+			autonomyLevel: createTaskAutonomyLevel,
+			allowedActionNames: createTaskAllowedActionNames,
+			reviewRequirement: createTaskReviewRequirement,
 			priority: createTaskPriority,
 			riskLevel: createTaskRiskLevel,
 			approvalMode: createTaskApprovalMode,
@@ -2036,6 +2271,13 @@
 			successCriteria: createTaskSuccessCriteria,
 			readyCondition: createTaskReadyCondition,
 			expectedOutcome: createTaskExpectedOutcome,
+			scope: createTaskScope,
+			nonGoals: createTaskNonGoals,
+			validationSteps: createTaskValidationSteps,
+			readinessLevel: createTaskReadinessLevel,
+			autonomyLevel: createTaskAutonomyLevel,
+			allowedActionNames: createTaskAllowedActionNames,
+			reviewRequirement: createTaskReviewRequirement,
 			priority: createTaskPriority,
 			riskLevel: createTaskRiskLevel,
 			approvalMode: createTaskApprovalMode,
@@ -2061,6 +2303,13 @@
 		createTaskSuccessCriteria = '';
 		createTaskReadyCondition = '';
 		createTaskExpectedOutcome = '';
+		createTaskScope = '';
+		createTaskNonGoals = '';
+		createTaskValidationSteps = '';
+		createTaskReadinessLevel = 'R1_FRAMED';
+		createTaskAutonomyLevel = 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+		createTaskAllowedActionNames = '';
+		createTaskReviewRequirement = 'SUMMARY_REVIEW';
 		createTaskPriority = 'medium';
 		createTaskRiskLevel = 'medium';
 		createTaskApprovalMode = 'none';
@@ -2105,6 +2354,13 @@
 			createTaskSuccessCriteria = createTaskFormValues.successCriteria;
 			createTaskReadyCondition = createTaskFormValues.readyCondition;
 			createTaskExpectedOutcome = createTaskFormValues.expectedOutcome;
+			createTaskScope = createTaskFormValues.scope;
+			createTaskNonGoals = createTaskFormValues.nonGoals;
+			createTaskValidationSteps = createTaskFormValues.validationSteps;
+			createTaskReadinessLevel = createTaskFormValues.readinessLevel;
+			createTaskAutonomyLevel = createTaskFormValues.autonomyLevel;
+			createTaskAllowedActionNames = createTaskFormValues.allowedActionNames;
+			createTaskReviewRequirement = createTaskFormValues.reviewRequirement;
 			createTaskAssigneeExecutionSurfaceId = createTaskFormValues.assigneeExecutionSurfaceId;
 			createTaskTargetDate = createTaskFormValues.targetDate;
 			createTaskGoalId = createTaskFormValues.goalId;
@@ -2212,6 +2468,13 @@
 			createTaskSuccessCriteria = savedDraft.successCriteria ?? '';
 			createTaskReadyCondition = savedDraft.readyCondition ?? '';
 			createTaskExpectedOutcome = savedDraft.expectedOutcome ?? '';
+			createTaskScope = savedDraft.scope ?? '';
+			createTaskNonGoals = savedDraft.nonGoals ?? '';
+			createTaskValidationSteps = savedDraft.validationSteps ?? '';
+			createTaskReadinessLevel = savedDraft.readinessLevel ?? 'R1_FRAMED';
+			createTaskAutonomyLevel = savedDraft.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+			createTaskAllowedActionNames = savedDraft.allowedActionNames ?? '';
+			createTaskReviewRequirement = savedDraft.reviewRequirement ?? 'SUMMARY_REVIEW';
 			createTaskAssigneeExecutionSurfaceId = savedDraft.assigneeExecutionSurfaceId ?? '';
 			createTaskTargetDate = savedDraft.targetDate ?? '';
 			createTaskGoalId = savedDraft.goalId ?? '';
@@ -2233,6 +2496,13 @@
 				successCriteria: createTaskSuccessCriteria,
 				readyCondition: createTaskReadyCondition,
 				expectedOutcome: createTaskExpectedOutcome,
+				scope: createTaskScope,
+				nonGoals: createTaskNonGoals,
+				validationSteps: createTaskValidationSteps,
+				readinessLevel: createTaskReadinessLevel,
+				autonomyLevel: createTaskAutonomyLevel,
+				allowedActionNames: createTaskAllowedActionNames,
+				reviewRequirement: createTaskReviewRequirement,
 				priority: createTaskPriority,
 				riskLevel: createTaskRiskLevel,
 				approvalMode: createTaskApprovalMode,
@@ -2255,6 +2525,13 @@
 				successCriteria: createTaskSuccessCriteria,
 				readyCondition: createTaskReadyCondition,
 				expectedOutcome: createTaskExpectedOutcome,
+				scope: createTaskScope,
+				nonGoals: createTaskNonGoals,
+				validationSteps: createTaskValidationSteps,
+				readinessLevel: createTaskReadinessLevel,
+				autonomyLevel: createTaskAutonomyLevel,
+				allowedActionNames: createTaskAllowedActionNames,
+				reviewRequirement: createTaskReviewRequirement,
 				priority: createTaskPriority,
 				riskLevel: createTaskRiskLevel,
 				approvalMode: createTaskApprovalMode,
@@ -2294,6 +2571,17 @@
 			successCriteria: createTaskSuccessCriteria,
 			readyCondition: createTaskReadyCondition,
 			expectedOutcome: createTaskExpectedOutcome,
+			scope: createTaskScope,
+			nonGoals: createTaskNonGoals,
+			validationSteps: createTaskValidationSteps,
+			readinessLevel: createTaskReadinessLevel === 'R1_FRAMED' ? '' : createTaskReadinessLevel,
+			autonomyLevel:
+				createTaskAutonomyLevel === 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+					? ''
+					: createTaskAutonomyLevel,
+			allowedActionNames: createTaskAllowedActionNames,
+			reviewRequirement:
+				createTaskReviewRequirement === 'SUMMARY_REVIEW' ? '' : createTaskReviewRequirement,
 			assigneeExecutionSurfaceId: createTaskAssigneeExecutionSurfaceId,
 			targetDate: createTaskTargetDate,
 			goalId: createTaskGoalId,
@@ -2414,6 +2702,12 @@
 									>
 										{formatTaskStatusLabel(task.status)}
 									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${delegationModeBadgeClass(task.delegationReadiness?.recommendedMode)}`}
+										title={task.delegationReadiness?.rationale}
+									>
+										{task.delegationReadiness?.readinessLabel ?? 'Unassessed'}
+									</span>
 								</div>
 
 								<div class="mt-3 flex flex-wrap gap-2">
@@ -2434,12 +2728,31 @@
 										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
 											task.riskLevel === 'high'
 												? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
-												: task.riskLevel === 'medium'
-													? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
-													: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
+												: task.riskLevel === 'critical'
+													? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
+													: task.riskLevel === 'medium'
+														? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
+														: 'border border-emerald-900/70 bg-emerald-950/40 text-emerald-300'
 										}`}
 									>
 										{formatTaskRiskLevelLabel(task.riskLevel)} risk
+									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('readiness', task.readinessLevel ?? 'R1_FRAMED')}`}
+									>
+										{formatTaskReadinessLevelLabel(task.readinessLevel ?? 'R1_FRAMED')}
+									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('autonomy', task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE')}`}
+									>
+										{formatTaskAutonomyLevelLabel(
+											task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+										)}
+									</span>
+									<span
+										class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('review', task.reviewRequirement ?? 'SUMMARY_REVIEW')}`}
+									>
+										{formatTaskReviewRequirementLabel(task.reviewRequirement ?? 'SUMMARY_REVIEW')}
 									</span>
 									{#if task.approvalMode !== 'none'}
 										<span
@@ -2707,7 +3020,7 @@
 													</span>
 													<span
 														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${
-															task.riskLevel === 'high'
+															task.riskLevel === 'high' || task.riskLevel === 'critical'
 																? 'border border-rose-900/70 bg-rose-950/40 text-rose-300'
 																: task.riskLevel === 'medium'
 																	? 'border border-amber-900/70 bg-amber-950/40 text-amber-300'
@@ -2715,6 +3028,31 @@
 														}`}
 													>
 														{formatTaskRiskLevelLabel(task.riskLevel)} risk
+													</span>
+													<span
+														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('readiness', task.readinessLevel ?? 'R1_FRAMED')}`}
+													>
+														{formatTaskReadinessLevelLabel(task.readinessLevel ?? 'R1_FRAMED')}
+													</span>
+													<span
+														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${delegationModeBadgeClass(task.delegationReadiness?.recommendedMode)}`}
+														title={task.delegationReadiness?.rationale}
+													>
+														{task.delegationReadiness?.readinessLabel ?? 'Unassessed'}
+													</span>
+													<span
+														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('autonomy', task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE')}`}
+													>
+														{formatTaskAutonomyLevelLabel(
+															task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+														)}
+													</span>
+													<span
+														class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${metadataBadgeClass('review', task.reviewRequirement ?? 'SUMMARY_REVIEW')}`}
+													>
+														{formatTaskReviewRequirementLabel(
+															task.reviewRequirement ?? 'SUMMARY_REVIEW'
+														)}
 													</span>
 													{#if task.approvalMode !== 'none'}
 														<span
@@ -3412,6 +3750,142 @@
 								</button>
 							</div>
 						</div>
+
+						<div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-5">
+							<label class="flex min-w-0 flex-col gap-1.5">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Delegation mode
+								</span>
+								<select
+									bind:value={selectedDelegationMode}
+									aria-label="Filter by delegation readiness mode"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">All modes</option>
+									{#each DELEGATION_MODE_OPTIONS as mode (mode.id)}
+										<option value={mode.id}>{mode.label}</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="flex min-w-0 flex-col gap-1.5">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Readiness
+								</span>
+								<select
+									bind:value={selectedReadinessLevel}
+									aria-label="Filter by readiness level"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">All readiness levels</option>
+									{#each TASK_READINESS_LEVEL_OPTIONS as readinessLevel (readinessLevel)}
+										<option value={readinessLevel}>
+											{formatTaskReadinessLevelLabel(readinessLevel)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="flex min-w-0 flex-col gap-1.5">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Autonomy
+								</span>
+								<select
+									bind:value={selectedAutonomyLevel}
+									aria-label="Filter by autonomy level"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">All autonomy levels</option>
+									{#each TASK_AUTONOMY_LEVEL_OPTIONS as autonomyLevel (autonomyLevel)}
+										<option value={autonomyLevel}>
+											{formatTaskAutonomyLevelLabel(autonomyLevel)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="flex min-w-0 flex-col gap-1.5">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Risk
+								</span>
+								<select
+									bind:value={selectedRiskLevel}
+									aria-label="Filter by risk level"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">All risk levels</option>
+									{#each TASK_RISK_LEVEL_OPTIONS as riskLevel (riskLevel)}
+										<option value={riskLevel}>{formatTaskRiskLevelLabel(riskLevel)}</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="flex min-w-0 flex-col gap-1.5">
+								<span class="text-[0.6875rem] tracking-[0.16em] text-slate-500 uppercase">
+									Blockers
+								</span>
+								<select
+									bind:value={selectedBlockedFilter}
+									aria-label="Filter by blocked state"
+									class="select min-w-0 text-sm text-white"
+								>
+									<option value="all">Blocked and unblocked</option>
+									<option value="blocked">Blocked only</option>
+									<option value="unblocked">Unblocked only</option>
+								</select>
+							</label>
+						</div>
+
+						<div class="flex flex-wrap gap-2">
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-emerald-100 uppercase transition hover:border-emerald-700 hover:text-white"
+								type="button"
+								onclick={() => {
+									selectedDelegationMode = 'READY_FOR_EXECUTION';
+									selectedReadinessLevel = 'all';
+									selectedRiskLevel = 'all';
+									selectedBlockedFilter = 'all';
+								}}
+							>
+								Ready for execution
+							</button>
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-sky-800/70 bg-sky-950/30 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-sky-100 uppercase transition hover:border-sky-700 hover:text-white"
+								type="button"
+								onclick={() => {
+									selectedDelegationMode = 'NEEDS_PLANNING';
+									selectedReadinessLevel = 'all';
+									selectedRiskLevel = 'all';
+									selectedBlockedFilter = 'all';
+								}}
+							>
+								Needs planning
+							</button>
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-rose-800/70 bg-rose-950/30 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-rose-100 uppercase transition hover:border-rose-700 hover:text-white"
+								type="button"
+								onclick={() => {
+									selectedDelegationMode = 'NEEDS_RESEARCH';
+									selectedReadinessLevel = 'all';
+									selectedRiskLevel = 'all';
+									selectedBlockedFilter = 'all';
+								}}
+							>
+								Needs research
+							</button>
+							<button
+								class="inline-flex items-center justify-center rounded-full border border-amber-800/70 bg-amber-950/30 px-3 py-2 text-center text-xs leading-none font-medium tracking-[0.14em] text-amber-100 uppercase transition hover:border-amber-700 hover:text-white"
+								type="button"
+								onclick={() => {
+									selectedDelegationMode = 'AWAITING_REVIEW';
+									selectedReadinessLevel = 'all';
+									selectedRiskLevel = 'all';
+									selectedBlockedFilter = 'all';
+								}}
+							>
+								Awaiting review
+							</button>
+						</div>
 					</div>
 				</section>
 
@@ -3626,6 +4100,17 @@
 								<input type="hidden" name="successCriteria" value={createTaskSuccessCriteria} />
 								<input type="hidden" name="readyCondition" value={createTaskReadyCondition} />
 								<input type="hidden" name="expectedOutcome" value={createTaskExpectedOutcome} />
+								<input type="hidden" name="scope" value={createTaskScope} />
+								<input type="hidden" name="nonGoals" value={createTaskNonGoals} />
+								<input type="hidden" name="validationSteps" value={createTaskValidationSteps} />
+								<input type="hidden" name="readinessLevel" value={createTaskReadinessLevel} />
+								<input type="hidden" name="autonomyLevel" value={createTaskAutonomyLevel} />
+								<input
+									type="hidden"
+									name="allowedActionNames"
+									value={createTaskAllowedActionNames}
+								/>
+								<input type="hidden" name="reviewRequirement" value={createTaskReviewRequirement} />
 								{#each createTaskDependencyTaskIds as dependencyTaskId (dependencyTaskId)}
 									<input type="hidden" name="dependencyTaskIds" value={dependencyTaskId} />
 								{/each}
@@ -4215,6 +4700,118 @@
 									</div>
 								</div>
 
+								<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div>
+											<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+												Readiness and autonomy
+											</p>
+											<p class="mt-2 text-sm text-slate-400">
+												Set the task boundary and execution policy before it enters the queue.
+											</p>
+										</div>
+									</div>
+
+									<div class="mt-4 grid gap-4 lg:grid-cols-3">
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">Scope</span>
+											<textarea
+												bind:value={createTaskScope}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="scope"
+												placeholder="Files, app areas, docs, or artifacts that are in bounds."
+											></textarea>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">Non-goals</span>
+											<textarea
+												bind:value={createTaskNonGoals}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="nonGoals"
+												placeholder="Work the agent should not do."
+											></textarea>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Validation steps
+											</span>
+											<textarea
+												bind:value={createTaskValidationSteps}
+												class="textarea min-h-28 text-white placeholder:text-slate-500"
+												name="validationSteps"
+												placeholder="Tests, commands, screenshots, artifacts, or review checks."
+											></textarea>
+										</label>
+									</div>
+
+									<div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Readiness level
+											</span>
+											<select
+												bind:value={createTaskReadinessLevel}
+												class="select text-white"
+												name="readinessLevel"
+											>
+												{#each TASK_READINESS_LEVEL_OPTIONS as readinessLevel (readinessLevel)}
+													<option value={readinessLevel}>
+														{formatTaskReadinessLevelLabel(readinessLevel)}
+													</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Autonomy level
+											</span>
+											<select
+												bind:value={createTaskAutonomyLevel}
+												class="select text-white"
+												name="autonomyLevel"
+											>
+												{#each TASK_AUTONOMY_LEVEL_OPTIONS as autonomyLevel (autonomyLevel)}
+													<option value={autonomyLevel}>
+														{formatTaskAutonomyLevelLabel(autonomyLevel)}
+													</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Review requirement
+											</span>
+											<select
+												bind:value={createTaskReviewRequirement}
+												class="select text-white"
+												name="reviewRequirement"
+											>
+												{#each TASK_REVIEW_REQUIREMENT_OPTIONS as reviewRequirement (reviewRequirement)}
+													<option value={reviewRequirement}>
+														{formatTaskReviewRequirementLabel(reviewRequirement)}
+													</option>
+												{/each}
+											</select>
+										</label>
+
+										<label class="block">
+											<span class="mb-2 block text-sm font-medium text-slate-200">
+												Allowed actions
+											</span>
+											<input
+												bind:value={createTaskAllowedActionNames}
+												class="input text-white placeholder:text-slate-500"
+												name="allowedActionNames"
+												placeholder="read repo, edit docs, run tests"
+											/>
+										</label>
+									</div>
+								</div>
+
 								<div
 									id="full-task-dependencies"
 									class="grid scroll-mt-28 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
@@ -4770,6 +5367,13 @@
 					<input type="hidden" name="successCriteria" value={createTaskSuccessCriteria} />
 					<input type="hidden" name="readyCondition" value={createTaskReadyCondition} />
 					<input type="hidden" name="expectedOutcome" value={createTaskExpectedOutcome} />
+					<input type="hidden" name="scope" value={createTaskScope} />
+					<input type="hidden" name="nonGoals" value={createTaskNonGoals} />
+					<input type="hidden" name="validationSteps" value={createTaskValidationSteps} />
+					<input type="hidden" name="readinessLevel" value={createTaskReadinessLevel} />
+					<input type="hidden" name="autonomyLevel" value={createTaskAutonomyLevel} />
+					<input type="hidden" name="allowedActionNames" value={createTaskAllowedActionNames} />
+					<input type="hidden" name="reviewRequirement" value={createTaskReviewRequirement} />
 					<input
 						type="hidden"
 						name="assigneeExecutionSurfaceId"

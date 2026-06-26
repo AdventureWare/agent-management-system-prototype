@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RetrievedSelfImprovementKnowledgeItem } from '$lib/types/self-improvement';
-import type { DelegationPacket } from '$lib/types/control-plane';
+import { getRigorProfileGuidance } from '$lib/rigor-profiles';
+import type { DelegationPacket, RigorProfile } from '$lib/types/control-plane';
 import { buildTaskExecutionContractStatus } from '$lib/task-execution-contract';
 import { AMS_CLI_DOCS_PATH, buildAgentThreadCliCommand, buildAmsCliCommand } from './ams-cli-paths';
 import type { TaskRolePromptContext } from './task-role-context';
@@ -17,11 +18,38 @@ export function buildTaskThreadPrompt(input: {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	effectiveRigorProfile?: RigorProfile;
+	readinessLevel?: string;
+	autonomyLevel?: string;
+	riskLevel?: string;
+	allowedActionNames?: string[];
+	reviewRequirement?: string;
 	delegationPacket?: DelegationPacket | null;
 	projectName: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
 	additionalWritableRoots?: string[];
+	projectBrief?: string;
+	currentStateMemo?: string;
+	decisionLog?: string;
+	agentInstructionsPath?: string;
+	setupNotes?: string;
+	validationCommands?: string[];
+	codingConventions?: string;
+	approvalRequirements?: string;
+	defaultAllowedActions?: string[];
+	defaultDisallowedActions?: string[];
+	defaultAutonomyLevel?: string;
+	defaultRiskThreshold?: string;
+	defaultReviewRequirement?: string;
+	defaultRigorProfile?: RigorProfile | null;
+	defaultValidationExpectations?: string;
+	importantLinks?: string[];
+	constraints?: string;
+	projectNonGoals?: string;
 	availableSkillNames?: string[];
 	requiredPromptSkillNames?: string[];
 	preferredRole?: TaskRolePromptContext;
@@ -40,6 +68,23 @@ export function buildTaskThreadPrompt(input: {
 	const readyCondition = executionContract.readyCondition || 'None recorded.';
 	const expectedOutcome = executionContract.expectedOutcome || 'None recorded.';
 	const successCriteria = executionContract.successCriteria || 'None recorded.';
+	const effectiveRigorProfile =
+		input.effectiveRigorProfile ?? input.defaultRigorProfile ?? 'INTERNAL';
+	const rigorGuidance = getRigorProfileGuidance(effectiveRigorProfile);
+	const taskPolicyLines = [
+		`Effective rigor profile: ${rigorGuidance.label} (${effectiveRigorProfile})`,
+		input.readinessLevel ? `Readiness level: ${input.readinessLevel}` : '',
+		input.autonomyLevel ? `Autonomy level: ${input.autonomyLevel}` : '',
+		input.riskLevel ? `Risk level: ${input.riskLevel}` : '',
+		input.reviewRequirement ? `Review requirement: ${input.reviewRequirement}` : '',
+		input.scope?.trim() ? `Scope: ${input.scope.trim()}` : '',
+		input.nonGoals?.trim() ? `Non-goals: ${input.nonGoals.trim()}` : '',
+		input.validationSteps?.trim() ? `Validation steps: ${input.validationSteps.trim()}` : '',
+		`Rigor validation guidance: ${rigorGuidance.validationExpectations.join(' ')}`,
+		input.allowedActionNames?.length
+			? `Allowed actions/tools: ${input.allowedActionNames.join(', ')}`
+			: ''
+	].filter(Boolean);
 	const contextLines = [
 		`Task: ${input.taskName}`,
 		`Project: ${input.projectName}`,
@@ -48,7 +93,10 @@ export function buildTaskThreadPrompt(input: {
 	const coordinationLines = [
 		'Thread coordination:',
 		'If you need to inspect or update AMS state from this managed run, use the AMS helper CLI paths below instead of guessing URLs or assuming the helper scripts exist in the target project workspace.',
-		'Start discovery with the machine-readable AMS capability manifest:',
+		'Start with the AMS doctor before depending on control-plane readback or mutation:',
+		buildAmsCliCommand('doctor'),
+		'If doctor reports local_listener_permission with EPERM/EACCES, this worker environment cannot reach or start the local operator. Continue repo/artifact work if safe, but do not claim AMS state was updated; report the control-plane mismatch instead.',
+		'When doctor reports the operator API is reachable, continue discovery with the machine-readable AMS capability manifest:',
 		buildAmsCliCommand('manifest'),
 		buildAmsCliCommand('manifest --resource task'),
 		'If the run already has a task, run, or thread id, resolve canonical state before assuming where the work stands:',
@@ -159,6 +207,46 @@ export function buildTaskThreadPrompt(input: {
 		);
 	}
 
+	const projectMemoryLines = [
+		input.projectBrief?.trim() ? `Project brief: ${input.projectBrief.trim()}` : '',
+		input.currentStateMemo?.trim() ? `Current state memo: ${input.currentStateMemo.trim()}` : '',
+		input.decisionLog?.trim() ? `Decision log: ${input.decisionLog.trim()}` : '',
+		input.agentInstructionsPath?.trim()
+			? `Agent instructions reference: ${input.agentInstructionsPath.trim()}`
+			: '',
+		input.setupNotes?.trim() ? `Setup notes: ${input.setupNotes.trim()}` : '',
+		input.validationCommands?.length
+			? `Default validation commands: ${input.validationCommands.join('; ')}`
+			: '',
+		input.codingConventions?.trim()
+			? `Coding/doc conventions: ${input.codingConventions.trim()}`
+			: '',
+		input.approvalRequirements?.trim()
+			? `Approval requirements: ${input.approvalRequirements.trim()}`
+			: '',
+		input.defaultAllowedActions?.length
+			? `Default allowed actions: ${input.defaultAllowedActions.join(', ')}`
+			: '',
+		input.defaultDisallowedActions?.length
+			? `Default disallowed actions: ${input.defaultDisallowedActions.join(', ')}`
+			: '',
+		input.defaultAutonomyLevel?.trim()
+			? `Default project autonomy level: ${input.defaultAutonomyLevel.trim()}`
+			: '',
+		input.defaultRiskThreshold?.trim()
+			? `Default project risk threshold: ${input.defaultRiskThreshold.trim()}`
+			: '',
+		input.defaultReviewRequirement?.trim()
+			? `Default project review requirement: ${input.defaultReviewRequirement.trim()}`
+			: '',
+		input.defaultValidationExpectations?.trim()
+			? `Default validation expectations: ${input.defaultValidationExpectations.trim()}`
+			: '',
+		input.importantLinks?.length ? `Important links: ${input.importantLinks.join(', ')}` : '',
+		input.constraints?.trim() ? `Project constraints: ${input.constraints.trim()}` : '',
+		input.projectNonGoals?.trim() ? `Project non-goals: ${input.projectNonGoals.trim()}` : ''
+	].filter(Boolean);
+
 	const roleLines = input.preferredRole
 		? [
 				'Preferred role:',
@@ -207,6 +295,12 @@ export function buildTaskThreadPrompt(input: {
 		'Success criteria:',
 		successCriteria,
 		'',
+		...(taskPolicyLines.length > 0
+			? ['Task readiness and autonomy metadata:', ...taskPolicyLines, '']
+			: []),
+		...(projectMemoryLines.length > 0
+			? ['Project memory artifacts:', ...projectMemoryLines, '']
+			: []),
 		'Completion standard:',
 		'- Do not claim completion unless the expected outcome exists and the success criteria are met.',
 		'- If the ready condition is false or becomes false, stop and report the mismatch instead of pushing ahead.',

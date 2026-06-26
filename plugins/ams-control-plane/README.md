@@ -2,11 +2,22 @@
 
 Repo-local MCP plugin for the Agent Management System control plane.
 
-The task, goal, project, and thread MCP tool definitions are generated from the same shared capability registry that powers `ams_manifest`, so that control-plane discovery and MCP tool descriptions stay aligned. Straightforward HTTP request handlers are also derived from that registry; only attachment reads and thread-routing helpers stay custom.
+The context, task, goal-loop, work-packet, goal, project, and thread MCP tool definitions are generated from the same shared capability registry that powers `ams_manifest`, so that control-plane discovery and MCP tool descriptions stay aligned. Straightforward HTTP request handlers are also derived from that registry; only attachment reads and thread-routing helpers stay custom.
 
 ## What it exposes
 
 - `ams_manifest`
+- `ams_context_current`, `ams_context_get_relevant_prior_runs`
+- `ams_goal_loop_list_active_goals`, `ams_goal_loop_get_goal_context`, `ams_goal_loop_get_goal_progress`
+- `ams_goal_loop_get_goal_success_criteria`, `ams_goal_loop_get_goal_blockers`
+- `ams_goal_loop_get_actionable_work`, `ams_goal_loop_get_blocked_work`, `ams_goal_loop_get_awaiting_review`
+- `ams_goal_loop_get_next_recommended_action`, `ams_goal_loop_explain_task_eligibility`
+- `ams_work_packet_get_agent_work_packet`
+- `ams_run_result_record_run_result`, `ams_run_result_record_validation_result`
+- `ams_run_result_record_blocker`, `ams_run_result_record_followup_recommendations`
+- `ams_run_result_create_followup_task`
+- `ams_run_result_request_review_from_run`, `ams_run_result_mark_task_blocked_from_run`
+- `ams_review_get_review_status`
 - `ams_task_list`, `ams_task_get`, `ams_task_create`, `ams_task_update`
 - `ams_task_attach`, `ams_task_attachment_read`, `ams_task_remove_attachment`
 - `ams_task_request_review`, `ams_task_approve_review`, `ams_task_request_review_changes`

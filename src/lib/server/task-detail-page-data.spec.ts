@@ -5,6 +5,7 @@ const loadControlPlaneWithRunTelemetry = vi.hoisted(() => vi.fn());
 const formatRelativeTime = vi.hoisted(() => vi.fn((value: string) => `relative:${value}`));
 const getOpenReviewForTask = vi.hoisted(() => vi.fn(() => null));
 const getPendingApprovalForTask = vi.hoisted(() => vi.fn(() => null));
+const taskHasUnmetDependencies = vi.hoisted(() => vi.fn(() => false));
 const selectExecutionProvider = vi.hoisted(() =>
 	vi.fn(
 		(
@@ -54,6 +55,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	formatRelativeTime,
 	getOpenReviewForTask,
 	getPendingApprovalForTask,
+	taskHasUnmetDependencies,
 	selectExecutionProvider,
 	resolveThreadSandbox
 }));
@@ -318,6 +320,7 @@ describe('task-detail-page-data', () => {
 		formatRelativeTime.mockClear();
 		getOpenReviewForTask.mockClear();
 		getPendingApprovalForTask.mockClear();
+		taskHasUnmetDependencies.mockClear();
 		listAgentThreads.mockReset();
 		listAgentThreads.mockResolvedValue([{ id: 'thread_1' }]);
 		buildArtifactBrowser.mockReset();
@@ -390,6 +393,12 @@ describe('task-detail-page-data', () => {
 			attachmentRoot: '/tmp/project/agent_output/task_1',
 			artifactBrowser: { entries: [{ id: 'artifact_1' }] },
 			retrievedKnowledgeItems: [{ id: 'knowledge_1' }],
+			goalLoopWorkPacket: {
+				taskId: 'task_1',
+				taskTitle: 'Child task',
+				projectId: 'project_a',
+				goalId: 'goal_child'
+			},
 			relatedRuns: [{ id: 'run_1' }],
 			candidateThreads: [{ id: 'thread_1' }],
 			suggestedThread: { id: 'thread_1' },

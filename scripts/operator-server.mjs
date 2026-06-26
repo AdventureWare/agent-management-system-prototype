@@ -526,12 +526,7 @@ export async function validateBuildArtifacts(buildPaths = BUILD_PATHS) {
 		buildManifestPath
 	} = buildPaths;
 
-	const missingArtifact = findMissingBuildArtifact(
-		buildEntryPath,
-		buildHandlerPath,
-		buildServerIndexPath,
-		buildManifestPath
-	);
+	const missingArtifact = findMissingBuildArtifact(buildEntryPath, buildHandlerPath);
 
 	if (missingArtifact) {
 		return {
@@ -546,6 +541,22 @@ export async function validateBuildArtifacts(buildPaths = BUILD_PATHS) {
 		return {
 			ok: false,
 			reason: `Build startup imports are invalid: ${formatBuildValidationError(error)}`
+		};
+	}
+
+	const hasLegacyServerManifestShape =
+		existsSync(buildServerIndexPath) || existsSync(buildManifestPath);
+
+	if (!hasLegacyServerManifestShape) {
+		return { ok: true };
+	}
+
+	const missingLegacyArtifact = findMissingBuildArtifact(buildServerIndexPath, buildManifestPath);
+
+	if (missingLegacyArtifact) {
+		return {
+			ok: false,
+			reason: `Missing build artifact at ${missingLegacyArtifact}.`
 		};
 	}
 

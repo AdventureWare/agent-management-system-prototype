@@ -195,7 +195,7 @@ describe('buildTaskThreadSuggestions', () => {
 			task: createTask({
 				title: 'Ship the implementation pass',
 				summary: 'Continue the work with the right execution context.',
-				desiredRoleId: 'role_app_worker',
+				desiredRoleId: 'role_app_execution_surface',
 				requiredCapabilityNames: ['ios', 'swiftui'],
 				requiredToolNames: ['xcodebuild']
 			}),
@@ -212,11 +212,11 @@ describe('buildTaskThreadSuggestions', () => {
 						areaLabels: ['Product'],
 						focusLabels: ['UI/UX'],
 						entityLabels: ['Task'],
-						roleLabels: ['App ExecutionSurface'],
+						roleLabels: ['App Execution Surface'],
 						capabilityLabels: ['iOS', 'SwiftUI'],
 						toolLabels: ['Xcodebuild'],
 						keywordLabels: [],
-						labels: ['Product', 'UI/UX', 'Task', 'App ExecutionSurface']
+						labels: ['Product', 'UI/UX', 'Task', 'App Execution Surface']
 					}
 				}),
 				createSession('generic', {
@@ -227,12 +227,12 @@ describe('buildTaskThreadSuggestions', () => {
 		});
 
 		expect(result.suggestedThread?.id).toBe('metadata');
-		expect(result.suggestedThread?.matchedContext.roleLabels).toEqual(['App ExecutionSurface']);
+		expect(result.suggestedThread?.matchedContext.roleLabels).toEqual(['App Execution Surface']);
 		expect(result.suggestedThread?.matchedContext.capabilityLabels).toEqual(
 			expect.arrayContaining(['iOS', 'SwiftUI'])
 		);
 		expect(result.suggestedThread?.matchedContext.toolLabels).toEqual(['Xcodebuild']);
-		expect(result.suggestedThread?.suggestionReason).toContain('role App ExecutionSurface');
+		expect(result.suggestedThread?.suggestionReason).toContain('role App Execution Surface');
 		expect(result.suggestedThread?.suggestionReason).toContain('capabilities iOS, SwiftUI');
 		expect(result.suggestedThread?.suggestionReason).toContain('tools Xcodebuild');
 	});

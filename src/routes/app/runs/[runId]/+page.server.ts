@@ -4,6 +4,7 @@ import { getAgentThread, listAgentThreads } from '$lib/server/agent-threads';
 import { loadAgentCurrentContext } from '$lib/server/agent-current-context';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { getExecutionSurfaces } from '$lib/server/control-plane';
+import { buildRunResultPreview } from '$lib/server/goal-run-result-preview';
 import { buildRunRecords } from '$lib/server/run-records';
 import { loadControlPlaneWithRunTelemetry } from '$lib/server/run-telemetry';
 import type { AgentRunDetail, AgentThreadDetail } from '$lib/types/agent-thread';
@@ -54,6 +55,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		? await getAgentThread(run.agentThreadId, { controlPlane: data })
 		: null;
 	const agentThreadRun = findAgentThreadRun({ run, thread });
+	const task = data.tasks.find((task) => task.id === run.taskId) ?? null;
 
 	return {
 		run,
@@ -66,7 +68,8 @@ export const load: PageServerLoad = async ({ params }) => {
 				})
 			)
 		),
-		task: data.tasks.find((task) => task.id === run.taskId) ?? null,
+		task,
+		project: task ? (data.projects.find((project) => project.id === task.projectId) ?? null) : null,
 		executionSurface: run.executionSurfaceId
 			? (getExecutionSurfaces(data).find((surface) => surface.id === run.executionSurfaceId) ??
 				null)
@@ -74,6 +77,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		provider: run.providerId
 			? (data.providers.find((provider) => provider.id === run.providerId) ?? null)
 			: null,
+		runResultPreview: buildRunResultPreview(data, { runId: params.runId }),
 		thread: run.agentThreadId
 			? (thread ?? threads.find((candidate) => candidate.id === run.agentThreadId) ?? null)
 			: null,

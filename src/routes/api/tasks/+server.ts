@@ -17,6 +17,10 @@ export const GET = async ({ url }) => {
 			projectId: url.searchParams.get('projectId'),
 			goalId: url.searchParams.get('goalId'),
 			status: url.searchParams.get('status'),
+			readinessLevel: url.searchParams.get('readinessLevel'),
+			autonomyLevel: url.searchParams.get('autonomyLevel'),
+			riskLevel: url.searchParams.get('riskLevel'),
+			blocked: url.searchParams.get('blocked'),
 			limit: Number.isFinite(limitValue) ? limitValue : null
 		})
 	});
@@ -31,6 +35,21 @@ export const POST = async ({ request }) => {
 			successCriteria: typeof body.successCriteria === 'string' ? body.successCriteria : undefined,
 			readyCondition: typeof body.readyCondition === 'string' ? body.readyCondition : undefined,
 			expectedOutcome: typeof body.expectedOutcome === 'string' ? body.expectedOutcome : undefined,
+			scope: typeof body.scope === 'string' ? body.scope : undefined,
+			nonGoals: typeof body.nonGoals === 'string' ? body.nonGoals : undefined,
+			validationSteps: typeof body.validationSteps === 'string' ? body.validationSteps : undefined,
+			rigorProfile:
+				typeof body.rigorProfile === 'string' || body.rigorProfile === null
+					? (body.rigorProfile as string | null)
+					: undefined,
+			readinessLevel: typeof body.readinessLevel === 'string' ? body.readinessLevel : undefined,
+			autonomyLevel: typeof body.autonomyLevel === 'string' ? body.autonomyLevel : undefined,
+			allowedActionNames:
+				Array.isArray(body.allowedActionNames) || typeof body.allowedActionNames === 'string'
+					? (body.allowedActionNames as string[] | string)
+					: undefined,
+			reviewRequirement:
+				typeof body.reviewRequirement === 'string' ? body.reviewRequirement : undefined,
 			projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
 			goalId:
 				typeof body.goalId === 'string' || body.goalId === null

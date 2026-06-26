@@ -2,6 +2,7 @@ export type AppNavigationLinkId =
 	| 'governance'
 	| 'access'
 	| 'skills'
+	| 'autonomousQueue'
 	| 'tasks'
 	| 'threads'
 	| 'runs'
@@ -19,6 +20,7 @@ export type AppNavigationRoute =
 	| '/app/governance'
 	| '/app/access'
 	| '/app/skills'
+	| '/app/autonomous-queue'
 	| '/app/tasks'
 	| '/app/threads'
 	| '/app/runs'
@@ -59,8 +61,9 @@ export const appNavigationSections: AppNavigationSection[] = [
 	{
 		id: 'work',
 		title: 'Work',
-		description: 'Queue, continuity, and execution',
+		description: 'Queue, planning, and execution',
 		links: [
+			{ id: 'autonomousQueue', label: 'Agent queue', href: '/app/autonomous-queue' },
 			{ id: 'tasks', label: 'Tasks', href: '/app/tasks' },
 			{ id: 'taskTemplates', label: 'Task templates', href: '/app/task-templates' },
 			{ id: 'workflows', label: 'Workflows', href: '/app/workflows' },

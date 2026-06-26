@@ -170,10 +170,27 @@
 		};
 	};
 
+	type GoalLoopWorkPacketView = {
+		mode: string;
+		recommendationKind: string;
+		projectId: string;
+		goalId: string;
+		taskId: string | null;
+		taskTitle: string | null;
+		selectionReason: string;
+		includedTaskIds: string[];
+		relevantRunIds: string[];
+		stoppingConditions: string[];
+		validationExpectations: string[];
+		expectedResultShape: string[];
+		prompt: string;
+	};
+
 	let {
 		task,
 		executionPreflight,
 		launchContext,
+		goalLoopWorkPacket,
 		retrievedKnowledgeItems,
 		suggestedThread,
 		candidateThreads,
@@ -185,6 +202,7 @@
 		task: TaskExecutionView;
 		executionPreflight: ExecutionPreflightView;
 		launchContext: LaunchContextView;
+		goalLoopWorkPacket: GoalLoopWorkPacketView | null;
 		retrievedKnowledgeItems: RetrievedKnowledgeItemView[];
 		suggestedThread: SuggestedThreadView | null;
 		candidateThreads: CandidateThreadView[];
@@ -259,6 +277,10 @@
 
 	function boolLabel(value: boolean, yesLabel: string, noLabel: string) {
 		return value ? yesLabel : noLabel;
+	}
+
+	function formatPacketLabel(value: string) {
+		return value.replace(/_/g, ' ');
 	}
 
 	let taskSpendUsd = $derived(
@@ -448,6 +470,107 @@
 				This mirrors the current launch plan so users can inspect the execution surface, provider,
 				sandbox, installed skills, and execution contract before starting work.
 			</p>
+
+			{#if goalLoopWorkPacket}
+				<div class="mt-5 rounded-2xl border border-sky-900/50 bg-sky-950/15 p-4">
+					<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+						<div class="min-w-0">
+							<p class="text-xs font-semibold tracking-[0.16em] text-sky-300 uppercase">
+								Goal-loop work packet
+							</p>
+							<h4 class="mt-2 text-lg font-semibold text-white">
+								{goalLoopWorkPacket.taskTitle ?? 'No selected task'}
+							</h4>
+							<p class="mt-2 text-sm text-slate-300">{goalLoopWorkPacket.selectionReason}</p>
+							<div class="mt-3 flex flex-wrap gap-2">
+								<span
+									class="badge border border-sky-800/70 bg-sky-950/40 text-[0.65rem] tracking-[0.16em] text-sky-100 uppercase"
+								>
+									{formatPacketLabel(goalLoopWorkPacket.mode)}
+								</span>
+								<span
+									class="badge border border-slate-700 bg-slate-900 text-[0.65rem] tracking-[0.16em] text-slate-200 uppercase"
+								>
+									{formatPacketLabel(goalLoopWorkPacket.recommendationKind)}
+								</span>
+								{#if goalLoopWorkPacket.goalId}
+									<span
+										class="badge border border-slate-700 bg-slate-900 text-[0.65rem] tracking-[0.16em] text-slate-200 uppercase"
+									>
+										Goal {goalLoopWorkPacket.goalId}
+									</span>
+								{/if}
+							</div>
+						</div>
+						<div class="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 xl:min-w-96">
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-xs text-slate-500 uppercase">Included tasks</p>
+								<p class="ui-wrap-anywhere mt-2">
+									{goalLoopWorkPacket.includedTaskIds.length > 0
+										? goalLoopWorkPacket.includedTaskIds.join(', ')
+										: 'None'}
+								</p>
+							</div>
+							<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+								<p class="text-xs text-slate-500 uppercase">Run evidence</p>
+								<p class="ui-wrap-anywhere mt-2">
+									{goalLoopWorkPacket.relevantRunIds.length > 0
+										? goalLoopWorkPacket.relevantRunIds.join(', ')
+										: 'None'}
+								</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-3">
+						<div>
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Stopping conditions
+							</p>
+							<ul class="mt-2 space-y-2 text-sm text-slate-300">
+								{#each goalLoopWorkPacket.stoppingConditions as condition (condition)}
+									<li>{condition}</li>
+								{/each}
+							</ul>
+						</div>
+						<div>
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Validation
+							</p>
+							<ul class="mt-2 space-y-2 text-sm text-slate-300">
+								{#each goalLoopWorkPacket.validationExpectations as expectation (expectation)}
+									<li>{expectation}</li>
+								{/each}
+							</ul>
+						</div>
+						<div>
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Result shape
+							</p>
+							<ul class="mt-2 space-y-2 text-sm text-slate-300">
+								{#each goalLoopWorkPacket.expectedResultShape as item (item)}
+									<li>{item}</li>
+								{/each}
+							</ul>
+						</div>
+					</div>
+
+					<details class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+						<summary class="cursor-pointer text-sm font-medium text-sky-200">
+							Inspect selected-task prompt
+						</summary>
+						<textarea class="mt-3 textarea min-h-72 font-mono text-xs text-white" readonly
+							>{goalLoopWorkPacket.prompt}</textarea
+						>
+					</details>
+				</div>
+			{:else}
+				<p
+					class="mt-5 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-400"
+				>
+					No goal-loop work packet is available for this task yet.
+				</p>
+			{/if}
 
 			<div class="mt-5 grid gap-4 xl:grid-cols-2">
 				<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">

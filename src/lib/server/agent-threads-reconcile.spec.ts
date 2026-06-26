@@ -133,6 +133,65 @@ describe('agent thread control-plane reconciliation', () => {
 		);
 	});
 
+	it('does not reopen a review task from passive active-thread heartbeat', () => {
+		const data = createControlPlaneFixture();
+		const reconciled = reconcileControlPlaneThreadState(data, {
+			id: 'thread_1',
+			hasActiveRun: true,
+			canResume: false,
+			latestRunStatus: 'running',
+			lastActivityAt: '2026-04-10T10:10:00.000Z',
+			latestRun: {
+				id: 'agent_run_1',
+				agentThreadId: 'thread_1',
+				state: {
+					status: 'running',
+					pid: 123,
+					startedAt: '2026-04-10T10:00:00.000Z',
+					finishedAt: null,
+					exitCode: null,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: 'Still available for follow-up.',
+				logTail: [],
+				activityAt: '2026-04-10T10:10:00.000Z',
+				createdAt: '2026-04-10T10:00:00.000Z',
+				updatedAt: '2026-04-10T10:10:00.000Z',
+				mode: 'start',
+				prompt: 'Investigate issue',
+				requestedThreadId: null,
+				sourceAgentThreadId: null,
+				sourceAgentThreadName: null,
+				contactId: null,
+				replyToContactId: null,
+				configPath: '',
+				logPath: '',
+				statePath: '',
+				messagePath: ''
+			}
+		});
+
+		expect(reconciled.tasks[0]).toEqual(
+			expect.objectContaining({
+				status: 'review',
+				updatedAt: '2026-04-10T10:05:00.000Z'
+			})
+		);
+		expect(reconciled.runs[0]).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'Completed prior pass',
+				endedAt: '2026-04-10T10:05:00.000Z'
+			})
+		);
+		expect(reconciled.reviews[0]).toEqual(
+			expect.objectContaining({
+				status: 'open'
+			})
+		);
+	});
+
 	it('blocks linked task state when the thread run fails', () => {
 		const data = createControlPlaneFixture();
 		data.tasks[0] = {
@@ -192,6 +251,144 @@ describe('agent thread control-plane reconciliation', () => {
 			expect.objectContaining({
 				status: 'failed',
 				summary: 'Task blocked after the linked work thread failed.'
+			})
+		);
+	});
+
+	it('repairs stale linked-thread blocked state when the latest thread run completed', () => {
+		const data = createControlPlaneFixture();
+		data.tasks[0] = {
+			...data.tasks[0]!,
+			status: 'blocked',
+			blockedReason: 'The linked work thread exited with code -1.'
+		};
+		data.runs[0] = {
+			...data.runs[0]!,
+			status: 'failed',
+			endedAt: '2026-04-10T10:11:00.000Z',
+			errorSummary: 'The linked work thread exited with code -1.'
+		};
+
+		const reconciled = reconcileControlPlaneThreadState(data, {
+			id: 'thread_1',
+			hasActiveRun: false,
+			canResume: true,
+			latestRunStatus: 'completed',
+			lastActivityAt: '2026-04-10T10:12:00.000Z',
+			latestRun: {
+				id: 'agent_run_1',
+				agentThreadId: 'thread_1',
+				state: {
+					status: 'completed',
+					pid: null,
+					startedAt: '2026-04-10T10:00:00.000Z',
+					finishedAt: '2026-04-10T10:12:00.000Z',
+					exitCode: 0,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: 'Finished the work.',
+				logTail: [],
+				activityAt: '2026-04-10T10:12:00.000Z',
+				createdAt: '2026-04-10T10:00:00.000Z',
+				updatedAt: '2026-04-10T10:12:00.000Z',
+				mode: 'start',
+				prompt: 'Investigate issue',
+				requestedThreadId: null,
+				sourceAgentThreadId: null,
+				sourceAgentThreadName: null,
+				contactId: null,
+				replyToContactId: null,
+				configPath: '',
+				logPath: '',
+				statePath: '',
+				messagePath: ''
+			}
+		});
+
+		expect(reconciled.tasks[0]).toEqual(
+			expect.objectContaining({
+				status: 'review',
+				blockedReason: ''
+			})
+		);
+		expect(reconciled.runs[0]).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'Task run finished and is ready for review.',
+				errorSummary: ''
+			})
+		);
+	});
+
+	it('closes a linked run when the worker exits after marking the task done', () => {
+		const data = createControlPlaneFixture();
+		data.tasks[0] = {
+			...data.tasks[0]!,
+			status: 'done',
+			requiresReview: false,
+			approvalMode: 'none',
+			updatedAt: '2026-04-10T10:11:00.000Z'
+		};
+		data.runs[0] = {
+			...data.runs[0]!,
+			status: 'running',
+			summary: 'Linked work thread is actively running.',
+			updatedAt: '2026-04-10T10:10:00.000Z',
+			endedAt: null,
+			errorSummary: ''
+		};
+
+		const reconciled = reconcileControlPlaneThreadState(data, {
+			id: 'thread_1',
+			hasActiveRun: false,
+			canResume: true,
+			latestRunStatus: 'completed',
+			lastActivityAt: '2026-04-10T10:12:00.000Z',
+			latestRun: {
+				id: 'agent_run_1',
+				agentThreadId: 'thread_1',
+				state: {
+					status: 'completed',
+					pid: null,
+					startedAt: '2026-04-10T10:00:00.000Z',
+					finishedAt: '2026-04-10T10:12:00.000Z',
+					exitCode: 0,
+					signal: null,
+					codexThreadId: null
+				},
+				lastMessage: 'Completed the proof task.',
+				logTail: [],
+				activityAt: '2026-04-10T10:12:00.000Z',
+				createdAt: '2026-04-10T10:00:00.000Z',
+				updatedAt: '2026-04-10T10:12:00.000Z',
+				mode: 'start',
+				prompt: 'Investigate issue',
+				requestedThreadId: null,
+				sourceAgentThreadId: null,
+				sourceAgentThreadName: null,
+				contactId: null,
+				replyToContactId: null,
+				configPath: '',
+				logPath: '',
+				statePath: '',
+				messagePath: ''
+			}
+		});
+
+		expect(reconciled.tasks[0]).toEqual(
+			expect.objectContaining({
+				status: 'done',
+				updatedAt: '2026-04-10T10:11:00.000Z'
+			})
+		);
+		expect(reconciled.runs[0]).toEqual(
+			expect.objectContaining({
+				status: 'completed',
+				summary: 'Task run finished and is ready for review.',
+				updatedAt: '2026-04-10T10:12:00.000Z',
+				endedAt: '2026-04-10T10:12:00.000Z',
+				errorSummary: ''
 			})
 		);
 	});

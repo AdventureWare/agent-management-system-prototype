@@ -93,6 +93,10 @@ describe('agent session helpers', () => {
 			'apps',
 			'-c',
 			'mcp_servers.supabase.enabled=false',
+			'-c',
+			'mcp_servers.vercel={url="https://mcp.vercel.com", enabled=false}',
+			'-c',
+			'mcp_servers.posthog.enabled=false',
 			'thread_123',
 			'-o',
 			'/tmp/last-message.txt',
@@ -119,6 +123,10 @@ describe('agent session helpers', () => {
 			'apps',
 			'-c',
 			'mcp_servers.supabase.enabled=false',
+			'-c',
+			'mcp_servers.vercel={url="https://mcp.vercel.com", enabled=false}',
+			'-c',
+			'mcp_servers.posthog.enabled=false',
 			'--full-auto',
 			'-m',
 			'gpt-5',
@@ -148,6 +156,10 @@ describe('agent session helpers', () => {
 			'apps',
 			'-c',
 			'mcp_servers.supabase.enabled=false',
+			'-c',
+			'mcp_servers.vercel={url="https://mcp.vercel.com", enabled=false}',
+			'-c',
+			'mcp_servers.posthog.enabled=false',
 			'--dangerously-bypass-approvals-and-sandbox',
 			'thread_123',
 			'-o',
@@ -175,6 +187,10 @@ describe('agent session helpers', () => {
 			'apps',
 			'-c',
 			'mcp_servers.supabase.enabled=false',
+			'-c',
+			'mcp_servers.vercel={url="https://mcp.vercel.com", enabled=false}',
+			'-c',
+			'mcp_servers.posthog.enabled=false',
 			'-C',
 			'/tmp/project',
 			'--sandbox',
@@ -498,6 +514,90 @@ describe('agent session helpers', () => {
 			signal: null,
 			codexThreadId: 'thread_123'
 		});
+	});
+
+	it('marks runs as failed when Codex exhausts stream reconnects without completing', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-06-12T22:21:30.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_stream_disconnect',
+			agentThreadId: 'session_stream_disconnect',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-06-12T21:59:47.738Z',
+			updatedAt: '2026-06-12T21:59:47.738Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: null,
+				startedAt: '2026-06-12T21:59:48.086Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: '019ebdd9-3218-7611-b1dd-7b6776226e23'
+			},
+			lastMessage: null,
+			logTail: [
+				'{"type":"thread.started","thread_id":"019ebdd9-3218-7611-b1dd-7b6776226e23"}',
+				'{"type":"error","message":"Reconnecting... 5/5 (stream disconnected before completion: failed to send websocket request: IO error: Broken pipe (os error 32))"}'
+			],
+			activityAt: '2026-06-12T22:20:36.021Z'
+		};
+
+		expect(deriveRunState(run)).toEqual({
+			status: 'failed',
+			pid: null,
+			startedAt: '2026-06-12T21:59:48.086Z',
+			finishedAt: '2026-06-12T22:20:36.021Z',
+			exitCode: -1,
+			signal: null,
+			codexThreadId: '019ebdd9-3218-7611-b1dd-7b6776226e23'
+		});
+
+		vi.useRealTimers();
+	});
+
+	it('keeps runs active when output continues after an exhausted reconnect marker', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-06-12T22:21:30.000Z'));
+
+		const run: AgentRunDetail = {
+			id: 'run_recovered_stream',
+			agentThreadId: 'session_recovered_stream',
+			mode: 'start',
+			prompt: 'start work',
+			requestedThreadId: null,
+			createdAt: '2026-06-12T21:59:47.738Z',
+			updatedAt: '2026-06-12T21:59:47.738Z',
+			logPath: '/tmp/codex.log',
+			statePath: '/tmp/state.json',
+			messagePath: '/tmp/last-message.txt',
+			configPath: '/tmp/config.json',
+			state: {
+				status: 'running',
+				pid: null,
+				startedAt: '2026-06-12T21:59:48.086Z',
+				finishedAt: null,
+				exitCode: null,
+				signal: null,
+				codexThreadId: '019ebdd9-3218-7611-b1dd-7b6776226e23'
+			},
+			lastMessage: null,
+			logTail: [
+				'{"type":"error","message":"Reconnecting... 5/5 (stream disconnected before completion: failed to send websocket request: IO error: Broken pipe (os error 32))"}',
+				'{"type":"item.completed","item":{"id":"item_30","type":"file_change","status":"completed"}}'
+			],
+			activityAt: '2026-06-12T22:20:36.021Z'
+		};
+
+		expect(deriveRunState(run)).toEqual(run.state);
+
+		vi.useRealTimers();
 	});
 
 	it('builds follow-up prompts that include attached thread files as immediate context', () => {
@@ -1450,6 +1550,106 @@ describe('agent session helpers', () => {
 		expect(next.runs[0]?.errorSummary).toBe(
 			'Codex could not start the work thread because authentication refresh failed before thread startup. Re-login to Codex CLI and retry the task.'
 		);
+	});
+
+	it('surfaces exhausted stream reconnect failures for linked tasks', () => {
+		const data: ControlPlaneData = {
+			providers: [],
+			roles: [],
+			projects: [],
+			goals: [],
+			executionSurfaces: [],
+			tasks: [
+				{
+					id: 'task_1',
+					title: 'Improve model',
+					summary: 'Start the task in a fresh thread.',
+					projectId: 'project_1',
+					area: 'product',
+					goalId: 'goal_1',
+					priority: 'medium',
+					status: 'in_progress',
+					riskLevel: 'medium',
+					approvalMode: 'none',
+					requiresReview: true,
+					desiredRoleId: 'role_coordinator',
+					assigneeExecutionSurfaceId: null,
+					agentThreadId: 'session_1',
+					blockedReason: '',
+					dependencyTaskIds: [],
+					runCount: 1,
+					latestRunId: 'run_1',
+					artifactPath: '/tmp/artifacts',
+					attachments: [],
+					createdAt: '2026-06-12T21:59:47.000Z',
+					updatedAt: '2026-06-12T21:59:47.000Z'
+				}
+			],
+			runs: [
+				{
+					id: 'run_1',
+					taskId: 'task_1',
+					executionSurfaceId: null,
+					providerId: null,
+					status: 'running',
+					createdAt: '2026-06-12T21:59:47.000Z',
+					updatedAt: '2026-06-12T21:59:47.000Z',
+					startedAt: '2026-06-12T21:59:48.000Z',
+					endedAt: null,
+					threadId: null,
+					agentThreadId: 'session_1',
+					promptDigest: '',
+					artifactPaths: [],
+					summary: 'Running task.',
+					lastHeartbeatAt: '2026-06-12T21:59:48.000Z',
+					errorSummary: ''
+				}
+			],
+			reviews: [],
+			approvals: []
+		};
+
+		const next = reconcileControlPlaneThreadState(data, {
+			id: 'session_1',
+			hasActiveRun: false,
+			canResume: false,
+			latestRunStatus: 'failed',
+			lastActivityAt: '2026-06-12T22:20:36.021Z',
+			latestRun: {
+				id: 'run_1',
+				agentThreadId: 'session_1',
+				mode: 'start',
+				prompt: 'start work',
+				requestedThreadId: null,
+				createdAt: '2026-06-12T21:59:47.000Z',
+				updatedAt: '2026-06-12T22:20:36.021Z',
+				logPath: '/tmp/codex.log',
+				statePath: '/tmp/state.json',
+				messagePath: '/tmp/last-message.txt',
+				configPath: '/tmp/config.json',
+				state: {
+					status: 'failed',
+					pid: null,
+					startedAt: '2026-06-12T21:59:48.000Z',
+					finishedAt: '2026-06-12T22:20:36.021Z',
+					exitCode: -1,
+					signal: null,
+					codexThreadId: '019ebdd9-3218-7611-b1dd-7b6776226e23'
+				},
+				lastMessage: null,
+				logTail: [
+					'{"type":"error","message":"Reconnecting... 5/5 (stream disconnected before completion: failed to send websocket request: IO error: Broken pipe (os error 32))"}'
+				],
+				activityAt: '2026-06-12T22:20:36.021Z'
+			}
+		});
+
+		const expectedReason =
+			'Codex disconnected before completing the response after exhausting stream reconnect attempts. Review any file changes from the run, then retry the task.';
+
+		expect(next.tasks[0]?.blockedReason).toBe(expectedReason);
+		expect(next.runs[0]?.status).toBe('failed');
+		expect(next.runs[0]?.errorSummary).toBe(expectedReason);
 	});
 
 	it('reopens linked blocked tasks when the session is actively running', () => {

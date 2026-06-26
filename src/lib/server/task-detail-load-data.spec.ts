@@ -183,8 +183,8 @@ describe('task-detail-load-data', () => {
 			}
 		]);
 		expect(result.childTasks.map((childTask) => childTask.integrationStatus)).toEqual([
-			'accepted',
-			'pending'
+			'pending',
+			'accepted'
 		]);
 		expect(result.childTaskRollup).toMatchObject({
 			status: 'review',

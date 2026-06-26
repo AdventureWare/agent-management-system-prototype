@@ -251,4 +251,18 @@ describe('task execution workspace checks', () => {
 			'Project Codex skill is invalid: /tmp/project/.agents/docs-writer/SKILL.md. Add YAML frontmatter delimited by --- at the top of the file or remove the broken skill before launching a work thread.'
 		);
 	});
+
+	it('skips unreadable skill files during launch preflight', () => {
+		existsSync.mockImplementation((path: string) =>
+			new Set(['/tmp/project/.agents', '/tmp/project/.agents/docs-writer/SKILL.md']).has(path)
+		);
+		readdirSync.mockImplementation((path: string) =>
+			path === '/tmp/project/.agents' ? [{ name: 'docs-writer', isDirectory: () => true }] : []
+		);
+		readFileSync.mockImplementation(() => {
+			throw new Error('Unknown system error -11');
+		});
+
+		expect(getCodexSkillExecutionIssue('/tmp/project', '/fake/.codex')).toBeNull();
+	});
 });

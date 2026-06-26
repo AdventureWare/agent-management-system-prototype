@@ -14,6 +14,8 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 ## Workflow
 
 1. Start with capability discovery.
+   Run `node scripts/ams-cli.mjs doctor` first when the thread is in a managed run or when operator reachability is uncertain.
+   If doctor reports `local_listener_permission` with `EPERM` or `EACCES`, the current worker environment cannot bind a local operator listener. Do not retry `npm run app:server:start` from that worker, do not claim AMS state was updated, and report the control-plane mismatch after finishing any safe repo/artifact work.
    Use `node scripts/ams-cli.mjs manifest` or the MCP tool `ams_manifest` before guessing which operation exists.
    The shared capability registry also drives the manifest-backed task, goal, project, and thread MCP tool definitions, so discovery and tool metadata should match.
    If the managed run already has a thread id, task id, or run id, immediately resolve canonical state with `node scripts/ams-cli.mjs context current` or the MCP tool `ams_context_current`.
@@ -35,7 +37,7 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 
 ## High-signal commands
 
-- Discovery: `node scripts/ams-cli.mjs manifest`
+- Discovery: `node scripts/ams-cli.mjs doctor`, then `node scripts/ams-cli.mjs manifest`
 - Current context: `node scripts/ams-cli.mjs context current`
 - First-class intents: `node scripts/ams-cli.mjs intent prepare_task_for_review`, `prepare_task_for_approval`, `reject_task_approval`, `accept_child_handoff`, `request_child_handoff_changes`, `coordinate_with_another_thread`
 - Preview examples: `node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","validateOnly":true,"review":{"summary":"Ready for review."}}'`, `node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","validateOnly":true,"approval":{"summary":"Ready for approval.","mode":"before_complete"}}'`, `node scripts/ams-cli.mjs intent reject_task_approval --json '{"taskId":"<taskId>","validateOnly":true}'`, `node scripts/ams-cli.mjs intent accept_child_handoff --json '{"parentTaskId":"<parentTaskId>","childTaskId":"<childTaskId>","validateOnly":true}'`, `node scripts/ams-cli.mjs task decompose <taskId> --json '{"validateOnly":true,"children":[...]}'`
@@ -54,5 +56,6 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 - Do not edit `data/control-plane.json` directly when AMS already exposes a supported operation.
 - Do not use thread routing for work that is only a task or project mutation.
 - Do not guess task or run state from memory when `context current` can resolve it directly.
+- Do not try to start the local operator from a managed worker after doctor reports local-listener denial; that is an environment capability mismatch, not a retryable task step.
 - Do not manually sequence a common playbook when a matching `intent` command already exists unless you need a custom path the intent does not cover.
 - Do not assume a mutation succeeded without reading the resulting task, goal, or project state back.

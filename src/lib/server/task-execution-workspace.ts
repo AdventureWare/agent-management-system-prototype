@@ -234,7 +234,9 @@ export function getCodexSkillExecutionIssue(
 					return `${source.label} is invalid: ${skillPath}. Add YAML frontmatter delimited by --- at the top of the file or remove the broken skill before launching a work thread.`;
 				}
 			} catch (error) {
-				return `${source.label} could not be read: ${skillPath}. ${formatSkillValidationFailure(error)}`;
+				console.warn(
+					`${source.label} could not be read during launch preflight and will be skipped: ${skillPath}. ${formatSkillValidationFailure(error)}`
+				);
 			}
 		}
 	}

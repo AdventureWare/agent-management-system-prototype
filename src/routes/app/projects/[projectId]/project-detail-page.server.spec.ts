@@ -131,6 +131,23 @@ describe('project detail page server actions', () => {
 					name: 'Agent Management System Prototype',
 					summary: 'Prototype project',
 					parentProjectId: null,
+					projectBrief: '',
+					currentStateMemo: '',
+					decisionLog: '',
+					agentInstructionsPath: '',
+					setupNotes: '',
+					validationCommands: [],
+					codingConventions: '',
+					approvalRequirements: '',
+					defaultAllowedActions: [],
+					defaultDisallowedActions: [],
+					defaultAutonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+					defaultRiskThreshold: 'medium',
+					defaultReviewRequirement: 'SUMMARY_REVIEW',
+					defaultValidationExpectations: '',
+					importantLinks: [],
+					constraints: '',
+					nonGoals: '',
 					projectRootFolder: '/tmp/project',
 					defaultArtifactRoot: '/tmp/project/agent_output',
 					defaultRepoPath: '',
@@ -143,6 +160,23 @@ describe('project detail page server actions', () => {
 					name: 'Kwipoo website',
 					summary: 'Marketing site',
 					parentProjectId: 'project_1',
+					projectBrief: '',
+					currentStateMemo: '',
+					decisionLog: '',
+					agentInstructionsPath: '',
+					setupNotes: '',
+					validationCommands: [],
+					codingConventions: '',
+					approvalRequirements: '',
+					defaultAllowedActions: [],
+					defaultDisallowedActions: [],
+					defaultAutonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+					defaultRiskThreshold: 'medium',
+					defaultReviewRequirement: 'SUMMARY_REVIEW',
+					defaultValidationExpectations: '',
+					importantLinks: [],
+					constraints: '',
+					nonGoals: '',
 					projectRootFolder: '/tmp/project/site',
 					defaultArtifactRoot: '/tmp/project/site/agent_output',
 					defaultRepoPath: '',
@@ -304,5 +338,67 @@ describe('project detail page server actions', () => {
 			})
 		);
 		expect(buildProjectPermissionSurfaceMock).toHaveBeenCalled();
+	});
+
+	it('saves project memory and autonomy defaults from the edit form', async () => {
+		const form = new FormData();
+		form.set('name', 'Agent Management System Prototype');
+		form.set('summary', 'Prototype project');
+		form.set('parentProjectId', '');
+		form.set('projectBrief', 'Build a local control plane for managed agents.');
+		form.set('currentStateMemo', 'Project memory fields are being normalized.');
+		form.set('decisionLog', '2026-06-25: Store v0 memory on Project.');
+		form.set('agentInstructionsPath', '/tmp/project/AGENTS.md');
+		form.set('setupNotes', 'Run npm install before validation.');
+		form.set('validationCommands', 'npm run check\nnpm run test:unit -- --run');
+		form.set('codingConventions', 'Keep edits scoped.');
+		form.set('approvalRequirements', 'Request summary review for medium-risk work.');
+		form.set('defaultAllowedActions', 'inspect repo\nedit workspace files');
+		form.set('defaultDisallowedActions', 'deploy production');
+		form.set('defaultAutonomyLevel', 'A2_AGENT_MAY_DRAFT_ARTIFACTS');
+		form.set('defaultRiskThreshold', 'low');
+		form.set('defaultReviewRequirement', 'DIFF_REVIEW');
+		form.set('defaultValidationExpectations', 'Run focused checks and report skipped checks.');
+		form.set('importantLinks', 'https://github.com/example/ams');
+		form.set('constraints', 'Do not create a duplicate memory table.');
+		form.set('nonGoals', 'Do not implement autonomous queue changes.');
+		form.set('projectRootFolder', '/tmp/project');
+		form.set('defaultArtifactRoot', '/tmp/project/agent_output');
+		form.set('defaultRepoPath', '/tmp/project');
+		form.set('defaultRepoUrl', 'git@github.com:example/ams.git');
+		form.set('defaultBranch', 'main');
+		form.set('additionalWritableRoots', '/tmp/project/shared');
+		form.set('defaultThreadSandbox', 'workspace-write');
+		form.set('defaultModel', 'gpt-5');
+
+		const result = await actions.updateProject({
+			params: { projectId: 'project_1' },
+			request: new Request('http://localhost', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toMatchObject({
+			ok: true,
+			successAction: 'updateProject',
+			projectId: 'project_1'
+		});
+		expect(controlPlaneState.saved?.projects[0]).toMatchObject({
+			projectBrief: 'Build a local control plane for managed agents.',
+			currentStateMemo: 'Project memory fields are being normalized.',
+			decisionLog: '2026-06-25: Store v0 memory on Project.',
+			agentInstructionsPath: '/tmp/project/AGENTS.md',
+			validationCommands: ['npm run check', 'npm run test:unit -- --run'],
+			defaultAllowedActions: ['inspect repo', 'edit workspace files'],
+			defaultDisallowedActions: ['deploy production'],
+			defaultAutonomyLevel: 'A2_AGENT_MAY_DRAFT_ARTIFACTS',
+			defaultRiskThreshold: 'low',
+			defaultReviewRequirement: 'DIFF_REVIEW',
+			defaultValidationExpectations: 'Run focused checks and report skipped checks.',
+			importantLinks: ['https://github.com/example/ams'],
+			constraints: 'Do not create a duplicate memory table.',
+			nonGoals: 'Do not implement autonomous queue changes.'
+		});
 	});
 });

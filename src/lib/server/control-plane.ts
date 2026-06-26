@@ -24,10 +24,15 @@ import {
 	PROJECT_SKILL_AVAILABILITY_OPTIONS,
 	PLANNING_CONFIDENCE_OPTIONS,
 	PRIORITY_OPTIONS,
+	RIGOR_PROFILE_OPTIONS,
 	REVIEW_STATUS_OPTIONS,
 	RUN_STATUS_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
+	TASK_AUTONOMY_LEVEL_OPTIONS,
+	TASK_CLOSEOUT_STATE_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS,
+	TASK_READINESS_LEVEL_OPTIONS,
+	TASK_REVIEW_REQUIREMENT_OPTIONS,
 	WORKFLOW_STATUS_OPTIONS,
 	EXECUTION_SURFACE_LOCATION_OPTIONS,
 	EXECUTION_SURFACE_STATUS_OPTIONS,
@@ -56,6 +61,7 @@ import {
 	type ProjectSkillAvailabilityPolicyEvent,
 	type ProjectSkillAvailabilityPolicy,
 	type Priority,
+	type RigorProfile,
 	type Role,
 	type Review,
 	type ReviewStatus,
@@ -65,7 +71,11 @@ import {
 	type RunStatus,
 	type RunUsageSource,
 	type TaskApprovalMode,
+	type TaskAutonomyLevel,
+	type TaskCloseoutState,
+	type TaskReadinessLevel,
 	type TaskRiskLevel,
+	type TaskReviewRequirement,
 	type TaskTemplate,
 	type Task,
 	type TaskAttachment,
@@ -81,6 +91,28 @@ import {
 export { normalizeTaskBlockedReasonForStatus } from '$lib/types/control-plane';
 
 const DATA_FILE = resolve(process.cwd(), 'data', 'control-plane.json');
+let hasWarnedControlPlaneJsonDrift = false;
+
+function inferReviewRequirement(input: {
+	reviewRequirement?: unknown;
+	requiresReview?: unknown;
+	approvalMode?: unknown;
+}): TaskReviewRequirement {
+	const reviewRequirement =
+		typeof input.reviewRequirement === 'string' ? input.reviewRequirement.trim() : '';
+
+	if (isTaskReviewRequirement(reviewRequirement)) {
+		return reviewRequirement;
+	}
+
+	const approvalMode = typeof input.approvalMode === 'string' ? input.approvalMode.trim() : '';
+
+	if (approvalMode && approvalMode !== 'none') {
+		return 'EXPLICIT_APPROVAL_REQUIRED';
+	}
+
+	return input.requiresReview === false ? 'NONE' : 'SUMMARY_REVIEW';
+}
 
 function isArea(value: string): value is Area {
 	return AREA_OPTIONS.includes(value as Area);
@@ -96,6 +128,26 @@ function isTaskRiskLevel(value: string): value is TaskRiskLevel {
 
 function isTaskApprovalMode(value: string): value is TaskApprovalMode {
 	return TASK_APPROVAL_MODE_OPTIONS.includes(value as TaskApprovalMode);
+}
+
+function isTaskReadinessLevel(value: string): value is TaskReadinessLevel {
+	return TASK_READINESS_LEVEL_OPTIONS.includes(value as TaskReadinessLevel);
+}
+
+function isTaskAutonomyLevel(value: string): value is TaskAutonomyLevel {
+	return TASK_AUTONOMY_LEVEL_OPTIONS.includes(value as TaskAutonomyLevel);
+}
+
+function isTaskReviewRequirement(value: string): value is TaskReviewRequirement {
+	return TASK_REVIEW_REQUIREMENT_OPTIONS.includes(value as TaskReviewRequirement);
+}
+
+function isTaskCloseoutState(value: string): value is TaskCloseoutState {
+	return TASK_CLOSEOUT_STATE_OPTIONS.includes(value as TaskCloseoutState);
+}
+
+function isRigorProfile(value: string): value is RigorProfile {
+	return RIGOR_PROFILE_OPTIONS.includes(value as RigorProfile);
 }
 
 function isRunStatus(value: string): value is RunStatus {
@@ -154,6 +206,25 @@ function isProjectSkillAvailability(value: string): value is ProjectSkillAvailab
 	return PROJECT_SKILL_AVAILABILITY_OPTIONS.includes(value as ProjectSkillAvailability);
 }
 
+function normalizeProjectAutonomyLevel(value: unknown): TaskAutonomyLevel {
+	return typeof value === 'string' && isTaskAutonomyLevel(value)
+		? value
+		: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
+}
+
+function normalizeProjectRiskThreshold(value: unknown): TaskRiskLevel {
+	return typeof value === 'string' && isTaskRiskLevel(value) ? value : 'medium';
+}
+
+function normalizeProjectReviewRequirement(value: unknown): TaskReviewRequirement {
+	return typeof value === 'string' && isTaskReviewRequirement(value) ? value : 'SUMMARY_REVIEW';
+}
+
+function normalizeOptionalRigorProfile(value: unknown): RigorProfile | null {
+	const normalized = typeof value === 'string' ? value.trim() : '';
+	return isRigorProfile(normalized) ? normalized : null;
+}
+
 function isAgentSandbox(value: string): value is AgentSandbox {
 	return AGENT_SANDBOX_OPTIONS.includes(value as AgentSandbox);
 }
@@ -185,9 +256,14 @@ type LegacyProject = Partial<Project> & {
 	defaultCoordinationFolder?: unknown;
 	projectRootFolder?: unknown;
 	additionalWritableRoots?: unknown;
+	validationCommands?: unknown;
+	defaultAllowedActions?: unknown;
+	defaultDisallowedActions?: unknown;
+	importantLinks?: unknown;
 	defaultModel?: unknown;
 	skillAvailabilityPolicies?: unknown;
 	skillAvailabilityPolicyEvents?: unknown;
+	defaultRigorProfile?: unknown;
 };
 
 type LegacyProvider = Partial<Provider> & {
@@ -254,6 +330,8 @@ type LegacyTaskTemplate = Partial<TaskTemplate> & {
 	requiredPromptSkillNames?: unknown;
 	requiredCapabilityNames?: unknown;
 	requiredToolNames?: unknown;
+	allowedActionNames?: unknown;
+	rigorProfile?: unknown;
 };
 
 type LegacyTask = Partial<Task> & {
@@ -270,6 +348,8 @@ type LegacyTask = Partial<Task> & {
 	parentTaskId?: unknown;
 	delegationPacket?: unknown;
 	delegationAcceptance?: unknown;
+	allowedActionNames?: unknown;
+	rigorProfile?: unknown;
 };
 
 type LegacyRole = Partial<Role> & {
@@ -347,6 +427,7 @@ type LegacyRun = Partial<Run> & {
 	estimatedCostUsd?: unknown;
 	costSource?: unknown;
 	pricingVersion?: unknown;
+	effectiveRigorProfile?: unknown;
 };
 
 type LegacyReview = Partial<Review>;
@@ -780,6 +861,14 @@ function normalizeTaskTemplate(template: LegacyTaskTemplate): TaskTemplate | nul
 		typeof template.approvalMode === 'string' && isTaskApprovalMode(template.approvalMode)
 			? template.approvalMode
 			: 'none';
+	const readinessLevel =
+		typeof template.readinessLevel === 'string' && isTaskReadinessLevel(template.readinessLevel)
+			? template.readinessLevel
+			: 'R1_FRAMED';
+	const autonomyLevel =
+		typeof template.autonomyLevel === 'string' && isTaskAutonomyLevel(template.autonomyLevel)
+			? template.autonomyLevel
+			: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
 	const lifecycleStatusValue =
 		typeof template.lifecycleStatus === 'string' ? template.lifecycleStatus.trim() : '';
 
@@ -818,6 +907,15 @@ function normalizeTaskTemplate(template: LegacyTaskTemplate): TaskTemplate | nul
 			typeof template.readyCondition === 'string' ? template.readyCondition.trim() : '',
 		expectedOutcome:
 			typeof template.expectedOutcome === 'string' ? template.expectedOutcome.trim() : '',
+		scope: typeof template.scope === 'string' ? template.scope.trim() : '',
+		nonGoals: typeof template.nonGoals === 'string' ? template.nonGoals.trim() : '',
+		validationSteps:
+			typeof template.validationSteps === 'string' ? template.validationSteps.trim() : '',
+		rigorProfile: normalizeOptionalRigorProfile(template.rigorProfile),
+		readinessLevel,
+		autonomyLevel,
+		allowedActionNames: normalizeStringList(template.allowedActionNames),
+		reviewRequirement: inferReviewRequirement(template),
 		area,
 		priority,
 		riskLevel,
@@ -862,6 +960,38 @@ function normalizeProject(
 			typeof legacyProject.parentProjectId === 'string' && legacyProject.parentProjectId.trim()
 				? legacyProject.parentProjectId.trim()
 				: null,
+		projectBrief: typeof legacyProject.projectBrief === 'string' ? legacyProject.projectBrief : '',
+		currentStateMemo:
+			typeof legacyProject.currentStateMemo === 'string' ? legacyProject.currentStateMemo : '',
+		decisionLog: typeof legacyProject.decisionLog === 'string' ? legacyProject.decisionLog : '',
+		agentInstructionsPath: normalizePathInput(
+			typeof legacyProject.agentInstructionsPath === 'string'
+				? legacyProject.agentInstructionsPath
+				: ''
+		),
+		setupNotes: typeof legacyProject.setupNotes === 'string' ? legacyProject.setupNotes : '',
+		validationCommands: normalizeStringList(legacyProject.validationCommands),
+		codingConventions:
+			typeof legacyProject.codingConventions === 'string' ? legacyProject.codingConventions : '',
+		approvalRequirements:
+			typeof legacyProject.approvalRequirements === 'string'
+				? legacyProject.approvalRequirements
+				: '',
+		defaultAllowedActions: normalizeStringList(legacyProject.defaultAllowedActions),
+		defaultDisallowedActions: normalizeStringList(legacyProject.defaultDisallowedActions),
+		defaultAutonomyLevel: normalizeProjectAutonomyLevel(legacyProject.defaultAutonomyLevel),
+		defaultRiskThreshold: normalizeProjectRiskThreshold(legacyProject.defaultRiskThreshold),
+		defaultReviewRequirement: normalizeProjectReviewRequirement(
+			legacyProject.defaultReviewRequirement
+		),
+		defaultRigorProfile: normalizeOptionalRigorProfile(legacyProject.defaultRigorProfile),
+		defaultValidationExpectations:
+			typeof legacyProject.defaultValidationExpectations === 'string'
+				? legacyProject.defaultValidationExpectations
+				: '',
+		importantLinks: normalizeStringList(legacyProject.importantLinks),
+		constraints: typeof legacyProject.constraints === 'string' ? legacyProject.constraints : '',
+		nonGoals: typeof legacyProject.nonGoals === 'string' ? legacyProject.nonGoals : '',
 		projectRootFolder: normalizePathInput(projectRootFolder),
 		defaultArtifactRoot: normalizePathInput(defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(defaultRepoPath),
@@ -1046,6 +1176,14 @@ function normalizeRun(run: LegacyRun): Run {
 			? run.artifactPaths.filter((candidate): candidate is string => typeof candidate === 'string')
 			: [],
 		summary: typeof run.summary === 'string' ? run.summary : '',
+		inputPrompt: typeof run.inputPrompt === 'string' ? run.inputPrompt : '',
+		contextSummary: typeof run.contextSummary === 'string' ? run.contextSummary : '',
+		actionsTaken: typeof run.actionsTaken === 'string' ? run.actionsTaken : '',
+		validationSummary: typeof run.validationSummary === 'string' ? run.validationSummary : '',
+		resultSummary: typeof run.resultSummary === 'string' ? run.resultSummary : '',
+		blockersFound: normalizeStringList(run.blockersFound),
+		followUpTaskIds: normalizeStringList(run.followUpTaskIds),
+		effectiveRigorProfile: normalizeOptionalRigorProfile(run.effectiveRigorProfile),
 		lastHeartbeatAt: typeof run.lastHeartbeatAt === 'string' ? run.lastHeartbeatAt : null,
 		errorSummary: typeof run.errorSummary === 'string' ? run.errorSummary : '',
 		...(typeof run.modelUsed === 'string'
@@ -1250,6 +1388,14 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		typeof approvalModeValue === 'string' && isTaskApprovalMode(approvalModeValue)
 			? approvalModeValue
 			: 'none';
+	const readinessLevel =
+		typeof task.readinessLevel === 'string' && isTaskReadinessLevel(task.readinessLevel)
+			? task.readinessLevel
+			: 'R1_FRAMED';
+	const autonomyLevel =
+		typeof task.autonomyLevel === 'string' && isTaskAutonomyLevel(task.autonomyLevel)
+			? task.autonomyLevel
+			: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE';
 	return {
 		id: typeof task.id === 'string' ? task.id : createTaskId(),
 		title: typeof task.title === 'string' ? task.title : '',
@@ -1257,6 +1403,14 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		successCriteria: typeof task.successCriteria === 'string' ? task.successCriteria : '',
 		readyCondition: typeof task.readyCondition === 'string' ? task.readyCondition : '',
 		expectedOutcome: typeof task.expectedOutcome === 'string' ? task.expectedOutcome : '',
+		scope: typeof task.scope === 'string' ? task.scope : '',
+		nonGoals: typeof task.nonGoals === 'string' ? task.nonGoals : '',
+		validationSteps: typeof task.validationSteps === 'string' ? task.validationSteps : '',
+		rigorProfile: normalizeOptionalRigorProfile(task.rigorProfile),
+		readinessLevel,
+		autonomyLevel,
+		allowedActionNames: normalizeStringList(task.allowedActionNames),
+		reviewRequirement: inferReviewRequirement(task),
 		projectId: inferTaskProjectId(task, projects),
 		area,
 		goalId: typeof task.goalId === 'string' ? task.goalId : '',
@@ -1300,6 +1454,25 @@ function normalizeTask(task: LegacyTask, projects: Project[], runs: Run[]): Task
 		targetDate: normalizeOptionalDate(task.targetDate),
 		runCount: taskRuns.length,
 		latestRunId: taskRuns[0]?.id ?? null,
+		closeoutState:
+			typeof task.closeoutState === 'string' && isTaskCloseoutState(task.closeoutState)
+				? task.closeoutState
+				: null,
+		closeoutSummary: typeof task.closeoutSummary === 'string' ? task.closeoutSummary.trim() : '',
+		closeoutChanged: typeof task.closeoutChanged === 'string' ? task.closeoutChanged.trim() : '',
+		closeoutValidation:
+			typeof task.closeoutValidation === 'string' ? task.closeoutValidation.trim() : '',
+		closeoutRemainingIssues:
+			typeof task.closeoutRemainingIssues === 'string' ? task.closeoutRemainingIssues.trim() : '',
+		closeoutFollowUps: normalizeStringList(task.closeoutFollowUps),
+		closeoutShouldUpdateMemory:
+			typeof task.closeoutShouldUpdateMemory === 'boolean'
+				? task.closeoutShouldUpdateMemory
+				: false,
+		closeoutRecordedAt:
+			typeof task.closeoutRecordedAt === 'string' && task.closeoutRecordedAt.trim()
+				? task.closeoutRecordedAt
+				: null,
 		artifactPath: typeof task.artifactPath === 'string' ? task.artifactPath : '',
 		attachments: Array.isArray(task.attachments)
 			? task.attachments
@@ -1959,7 +2132,7 @@ async function loadControlPlaneFromJson() {
 	return parseControlPlaneData(await readFile(DATA_FILE, 'utf8'));
 }
 
-async function writeControlPlaneJsonMirror(data: ControlPlaneData) {
+async function writeControlPlaneJsonTestStore(data: ControlPlaneData) {
 	await mkdir(resolve(process.cwd(), 'data'), { recursive: true });
 	await writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }
@@ -1976,6 +2149,27 @@ async function readControlPlaneJsonIfPresent() {
 	}
 }
 
+async function warnIfControlPlaneJsonDrifted(sqliteData: ControlPlaneData) {
+	if (process.env.NODE_ENV === 'production' || hasWarnedControlPlaneJsonDrift) {
+		return;
+	}
+
+	const jsonData = await readControlPlaneJsonIfPresent();
+
+	if (!jsonData) {
+		return;
+	}
+
+	if (JSON.stringify(jsonData) === JSON.stringify(sqliteData)) {
+		return;
+	}
+
+	hasWarnedControlPlaneJsonDrift = true;
+	console.warn(
+		`[control-plane] SQLite is the runtime source of truth, but ${DATA_FILE} differs from data/app.sqlite. Treat the JSON file as an explicit import/export artifact; use "node scripts/app-db.mjs export-json" to refresh it from SQLite or "node scripts/app-db.mjs import-json" to intentionally import it.`
+	);
+}
+
 async function ensureControlPlaneSqliteSeeded() {
 	if (!isControlPlaneSqliteEmpty()) {
 		return;
@@ -1989,9 +2183,11 @@ async function loadControlPlaneSnapshot() {
 	if (getControlPlaneStorageBackend() === 'sqlite') {
 		await ensureControlPlaneSqliteSeeded();
 		const snapshot = loadControlPlaneSnapshotFromSqlite();
+		const data = normalizeControlPlaneData(snapshot.data);
+		await warnIfControlPlaneJsonDrifted(data);
 
 		return {
-			data: normalizeControlPlaneData(snapshot.data),
+			data,
 			revision: snapshot.revision
 		};
 	}
@@ -2020,18 +2216,10 @@ async function saveControlPlane(
 			saveControlPlaneToSqlite(data, options);
 		}
 
-		try {
-			await writeControlPlaneJsonMirror(data);
-		} catch (error) {
-			console.warn(
-				`[control-plane] Saved sqlite state but could not refresh ${DATA_FILE}: ${error instanceof Error ? error.message : String(error)}`
-			);
-		}
-
 		return;
 	}
 
-	await writeControlPlaneJsonMirror(data);
+	await writeControlPlaneJsonTestStore(data);
 }
 
 let controlPlaneUpdateQueue: Promise<void> = Promise.resolve();
@@ -2245,6 +2433,34 @@ export function parseTaskRiskLevel(value: string, fallback: TaskRiskLevel): Task
 
 export function parseTaskApprovalMode(value: string, fallback: TaskApprovalMode): TaskApprovalMode {
 	return isTaskApprovalMode(value) ? value : fallback;
+}
+
+export function parseTaskReadinessLevel(
+	value: string,
+	fallback: TaskReadinessLevel
+): TaskReadinessLevel {
+	return isTaskReadinessLevel(value) ? value : fallback;
+}
+
+export function parseTaskAutonomyLevel(
+	value: string,
+	fallback: TaskAutonomyLevel
+): TaskAutonomyLevel {
+	return isTaskAutonomyLevel(value) ? value : fallback;
+}
+
+export function parseTaskReviewRequirement(
+	value: string,
+	fallback: TaskReviewRequirement
+): TaskReviewRequirement {
+	return isTaskReviewRequirement(value) ? value : fallback;
+}
+
+export function parseRigorProfile(
+	value: string,
+	fallback: RigorProfile | null
+): RigorProfile | null {
+	return isRigorProfile(value) ? value : fallback;
 }
 
 export function parseRunStatus(value: string, fallback: RunStatus): RunStatus {
@@ -2473,6 +2689,14 @@ export function createTaskTemplate(input: {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: RigorProfile | null;
+	readinessLevel?: TaskReadinessLevel;
+	autonomyLevel?: TaskAutonomyLevel;
+	allowedActionNames?: string[];
+	reviewRequirement?: TaskReviewRequirement;
 	area?: Area;
 	priority?: Priority;
 	riskLevel?: TaskRiskLevel;
@@ -2509,6 +2733,19 @@ export function createTaskTemplate(input: {
 		successCriteria: input.successCriteria?.trim() ?? '',
 		readyCondition: input.readyCondition?.trim() ?? '',
 		expectedOutcome: input.expectedOutcome?.trim() ?? '',
+		scope: input.scope?.trim() ?? '',
+		nonGoals: input.nonGoals?.trim() ?? '',
+		validationSteps: input.validationSteps?.trim() ?? '',
+		rigorProfile: input.rigorProfile ?? null,
+		readinessLevel: input.readinessLevel ?? 'R1_FRAMED',
+		autonomyLevel: input.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+		allowedActionNames: normalizeStringList(input.allowedActionNames),
+		reviewRequirement:
+			input.reviewRequirement ??
+			inferReviewRequirement({
+				requiresReview: input.requiresReview,
+				approvalMode: input.approvalMode
+			}),
 		area: input.area ?? 'product',
 		priority: input.priority ?? 'medium',
 		riskLevel: input.riskLevel ?? 'medium',
@@ -2539,12 +2776,48 @@ export function createProject(input: {
 	additionalWritableRoots?: string[];
 	defaultThreadSandbox?: AgentSandbox | null;
 	defaultModel?: string | null;
+	projectBrief?: string;
+	currentStateMemo?: string;
+	decisionLog?: string;
+	agentInstructionsPath?: string;
+	setupNotes?: string;
+	validationCommands?: string[];
+	codingConventions?: string;
+	approvalRequirements?: string;
+	defaultAllowedActions?: string[];
+	defaultDisallowedActions?: string[];
+	defaultAutonomyLevel?: TaskAutonomyLevel;
+	defaultRiskThreshold?: TaskRiskLevel;
+	defaultReviewRequirement?: TaskReviewRequirement;
+	defaultRigorProfile?: RigorProfile | null;
+	defaultValidationExpectations?: string;
+	importantLinks?: string[];
+	constraints?: string;
+	nonGoals?: string;
 }): Project {
 	return {
 		id: createProjectId(),
 		name: input.name,
 		summary: input.summary,
 		parentProjectId: input.parentProjectId?.trim() || null,
+		projectBrief: input.projectBrief ?? '',
+		currentStateMemo: input.currentStateMemo ?? '',
+		decisionLog: input.decisionLog ?? '',
+		agentInstructionsPath: normalizePathInput(input.agentInstructionsPath),
+		setupNotes: input.setupNotes ?? '',
+		validationCommands: normalizeStringList(input.validationCommands),
+		codingConventions: input.codingConventions ?? '',
+		approvalRequirements: input.approvalRequirements ?? '',
+		defaultAllowedActions: normalizeStringList(input.defaultAllowedActions),
+		defaultDisallowedActions: normalizeStringList(input.defaultDisallowedActions),
+		defaultAutonomyLevel: input.defaultAutonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+		defaultRiskThreshold: input.defaultRiskThreshold ?? 'medium',
+		defaultReviewRequirement: input.defaultReviewRequirement ?? 'SUMMARY_REVIEW',
+		defaultRigorProfile: input.defaultRigorProfile ?? null,
+		defaultValidationExpectations: input.defaultValidationExpectations ?? '',
+		importantLinks: normalizeStringList(input.importantLinks),
+		constraints: input.constraints ?? '',
+		nonGoals: input.nonGoals ?? '',
 		projectRootFolder: normalizePathInput(input.projectRootFolder),
 		defaultArtifactRoot: normalizePathInput(input.defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
@@ -2751,6 +3024,14 @@ export function createTask(input: {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: RigorProfile | null;
+	readinessLevel?: TaskReadinessLevel;
+	autonomyLevel?: TaskAutonomyLevel;
+	allowedActionNames?: string[];
+	reviewRequirement?: TaskReviewRequirement;
 	projectId: string;
 	area?: Area;
 	goalId: string;
@@ -2792,6 +3073,19 @@ export function createTask(input: {
 		successCriteria: input.successCriteria ?? '',
 		readyCondition: input.readyCondition ?? '',
 		expectedOutcome: input.expectedOutcome ?? '',
+		scope: input.scope ?? '',
+		nonGoals: input.nonGoals ?? '',
+		validationSteps: input.validationSteps ?? '',
+		rigorProfile: input.rigorProfile ?? null,
+		readinessLevel: input.readinessLevel ?? 'R1_FRAMED',
+		autonomyLevel: input.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+		allowedActionNames: normalizeStringList(input.allowedActionNames),
+		reviewRequirement:
+			input.reviewRequirement ??
+			inferReviewRequirement({
+				requiresReview: input.requiresReview,
+				approvalMode: input.approvalMode
+			}),
 		projectId: input.projectId,
 		area,
 		goalId: input.goalId,
@@ -2840,6 +3134,14 @@ export function createRun(input: {
 	promptDigest?: string;
 	artifactPaths?: string[];
 	summary?: string;
+	inputPrompt?: string;
+	contextSummary?: string;
+	actionsTaken?: string;
+	validationSummary?: string;
+	resultSummary?: string;
+	blockersFound?: string[];
+	followUpTaskIds?: string[];
+	effectiveRigorProfile?: RigorProfile | null;
 	lastHeartbeatAt?: string | null;
 	errorSummary?: string;
 	modelUsed?: string | null;
@@ -2877,6 +3179,14 @@ export function createRun(input: {
 		promptDigest: input.promptDigest ?? '',
 		artifactPaths: input.artifactPaths ?? [],
 		summary: input.summary ?? '',
+		inputPrompt: input.inputPrompt ?? '',
+		contextSummary: input.contextSummary ?? '',
+		actionsTaken: input.actionsTaken ?? '',
+		validationSummary: input.validationSummary ?? '',
+		resultSummary: input.resultSummary ?? '',
+		blockersFound: normalizeStringList(input.blockersFound),
+		followUpTaskIds: normalizeStringList(input.followUpTaskIds),
+		effectiveRigorProfile: input.effectiveRigorProfile ?? null,
 		lastHeartbeatAt: input.lastHeartbeatAt ?? null,
 		errorSummary: input.errorSummary ?? '',
 		modelUsed: input.modelUsed ?? null,

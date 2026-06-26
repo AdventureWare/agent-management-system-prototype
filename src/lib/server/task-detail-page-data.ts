@@ -8,6 +8,7 @@ import { listAgentThreads } from '$lib/server/agent-threads';
 import { buildArtifactBrowser } from '$lib/server/artifact-browser';
 import { listInstalledCodexSkills } from '$lib/server/codex-skills';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
+import { buildGoalLoopWorkPacket } from '$lib/server/goal-work-packets';
 import { buildTaskLaunchContextSummary } from '$lib/server/task-launch-context-summary';
 import { loadRelevantSelfImprovementKnowledgeItems } from '$lib/server/self-improvement-knowledge';
 import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
@@ -15,6 +16,7 @@ import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-
 import { buildTaskExecutionPreflight } from '$lib/server/task-execution-preflight';
 import { collectLaunchModelOptions } from '$lib/server/task-launch-model';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
+import { buildDelegationReadinessAssessment } from './delegation-readiness';
 import {
 	buildAssignmentSuggestionViews,
 	buildParentTaskView,
@@ -84,6 +86,9 @@ export async function loadTaskDetailPageData(taskId: string) {
 		relatedRuns
 	});
 	const availableSkills = listInstalledCodexSkills(project?.projectRootFolder ?? '');
+	const delegationReadiness = buildDelegationReadinessAssessment(data, task, {
+		availablePromptSkillNames: availableSkills.map((skill) => skill.id)
+	});
 	const availableSkillSummary = summarizeInstalledSkills(availableSkills);
 	const assignedExecutionSurface = task.assigneeExecutionSurfaceId
 		? (executionSurfaceMap.get(task.assigneeExecutionSurfaceId) ?? null)
@@ -131,6 +136,11 @@ export async function loadTaskDetailPageData(taskId: string) {
 			publishedKnowledgeCount: retrievedKnowledgeItems.length
 		}
 	);
+	const goalLoopWorkPacket = buildGoalLoopWorkPacket(data, {
+		projectId: task.projectId,
+		goalId: task.goalId || null,
+		taskId: task.id
+	});
 
 	return {
 		task: buildTaskDetailTaskView({
@@ -154,10 +164,13 @@ export async function loadTaskDetailPageData(taskId: string) {
 		stalledRecovery,
 		attachmentRoot: artifactRoot,
 		availableSkills: availableSkillSummary,
+		delegationReadiness,
 		projectInstalledSkills: availableSkills,
 		launchContext,
+		goalLoopWorkPacket,
 		artifactBrowser,
 		project,
+		linkedGoal: task.goalId ? (goalMap.get(task.goalId) ?? null) : null,
 		retrievedKnowledgeItems,
 		projects: [...data.projects].sort((a, b) => a.name.localeCompare(b.name)),
 		goals: buildTaskGoalOptions(data.goals),

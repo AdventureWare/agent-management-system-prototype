@@ -10,7 +10,17 @@ import {
 import { AGENT_CAPABILITY_PLAYBOOKS } from './agent-capability-playbooks.js';
 
 export type AgentCapabilityCommand = {
-	resource: 'context' | 'intent' | 'task' | 'goal' | 'project' | 'thread';
+	resource:
+		| 'context'
+		| 'intent'
+		| 'goal-loop'
+		| 'work-packet'
+		| 'run-result'
+		| 'review'
+		| 'task'
+		| 'goal'
+		| 'project'
+		| 'thread';
 	command: string;
 	summary: string;
 	cli?: string;

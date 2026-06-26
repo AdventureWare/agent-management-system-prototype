@@ -16,6 +16,21 @@ export const PATCH = async ({ params, request }) => {
 			successCriteria: typeof body.successCriteria === 'string' ? body.successCriteria : undefined,
 			readyCondition: typeof body.readyCondition === 'string' ? body.readyCondition : undefined,
 			expectedOutcome: typeof body.expectedOutcome === 'string' ? body.expectedOutcome : undefined,
+			scope: typeof body.scope === 'string' ? body.scope : undefined,
+			nonGoals: typeof body.nonGoals === 'string' ? body.nonGoals : undefined,
+			validationSteps: typeof body.validationSteps === 'string' ? body.validationSteps : undefined,
+			rigorProfile:
+				typeof body.rigorProfile === 'string' || body.rigorProfile === null
+					? (body.rigorProfile as string | null)
+					: undefined,
+			readinessLevel: typeof body.readinessLevel === 'string' ? body.readinessLevel : undefined,
+			autonomyLevel: typeof body.autonomyLevel === 'string' ? body.autonomyLevel : undefined,
+			allowedActionNames:
+				Array.isArray(body.allowedActionNames) || typeof body.allowedActionNames === 'string'
+					? (body.allowedActionNames as string[] | string)
+					: undefined,
+			reviewRequirement:
+				typeof body.reviewRequirement === 'string' ? body.reviewRequirement : undefined,
 			priority: typeof body.priority === 'string' ? body.priority : undefined,
 			status: typeof body.status === 'string' ? body.status : undefined,
 			area: typeof body.area === 'string' ? body.area : undefined,

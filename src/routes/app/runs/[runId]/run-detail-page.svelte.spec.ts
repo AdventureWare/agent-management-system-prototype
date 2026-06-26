@@ -106,6 +106,26 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					id: 'provider_1',
 					service: 'OpenAI'
 				},
+				runResultPreview: {
+					runId: 'run_1',
+					taskId: 'task_1',
+					classification: 'failed',
+					confidence: 'high',
+					reasons: ['Run failed.'],
+					proposedUpdates: [
+						{
+							resource: 'run',
+							id: 'run_1',
+							fields: {
+								status: 'failed',
+								errorSummary: 'Route load failed on missing execution-surface filter.'
+							},
+							reason: 'Failed run should preserve diagnostic evidence.'
+						}
+					],
+					nextAction: 'diagnose_failure',
+					followUpTaskIds: ['task_followup']
+				},
 				session: {
 					id: 'session_1',
 					threadState: 'attention',
@@ -123,6 +143,10 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 			} as never
 		});
 
+		expect(document.body.textContent).toContain('Result preview');
+		expect(document.body.textContent).toContain('Failed');
+		expect(document.body.textContent).toContain('Diagnose Failure');
+		expect(document.body.textContent).toContain('Proposed state updates');
 		expect(document.body.textContent).toContain('Captured execution inputs');
 		expect(document.body.textContent).toContain('digest: add runs index and detail');
 		expect(document.body.textContent).toContain('thread_1');
@@ -130,6 +154,20 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 			'Route load failed on missing execution-surface filter.'
 		);
 		expect(document.body.textContent).toContain('/tmp/project/agent_output/run_1/log.txt');
+		expect(document.body.textContent).toContain('Result preview');
+		expect(document.body.textContent).toContain('Failed');
+		expect(document.body.textContent).toContain('High confidence');
+		expect(document.body.textContent).toContain('Diagnose Failure');
+		expect(document.body.textContent).toContain('Run failed.');
+		expect(document.body.textContent).toContain('Proposed state updates');
+		expect(document.body.textContent).toContain(
+			'Failed run should preserve diagnostic evidence.'
+		);
+		expect(
+			Array.from(document.querySelectorAll('a')).some(
+				(link) => link.getAttribute('href') === '/app/tasks/task_followup'
+			)
+		).toBe(true);
 		expect(document.body.textContent).toContain('Run logs');
 		expect(document.body.textContent).toContain('/tmp/project/.agents/runs/agent_run_1/codex.log');
 		expect(document.body.textContent).toContain('Error: missing execution-surface filter');
@@ -190,6 +228,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 				session: null,
 				thread: null,
 				relatedTaskRuns: [],
+				runResultPreview: null,
 				agentCurrentContext: {
 					task: {
 						title: 'Coordinate rollout',
@@ -230,7 +269,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 			} as never
 		});
 
-		expect(document.body.textContent).toContain('Current context recommendations');
+		expect(document.body.textContent).toContain('Managed-run context and recommendations');
 		expect(document.body.textContent).toContain('Preview first');
 		expect(document.body.textContent).toContain(
 			'Cross-thread routing is coordination-heavy. Preview target resolution and availability first.'

@@ -74,6 +74,39 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 					linkedProjectCount: 1,
 					childGoalCount: 1
 				},
+				goalLoop: {
+					recommendation: {
+						kind: 'execute_task',
+						taskIds: ['task_1'],
+						parallelTaskIds: [],
+						reason: 'Execute the next actionable task.',
+						suggestedTaskDraft: null
+					},
+					counts: {
+						actionableNow: 1,
+						inProgress: 0,
+						awaitingReview: 0,
+						acceptedDone: 0,
+						needsRevision: 0,
+						blocked: 0,
+						needsClarification: 0,
+						needsResearch: 0,
+						needsPlanning: 0,
+						approvalRequired: 0,
+						unsafeOutOfScope: 0,
+						duplicateSuperseded: 0
+					},
+					classifiedTasks: [
+						{
+							id: 'task_1',
+							title: 'Draft creator outreach plan',
+							classification: 'actionable_now',
+							actionable: true,
+							reasons: [{ code: 'actionable', message: 'Ready.' }],
+							openDependencyTaskIds: []
+						}
+					]
+				},
 				laneOptions: AREA_OPTIONS,
 				statusOptions: GOAL_STATUS_OPTIONS,
 				folderOptions: [],
@@ -105,6 +138,9 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Goal coach');
 		expect(document.body.textContent).toContain('Improve with AI');
 		expect(document.body.textContent).toContain('Target May 20, 2026');
+		expect(document.body.textContent).toContain('Next recommended action');
+		expect(document.body.textContent).toContain('Execute Task');
+		expect(document.body.textContent).toContain('Actionable now');
 		expect(document.body.textContent).toContain('Target date');
 		expect(document.body.textContent).toContain('Parent and subgoal context');
 		expect(document.body.textContent).toContain('Validate creator partnerships');
@@ -199,6 +235,43 @@ describe('/app/goals/[goalId]/+page.svelte', () => {
 					activeTaskCount: 1,
 					linkedProjectCount: 1,
 					childGoalCount: 1
+				},
+				goalLoop: {
+					recommendation: {
+						kind: 'plan_task',
+						taskIds: ['task_1'],
+						parallelTaskIds: [],
+						reason:
+							'Add execution contract, scope, acceptance criteria, or validation before execution.',
+						suggestedTaskDraft: {
+							title: 'Plan: Draft creator outreach plan',
+							summary: 'Turn the task into a bounded execution contract.'
+						}
+					},
+					counts: {
+						actionableNow: 0,
+						inProgress: 0,
+						awaitingReview: 0,
+						acceptedDone: 0,
+						needsRevision: 0,
+						blocked: 0,
+						needsClarification: 0,
+						needsResearch: 0,
+						needsPlanning: 1,
+						approvalRequired: 0,
+						unsafeOutOfScope: 0,
+						duplicateSuperseded: 0
+					},
+					classifiedTasks: [
+						{
+							id: 'task_1',
+							title: 'Draft creator outreach plan',
+							classification: 'needs_planning',
+							actionable: false,
+							reasons: [{ code: 'needs_planning', message: 'Needs planning.' }],
+							openDependencyTaskIds: []
+						}
+					]
 				},
 				areaOptions: AREA_OPTIONS,
 				statusOptions: GOAL_STATUS_OPTIONS,

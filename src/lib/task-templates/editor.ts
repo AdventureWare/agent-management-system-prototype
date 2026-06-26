@@ -16,6 +16,13 @@ export type TaskTemplateEditorValues = {
 	successCriteria: string;
 	readyCondition: string;
 	expectedOutcome: string;
+	scope: string;
+	nonGoals: string;
+	validationSteps: string;
+	readinessLevel: string;
+	autonomyLevel: string;
+	allowedActionNames: string;
+	reviewRequirement: string;
 	area: string;
 	priority: string;
 	riskLevel: string;
@@ -58,6 +65,22 @@ export function buildDefaultTaskTemplateEditorValues(
 		successCriteria: typeof values?.successCriteria === 'string' ? values.successCriteria : '',
 		readyCondition: typeof values?.readyCondition === 'string' ? values.readyCondition : '',
 		expectedOutcome: typeof values?.expectedOutcome === 'string' ? values.expectedOutcome : '',
+		scope: typeof values?.scope === 'string' ? values.scope : '',
+		nonGoals: typeof values?.nonGoals === 'string' ? values.nonGoals : '',
+		validationSteps: typeof values?.validationSteps === 'string' ? values.validationSteps : '',
+		readinessLevel:
+			typeof values?.readinessLevel === 'string' ? values.readinessLevel : 'R1_FRAMED',
+		autonomyLevel:
+			typeof values?.autonomyLevel === 'string'
+				? values.autonomyLevel
+				: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+		allowedActionNames: Array.isArray(values?.allowedActionNames)
+			? values.allowedActionNames.join(', ')
+			: typeof values?.allowedActionNames === 'string'
+				? values.allowedActionNames
+				: '',
+		reviewRequirement:
+			typeof values?.reviewRequirement === 'string' ? values.reviewRequirement : 'SUMMARY_REVIEW',
 		area: typeof values?.area === 'string' ? values.area : 'product',
 		priority: typeof values?.priority === 'string' ? values.priority : 'medium',
 		riskLevel: typeof values?.riskLevel === 'string' ? values.riskLevel : 'medium',

@@ -29,7 +29,11 @@ import {
 	parseGoalStatus,
 	parsePriority,
 	parseTaskApprovalMode,
+	parseTaskAutonomyLevel,
+	parseTaskReadinessLevel,
+	parseTaskReviewRequirement,
 	parseTaskRiskLevel,
+	parseRigorProfile,
 	parseTaskStatus,
 	normalizeTaskBlockedReasonForStatus,
 	updateControlPlaneCollections,
@@ -60,7 +64,14 @@ import {
 } from '$lib/server/task-session-actions';
 import { isValidTaskDate } from '$lib/server/task-form';
 import type { AgentSandbox } from '$lib/types/agent-thread';
-import type { ControlPlaneData, Goal, Project, Task } from '$lib/types/control-plane';
+import {
+	PLANNING_CONFIDENCE_OPTIONS,
+	type ControlPlaneData,
+	type Goal,
+	type PlanningConfidence,
+	type Project,
+	type Task
+} from '$lib/types/control-plane';
 export { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 
 export type AgentTaskListFilters = {
@@ -68,6 +79,10 @@ export type AgentTaskListFilters = {
 	projectId?: string | null;
 	goalId?: string | null;
 	status?: string | null;
+	readinessLevel?: string | null;
+	autonomyLevel?: string | null;
+	riskLevel?: string | null;
+	blocked?: string | boolean | null;
 	limit?: number | null;
 };
 
@@ -89,6 +104,14 @@ export type AgentCreateTaskInput = {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: string | null;
+	readinessLevel?: string;
+	autonomyLevel?: string;
+	allowedActionNames?: string[] | string;
+	reviewRequirement?: string;
 	projectId?: string;
 	goalId?: string | null;
 	workflowId?: string | null;
@@ -117,6 +140,8 @@ export type AgentCreateGoalInput = {
 	summary?: string;
 	successSignal?: string;
 	targetDate?: string | null;
+	planningPriority?: number | string | null;
+	confidence?: string | null;
 	artifactPath?: string | null;
 	parentGoalId?: string | null;
 	projectIds?: string[] | string;
@@ -130,6 +155,8 @@ export type AgentUpdateGoalInput = {
 	summary?: string;
 	successSignal?: string;
 	targetDate?: string | null;
+	planningPriority?: number | string | null;
+	confidence?: string | null;
 	artifactPath?: string | null;
 	parentGoalId?: string | null;
 	projectIds?: string[] | string;
@@ -142,6 +169,24 @@ export type AgentCreateProjectInput = {
 	name?: string;
 	summary?: string;
 	parentProjectId?: string | null;
+	projectBrief?: string;
+	currentStateMemo?: string;
+	decisionLog?: string;
+	agentInstructionsPath?: string | null;
+	setupNotes?: string;
+	validationCommands?: string[] | string;
+	codingConventions?: string;
+	approvalRequirements?: string;
+	defaultAllowedActions?: string[] | string;
+	defaultDisallowedActions?: string[] | string;
+	defaultAutonomyLevel?: string;
+	defaultRiskThreshold?: string;
+	defaultReviewRequirement?: string;
+	defaultRigorProfile?: string | null;
+	defaultValidationExpectations?: string;
+	importantLinks?: string[] | string;
+	constraints?: string;
+	nonGoals?: string;
 	projectRootFolder?: string | null;
 	defaultArtifactRoot?: string | null;
 	defaultRepoPath?: string | null;
@@ -156,6 +201,24 @@ export type AgentUpdateProjectInput = {
 	name?: string;
 	summary?: string;
 	parentProjectId?: string | null;
+	projectBrief?: string;
+	currentStateMemo?: string;
+	decisionLog?: string;
+	agentInstructionsPath?: string | null;
+	setupNotes?: string;
+	validationCommands?: string[] | string;
+	codingConventions?: string;
+	approvalRequirements?: string;
+	defaultAllowedActions?: string[] | string;
+	defaultDisallowedActions?: string[] | string;
+	defaultAutonomyLevel?: string;
+	defaultRiskThreshold?: string;
+	defaultReviewRequirement?: string;
+	defaultRigorProfile?: string | null;
+	defaultValidationExpectations?: string;
+	importantLinks?: string[] | string;
+	constraints?: string;
+	nonGoals?: string;
 	projectRootFolder?: string | null;
 	defaultArtifactRoot?: string | null;
 	defaultRepoPath?: string | null;
@@ -172,6 +235,14 @@ export type AgentUpdateTaskInput = {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: string | null;
+	readinessLevel?: string;
+	autonomyLevel?: string;
+	allowedActionNames?: string[] | string;
+	reviewRequirement?: string;
 	priority?: string;
 	status?: string;
 	area?: string;
@@ -239,6 +310,25 @@ function readTrimmedString(value: string | null | undefined) {
 function readNullableString(value: string | null | undefined) {
 	const normalized = readTrimmedString(value);
 	return normalized.length > 0 ? normalized : null;
+}
+
+function parsePlanningPriorityInput(value: number | string | null | undefined, fallback: number) {
+	if (value === undefined || value === null || value === '') {
+		return fallback;
+	}
+
+	const parsed = typeof value === 'number' ? value : Number.parseInt(value, 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+function parsePlanningConfidenceInput(
+	value: string | null | undefined,
+	fallback: PlanningConfidence
+) {
+	const normalized = readTrimmedString(value);
+	return PLANNING_CONFIDENCE_OPTIONS.includes(normalized as PlanningConfidence)
+		? (normalized as PlanningConfidence)
+		: fallback;
 }
 
 function normalizeIdList(value: string[] | string | null | undefined) {
@@ -600,6 +690,17 @@ export function listAgentApiTasks(data: ControlPlaneData, filters: AgentTaskList
 	const normalizedProjectId = readTrimmedString(filters.projectId ?? '');
 	const normalizedGoalId = readTrimmedString(filters.goalId ?? '');
 	const normalizedStatus = readTrimmedString(filters.status ?? '');
+	const normalizedReadinessLevel = readTrimmedString(filters.readinessLevel ?? '');
+	const normalizedAutonomyLevel = readTrimmedString(filters.autonomyLevel ?? '');
+	const normalizedRiskLevel = readTrimmedString(filters.riskLevel ?? '');
+	const blockedFilter =
+		typeof filters.blocked === 'boolean'
+			? filters.blocked
+			: readTrimmedString(filters.blocked?.toString() ?? '').toLowerCase() === 'true'
+				? true
+				: readTrimmedString(filters.blocked?.toString() ?? '').toLowerCase() === 'false'
+					? false
+					: null;
 	const projectMap = new Map(data.projects.map((project) => [project.id, project.name]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal.name]));
 	const limit = clampLimit(filters.limit ?? null, 100);
@@ -609,6 +710,24 @@ export function listAgentApiTasks(data: ControlPlaneData, filters: AgentTaskList
 		.filter((task) => (normalizedGoalId ? task.goalId === normalizedGoalId : true))
 		.filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
 		.filter((task) =>
+			normalizedReadinessLevel
+				? (task.readinessLevel ?? 'R1_FRAMED') === normalizedReadinessLevel
+				: true
+		)
+		.filter((task) =>
+			normalizedAutonomyLevel
+				? (task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE') === normalizedAutonomyLevel
+				: true
+		)
+		.filter((task) => (normalizedRiskLevel ? task.riskLevel === normalizedRiskLevel : true))
+		.filter((task) =>
+			blockedFilter === null
+				? true
+				: blockedFilter
+					? task.status === 'blocked' || Boolean(task.blockedReason.trim())
+					: task.status !== 'blocked' && !task.blockedReason.trim()
+		)
+		.filter((task) =>
 			matchesSearch(
 				[
 					task.id,
@@ -617,6 +736,9 @@ export function listAgentApiTasks(data: ControlPlaneData, filters: AgentTaskList
 					task.successCriteria,
 					task.readyCondition,
 					task.expectedOutcome,
+					task.scope,
+					task.nonGoals,
+					task.validationSteps,
 					task.blockedReason
 				],
 				normalizedQuery
@@ -645,6 +767,8 @@ export async function createAgentApiGoal(input: AgentCreateGoalInput): Promise<G
 	const projectIds = normalizeIdList(input.projectIds);
 	const taskIds = normalizeIdList(input.taskIds);
 	const targetDate = normalizeGoalTargetDate(input.targetDate);
+	const planningPriority = parsePlanningPriorityInput(input.planningPriority, 0);
+	const confidence = parsePlanningConfidenceInput(input.confidence, 'medium');
 
 	if (!name || !summary) {
 		throw new AgentControlPlaneApiError(400, 'name and summary are required.', {
@@ -679,6 +803,8 @@ export async function createAgentApiGoal(input: AgentCreateGoalInput): Promise<G
 			parentGoalId,
 			projectIds,
 			taskIds,
+			planningPriority,
+			confidence,
 			area: parseArea(readTrimmedString(input.area), 'product'),
 			status: parseGoalStatus(readTrimmedString(input.status), 'ready')
 		});
@@ -752,6 +878,14 @@ export async function updateAgentApiGoal(
 		input.targetDate === undefined
 			? (existingGoal.targetDate ?? null)
 			: normalizeGoalTargetDate(input.targetDate);
+	const planningPriority =
+		input.planningPriority === undefined
+			? (existingGoal.planningPriority ?? 0)
+			: parsePlanningPriorityInput(input.planningPriority, existingGoal.planningPriority ?? 0);
+	const confidence =
+		input.confidence === undefined
+			? (existingGoal.confidence ?? 'medium')
+			: parsePlanningConfidenceInput(input.confidence, existingGoal.confidence ?? 'medium');
 
 	validateGoalReferences({
 		data: current,
@@ -783,7 +917,9 @@ export async function updateAgentApiGoal(
 			'projectIds',
 			'taskIds',
 			'area',
-			'status'
+			'status',
+			'planningPriority',
+			'confidence'
 		] as const
 	).filter((field) => input[field] !== undefined);
 	const now = new Date().toISOString();
@@ -806,6 +942,8 @@ export async function updateAgentApiGoal(
 							? readTrimmedString(input.successSignal)
 							: (existingGoal.successSignal ?? ''),
 					targetDate,
+					planningPriority,
+					confidence,
 					artifactPath,
 					area:
 						input.area !== undefined
@@ -881,6 +1019,33 @@ export async function createAgentApiProject(input: AgentCreateProjectInput): Pro
 		name,
 		summary,
 		parentProjectId,
+		projectBrief: readTrimmedString(input.projectBrief),
+		currentStateMemo: readTrimmedString(input.currentStateMemo),
+		decisionLog: readTrimmedString(input.decisionLog),
+		agentInstructionsPath: normalizePathInput(input.agentInstructionsPath),
+		setupNotes: readTrimmedString(input.setupNotes),
+		validationCommands: normalizePathListInput(input.validationCommands),
+		codingConventions: readTrimmedString(input.codingConventions),
+		approvalRequirements: readTrimmedString(input.approvalRequirements),
+		defaultAllowedActions: normalizePathListInput(input.defaultAllowedActions),
+		defaultDisallowedActions: normalizePathListInput(input.defaultDisallowedActions),
+		defaultAutonomyLevel: parseTaskAutonomyLevel(
+			readTrimmedString(input.defaultAutonomyLevel),
+			'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+		),
+		defaultRiskThreshold: parseTaskRiskLevel(
+			readTrimmedString(input.defaultRiskThreshold),
+			'medium'
+		),
+		defaultReviewRequirement: parseTaskReviewRequirement(
+			readTrimmedString(input.defaultReviewRequirement),
+			'SUMMARY_REVIEW'
+		),
+		defaultRigorProfile: parseRigorProfile(readTrimmedString(input.defaultRigorProfile), null),
+		defaultValidationExpectations: readTrimmedString(input.defaultValidationExpectations),
+		importantLinks: normalizePathListInput(input.importantLinks),
+		constraints: readTrimmedString(input.constraints),
+		nonGoals: readTrimmedString(input.nonGoals),
 		projectRootFolder: normalizePathInput(input.projectRootFolder),
 		defaultArtifactRoot: normalizePathInput(input.defaultArtifactRoot),
 		defaultRepoPath: normalizePathInput(input.defaultRepoPath),
@@ -962,6 +1127,90 @@ export async function updateAgentApiProject(
 					name,
 					summary,
 					parentProjectId,
+					projectBrief:
+						input.projectBrief !== undefined
+							? readTrimmedString(input.projectBrief)
+							: project.projectBrief,
+					currentStateMemo:
+						input.currentStateMemo !== undefined
+							? readTrimmedString(input.currentStateMemo)
+							: project.currentStateMemo,
+					decisionLog:
+						input.decisionLog !== undefined
+							? readTrimmedString(input.decisionLog)
+							: project.decisionLog,
+					agentInstructionsPath:
+						input.agentInstructionsPath !== undefined
+							? (normalizeOptionalPath(input.agentInstructionsPath) ?? '')
+							: project.agentInstructionsPath,
+					setupNotes:
+						input.setupNotes !== undefined
+							? readTrimmedString(input.setupNotes)
+							: project.setupNotes,
+					validationCommands:
+						input.validationCommands !== undefined
+							? normalizePathListInput(input.validationCommands)
+							: project.validationCommands,
+					codingConventions:
+						input.codingConventions !== undefined
+							? readTrimmedString(input.codingConventions)
+							: project.codingConventions,
+					approvalRequirements:
+						input.approvalRequirements !== undefined
+							? readTrimmedString(input.approvalRequirements)
+							: project.approvalRequirements,
+					defaultAllowedActions:
+						input.defaultAllowedActions !== undefined
+							? normalizePathListInput(input.defaultAllowedActions)
+							: project.defaultAllowedActions,
+					defaultDisallowedActions:
+						input.defaultDisallowedActions !== undefined
+							? normalizePathListInput(input.defaultDisallowedActions)
+							: project.defaultDisallowedActions,
+					defaultAutonomyLevel:
+						input.defaultAutonomyLevel !== undefined
+							? parseTaskAutonomyLevel(
+									readTrimmedString(input.defaultAutonomyLevel),
+									project.defaultAutonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+								)
+							: project.defaultAutonomyLevel,
+					defaultRiskThreshold:
+						input.defaultRiskThreshold !== undefined
+							? parseTaskRiskLevel(
+									readTrimmedString(input.defaultRiskThreshold),
+									project.defaultRiskThreshold ?? 'medium'
+								)
+							: project.defaultRiskThreshold,
+					defaultReviewRequirement:
+						input.defaultReviewRequirement !== undefined
+							? parseTaskReviewRequirement(
+									readTrimmedString(input.defaultReviewRequirement),
+									project.defaultReviewRequirement ?? 'SUMMARY_REVIEW'
+								)
+							: project.defaultReviewRequirement,
+					defaultRigorProfile:
+						input.defaultRigorProfile !== undefined
+							? input.defaultRigorProfile === null
+								? null
+								: parseRigorProfile(
+										readTrimmedString(input.defaultRigorProfile),
+										project.defaultRigorProfile ?? null
+									)
+							: project.defaultRigorProfile,
+					defaultValidationExpectations:
+						input.defaultValidationExpectations !== undefined
+							? readTrimmedString(input.defaultValidationExpectations)
+							: project.defaultValidationExpectations,
+					importantLinks:
+						input.importantLinks !== undefined
+							? normalizePathListInput(input.importantLinks)
+							: project.importantLinks,
+					constraints:
+						input.constraints !== undefined
+							? readTrimmedString(input.constraints)
+							: project.constraints,
+					nonGoals:
+						input.nonGoals !== undefined ? readTrimmedString(input.nonGoals) : project.nonGoals,
 					projectRootFolder:
 						input.projectRootFolder !== undefined
 							? (normalizeOptionalPath(input.projectRootFolder) ?? '')
@@ -1953,6 +2202,24 @@ export async function createAgentApiTask(input: AgentCreateTaskInput) {
 		successCriteria: readTrimmedString(input.successCriteria),
 		readyCondition: readTrimmedString(input.readyCondition),
 		expectedOutcome: readTrimmedString(input.expectedOutcome),
+		scope: readTrimmedString(input.scope),
+		nonGoals: readTrimmedString(input.nonGoals),
+		validationSteps: readTrimmedString(input.validationSteps),
+		rigorProfile: parseRigorProfile(readTrimmedString(input.rigorProfile), null),
+		readinessLevel: parseTaskReadinessLevel(readTrimmedString(input.readinessLevel), 'R1_FRAMED'),
+		autonomyLevel: parseTaskAutonomyLevel(
+			readTrimmedString(input.autonomyLevel),
+			'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+		),
+		allowedActionNames: normalizeIdList(input.allowedActionNames),
+		reviewRequirement: parseTaskReviewRequirement(
+			readTrimmedString(input.reviewRequirement),
+			typeof input.requiresReview === 'boolean' && !input.requiresReview
+				? 'NONE'
+				: input.approvalMode && input.approvalMode !== 'none'
+					? 'EXPLICIT_APPROVAL_REQUIRED'
+					: 'SUMMARY_REVIEW'
+		),
 		projectId: project.id,
 		goalId,
 		workflowId,
@@ -2057,6 +2324,14 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 			'successCriteria',
 			'readyCondition',
 			'expectedOutcome',
+			'scope',
+			'nonGoals',
+			'validationSteps',
+			'rigorProfile',
+			'readinessLevel',
+			'autonomyLevel',
+			'allowedActionNames',
+			'reviewRequirement',
 			'priority',
 			'status',
 			'area',
@@ -2109,6 +2384,43 @@ export async function updateAgentApiTask(taskId: string, input: AgentUpdateTaskI
 					input.expectedOutcome !== undefined
 						? readTrimmedString(input.expectedOutcome)
 						: task.expectedOutcome,
+				scope: input.scope !== undefined ? readTrimmedString(input.scope) : task.scope,
+				nonGoals: input.nonGoals !== undefined ? readTrimmedString(input.nonGoals) : task.nonGoals,
+				validationSteps:
+					input.validationSteps !== undefined
+						? readTrimmedString(input.validationSteps)
+						: task.validationSteps,
+				rigorProfile:
+					input.rigorProfile !== undefined
+						? input.rigorProfile === null
+							? null
+							: parseRigorProfile(readTrimmedString(input.rigorProfile), task.rigorProfile ?? null)
+						: task.rigorProfile,
+				readinessLevel:
+					input.readinessLevel !== undefined
+						? parseTaskReadinessLevel(
+								readTrimmedString(input.readinessLevel),
+								task.readinessLevel ?? 'R1_FRAMED'
+							)
+						: (task.readinessLevel ?? 'R1_FRAMED'),
+				autonomyLevel:
+					input.autonomyLevel !== undefined
+						? parseTaskAutonomyLevel(
+								readTrimmedString(input.autonomyLevel),
+								task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+							)
+						: (task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'),
+				allowedActionNames:
+					input.allowedActionNames !== undefined
+						? normalizeIdList(input.allowedActionNames)
+						: (task.allowedActionNames ?? []),
+				reviewRequirement:
+					input.reviewRequirement !== undefined
+						? parseTaskReviewRequirement(
+								readTrimmedString(input.reviewRequirement),
+								task.reviewRequirement ?? 'SUMMARY_REVIEW'
+							)
+						: (task.reviewRequirement ?? 'SUMMARY_REVIEW'),
 				priority:
 					input.priority !== undefined
 						? parsePriority(readTrimmedString(input.priority), task.priority)

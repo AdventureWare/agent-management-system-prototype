@@ -15,6 +15,7 @@ import {
 } from '$lib/server/goal-relationships';
 import { normalizePathInput } from '$lib/server/path-tools';
 import { assistGoalWriting } from '$lib/server/goal-writing-assist';
+import { buildGoalWorkLoopClassification } from '$lib/server/goal-work-loop';
 import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	deleteGoal as removeGoalFromControlPlane,
@@ -194,6 +195,10 @@ export const load: PageServerLoad = async ({ params }) => {
 			...task,
 			projectName: projectMap.get(task.projectId)?.name ?? 'Unknown project'
 		}));
+	const goalLoop = buildGoalWorkLoopClassification(data, {
+		goalId: goal.id,
+		projectId: linkedProjects[0]?.id ?? null
+	});
 
 	return {
 		goal: {
@@ -216,6 +221,31 @@ export const load: PageServerLoad = async ({ params }) => {
 			).length,
 			linkedProjectCount: linkedProjects.length,
 			childGoalCount: childGoals.length
+		},
+		goalLoop: {
+			recommendation: goalLoop.recommendation,
+			counts: {
+				actionableNow: goalLoop.byClassification.actionable_now.length,
+				inProgress: goalLoop.byClassification.in_progress.length,
+				awaitingReview: goalLoop.byClassification.awaiting_review.length,
+				acceptedDone: goalLoop.byClassification.accepted_done.length,
+				needsRevision: goalLoop.byClassification.needs_revision.length,
+				blocked: goalLoop.byClassification.blocked.length,
+				needsClarification: goalLoop.byClassification.needs_clarification.length,
+				needsResearch: goalLoop.byClassification.needs_research.length,
+				needsPlanning: goalLoop.byClassification.needs_planning.length,
+				approvalRequired: goalLoop.byClassification.approval_required.length,
+				unsafeOutOfScope: goalLoop.byClassification.unsafe_out_of_scope.length,
+				duplicateSuperseded: goalLoop.byClassification.duplicate_superseded.length
+			},
+			classifiedTasks: goalLoop.tasks.map((task) => ({
+				id: task.id,
+				title: task.title,
+				classification: task.classification,
+				actionable: task.actionable,
+				reasons: task.reasons,
+				openDependencyTaskIds: task.openDependencyTaskIds
+			}))
 		},
 		areaOptions: AREA_OPTIONS,
 		statusOptions: GOAL_STATUS_OPTIONS,

@@ -2,6 +2,9 @@ import { formatAgentSandboxLabel, type AgentSandbox } from '$lib/types/agent-thr
 import {
 	formatPriorityLabel,
 	formatTaskApprovalModeLabel,
+	formatTaskAutonomyLevelLabel,
+	formatTaskReadinessLevelLabel,
+	formatTaskReviewRequirementLabel,
 	formatTaskRiskLevelLabel,
 	formatTaskStatusLabel,
 	normalizeTaskBlockedReasonForStatus,
@@ -11,7 +14,10 @@ import {
 	type Project,
 	type Task,
 	type TaskApprovalMode,
+	type TaskAutonomyLevel,
+	type TaskReadinessLevel,
 	type TaskRiskLevel,
+	type TaskReviewRequirement,
 	type ExecutionSurface
 } from '$lib/types/control-plane';
 import type { TaskDetailFormInput } from './task-form';
@@ -23,6 +29,13 @@ type TaskPlanDecisionSummaryInput = {
 	nextSuccessCriteria: string;
 	nextReadyCondition: string;
 	nextExpectedOutcome: string;
+	nextScope: string;
+	nextNonGoals: string;
+	nextValidationSteps: string;
+	nextReadinessLevel: TaskReadinessLevel;
+	nextAutonomyLevel: TaskAutonomyLevel;
+	nextAllowedActionNames: string[];
+	nextReviewRequirement: TaskReviewRequirement;
 	nextDelegationPacket: Task['delegationPacket'] | null;
 	nextProject: Project;
 	nextGoalId: string;
@@ -54,6 +67,13 @@ export type ResolvedTaskPlanUpdate = {
 	nextSuccessCriteria: string;
 	nextReadyCondition: string;
 	nextExpectedOutcome: string;
+	nextScope: string;
+	nextNonGoals: string;
+	nextValidationSteps: string;
+	nextReadinessLevel: TaskReadinessLevel;
+	nextAutonomyLevel: TaskAutonomyLevel;
+	nextAllowedActionNames: string[];
+	nextReviewRequirement: TaskReviewRequirement;
 	nextDelegationPacket: Task['delegationPacket'] | null;
 	nextGoalId: string;
 	nextStatus: Task['status'];
@@ -127,6 +147,47 @@ function buildTaskPlanDecisionSummary(input: TaskPlanDecisionSummaryInput) {
 	if (input.nextExpectedOutcome !== (input.task.expectedOutcome ?? '')) {
 		changes.push(
 			input.nextExpectedOutcome ? 'updated expected outcome' : 'cleared expected outcome'
+		);
+	}
+
+	if (input.nextScope !== (input.task.scope ?? '')) {
+		changes.push(input.nextScope ? 'updated scope' : 'cleared scope');
+	}
+
+	if (input.nextNonGoals !== (input.task.nonGoals ?? '')) {
+		changes.push(input.nextNonGoals ? 'updated non-goals' : 'cleared non-goals');
+	}
+
+	if (input.nextValidationSteps !== (input.task.validationSteps ?? '')) {
+		changes.push(
+			input.nextValidationSteps ? 'updated validation steps' : 'cleared validation steps'
+		);
+	}
+
+	if (input.nextReadinessLevel !== (input.task.readinessLevel ?? 'R1_FRAMED')) {
+		changes.push(`set readiness to ${formatTaskReadinessLevelLabel(input.nextReadinessLevel)}`);
+	}
+
+	if (
+		input.nextAutonomyLevel !== (input.task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE')
+	) {
+		changes.push(`set autonomy to ${formatTaskAutonomyLevelLabel(input.nextAutonomyLevel)}`);
+	}
+
+	const currentAllowedActionNames = [...(input.task.allowedActionNames ?? [])].sort();
+	const nextAllowedActionNames = [...input.nextAllowedActionNames].sort();
+
+	if (currentAllowedActionNames.join('|') !== nextAllowedActionNames.join('|')) {
+		changes.push(
+			nextAllowedActionNames.length > 0
+				? `set allowed actions to ${nextAllowedActionNames.join(', ')}`
+				: 'cleared allowed actions'
+		);
+	}
+
+	if (input.nextReviewRequirement !== (input.task.reviewRequirement ?? 'SUMMARY_REVIEW')) {
+		changes.push(
+			`set review requirement to ${formatTaskReviewRequirementLabel(input.nextReviewRequirement)}`
 		);
 	}
 
@@ -276,6 +337,23 @@ export function resolveTaskPlanUpdate(input: {
 	const nextSuccessCriteria = form.successCriteria;
 	const nextReadyCondition = form.readyCondition;
 	const nextExpectedOutcome = form.expectedOutcome;
+	const nextScope = form.hasScope ? form.scope : (task.scope ?? '');
+	const nextNonGoals = form.hasNonGoals ? form.nonGoals : (task.nonGoals ?? '');
+	const nextValidationSteps = form.hasValidationSteps
+		? form.validationSteps
+		: (task.validationSteps ?? '');
+	const nextReadinessLevel = form.hasReadinessLevel
+		? form.readinessLevel
+		: (task.readinessLevel ?? 'R1_FRAMED');
+	const nextAutonomyLevel = form.hasAutonomyLevel
+		? form.autonomyLevel
+		: (task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE');
+	const nextAllowedActionNames = form.hasAllowedActionNames
+		? form.allowedActionNames
+		: (task.allowedActionNames ?? []);
+	const nextReviewRequirement = form.hasReviewRequirement
+		? form.reviewRequirement
+		: (task.reviewRequirement ?? 'SUMMARY_REVIEW');
 	const nextDelegationPacket =
 		task.parentTaskId && form.hasDelegationPacketFields
 			? {
@@ -312,10 +390,12 @@ export function resolveTaskPlanUpdate(input: {
 	const nextRequiredToolNames = form.hasRequiredToolNames
 		? form.requiredToolNames
 		: (task.requiredToolNames ?? []);
-	const nextBlockedReason = normalizeTaskBlockedReasonForStatus(
-		nextStatus,
-		form.hasBlockedReason ? form.blockedReason : task.blockedReason
-	);
+	const submittedBlockedReason = form.blockedReason.trim();
+	const nextBlockedReason =
+		form.hasBlockedReason &&
+		(nextStatus === 'blocked' || submittedBlockedReason !== task.blockedReason)
+			? submittedBlockedReason
+			: normalizeTaskBlockedReasonForStatus(nextStatus, task.blockedReason);
 	const nextDependencyTaskIds = form.hasDependencyTaskSelection
 		? form.dependencyTaskIds
 		: task.dependencyTaskIds;
@@ -330,6 +410,13 @@ export function resolveTaskPlanUpdate(input: {
 		nextSuccessCriteria,
 		nextReadyCondition,
 		nextExpectedOutcome,
+		nextScope,
+		nextNonGoals,
+		nextValidationSteps,
+		nextReadinessLevel,
+		nextAutonomyLevel,
+		nextAllowedActionNames,
+		nextReviewRequirement,
 		nextDelegationPacket,
 		nextProject: project,
 		nextGoalId,
@@ -373,6 +460,13 @@ export function resolveTaskPlanUpdate(input: {
 		nextSuccessCriteria,
 		nextReadyCondition,
 		nextExpectedOutcome,
+		nextScope,
+		nextNonGoals,
+		nextValidationSteps,
+		nextReadinessLevel,
+		nextAutonomyLevel,
+		nextAllowedActionNames,
+		nextReviewRequirement,
 		nextDelegationPacket,
 		nextGoalId,
 		nextStatus,

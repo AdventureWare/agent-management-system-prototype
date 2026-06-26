@@ -1,0 +1,24 @@
+Total messages: 4 (Errors: 4, Warnings: 0)
+Returning 12 messages for level "debug"
+
+[WARNING] WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost @ http://localhost:5206/engine.html:0
+[LOG] THREE.WebGLRenderer: Context Lost. @ https://unpkg.com/three@0.164.1/build/three.module.js:28868
+[LOG] THREE.WebGLRenderer: Context Restored. @ https://unpkg.com/three@0.164.1/build/three.module.js:28876
+[WARNING] WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost @ http://localhost:5206/engine.html:0
+[LOG] THREE.WebGLRenderer: Context Lost. @ https://unpkg.com/three@0.164.1/build/three.module.js:28868
+[LOG] THREE.WebGLRenderer: Context Lost. @ https://unpkg.com/three@0.164.1/build/three.module.js:28868
+[LOG] THREE.WebGLRenderer: Context Restored. @ https://unpkg.com/three@0.164.1/build/three.module.js:28876
+[ERROR] THREE.WebGLRenderer: A WebGL context could not be created. Reason:  Web page caused context loss and was blocked @ https://unpkg.com/three@0.164.1/build/three.module.js:28898
+[ERROR] THREE.WebGLRenderer: A WebGL context could not be created. Reason:  Web page caused context loss and was blocked @ https://unpkg.com/three@0.164.1/build/three.module.js:28898
+[ERROR] THREE.WebGLRenderer: Error creating WebGL context. @ https://unpkg.com/three@0.164.1/build/three.module.js:28482
+TypeError: Cannot read properties of null (reading 'precision')
+    at getMaxPrecision (https://unpkg.com/three@0.164.1/build/three.module.js:15756:71)
+    at new WebGLCapabilities (https://unpkg.com/three@0.164.1/build/three.module.js:15783:23)
+    at initGLContext (https://unpkg.com/three@0.164.1/build/three.module.js:28503:19)
+    at HTMLCanvasElement.onContextRestore (https://unpkg.com/three@0.164.1/build/three.module.js:28887:4)
+    at eval (eval at <anonymous> (eval at evaluate (:303:30)), <anonymous>:8:10)
+    at async eval (eval at evaluate (:303:30), <anonymous>:4:30)
+    at async <anonymous>:329:30
+Error: Error creating WebGL context.
+    at new WebGLRenderer (https://unpkg.com/three@0.164.1/build/three.module.js:28473:13)
+    at http://localhost:5207/engine.js:69:18

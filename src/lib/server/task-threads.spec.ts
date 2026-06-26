@@ -66,6 +66,33 @@ describe('task thread naming', () => {
 		).toContain('Prefer installed skills for this task: frontend-sveltekit');
 	});
 
+	it('includes project memory artifacts in the task prompt when present', () => {
+		const prompt = buildTaskThreadPrompt({
+			taskName: 'Use project memory',
+			taskInstructions: 'Carry durable project context into the worker prompt.',
+			projectName: 'Agent Management System Prototype',
+			projectRootFolder: '/tmp/project',
+			defaultArtifactRoot: '/tmp/project/agent_output',
+			projectBrief: 'AMS coordinates queued agent work.',
+			currentStateMemo: 'Project memory support is being added.',
+			decisionLog: 'Store project memory on Project for v0.',
+			agentInstructionsPath: '/tmp/project/AGENTS.md',
+			validationCommands: ['npm run check'],
+			defaultAutonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+			defaultRiskThreshold: 'medium',
+			defaultReviewRequirement: 'SUMMARY_REVIEW',
+			constraints: 'Avoid duplicate document systems.',
+			projectNonGoals: 'No autonomous queue changes.'
+		});
+
+		expect(prompt).toContain('Project memory artifacts:');
+		expect(prompt).toContain('Project brief: AMS coordinates queued agent work.');
+		expect(prompt).toContain('Current state memo: Project memory support is being added.');
+		expect(prompt).toContain('Agent instructions reference: /tmp/project/AGENTS.md');
+		expect(prompt).toContain('Default validation commands: npm run check');
+		expect(prompt).toContain('Project constraints: Avoid duplicate document systems.');
+	});
+
 	it('formats the execution contract in the launch prompt', () => {
 		const prompt = buildTaskThreadPrompt({
 			taskName: 'Tighten task contracts',
@@ -188,6 +215,24 @@ describe('task thread naming', () => {
 		).toContain(
 			'use the AMS helper CLI paths below instead of guessing URLs or assuming the helper scripts exist in the target project workspace'
 		);
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('doctor');
+		expect(
+			buildTaskThreadPrompt({
+				taskName: 'Coordinate thread work',
+				taskInstructions: 'Use another thread if you need outside context.',
+				projectName: 'Agent Management System Prototype',
+				projectRootFolder: '/tmp/project',
+				defaultArtifactRoot: '/tmp/project/agent_output'
+			})
+		).toContain('do not claim AMS state was updated');
 		expect(
 			buildTaskThreadPrompt({
 				taskName: 'Coordinate thread work',

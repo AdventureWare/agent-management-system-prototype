@@ -6,7 +6,11 @@
 	import DetailSection from '$lib/components/DetailSection.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PathField from '$lib/components/PathField.svelte';
+	import { buildPlannerPrompt } from '$lib/workflow-prompts';
 	import {
+		formatTaskAutonomyLevelLabel,
+		formatTaskReviewRequirementLabel,
+		formatTaskRiskLevelLabel,
 		formatGoalStatusLabel,
 		formatTaskApprovalModeLabel,
 		formatTaskStatusLabel,
@@ -18,6 +22,78 @@
 
 	let updateSuccess = $derived(form?.ok && form?.successAction === 'updateProject');
 	let deleteBlocked = $derived(data.contextScope.directTaskCount > 0);
+	let copyStatus = $state('');
+	let plannerPrompt = $state('');
+
+	function listOrNone(items: string[] | undefined) {
+		return items?.length ? items.map((item) => `- ${item}`).join('\n') : '- Not configured';
+	}
+
+	function textOrFallback(value: string | null | undefined) {
+		return value?.trim() || 'Not configured';
+	}
+
+	function buildAgentContextPackage() {
+		return [
+			`# Project Context: ${data.project.name}`,
+			'',
+			'## Project Brief',
+			textOrFallback(data.project.projectBrief || data.project.summary),
+			'',
+			'## Current State',
+			textOrFallback(data.project.currentStateMemo),
+			'',
+			'## Constraints',
+			textOrFallback(data.project.constraints),
+			'',
+			'## Non-goals',
+			textOrFallback(data.project.nonGoals),
+			'',
+			'## Agent Instructions',
+			`Instructions path: ${textOrFallback(data.project.agentInstructionsPath)}`,
+			`Setup notes: ${textOrFallback(data.project.setupNotes)}`,
+			`Coding conventions: ${textOrFallback(data.project.codingConventions)}`,
+			`Approval requirements: ${textOrFallback(data.project.approvalRequirements)}`,
+			'',
+			'## Default Autonomy Policy',
+			`Allowed autonomy: ${data.project.defaultAutonomyLevel}`,
+			`Risk threshold: ${data.project.defaultRiskThreshold}`,
+			`Review requirement: ${data.project.defaultReviewRequirement}`,
+			`Validation expectations: ${textOrFallback(data.project.defaultValidationExpectations)}`,
+			'',
+			'## Default Validation Commands',
+			listOrNone(data.project.validationCommands),
+			'',
+			'## Important Links',
+			listOrNone(data.project.importantLinks)
+		].join('\n');
+	}
+
+	async function copyAgentContext() {
+		const contextPackage = buildAgentContextPackage();
+		await navigator.clipboard.writeText(contextPackage);
+		copyStatus = 'Agent context copied.';
+		window.setTimeout(() => {
+			copyStatus = '';
+		}, 2200);
+	}
+
+	function buildProjectPlannerPrompt() {
+		return buildPlannerPrompt({
+			project: data.project,
+			goals: data.relatedGoals,
+			tasks: data.relatedTasks
+		});
+	}
+
+	async function preparePlannerPrompt() {
+		plannerPrompt = buildProjectPlannerPrompt();
+		await navigator.clipboard.writeText(plannerPrompt);
+		copyStatus = 'Planner prompt copied.';
+		window.setTimeout(() => {
+			copyStatus = '';
+		}, 2200);
+	}
 
 	function accessToneClass(status: string) {
 		switch (status) {
@@ -268,6 +344,246 @@
 						>
 					</label>
 
+					<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Project Memory</p>
+								<h3 class="mt-1 font-medium text-white">Agent context artifacts</h3>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<button
+									class="btn border border-sky-800/70 bg-sky-950/40 text-sm font-semibold text-sky-200"
+									type="button"
+									onclick={copyAgentContext}
+								>
+									Copy Agent Context
+								</button>
+								<button
+									class="btn border border-emerald-800/70 bg-emerald-950/40 text-sm font-semibold text-emerald-200"
+									type="button"
+									onclick={preparePlannerPrompt}
+								>
+									Prepare Planner Prompt
+								</button>
+								{#if copyStatus}
+									<span class="text-xs text-emerald-300">{copyStatus}</span>
+								{/if}
+							</div>
+						</div>
+
+						<div class="mt-4 grid gap-4 xl:grid-cols-2">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Project brief</span>
+								<textarea
+									class="textarea min-h-44 text-white placeholder:text-slate-500"
+									name="projectBrief"
+									placeholder="What this project is, why it exists, desired future state, success criteria, target users or stakeholders, important links, major constraints, and non-goals."
+									>{data.project.projectBrief}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Current state memo
+								</span>
+								<textarea
+									class="textarea min-h-44 text-white placeholder:text-slate-500"
+									name="currentStateMemo"
+									placeholder="Current status, recent changes, known problems, current risks, likely next moves, and open questions."
+									>{data.project.currentStateMemo}</textarea
+								>
+							</label>
+
+							<label class="block xl:col-span-2">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Decision log</span>
+								<textarea
+									class="textarea min-h-36 text-white placeholder:text-slate-500"
+									name="decisionLog"
+									placeholder="Important decisions, rationale, rejected alternatives, date/author when available, and implications for agents."
+									>{data.project.decisionLog}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									AGENTS.md or instruction path
+								</span>
+								<input
+									class="input text-white placeholder:text-slate-500"
+									name="agentInstructionsPath"
+									placeholder="/absolute/path/to/AGENTS.md"
+									value={data.project.agentInstructionsPath}
+								/>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Important links and repositories
+								</span>
+								<textarea
+									class="textarea min-h-24 text-white placeholder:text-slate-500"
+									name="importantLinks"
+									placeholder="https://github.com/org/repo&#10;https://docs.example.com/project"
+									>{(data.project.importantLinks ?? []).join('\n')}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Setup notes</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="setupNotes"
+									placeholder="Install steps, local services, credentials, fixtures, or environment assumptions."
+									>{data.project.setupNotes}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Test and validation commands
+								</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="validationCommands"
+									placeholder="npm run check&#10;npm run test:unit -- --run"
+									>{(data.project.validationCommands ?? []).join('\n')}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Coding and documentation conventions
+								</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="codingConventions"
+									placeholder="Style, architecture, documentation, testing, and artifact conventions agents should preserve."
+									>{data.project.codingConventions}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Approval requirements
+								</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="approvalRequirements"
+									placeholder="Actions that need review, approval, coordination, or explicit human confirmation."
+									>{data.project.approvalRequirements}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Major constraints</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="constraints"
+									placeholder="Technical, process, compliance, data, timeline, or access constraints."
+									>{data.project.constraints}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">Non-goals</span>
+								<textarea
+									class="textarea min-h-28 text-white placeholder:text-slate-500"
+									name="nonGoals"
+									placeholder="Work agents should not pursue unless explicitly assigned."
+									>{data.project.nonGoals}</textarea
+								>
+							</label>
+						</div>
+
+						<div class="mt-4 grid gap-4 md:grid-cols-3">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default autonomy level
+								</span>
+								<select class="select text-white" name="defaultAutonomyLevel">
+									{#each data.autonomyOptions as autonomyLevel (autonomyLevel)}
+										<option
+											value={autonomyLevel}
+											selected={data.project.defaultAutonomyLevel === autonomyLevel}
+										>
+											{formatTaskAutonomyLevelLabel(autonomyLevel)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default risk threshold
+								</span>
+								<select class="select text-white" name="defaultRiskThreshold">
+									{#each data.riskOptions as riskLevel (riskLevel)}
+										<option
+											value={riskLevel}
+											selected={data.project.defaultRiskThreshold === riskLevel}
+										>
+											{formatTaskRiskLevelLabel(riskLevel)}
+										</option>
+									{/each}
+								</select>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default review requirement
+								</span>
+								<select class="select text-white" name="defaultReviewRequirement">
+									{#each data.reviewRequirementOptions as reviewRequirement (reviewRequirement)}
+										<option
+											value={reviewRequirement}
+											selected={data.project.defaultReviewRequirement === reviewRequirement}
+										>
+											{formatTaskReviewRequirementLabel(reviewRequirement)}
+										</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+
+						<div class="mt-4 grid gap-4 lg:grid-cols-3">
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default allowed actions
+								</span>
+								<textarea
+									class="textarea min-h-24 text-white placeholder:text-slate-500"
+									name="defaultAllowedActions"
+									placeholder="read repository&#10;edit files in workspace&#10;run local tests"
+									>{(data.project.defaultAllowedActions ?? []).join('\n')}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default disallowed actions
+								</span>
+								<textarea
+									class="textarea min-h-24 text-white placeholder:text-slate-500"
+									name="defaultDisallowedActions"
+									placeholder="merge to main&#10;deploy production&#10;rotate credentials"
+									>{(data.project.defaultDisallowedActions ?? []).join('\n')}</textarea
+								>
+							</label>
+
+							<label class="block">
+								<span class="mb-2 block text-sm font-medium text-slate-200">
+									Default validation expectations
+								</span>
+								<textarea
+									class="textarea min-h-24 text-white placeholder:text-slate-500"
+									name="defaultValidationExpectations"
+									placeholder="Run focused tests for touched areas and report any commands that could not be run."
+									>{data.project.defaultValidationExpectations}</textarea
+								>
+							</label>
+						</div>
+					</div>
+
 					<label class="block">
 						<span class="mb-2 block text-sm font-medium text-slate-200">Parent project</span>
 						<select class="select text-white" name="parentProjectId">
@@ -504,6 +820,98 @@
 						surfaces. This section is focused on local folder access because that is what controls
 						iCloud, Dropbox, and similar synced paths today.
 					</p>
+				</div>
+			</DetailSection>
+
+			<DetailSection
+				eyebrow="Project memory"
+				title="Stored agent context"
+				description="Durable project notes that planner, executor, and reviewer prompts can reuse without restating the same background in every task."
+				bodyClass="space-y-4"
+			>
+				<div class="flex flex-wrap justify-end gap-2">
+					<button
+						class="btn border border-sky-800/70 bg-sky-950/40 text-sm font-semibold text-sky-200"
+						type="button"
+						onclick={copyAgentContext}
+					>
+						Copy Agent Context
+					</button>
+					<button
+						class="btn border border-emerald-800/70 bg-emerald-950/40 text-sm font-semibold text-emerald-200"
+						type="button"
+						onclick={preparePlannerPrompt}
+					>
+						Prepare Planner Prompt
+					</button>
+					{#if copyStatus}
+						<span class="self-center text-xs text-emerald-300">{copyStatus}</span>
+					{/if}
+				</div>
+
+				{#if plannerPrompt}
+					<div class="rounded-2xl border border-emerald-900/50 bg-emerald-950/15 p-4">
+						<p class="text-[11px] tracking-[0.16em] text-emerald-200 uppercase">
+							Prepared planner prompt
+						</p>
+						<textarea class="mt-3 textarea min-h-72 font-mono text-xs text-white" readonly
+							>{plannerPrompt}</textarea
+						>
+					</div>
+				{/if}
+
+				<div class="grid gap-4 lg:grid-cols-2">
+					<DetailFactCard
+						label="Project brief"
+						value={data.project.projectBrief || data.project.summary || 'Not configured'}
+					/>
+					<DetailFactCard
+						label="Current state memo"
+						value={data.project.currentStateMemo || 'Not configured'}
+					/>
+					<DetailFactCard
+						label="AGENTS.md reference"
+						value={data.project.agentInstructionsPath || 'Not configured'}
+					/>
+					<DetailFactCard
+						label="Default autonomy policy"
+						value={`${data.project.defaultAutonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'} · ${data.project.defaultRiskThreshold ?? 'medium'} risk · ${data.project.defaultReviewRequirement ?? 'SUMMARY_REVIEW'}`}
+					/>
+					<DetailFactCard
+						label="Validation commands"
+						value={(data.project.validationCommands ?? []).join(' · ') || 'Not configured'}
+					/>
+					<DetailFactCard
+						label="Constraints"
+						value={data.project.constraints || 'Not configured'}
+					/>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+					<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Decision log</p>
+					{#if data.project.decisionLog}
+						<p class="mt-3 text-sm whitespace-pre-wrap text-slate-300">
+							{data.project.decisionLog}
+						</p>
+					{:else}
+						<p class="mt-3 text-sm text-slate-500">No project decision memo has been saved.</p>
+					{/if}
+
+					{#if data.relatedDecisionLog.length}
+						<div class="mt-4 space-y-3 border-t border-slate-800 pt-4">
+							{#each data.relatedDecisionLog as decision (decision.id)}
+								<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+									<div class="flex flex-wrap items-center justify-between gap-2">
+										<p class="text-xs font-medium text-slate-200">
+											{decision.decisionType.replace(/_/g, ' ')}
+										</p>
+										<p class="text-xs text-slate-500">{decision.createdAt.slice(0, 10)}</p>
+									</div>
+									<p class="mt-2 text-sm text-slate-300">{decision.summary}</p>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</DetailSection>
 

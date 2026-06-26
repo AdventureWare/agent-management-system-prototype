@@ -6,6 +6,12 @@
 	import ThreadActivityIndicator from '$lib/components/ThreadActivityIndicator.svelte';
 	import { formatThreadStateLabel } from '$lib/thread-activity';
 	import type { AgentThreadDetail } from '$lib/types/agent-thread';
+	import {
+		formatTaskAutonomyLevelLabel,
+		formatTaskReadinessLevelLabel,
+		formatTaskReviewRequirementLabel,
+		formatTaskRiskLevelLabel
+	} from '$lib/types/control-plane';
 
 	type ProjectView = {
 		id: string;
@@ -40,6 +46,10 @@
 		desiredRoleName?: string | null;
 		desiredRoleId?: string | null;
 		runCount: number;
+		readinessLevel?: string;
+		autonomyLevel?: string;
+		riskLevel: string;
+		reviewRequirement?: string;
 		updatedAtLabel: string;
 		targetDate?: string | null;
 		linkThread?: AgentThreadDetail | null;
@@ -121,6 +131,18 @@
 
 	function taskAction(actionName: string) {
 		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
+
+	function riskBadgeClass(riskLevel: string) {
+		switch (riskLevel) {
+			case 'critical':
+			case 'high':
+				return 'border-rose-900/70 bg-rose-950/40 text-rose-200';
+			case 'medium':
+				return 'border-amber-900/70 bg-amber-950/40 text-amber-200';
+			default:
+				return 'border-emerald-900/70 bg-emerald-950/40 text-emerald-200';
+		}
 	}
 </script>
 
@@ -247,6 +269,29 @@
 				</p>
 			{/if}
 		</DetailFactCard>
+	</div>
+
+	<div class="flex flex-wrap gap-2">
+		<span
+			class="inline-flex items-center justify-center rounded-full border border-sky-900/70 bg-sky-950/40 px-2 py-1 text-center text-[11px] leading-none text-sky-200 uppercase"
+		>
+			{formatTaskReadinessLevelLabel(task.readinessLevel ?? 'R1_FRAMED')}
+		</span>
+		<span
+			class="inline-flex items-center justify-center rounded-full border border-violet-900/70 bg-violet-950/40 px-2 py-1 text-center text-[11px] leading-none text-violet-200 uppercase"
+		>
+			{formatTaskAutonomyLevelLabel(task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE')}
+		</span>
+		<span
+			class={`inline-flex items-center justify-center rounded-full border px-2 py-1 text-center text-[11px] leading-none uppercase ${riskBadgeClass(task.riskLevel)}`}
+		>
+			{formatTaskRiskLevelLabel(task.riskLevel)} risk
+		</span>
+		<span
+			class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-center text-[11px] leading-none text-slate-300 uppercase"
+		>
+			{formatTaskReviewRequirementLabel(task.reviewRequirement ?? 'SUMMARY_REVIEW')}
+		</span>
 	</div>
 
 	<section class="card border border-slate-800 bg-slate-950/70 px-5 py-4">

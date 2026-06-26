@@ -64,6 +64,19 @@ describe('agent-capability-manifest', () => {
 					])
 				}),
 				expect.objectContaining({
+					resource: 'context',
+					command: 'get_relevant_prior_runs',
+					path: '/api/agent-context/relevant-prior-runs',
+					method: 'GET',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('durable run evidence')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('prior runs')
+						})
+					])
+				}),
+				expect.objectContaining({
 					resource: 'intent',
 					command: 'prepare_task_for_review',
 					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
@@ -111,6 +124,69 @@ describe('agent-capability-manifest', () => {
 							})
 						})
 					])
+				}),
+				expect.objectContaining({
+					resource: 'goal-loop',
+					command: 'get_next_recommended_action',
+					path: '/api/agent-goal-loop/get_next_recommended_action',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('single best next action')])
+				}),
+				expect.objectContaining({
+					resource: 'goal-loop',
+					command: 'explain_task_eligibility',
+					path: '/api/agent-goal-loop/explain_task_eligibility',
+					nextCommands: expect.arrayContaining(['task:get'])
+				}),
+				expect.objectContaining({
+					resource: 'work-packet',
+					command: 'get_agent_work_packet',
+					path: '/api/agent-work-packets/get_agent_work_packet',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('bounded packet')])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'record_run_result',
+					path: '/api/agent-run-results/record_run_result',
+					payloadMode: 'json_or_file',
+					whenToUse: expect.arrayContaining([expect.stringContaining('run produced')]),
+					nextCommands: expect.arrayContaining(['task:request-review'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'record_blocker',
+					path: '/api/agent-run-results/record_blocker',
+					nextCommands: expect.arrayContaining(['task:update'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'create_followup_task',
+					path: '/api/agent-run-results/create_followup_task',
+					whenToUse: expect.arrayContaining([expect.stringContaining('dedupes')]),
+					nextCommands: expect.arrayContaining(['task:get'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'request_review_from_run',
+					path: '/api/agent-run-results/request_review_from_run',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					nextCommands: expect.arrayContaining(['context:current'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'mark_task_blocked_from_run',
+					path: '/api/agent-run-results/mark_task_blocked_from_run',
+					whenToUse: expect.arrayContaining([expect.stringContaining('blocker')]),
+					nextCommands: expect.arrayContaining(['goal-loop:get_goal_blockers'])
+				}),
+				expect.objectContaining({
+					resource: 'review',
+					command: 'get_review_status',
+					path: '/api/agent-reviews/get_review_status',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('approve')]),
+					nextCommands: expect.arrayContaining(['task:approve-review'])
 				}),
 				expect.objectContaining({
 					resource: 'task',
@@ -246,6 +322,26 @@ describe('agent-capability-manifest', () => {
 
 	it('filters commands by resource and command name', () => {
 		const taskManifest = getAgentCapabilityManifest({ resource: 'task', command: 'decompose' });
+		const goalLoopManifest = getAgentCapabilityManifest({
+			resource: 'goal-loop',
+			command: 'get_actionable_work'
+		});
+		const priorRunsManifest = getAgentCapabilityManifest({
+			resource: 'context',
+			command: 'get_relevant_prior_runs'
+		});
+		const workPacketManifest = getAgentCapabilityManifest({
+			resource: 'work-packet',
+			command: 'get_agent_work_packet'
+		});
+		const runResultManifest = getAgentCapabilityManifest({
+			resource: 'run-result',
+			command: 'record_run_result'
+		});
+		const reviewManifest = getAgentCapabilityManifest({
+			resource: 'review',
+			command: 'get_review_status'
+		});
 
 		expect(taskManifest.commands).toEqual([
 			expect.objectContaining({
@@ -255,5 +351,41 @@ describe('agent-capability-manifest', () => {
 			})
 		]);
 		expect(taskManifest.commands[0]).not.toHaveProperty('mcp');
+		expect(goalLoopManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'goal-loop',
+				command: 'get_actionable_work',
+				method: 'GET'
+			})
+		]);
+		expect(priorRunsManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'context',
+				command: 'get_relevant_prior_runs',
+				method: 'GET',
+				path: '/api/agent-context/relevant-prior-runs'
+			})
+		]);
+		expect(workPacketManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'work-packet',
+				command: 'get_agent_work_packet',
+				method: 'GET'
+			})
+		]);
+		expect(runResultManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'run-result',
+				command: 'record_run_result',
+				method: 'POST'
+			})
+		]);
+		expect(reviewManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'review',
+				command: 'get_review_status',
+				method: 'GET'
+			})
+		]);
 	});
 });

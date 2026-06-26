@@ -104,7 +104,7 @@ async function request(path, init = {}) {
 	} catch (error) {
 		if (error instanceof Error) {
 			throw new Error(
-				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`
+				`Unable to reach the AMS operator API at ${requestUrl.href}. Run \`node scripts/ams-cli.mjs doctor\` to check operator reachability before retrying \`npm run app:server:start\`; if doctor reports local_listener_permission, use an already-running operator via AMS_AGENT_API_BASE_URL or report that AMS state could not be updated.`
 			);
 		}
 

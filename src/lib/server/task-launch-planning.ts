@@ -33,12 +33,19 @@ import {
 import { describeDirectProviderTaskFit } from '$lib/server/direct-provider-task-fit';
 import { getWorkspaceExecutionIssue } from '$lib/server/task-execution-workspace';
 import { resolveLaunchModel } from '$lib/server/task-launch-model';
+import { resolveEffectiveRigorProfile } from '$lib/rigor-profiles';
 import {
 	describeExecutionSurfaceTaskFit,
 	getExecutionSurfaceAssignmentSuggestions
 } from '$lib/server/execution-surface-api';
 import { isValidTaskDate, type TaskDetailFormInput } from '$lib/server/task-form';
-import type { ControlPlaneData, Project, Task, ExecutionSurface } from '$lib/types/control-plane';
+import type {
+	ControlPlaneData,
+	Project,
+	RigorProfile,
+	Task,
+	ExecutionSurface
+} from '$lib/types/control-plane';
 import type { AgentSandbox } from '$lib/types/agent-thread';
 
 export class TaskLaunchPlanError extends Error {
@@ -62,6 +69,7 @@ export type TaskLaunchPlan = {
 	effectiveDelegationPacket: Task['delegationPacket'] | null;
 	effectivePriority: Task['priority'];
 	effectiveRiskLevel: Task['riskLevel'];
+	effectiveRigorProfile: RigorProfile;
 	effectiveApprovalMode: Task['approvalMode'];
 	effectiveRequiredThreadSandbox: AgentSandbox | null;
 	effectiveRequiresReview: boolean;
@@ -240,6 +248,8 @@ export async function buildTaskLaunchPlan(
 		throw new TaskLaunchPlanError(400, 'Task project not found.');
 	}
 
+	const effectiveRigorProfile = resolveEffectiveRigorProfile({ task, project });
+
 	if (input.goalId && !selectedGoal) {
 		throw new TaskLaunchPlanError(400, 'Goal not found.');
 	}
@@ -415,11 +425,38 @@ export async function buildTaskLaunchPlan(
 		successCriteria: effectiveSuccessCriteria,
 		readyCondition: effectiveReadyCondition,
 		expectedOutcome: effectiveExpectedOutcome,
+		scope: task.scope ?? '',
+		nonGoals: task.nonGoals ?? '',
+		validationSteps: task.validationSteps ?? '',
+		effectiveRigorProfile,
+		readinessLevel: task.readinessLevel ?? 'R1_FRAMED',
+		autonomyLevel: task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+		riskLevel: task.riskLevel,
+		allowedActionNames: task.allowedActionNames ?? [],
+		reviewRequirement: task.reviewRequirement ?? 'SUMMARY_REVIEW',
 		delegationPacket: effectiveDelegationPacket,
 		projectName: project.name,
 		projectRootFolder: project.projectRootFolder,
 		defaultArtifactRoot: project.defaultArtifactRoot,
 		additionalWritableRoots: project.additionalWritableRoots ?? [],
+		projectBrief: project.projectBrief,
+		currentStateMemo: project.currentStateMemo,
+		decisionLog: project.decisionLog,
+		agentInstructionsPath: project.agentInstructionsPath,
+		setupNotes: project.setupNotes,
+		validationCommands: project.validationCommands ?? [],
+		codingConventions: project.codingConventions,
+		approvalRequirements: project.approvalRequirements,
+		defaultAllowedActions: project.defaultAllowedActions ?? [],
+		defaultDisallowedActions: project.defaultDisallowedActions ?? [],
+		defaultAutonomyLevel: project.defaultAutonomyLevel,
+		defaultRiskThreshold: project.defaultRiskThreshold,
+		defaultReviewRequirement: project.defaultReviewRequirement,
+		defaultRigorProfile: project.defaultRigorProfile,
+		defaultValidationExpectations: project.defaultValidationExpectations,
+		importantLinks: project.importantLinks ?? [],
+		constraints: project.constraints,
+		projectNonGoals: project.nonGoals,
 		availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 			.slice(0, 12)
 			.map((skill) => skill.id),
@@ -478,6 +515,7 @@ export async function buildTaskLaunchPlan(
 		effectiveDelegationPacket,
 		effectivePriority,
 		effectiveRiskLevel,
+		effectiveRigorProfile,
 		effectiveApprovalMode,
 		effectiveRequiredThreadSandbox,
 		effectiveRequiresReview,
@@ -613,6 +651,7 @@ export async function launchTaskFromPlan(
 		agentThreadId,
 		modelUsed: launchModel.model,
 		modelSource: launchModel.source,
+		effectiveRigorProfile: plan.effectiveRigorProfile,
 		promptDigest: buildPromptDigest(plan.prompt),
 		artifactPaths:
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder

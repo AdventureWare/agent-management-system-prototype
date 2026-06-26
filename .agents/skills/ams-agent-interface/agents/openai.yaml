@@ -1,0 +1,4 @@
+interface:
+  display_name: "AMS Agent Interface"
+  short_description: "Use AMS structured state and tools"
+  default_prompt: "Use $ams-agent-interface to work from an active AMS Goal through structured state, tools, and durable updates."

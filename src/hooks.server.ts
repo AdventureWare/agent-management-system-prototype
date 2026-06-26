@@ -10,6 +10,24 @@ import {
 } from '$lib/server/operator-auth';
 import { readBearerToken } from '$lib/server/operator-auth';
 
+export function isAgentControlPlaneApiPath(pathname: string) {
+	return (
+		pathname === '/api/agent-capabilities' ||
+		pathname === '/api/agent-context/current' ||
+		pathname.startsWith('/api/agent-intents/') ||
+		pathname.startsWith('/api/agent-goal-loop/') ||
+		pathname.startsWith('/api/agent-work-packets/') ||
+		pathname.startsWith('/api/agent-run-results/') ||
+		pathname.startsWith('/api/agent-reviews/') ||
+		pathname === '/api/tasks' ||
+		pathname.startsWith('/api/tasks/') ||
+		pathname === '/api/goals' ||
+		pathname.startsWith('/api/goals/') ||
+		pathname === '/api/projects' ||
+		pathname.startsWith('/api/projects/')
+	);
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const authConfig = getOperatorAuthConfig();
 
@@ -20,19 +38,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isThreadApiPath =
 		event.url.pathname === '/api/agents/threads' ||
 		event.url.pathname.startsWith('/api/agents/threads/');
-	const isAgentControlPlaneApiPath =
-		event.url.pathname === '/api/agent-capabilities' ||
-		event.url.pathname === '/api/agent-context/current' ||
-		event.url.pathname.startsWith('/api/agent-intents/') ||
-		event.url.pathname === '/api/tasks' ||
-		event.url.pathname.startsWith('/api/tasks/') ||
-		event.url.pathname === '/api/goals' ||
-		event.url.pathname.startsWith('/api/goals/') ||
-		event.url.pathname === '/api/projects' ||
-		event.url.pathname.startsWith('/api/projects/');
 	const bearerToken = readBearerToken(event.request.headers.get('authorization'));
 
-	if ((isThreadApiPath || isAgentControlPlaneApiPath) && isValidAgentApiToken(bearerToken)) {
+	if (
+		(isThreadApiPath || isAgentControlPlaneApiPath(event.url.pathname)) &&
+		isValidAgentApiToken(bearerToken)
+	) {
 		return resolve(event);
 	}
 

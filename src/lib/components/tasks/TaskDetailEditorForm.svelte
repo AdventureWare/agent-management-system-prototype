@@ -14,13 +14,22 @@
 	import {
 		PRIORITY_OPTIONS,
 		TASK_APPROVAL_MODE_OPTIONS,
+		TASK_AUTONOMY_LEVEL_OPTIONS,
+		TASK_READINESS_LEVEL_OPTIONS,
+		TASK_REVIEW_REQUIREMENT_OPTIONS,
 		TASK_RISK_LEVEL_OPTIONS,
+		formatTaskAutonomyLevelLabel,
 		formatPriorityLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskReadinessLevelLabel,
+		formatTaskReviewRequirementLabel,
 		formatTaskRiskLevelLabel,
 		formatTaskStatusLabel,
 		type Priority,
 		type TaskApprovalMode,
+		type TaskAutonomyLevel,
+		type TaskReadinessLevel,
+		type TaskReviewRequirement,
 		type TaskRiskLevel,
 		type TaskStatus
 	} from '$lib/types/control-plane';
@@ -49,6 +58,13 @@
 		successCriteria?: string | null;
 		readyCondition?: string | null;
 		expectedOutcome?: string | null;
+		scope?: string | null;
+		nonGoals?: string | null;
+		validationSteps?: string | null;
+		readinessLevel: TaskReadinessLevel;
+		autonomyLevel: TaskAutonomyLevel;
+		allowedActionNames?: string[];
+		reviewRequirement: TaskReviewRequirement;
 		parentTaskId?: string | null;
 		workflowId?: string | null;
 		delegationPacket?: TaskDelegationPacket | null;
@@ -196,6 +212,7 @@
 	let requiredPromptSkillNamesInput = $state('');
 	let requiredCapabilityNamesInput = $state('');
 	let requiredToolNamesInput = $state('');
+	let allowedActionNamesInput = $state('');
 	let successCriteriaInput = $state('');
 	let readyConditionInput = $state('');
 	let expectedOutcomeInput = $state('');
@@ -299,6 +316,7 @@
 		requiredPromptSkillNamesInput = (task.requiredPromptSkillNames ?? []).join(', ');
 		requiredCapabilityNamesInput = (task.requiredCapabilityNames ?? []).join(', ');
 		requiredToolNamesInput = (task.requiredToolNames ?? []).join(', ');
+		allowedActionNamesInput = (task.allowedActionNames ?? []).join(', ');
 		desiredRoleIdInput = task.desiredRoleId ?? '';
 		successCriteriaInput = task.successCriteria ?? '';
 		readyConditionInput = task.readyCondition ?? '';
@@ -388,6 +406,106 @@
 							'Reviews can validate this task against the recorded success criteria and expected outcome.'}
 					</p>
 				</div>
+
+				<section class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Readiness and autonomy
+						</p>
+						<p class="text-sm text-slate-400">
+							Capture the execution boundary, validation path, and review policy before assigning
+							agent work.
+						</p>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-3">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Scope</span>
+							<textarea
+								class="textarea min-h-28 text-white"
+								name="scope"
+								placeholder="Files, app areas, docs, or artifacts that are in bounds."
+								>{task.scope ?? ''}</textarea
+							>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Non-goals</span>
+							<textarea
+								class="textarea min-h-28 text-white"
+								name="nonGoals"
+								placeholder="Explicitly call out work the agent should not do."
+								>{task.nonGoals ?? ''}</textarea
+							>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Validation steps</span>
+							<textarea
+								class="textarea min-h-28 text-white"
+								name="validationSteps"
+								placeholder="Tests, commands, manual checks, screenshots, or review steps."
+								>{task.validationSteps ?? ''}</textarea
+							>
+						</label>
+					</div>
+
+					<div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Readiness level</span>
+							<select class="select text-white" name="readinessLevel">
+								{#each TASK_READINESS_LEVEL_OPTIONS as readinessLevel (readinessLevel)}
+									<option
+										value={readinessLevel}
+										selected={(task.readinessLevel ?? 'R1_FRAMED') === readinessLevel}
+									>
+										{formatTaskReadinessLevelLabel(readinessLevel)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Autonomy level</span>
+							<select class="select text-white" name="autonomyLevel">
+								{#each TASK_AUTONOMY_LEVEL_OPTIONS as autonomyLevel (autonomyLevel)}
+									<option
+										value={autonomyLevel}
+										selected={(task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE') ===
+											autonomyLevel}
+									>
+										{formatTaskAutonomyLevelLabel(autonomyLevel)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Review requirement</span>
+							<select class="select text-white" name="reviewRequirement">
+								{#each TASK_REVIEW_REQUIREMENT_OPTIONS as reviewRequirement (reviewRequirement)}
+									<option
+										value={reviewRequirement}
+										selected={(task.reviewRequirement ?? 'SUMMARY_REVIEW') === reviewRequirement}
+									>
+										{formatTaskReviewRequirementLabel(reviewRequirement)}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="block">
+							<span class="mb-2 block text-sm font-medium text-slate-200">Allowed actions</span>
+							<input
+								bind:value={allowedActionNamesInput}
+								class="input text-white"
+								name="allowedActionNames"
+								placeholder="read repo, edit docs, run tests"
+							/>
+							<p class="mt-2 text-xs text-slate-500">Comma-separated policy notes for v0.</p>
+						</label>
+					</div>
+				</section>
 
 				{#if task.parentTaskId || task.delegationPacket}
 					<section class="rounded-2xl border border-sky-900/50 bg-sky-950/15 p-4">

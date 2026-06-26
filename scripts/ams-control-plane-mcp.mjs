@@ -25,7 +25,18 @@ const SPECIAL_TOOLS = [
 			properties: {
 				resource: {
 					type: 'string',
-					enum: ['context', 'intent', 'task', 'goal', 'project', 'thread']
+					enum: [
+						'context',
+						'intent',
+						'goal-loop',
+						'work-packet',
+						'run-result',
+						'review',
+						'task',
+						'goal',
+						'project',
+						'thread'
+					]
 				},
 				command: {
 					type: 'string'
@@ -50,6 +61,13 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		threadId: { type: 'string' },
 		taskId: { type: 'string' },
 		runId: { type: 'string' }
+	}),
+	'context:get_relevant_prior_runs': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' },
+		status: { type: 'string' },
+		limit: { type: 'number' }
 	}),
 	'intent:prepare_task_for_review': buildObjectSchema({
 		taskId: { type: 'string' },
@@ -92,6 +110,114 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		validateOnly: { type: 'boolean' },
 		replyRequested: { type: 'boolean' },
 		replyToContactId: { type: 'string' }
+	}),
+	'goal-loop:list_active_goals': buildObjectSchema({
+		projectId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_goal_context': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_goal_progress': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' }
+	}),
+	'goal-loop:get_goal_success_criteria': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_goal_blockers': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_actionable_work': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_blocked_work': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_awaiting_review': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		limit: { type: 'number' }
+	}),
+	'goal-loop:get_next_recommended_action': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' }
+	}),
+	'goal-loop:explain_task_eligibility': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' }
+	}),
+	'work-packet:get_agent_work_packet': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' }
+	}),
+	'run-result:record_run_result': buildObjectSchema({
+		runId: { type: 'string' },
+		status: { type: 'string' },
+		summary: { type: 'string' },
+		actionsTaken: { type: 'string' },
+		validationSummary: { type: 'string' },
+		resultSummary: { type: 'string' },
+		errorSummary: { type: 'string' },
+		blockersFound: { type: 'array', items: { type: 'string' } },
+		followUpTaskIds: { type: 'array', items: { type: 'string' } },
+		artifactPaths: { type: 'array', items: { type: 'string' } }
+	}),
+	'run-result:record_validation_result': buildObjectSchema({
+		runId: { type: 'string' },
+		status: { type: 'string' },
+		validationSummary: { type: 'string' },
+		artifactPaths: { type: 'array', items: { type: 'string' } }
+	}),
+	'run-result:record_blocker': buildObjectSchema({
+		runId: { type: 'string' },
+		blocker: { type: 'string' },
+		blockersFound: { type: 'array', items: { type: 'string' } },
+		errorSummary: { type: 'string' }
+	}),
+	'run-result:record_followup_recommendations': buildObjectSchema({
+		runId: { type: 'string' },
+		resultSummary: { type: 'string' },
+		followUpTaskIds: { type: 'array', items: { type: 'string' } }
+	}),
+	'run-result:create_followup_task': buildObjectSchema({
+		runId: { type: 'string' },
+		title: { type: 'string' },
+		summary: { type: 'string' },
+		successCriteria: { type: 'string' },
+		readyCondition: { type: 'string' },
+		expectedOutcome: { type: 'string' },
+		scope: { type: 'string' },
+		nonGoals: { type: 'string' },
+		validationSteps: { type: 'string' }
+	}),
+	'run-result:request_review_from_run': buildObjectSchema({
+		runId: { type: 'string' },
+		summary: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'run-result:mark_task_blocked_from_run': buildObjectSchema({
+		runId: { type: 'string' },
+		blocker: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'review:get_review_status': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' },
+		limit: { type: 'number' }
 	}),
 	'thread:start': buildObjectSchema({ payload: { type: 'object' } }, ['payload']),
 	'thread:get': buildObjectSchema({ threadId: { type: 'string' } }, ['threadId']),
@@ -254,7 +380,7 @@ function buildManifestToolKey(resource, command) {
 }
 
 function buildManifestToolName(resource, command) {
-	return `ams_${resource}_${command.replaceAll('-', '_')}`;
+	return `ams_${resource.replaceAll('-', '_')}_${command.replaceAll('-', '_')}`;
 }
 
 function buildManifestBackedTools() {

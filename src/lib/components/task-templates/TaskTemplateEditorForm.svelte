@@ -13,10 +13,16 @@
 	} from '$lib/types/agent-thread';
 	import {
 		TASK_APPROVAL_MODE_OPTIONS,
+		TASK_AUTONOMY_LEVEL_OPTIONS,
+		TASK_READINESS_LEVEL_OPTIONS,
+		TASK_REVIEW_REQUIREMENT_OPTIONS,
 		TASK_RISK_LEVEL_OPTIONS,
 		CATALOG_LIFECYCLE_STATUS_OPTIONS,
 		formatCatalogLifecycleStatusLabel,
 		formatTaskApprovalModeLabel,
+		formatTaskAutonomyLevelLabel,
+		formatTaskReadinessLevelLabel,
+		formatTaskReviewRequirementLabel,
 		formatTaskRiskLevelLabel
 	} from '$lib/types/control-plane';
 
@@ -446,6 +452,82 @@
 				placeholder="Describe the desired end state or deliverable."
 			></textarea>
 		</label>
+	</div>
+
+	<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+		<p class="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+			Readiness and autonomy
+		</p>
+		<div class="mt-4 grid gap-4 lg:grid-cols-3">
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Scope</span>
+				<textarea
+					bind:value={values.scope}
+					class="textarea min-h-24 text-white placeholder:text-slate-500"
+					name="scope"
+					placeholder="Files, areas, sections, or artifacts in bounds."
+				></textarea>
+			</label>
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Non-goals</span>
+				<textarea
+					bind:value={values.nonGoals}
+					class="textarea min-h-24 text-white placeholder:text-slate-500"
+					name="nonGoals"
+					placeholder="Work this template should exclude."
+				></textarea>
+			</label>
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Validation steps</span>
+				<textarea
+					bind:value={values.validationSteps}
+					class="textarea min-h-24 text-white placeholder:text-slate-500"
+					name="validationSteps"
+					placeholder="Tests, commands, checks, screenshots, or reviews."
+				></textarea>
+			</label>
+		</div>
+		<div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Readiness level</span>
+				<select bind:value={values.readinessLevel} class="select text-white" name="readinessLevel">
+					{#each TASK_READINESS_LEVEL_OPTIONS as readinessLevel (readinessLevel)}
+						<option value={readinessLevel}>{formatTaskReadinessLevelLabel(readinessLevel)}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Autonomy level</span>
+				<select bind:value={values.autonomyLevel} class="select text-white" name="autonomyLevel">
+					{#each TASK_AUTONOMY_LEVEL_OPTIONS as autonomyLevel (autonomyLevel)}
+						<option value={autonomyLevel}>{formatTaskAutonomyLevelLabel(autonomyLevel)}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Review requirement</span>
+				<select
+					bind:value={values.reviewRequirement}
+					class="select text-white"
+					name="reviewRequirement"
+				>
+					{#each TASK_REVIEW_REQUIREMENT_OPTIONS as reviewRequirement (reviewRequirement)}
+						<option value={reviewRequirement}>
+							{formatTaskReviewRequirementLabel(reviewRequirement)}
+						</option>
+					{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="mb-2 block text-sm font-medium text-slate-200">Allowed actions</span>
+				<input
+					bind:value={values.allowedActionNames}
+					class="input text-white placeholder:text-slate-500"
+					name="allowedActionNames"
+					placeholder="read repo, edit docs, run tests"
+				/>
+			</label>
+		</div>
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-1">

@@ -18,6 +18,11 @@ export const PATCH = async ({ params, request }) => {
 				typeof body.targetDate === 'string' || body.targetDate === null
 					? (body.targetDate as string | null)
 					: undefined,
+			planningPriority:
+				typeof body.planningPriority === 'number' || typeof body.planningPriority === 'string'
+					? (body.planningPriority as number | string)
+					: undefined,
+			confidence: typeof body.confidence === 'string' ? body.confidence : undefined,
 			artifactPath:
 				typeof body.artifactPath === 'string' || body.artifactPath === null
 					? (body.artifactPath as string | null)

@@ -18,11 +18,18 @@
 	import TaskExecutionPanel from '$lib/components/tasks/TaskExecutionPanel.svelte';
 	import TaskGovernancePanel from '$lib/components/tasks/TaskGovernancePanel.svelte';
 	import TaskDetailHero from '$lib/components/tasks/TaskDetailHero.svelte';
+	import TaskDelegationReadinessPanel from '$lib/components/tasks/TaskDelegationReadinessPanel.svelte';
 	import TaskDetailOverview from '$lib/components/tasks/TaskDetailOverview.svelte';
 	import TaskResourcesPanel from '$lib/components/tasks/TaskResourcesPanel.svelte';
 	import { getTaskThreadActionLabel, isActiveTaskThread } from '$lib/task-thread-context';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
 	import { formatTaskStatusLabel, taskStatusToneClass } from '$lib/types/control-plane';
+	import {
+		buildExecutorPrompt,
+		buildPlannerPrompt,
+		buildResearchPrompt,
+		buildReviewerPrompt
+	} from '$lib/workflow-prompts';
 	import { fromStore } from 'svelte/store';
 
 	let props = $props<{
@@ -39,6 +46,9 @@
 	let autoRefresh = $state(true);
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
+	let workflowPrompt = $state('');
+	let workflowPromptLabel = $state('');
+	let workflowCopyStatus = $state('');
 	const threadStoreState = fromStore(agentThreadStore);
 	const taskRecordState = fromStore(taskRecordStore);
 	let data = $derived.by(() => ({
@@ -223,6 +233,98 @@
 
 	function taskAction(actionName: string) {
 		return actionBasePath ? `${actionBasePath}?/${actionName}` : `?/${actionName}`;
+	}
+
+	async function copyWorkflowPrompt(prompt: string, label: string) {
+		workflowPrompt = prompt;
+		workflowPromptLabel = label;
+		await navigator.clipboard.writeText(prompt);
+		workflowCopyStatus = `${label} copied.`;
+		window.setTimeout(() => {
+			workflowCopyStatus = '';
+		}, 2200);
+	}
+
+	function prepareExecutorPrompt() {
+		if (!data.project) {
+			return;
+		}
+
+		void copyWorkflowPrompt(
+			buildExecutorPrompt({
+				project: data.project,
+				task: data.task,
+				goal: data.linkedGoal,
+				recentRuns: data.relatedRuns
+			}),
+			'Executor prompt'
+		);
+	}
+
+	function prepareSuggestedPrompt() {
+		if (!data.project) {
+			return;
+		}
+
+		switch (data.delegationReadiness.recommendedMode) {
+			case 'READY_FOR_EXECUTION':
+				void copyWorkflowPrompt(
+					buildExecutorPrompt({
+						project: data.project,
+						task: data.task,
+						goal: data.linkedGoal,
+						recentRuns: data.relatedRuns
+					}),
+					'Suggested execution prompt'
+				);
+				break;
+			case 'AWAITING_REVIEW':
+				void copyWorkflowPrompt(
+					buildReviewerPrompt({
+						project: data.project,
+						task: data.task,
+						run: data.task.latestRun ?? data.relatedRuns[0] ?? null,
+						review: data.task.openReview
+					}),
+					'Suggested review prompt'
+				);
+				break;
+			case 'NEEDS_RESEARCH':
+				void copyWorkflowPrompt(
+					buildResearchPrompt({
+						project: data.project,
+						task: data.task,
+						goal: data.linkedGoal
+					}),
+					'Suggested research prompt'
+				);
+				break;
+			case 'CAPTURED':
+			case 'NEEDS_CLARIFICATION':
+			case 'NEEDS_PLANNING':
+			case 'AUTOMATION_CANDIDATE':
+			default:
+				void copyWorkflowPrompt(
+					buildPlannerPrompt({
+						project: data.project,
+						goals: data.goals,
+						tasks: [data.task]
+					}),
+					'Suggested planning prompt'
+				);
+		}
+	}
+
+	function prepareReviewPrompt() {
+		void copyWorkflowPrompt(
+			buildReviewerPrompt({
+				project: data.project,
+				task: data.task,
+				run: data.task.latestRun ?? data.relatedRuns[0] ?? null,
+				review: data.task.openReview
+			}),
+			'Review prompt'
+		);
 	}
 
 	function compactText(value: string, maxLength = 320) {
@@ -579,6 +681,61 @@
 		stalledRecovery={data.stalledRecovery}
 	/>
 
+	<TaskDelegationReadinessPanel assessment={data.delegationReadiness} />
+
+	<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+					Workflow prompts
+				</p>
+				<p class="mt-1 text-sm text-slate-400">
+					Prepare mode-aware packets from the current readiness assessment, task, project, run, and
+					governance data.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<button
+					class="btn border border-violet-800/70 bg-violet-950/40 text-sm font-semibold text-violet-200"
+					type="button"
+					onclick={prepareSuggestedPrompt}
+					disabled={!data.project}
+				>
+					Prepare Suggested Prompt
+				</button>
+				<button
+					class="btn border border-sky-800/70 bg-sky-950/40 text-sm font-semibold text-sky-200"
+					type="button"
+					onclick={prepareExecutorPrompt}
+					disabled={!data.project}
+				>
+					Prepare Executor Prompt
+				</button>
+				<button
+					class="btn border border-amber-800/70 bg-amber-950/40 text-sm font-semibold text-amber-200"
+					type="button"
+					onclick={prepareReviewPrompt}
+				>
+					Prepare Review Prompt
+				</button>
+				{#if workflowCopyStatus}
+					<span class="self-center text-xs text-emerald-300">{workflowCopyStatus}</span>
+				{/if}
+			</div>
+		</div>
+
+		{#if workflowPrompt}
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+				<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">
+					{workflowPromptLabel}
+				</p>
+				<textarea class="mt-3 textarea min-h-72 font-mono text-xs text-white" readonly
+					>{workflowPrompt}</textarea
+				>
+			</div>
+		{/if}
+	</section>
+
 	<div class="space-y-6">
 		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -619,6 +776,7 @@
 				task={data.task}
 				executionPreflight={data.executionPreflight}
 				launchContext={data.launchContext}
+				goalLoopWorkPacket={data.goalLoopWorkPacket}
 				retrievedKnowledgeItems={data.retrievedKnowledgeItems ?? []}
 				suggestedThread={data.suggestedThread}
 				candidateThreads={data.candidateThreads}

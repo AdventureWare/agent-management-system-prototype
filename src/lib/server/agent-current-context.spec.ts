@@ -254,6 +254,248 @@ describe('agent-current-context', () => {
 		);
 	});
 
+	it('prefers the task-linked worker thread over an ambient requester thread', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const currentContextModule = await importAgentCurrentContextModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_worker',
+				title: 'Worker task',
+				summary: 'Task launched from a different supervising thread',
+				projectId: project.id,
+				goalId: '',
+				priority: 'medium',
+				riskLevel: 'low',
+				approvalMode: 'none',
+				requiresReview: false,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot,
+				status: 'in_progress'
+			}),
+			agentThreadId: 'thread_worker',
+			latestRunId: 'run_worker'
+		};
+		const run = controlPlaneModule.createRun({
+			id: 'run_worker',
+			taskId: task.id,
+			status: 'running',
+			agentThreadId: 'thread_worker',
+			summary: 'Linked work thread is actively running.'
+		});
+		const supervisorTask = controlPlaneModule.createTask({
+			id: 'task_supervisor',
+			title: 'Supervisor task',
+			summary: 'Ambient managed-run task',
+			projectId: project.id,
+			goalId: '',
+			priority: 'medium',
+			riskLevel: 'low',
+			approvalMode: 'none',
+			requiresReview: false,
+			desiredRoleId: '',
+			artifactPath: project.defaultArtifactRoot,
+			status: 'in_progress'
+		});
+		const supervisorRun = controlPlaneModule.createRun({
+			id: 'run_supervisor',
+			taskId: supervisorTask.id,
+			status: 'running',
+			agentThreadId: 'thread_supervisor',
+			summary: 'Supervisor thread is actively running.'
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task, supervisorTask],
+			runs: [run, supervisorRun]
+		}));
+
+		const getAgentThreadSpy = vi
+			.spyOn(await import('./agent-threads'), 'getAgentThread')
+			.mockResolvedValue({
+				id: 'thread_worker',
+				name: 'Worker thread',
+				handle: 'worker',
+				contactLabel: '@worker',
+				threadState: 'working',
+				latestRunStatus: 'running',
+				hasActiveRun: true,
+				canResume: false,
+				lastActivityAt: '2026-04-22T13:00:00.000Z'
+			} as never);
+
+		const context = await currentContextModule.loadAgentCurrentContext({
+			threadId: 'thread_supervisor',
+			taskId: task.id,
+			runId: supervisorRun.id
+		});
+
+		expect(getAgentThreadSpy).toHaveBeenCalledWith('thread_worker', {
+			controlPlane: expect.any(Object)
+		});
+		expect(context.resolved.threadId).toBe('thread_worker');
+		expect(context.resolved.runId).toBe('run_worker');
+		expect(context.thread?.id).toBe('thread_worker');
+	});
+
+	it('does not recommend a new review for a done task with an approved review', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const currentContextModule = await importAgentCurrentContextModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_reviewed_done',
+				title: 'Reviewed task',
+				summary: 'Already reviewed and closed',
+				projectId: project.id,
+				goalId: '',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot,
+				status: 'done'
+			}),
+			latestRunId: 'run_reviewed_done'
+		};
+		const run = controlPlaneModule.createRun({
+			id: 'run_reviewed_done',
+			taskId: task.id,
+			status: 'completed',
+			summary: 'Closed after review.'
+		});
+		const review = {
+			...controlPlaneModule.createReview({
+				taskId: task.id,
+				runId: run.id,
+				status: 'approved',
+				summary: 'Review approved.'
+			}),
+			id: 'review_approved'
+		};
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task],
+			runs: [run],
+			reviews: [review]
+		}));
+
+		const context = await currentContextModule.loadAgentCurrentContext({ taskId: task.id });
+
+		expect(context.summary.recommendedNextActions).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'prepare_task_for_review'
+				})
+			])
+		);
+		expect(context.summary.primaryActionHint).toBeNull();
+	});
+
+	it('does not recommend a new approval for a done task with an approved approval', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const currentContextModule = await importAgentCurrentContextModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_approved_done',
+				title: 'Approved task',
+				summary: 'Already approved and closed',
+				projectId: project.id,
+				goalId: '',
+				priority: 'medium',
+				riskLevel: 'medium',
+				approvalMode: 'before_complete',
+				requiresReview: false,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot,
+				status: 'done'
+			}),
+			latestRunId: 'run_approved_done'
+		};
+		const run = controlPlaneModule.createRun({
+			id: 'run_approved_done',
+			taskId: task.id,
+			status: 'completed',
+			summary: 'Closed after approval.'
+		});
+		const approval = {
+			...controlPlaneModule.createApproval({
+				taskId: task.id,
+				runId: run.id,
+				mode: 'before_complete',
+				status: 'approved',
+				summary: 'Approval granted.'
+			}),
+			id: 'approval_approved'
+		};
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task],
+			runs: [run],
+			approvals: [approval]
+		}));
+
+		const context = await currentContextModule.loadAgentCurrentContext({ taskId: task.id });
+
+		expect(context.summary.recommendedNextActions).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'prepare_task_for_approval'
+				})
+			])
+		);
+		expect(context.summary.primaryActionHint).toBeNull();
+	});
+
 	it('returns a structured not-found error for unknown run ids', async () => {
 		const root = createTempDir();
 		process.chdir(root);

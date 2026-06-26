@@ -64,6 +64,12 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 			role: null,
 			assignedExecutionSurface: null,
 			provider: null,
+			model: {
+				effective: null,
+				source: 'none',
+				label: 'No model selected',
+				providerDefault: null
+			},
 			sandbox: {
 				effective: 'danger-full-access',
 				taskRequirement: null,
@@ -99,6 +105,28 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 				capabilityNames: [],
 				toolNames: []
 			}
+		},
+		goalLoopWorkPacket: null,
+		delegationReadiness: {
+			recommendedMode: 'READY_FOR_EXECUTION',
+			readinessLabel: 'Ready for execution',
+			canExecute: true,
+			needsClarification: false,
+			needsResearch: false,
+			needsReview: false,
+			effectiveRigorProfile: 'INTERNAL',
+			rigorProfileLabel: 'Internal',
+			rigorProfileValidationExpectations: ['Run focused checks.'],
+			riskFlags: [],
+			missingInformation: [],
+			suggestedNextActions: [
+				{
+					id: 'execute',
+					label: 'Run task',
+					detail: 'Task is ready for a managed execution run.'
+				}
+			],
+			rationale: 'The task has enough context for a bounded managed run.'
 		},
 		retrievedKnowledgeItems: [],
 		recentDecisions: [],
@@ -459,6 +487,42 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Open task template details' }))
 			.toBeInTheDocument();
+	});
+
+	it('surfaces the goal-loop selected-task work packet in launch context', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				initialDetailPanel: 'execution',
+				goalLoopWorkPacket: {
+					mode: 'executor',
+					recommendationKind: 'execute_task',
+					projectId: 'project_1',
+					goalId: 'goal_loop',
+					taskId: 'task_1',
+					taskTitle: 'Surface packet preview',
+					selectionReason: 'Task is ready, in scope, unblocked, and reviewable.',
+					includedTaskIds: ['task_1'],
+					relevantRunIds: ['run_previous'],
+					stoppingConditions: ['Stop before external-state changes.'],
+					validationExpectations: ['Run focused task detail tests.'],
+					expectedResultShape: ['What changed', 'Validation commands and results'],
+					prompt: '# Goal Loop Selected Work Packet\n\nSelected task: Surface packet preview'
+				}
+			}) as never
+		});
+
+		expect(document.body.textContent).toContain('Goal-loop work packet');
+		expect(document.body.textContent).toContain('Surface packet preview');
+		expect(document.body.textContent).toContain(
+			'Task is ready, in scope, unblocked, and reviewable.'
+		);
+		expect(document.body.textContent).toContain('Run focused task detail tests.');
+		expect(document.body.textContent).toContain('Inspect selected-task prompt');
+		expect(
+			(document.querySelector('textarea[readonly]') as HTMLTextAreaElement | null)?.value
+		).toContain('Goal Loop Selected Work Packet');
+		expect(document.body.textContent).toContain('Run task');
 	});
 
 	it('renders attached files with open, download, and detach controls', async () => {

@@ -43,6 +43,49 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		]
 	},
 	{
+		resource: 'context',
+		command: 'get_relevant_prior_runs',
+		summary:
+			'Return bounded, relevance-ranked prior AMS run evidence for a task, goal, or project.',
+		cli: 'node scripts/ams-cli.mjs context get_relevant_prior_runs [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--status <status>] [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-context/relevant-prior-runs',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use before starting work when prior durable run evidence may replace chat memory.',
+			'Use with a small limit to fetch concise result, validation, artifact, and rationale metadata without logs.'
+		],
+		nextCommands: ['task:get', 'goal-loop:get_goal_context', 'work-packet:get_agent_work_packet'],
+		examples: [
+			{
+				title: 'Fetch relevant prior runs for a task',
+				input: {
+					taskId: 'task_123',
+					limit: 3
+				},
+				output: {
+					command: 'get_relevant_prior_runs',
+					safety: {
+						readOnly: true
+					},
+					runs: [
+						{
+							id: 'run_123',
+							taskId: 'task_123',
+							taskTitle: 'Implement context tool',
+							status: 'completed',
+							resultSummary: 'Added the read-only prior-runs helper.',
+							validationSummary: 'Focused tests passed.',
+							artifactPaths: ['src/lib/server/agent-prior-runs.ts'],
+							updatedAt: '2026-06-26T12:00:00.000Z',
+							inclusionReason: 'same_task: run is attached to the requested task.'
+						}
+					]
+				}
+			}
+		]
+	},
+	{
 		resource: 'intent',
 		command: 'prepare_task_for_review',
 		summary:
@@ -261,6 +304,356 @@ export const AGENT_CAPABILITY_COMMANDS = [
 				intent: { default: 'request_child_handoff_changes' }
 			}
 		}
+	},
+	{
+		resource: 'goal-loop',
+		command: 'list_active_goals',
+		summary: 'List active goals that agents can use as goal-loop anchors.',
+		cli: 'node scripts/ams-cli.mjs goal-loop list_active_goals [--project <projectId>] [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/list_active_goals',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when no current goal is known or an agent needs to choose an active goal before selecting work.'
+		],
+		nextCommands: ['goal-loop:get_goal_context', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_goal_context',
+		summary: 'Fetch bounded goal, project, task, review, approval, and recommendation context.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_goal_context --goal <goalId> [--project <projectId>] [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_goal_context',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use after resolving an active goal when an agent needs source-of-truth context without prompt stuffing.'
+		],
+		nextCommands: ['goal-loop:get_actionable_work', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_goal_progress',
+		summary: 'Summarize goal-loop progress by derived task classification and open gates.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_goal_progress --goal <goalId> [--project <projectId>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_goal_progress',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when deciding whether the active goal is still blocked, ready for more work, or awaiting review.'
+		],
+		nextCommands: ['goal-loop:get_goal_blockers', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_goal_success_criteria',
+		summary: 'Return goal success signal and linked task acceptance/validation criteria.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_goal_success_criteria --goal <goalId> [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_goal_success_criteria',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use before closing or planning a goal to inspect the success criteria that should guide next work.'
+		],
+		nextCommands: ['goal-loop:get_goal_progress']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_goal_blockers',
+		summary: 'List blockers and non-actionable goal work that prevent progress.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_goal_blockers --goal <goalId> [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_goal_blockers',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when the next step may be clarification, approval, research, planning, or unblocking.'
+		],
+		nextCommands: ['goal-loop:get_next_recommended_action', 'task:update']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_actionable_work',
+		summary:
+			'Return goal-linked tasks that are actionable under current readiness, risk, autonomy, dependency, and review rules.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_actionable_work --goal <goalId> [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_actionable_work',
+		payloadMode: 'none',
+		whenToUse: ['Use before launching or assigning work from an active goal.'],
+		nextCommands: ['goal-loop:explain_task_eligibility', 'task:launch-session']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_blocked_work',
+		summary: 'Return blocked or not-yet-actionable goal work with reasons.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_blocked_work --goal <goalId> [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_blocked_work',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when no execution task is available or when preparing clarification/research/planning work.'
+		],
+		nextCommands: ['goal-loop:explain_task_eligibility', 'task:update']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_awaiting_review',
+		summary: 'Return goal work that is awaiting review or approval.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_awaiting_review --goal <goalId> [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_awaiting_review',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use before launching new work when review or approval gates may block goal progress.'
+		],
+		nextCommands: ['task:approve-review', 'task:request-review-changes', 'task:approve-approval']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_next_recommended_action',
+		summary: 'Return the next deterministic recommendation for goal-loop progress.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_next_recommended_action --goal <goalId> [--project <projectId>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_next_recommended_action',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when an agent needs the single best next action without reading every task manually.'
+		],
+		nextCommands: ['goal-loop:get_actionable_work', 'goal-loop:get_goal_blockers']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'explain_task_eligibility',
+		summary: 'Explain why a task is or is not actionable in the resolved goal-loop scope.',
+		cli: 'node scripts/ams-cli.mjs goal-loop explain_task_eligibility --task <taskId> [--goal <goalId>] [--project <projectId>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/explain_task_eligibility',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use before changing task status, launching a session, or creating follow-up work from a blocked task.'
+		],
+		nextCommands: ['task:get', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'work-packet',
+		command: 'get_agent_work_packet',
+		summary:
+			'Build a selective structured agent work packet from current goal, project, task, run, review, and readiness state.',
+		cli: 'node scripts/ams-cli.mjs work-packet get_agent_work_packet [--goal <goalId>] [--project <projectId>] [--task <taskId>]',
+		method: 'GET',
+		path: '/api/agent-work-packets/get_agent_work_packet',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use after selecting next work when an agent needs a bounded packet with structured sections and an optional rendered prompt.',
+			'Use this instead of dumping all project memory, tasks, runs, and prompt boilerplate into a generic instruction blob.'
+		],
+		nextCommands: ['goal-loop:get_next_recommended_action', 'goal-loop:explain_task_eligibility']
+	},
+	{
+		resource: 'run-result',
+		command: 'record_run_result',
+		summary:
+			'Record structured run result evidence without changing task, review, or approval state.',
+		cli: 'node scripts/ams-cli.mjs run-result record_run_result --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/record_run_result',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a run produced changed files, artifacts, validation evidence, blockers, or result summary.',
+			'Use this before review/approval mutations so run evidence is durable and inspectable.'
+		],
+		readAfter: ['context:current', 'task:get'],
+		nextCommands: ['task:request-review', 'task:update', 'task:create', 'context:current'],
+		examples: [
+			{
+				title: 'Record completed run evidence',
+				input: {
+					runId: 'run_123',
+					status: 'completed',
+					resultSummary: 'Implemented the bounded API slice.',
+					validationSummary: 'Focused unit tests passed.',
+					artifactPaths: ['/path/to/artifact.md']
+				},
+				output: {
+					command: 'record_run_result',
+					safety: {
+						mutation: 'run_evidence_only',
+						taskStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
+		command: 'record_validation_result',
+		summary: 'Record validation evidence on a run without changing task state.',
+		cli: 'node scripts/ams-cli.mjs run-result record_validation_result --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/record_validation_result',
+		payloadMode: 'json_or_file',
+		whenToUse: ['Use when validation was run and should be attached to run evidence.'],
+		readAfter: ['context:current', 'task:get'],
+		nextCommands: ['run-result:record_run_result', 'task:request-review']
+	},
+	{
+		resource: 'run-result',
+		command: 'record_blocker',
+		summary: 'Record a blocker found by a run without automatically blocking the linked task.',
+		cli: 'node scripts/ams-cli.mjs run-result record_blocker --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/record_blocker',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a run found missing access, missing input, failed dependency, or another blocker.'
+		],
+		readAfter: ['context:current', 'task:get'],
+		nextCommands: ['task:update', 'goal-loop:get_goal_blockers']
+	},
+	{
+		resource: 'run-result',
+		command: 'record_followup_recommendations',
+		summary: 'Record follow-up task references or recommendations on a run without creating tasks.',
+		cli: 'node scripts/ams-cli.mjs run-result record_followup_recommendations --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/record_followup_recommendations',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when a run identified follow-up work but task creation should remain a separate explicit operation.'
+		],
+		readAfter: ['context:current', 'task:get'],
+		nextCommands: ['task:create', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'run-result',
+		command: 'create_followup_task',
+		summary: 'Create or link a draft follow-up task from a run result, then record it on the run.',
+		cli: 'node scripts/ams-cli.mjs run-result create_followup_task --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/create_followup_task',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after recording run evidence when a concrete follow-up task is needed for the same project or goal.',
+			'This command dedupes by open task title in the same project and goal before creating a new draft task.'
+		],
+		readAfter: ['task:get', 'context:current'],
+		nextCommands: ['task:get', 'task:update', 'goal-loop:get_next_recommended_action'],
+		examples: [
+			{
+				title: 'Create a draft follow-up task from a run',
+				input: {
+					runId: 'run_123',
+					title: 'Document run-result API',
+					summary: 'Document the new run-result API surface.'
+				},
+				output: {
+					command: 'create_followup_task',
+					createdTask: true,
+					safety: {
+						mutation: 'run_evidence_and_draft_task',
+						reviewStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
+		command: 'request_review_from_run',
+		summary:
+			'Open a task review from completed run evidence without approving or accepting the task.',
+		cli: 'node scripts/ams-cli.mjs run-result request_review_from_run --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/request_review_from_run',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after recording completed run evidence when the linked task should enter review.',
+			'Set validateOnly=true first to preview the review request and task status transition.'
+		],
+		readAfter: ['task:get', 'context:current'],
+		nextCommands: ['task:get', 'context:current'],
+		examples: [
+			{
+				title: 'Preview review request from a completed run',
+				input: {
+					runId: 'run_123',
+					validateOnly: true,
+					summary: 'Review the completed run.'
+				},
+				output: {
+					command: 'request_review_from_run',
+					validationOnly: true,
+					safety: {
+						mutation: 'task_review_request',
+						reviewStateChanged: false,
+						approvalStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
+		command: 'mark_task_blocked_from_run',
+		summary:
+			'Mark the linked task blocked from run blocker evidence without review or approval changes.',
+		cli: 'node scripts/ams-cli.mjs run-result mark_task_blocked_from_run --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/mark_task_blocked_from_run',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use when run evidence identifies a concrete blocker that prevents linked task progress.',
+			'Set validateOnly=true first when the agent should preview the task/run state transition.'
+		],
+		readAfter: ['task:get', 'goal-loop:get_goal_blockers', 'context:current'],
+		nextCommands: ['task:get', 'goal-loop:get_goal_blockers', 'context:current'],
+		examples: [
+			{
+				title: 'Mark linked task blocked from run evidence',
+				input: {
+					runId: 'run_123',
+					blocker: 'Missing production credentials.'
+				},
+				output: {
+					command: 'mark_task_blocked_from_run',
+					safety: {
+						mutation: 'task_blocked_update',
+						taskStateChanged: true,
+						approvalStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'review',
+		command: 'get_review_status',
+		summary: 'Return read-only task, run, review, and approval gate status for agents.',
+		cli: 'node scripts/ams-cli.mjs review get_review_status [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--limit <n>]',
+		method: 'GET',
+		path: '/api/agent-reviews/get_review_status',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use before deciding whether to approve, reject, request changes, or continue work.',
+			'Use when an agent needs a focused gate readback instead of a full task or current-context payload.'
+		],
+		readAfter: ['task:get', 'context:current'],
+		nextCommands: ['task:approve-review', 'task:request-review-changes', 'task:approve-approval'],
+		examples: [
+			{
+				title: 'Inspect the current review gate for a task',
+				input: {
+					taskId: 'task_123'
+				},
+				output: {
+					command: 'get_review_status',
+					gate: {
+						status: 'awaiting_review',
+						nextCommands: ['task:approve-review', 'task:request-review-changes', 'context:current']
+					}
+				}
+			}
+		]
 	},
 	{
 		resource: 'intent',

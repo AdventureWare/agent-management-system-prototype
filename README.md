@@ -4,7 +4,7 @@ This prototype is the start of a small remote-work control plane for Codex.
 
 Current scope:
 
-- server-backed task, run, thread, and supporting control-plane data in `data/app.sqlite`, with JSON mirrors kept for fallback/export
+- server-backed task, run, thread, and supporting control-plane data in `data/app.sqlite`, with JSON files used only for explicit import/export and recovery
 - a task-first operator UI under `/app/*`
 - background Codex thread launching, reuse, and follow-up prompts
 - run history, prompt digests, logs, artifacts, and last-message capture
@@ -54,13 +54,15 @@ npm run lint
 npm run test
 ```
 
-Legacy JSON files:
+JSON export:
 
 ```sh
 npm run db:export-json
 ```
 
 The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store and app-managed agent threads. The JSON files under `data/` are for explicit export/import and recovery workflows, not normal runtime persistence.
+
+Runtime mutations should go through the app server, AMS CLI/API/MCP helpers, or server-side repository helpers that write SQLite. Do not patch `data/control-plane.json` as a live store. To intentionally move data between SQLite and JSON, use the database helpers below; `import-json` replaces SQLite from the JSON snapshot after creating a SQLite backup, and `export-json` refreshes the JSON files from SQLite.
 
 Database helpers:
 

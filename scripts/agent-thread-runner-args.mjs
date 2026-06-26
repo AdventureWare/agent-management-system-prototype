@@ -21,9 +21,16 @@ function buildManagedRunFeatureArgs() {
 
 function buildManagedRunConfigArgs() {
 	// Managed background runs should not fail just because a developer's personal MCP
-	// server auth state is stale. The Supabase MCP is configured globally on this machine
-	// but is unrelated to local repo task execution in this prototype.
-	return ['-c', 'mcp_servers.supabase.enabled=false'];
+	// server auth state is stale. Remote MCP servers stay opt-in for these runs until
+	// AMS can enable them from task/role/provider requirements.
+	return [
+		'-c',
+		'mcp_servers.supabase.enabled=false',
+		'-c',
+		'mcp_servers.vercel={url="https://mcp.vercel.com", enabled=false}',
+		'-c',
+		'mcp_servers.posthog.enabled=false'
+	];
 }
 
 /**

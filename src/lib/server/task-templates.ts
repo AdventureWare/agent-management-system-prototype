@@ -12,6 +12,13 @@ export type TaskTemplateDraftInput = {
 	successCriteria: string;
 	readyCondition: string;
 	expectedOutcome: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	readinessLevel?: string;
+	autonomyLevel?: string;
+	allowedActionNames?: string[];
+	reviewRequirement?: string;
 	area: string;
 	priority: string;
 	riskLevel: string;

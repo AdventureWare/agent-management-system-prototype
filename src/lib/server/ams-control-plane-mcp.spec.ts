@@ -19,6 +19,17 @@ describe('ams-control-plane-mcp', () => {
 						'Resolve the current thread, task, run, project, and goal context from explicit ids or managed-run defaults.'
 				}),
 				expect.objectContaining({
+					name: 'ams_context_get_relevant_prior_runs',
+					description:
+						'Return bounded, relevance-ranked prior AMS run evidence for a task, goal, or project.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							taskId: expect.objectContaining({ type: 'string' }),
+							limit: expect.objectContaining({ type: 'number' })
+						})
+					})
+				}),
+				expect.objectContaining({
 					name: 'ams_intent_prepare_task_for_review',
 					description:
 						'Prepare a task for review by optionally attaching support material, opening the review gate, and returning readback context.',
@@ -69,6 +80,78 @@ describe('ams-control-plane-mcp', () => {
 					inputSchema: expect.objectContaining({
 						properties: expect.objectContaining({
 							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_goal_loop_get_next_recommended_action',
+					description: 'Return the next deterministic recommendation for goal-loop progress.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							goalId: expect.objectContaining({ type: 'string' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_work_packet_get_agent_work_packet',
+					description:
+						'Build a selective structured agent work packet from current goal, project, task, run, review, and readiness state.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							taskId: expect.objectContaining({ type: 'string' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_run_result_record_run_result',
+					description:
+						'Record structured run result evidence without changing task, review, or approval state.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							runId: expect.objectContaining({ type: 'string' }),
+							artifactPaths: expect.objectContaining({ type: 'array' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_run_result_create_followup_task',
+					description:
+						'Create or link a draft follow-up task from a run result, then record it on the run.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							runId: expect.objectContaining({ type: 'string' }),
+							title: expect.objectContaining({ type: 'string' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_run_result_request_review_from_run',
+					description:
+						'Open a task review from completed run evidence without approving or accepting the task.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							runId: expect.objectContaining({ type: 'string' }),
+							validateOnly: expect.objectContaining({ type: 'boolean' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_run_result_mark_task_blocked_from_run',
+					description:
+						'Mark the linked task blocked from run blocker evidence without review or approval changes.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							runId: expect.objectContaining({ type: 'string' }),
+							blocker: expect.objectContaining({ type: 'string' })
+						})
+					})
+				}),
+				expect.objectContaining({
+					name: 'ams_review_get_review_status',
+					description: 'Return read-only task, run, review, and approval gate status for agents.',
+					inputSchema: expect.objectContaining({
+						properties: expect.objectContaining({
+							taskId: expect.objectContaining({ type: 'string' })
 						})
 					})
 				}),
@@ -437,6 +520,291 @@ describe('ams-control-plane-mcp', () => {
 		expect(result).toEqual({ ok: true });
 		expect(fetchMock).toHaveBeenCalledWith(
 			new URL('http://127.0.0.1:3000/api/agent-capabilities?resource=task'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+	});
+
+	it('routes read-only goal-loop tool calls through the generated agent goal-loop endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'get_actionable_work',
+				actionableWork: [{ taskId: 'task_123' }]
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_goal_loop_get_actionable_work', {
+			goalId: 'goal_123',
+			limit: 5
+		});
+
+		expect(result).toEqual({
+			command: 'get_actionable_work',
+			actionableWork: [{ taskId: 'task_123' }]
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL(
+				'http://127.0.0.1:3000/api/agent-goal-loop/get_actionable_work?goalId=goal_123&limit=5'
+			),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+	});
+
+	it('routes read-only prior-run context tool calls through the generated agent context endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'get_relevant_prior_runs',
+				safety: { readOnly: true },
+				runs: [{ id: 'run_123', taskId: 'task_123' }]
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_context_get_relevant_prior_runs', {
+			taskId: 'task_123',
+			limit: 3
+		});
+
+		expect(result).toEqual({
+			command: 'get_relevant_prior_runs',
+			safety: { readOnly: true },
+			runs: [{ id: 'run_123', taskId: 'task_123' }]
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL(
+				'http://127.0.0.1:3000/api/agent-context/relevant-prior-runs?taskId=task_123&limit=3'
+			),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+	});
+
+	it('routes read-only work-packet tool calls through the generated agent work-packet endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'get_agent_work_packet',
+				structuredSections: { selection: { mode: 'execution' } }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_work_packet_get_agent_work_packet', {
+			goalId: 'goal_123',
+			taskId: 'task_123'
+		});
+
+		expect(result).toEqual({
+			command: 'get_agent_work_packet',
+			structuredSections: { selection: { mode: 'execution' } }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL(
+				'http://127.0.0.1:3000/api/agent-work-packets/get_agent_work_packet?goalId=goal_123&taskId=task_123'
+			),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+	});
+
+	it('routes run-result tool calls through the generated agent run-results endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'record_run_result',
+				safety: { mutation: 'run_evidence_only' }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_run_result_record_run_result', {
+			runId: 'run_123',
+			status: 'completed',
+			resultSummary: 'Implemented the API.',
+			validationSummary: 'Tests passed.'
+		});
+
+		expect(result).toEqual({
+			command: 'record_run_result',
+			safety: { mutation: 'run_evidence_only' }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-run-results/record_run_result'),
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({
+					runId: 'run_123',
+					status: 'completed',
+					resultSummary: 'Implemented the API.',
+					validationSummary: 'Tests passed.'
+				})
+			})
+		);
+	});
+
+	it('routes follow-up task creation through the generated agent run-results endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'create_followup_task',
+				createdTask: true,
+				task: { id: 'task_followup' }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_run_result_create_followup_task', {
+			runId: 'run_123',
+			title: 'Document run-result API',
+			summary: 'Document the new API.'
+		});
+
+		expect(result).toEqual({
+			command: 'create_followup_task',
+			createdTask: true,
+			task: { id: 'task_followup' }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-run-results/create_followup_task'),
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({
+					runId: 'run_123',
+					title: 'Document run-result API',
+					summary: 'Document the new API.'
+				})
+			})
+		);
+	});
+
+	it('routes run-result review requests through the generated agent run-results endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'request_review_from_run',
+				validationOnly: true,
+				safety: { mutation: 'task_review_request' }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_run_result_request_review_from_run', {
+			runId: 'run_123',
+			summary: 'Ready for review.',
+			validateOnly: true
+		});
+
+		expect(result).toEqual({
+			command: 'request_review_from_run',
+			validationOnly: true,
+			safety: { mutation: 'task_review_request' }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-run-results/request_review_from_run'),
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({
+					runId: 'run_123',
+					summary: 'Ready for review.',
+					validateOnly: true
+				})
+			})
+		);
+	});
+
+	it('routes run-result task blocking through the generated agent run-results endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'mark_task_blocked_from_run',
+				safety: { mutation: 'task_blocked_update' }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_run_result_mark_task_blocked_from_run', {
+			runId: 'run_123',
+			blocker: 'Missing access.',
+			validateOnly: true
+		});
+
+		expect(result).toEqual({
+			command: 'mark_task_blocked_from_run',
+			safety: { mutation: 'task_blocked_update' }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-run-results/mark_task_blocked_from_run'),
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({
+					runId: 'run_123',
+					blocker: 'Missing access.',
+					validateOnly: true
+				})
+			})
+		);
+	});
+
+	it('routes review status tool calls through the generated agent reviews endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				command: 'get_review_status',
+				gate: { status: 'awaiting_review' }
+			})
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { invokeTool } = await import('../../../scripts/ams-control-plane-mcp.mjs');
+		const result = await invokeTool('ams_review_get_review_status', {
+			taskId: 'task_123'
+		});
+
+		expect(result).toEqual({
+			command: 'get_review_status',
+			gate: { status: 'awaiting_review' }
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-reviews/get_review_status?taskId=task_123'),
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					authorization: 'Bearer test-token'

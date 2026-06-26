@@ -64,6 +64,31 @@
 			timeZone: 'UTC'
 		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
+
+	function formatLoopLabel(value: string) {
+		return value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+	}
+
+	function taskTitleForId(taskId: string) {
+		return (
+			data.goalLoop.classifiedTasks.find((task: { id: string; title: string }) => task.id === taskId)
+				?.title ?? taskId
+		);
+	}
+
+	let goalLoopCounts = $derived([
+		['Actionable now', data.goalLoop.counts.actionableNow],
+		['In progress', data.goalLoop.counts.inProgress],
+		['Awaiting review', data.goalLoop.counts.awaitingReview],
+		['Approval required', data.goalLoop.counts.approvalRequired],
+		['Blocked', data.goalLoop.counts.blocked],
+		['Needs planning', data.goalLoop.counts.needsPlanning],
+		['Needs research', data.goalLoop.counts.needsResearch],
+		['Needs clarification', data.goalLoop.counts.needsClarification],
+		['Unsafe/out of scope', data.goalLoop.counts.unsafeOutOfScope],
+		['Duplicate/superseded', data.goalLoop.counts.duplicateSuperseded],
+		['Accepted/done', data.goalLoop.counts.acceptedDone]
+	]);
 </script>
 
 <AppPage width="full">
@@ -112,6 +137,80 @@
 			detail="Nested outcomes rolling up into this goal."
 		/>
 	</div>
+
+	<DetailSection
+		eyebrow="Goal loop"
+		title="Next recommended action"
+		description={data.goalLoop.recommendation.reason}
+	>
+		<div class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					{formatLoopLabel(data.goalLoop.recommendation.kind)}
+				</p>
+				{#if data.goalLoop.recommendation.taskIds.length > 0}
+					<div class="mt-3 space-y-2">
+						{#each data.goalLoop.recommendation.taskIds as taskId}
+							<a
+								class="ui-wrap-anywhere block text-sm font-medium text-sky-300 transition hover:text-sky-200"
+								href={resolve(`/app/tasks/${taskId}`)}
+							>
+								{taskTitleForId(taskId)}
+							</a>
+						{/each}
+					</div>
+				{:else}
+					<p class="mt-3 text-sm text-slate-300">No existing task is selected.</p>
+				{/if}
+
+				{#if data.goalLoop.recommendation.parallelTaskIds.length > 0}
+					<div class="mt-4 border-t border-slate-800 pt-4">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Parallel candidates
+						</p>
+						<div class="mt-2 flex flex-wrap gap-2">
+							{#each data.goalLoop.recommendation.parallelTaskIds as taskId}
+								<a
+									class="badge border border-sky-800/70 bg-sky-950/40 text-sky-200"
+									href={resolve(`/app/tasks/${taskId}`)}
+								>
+									{taskTitleForId(taskId)}
+								</a>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					Work state
+				</p>
+				<div class="mt-3 grid gap-2 sm:grid-cols-2">
+					{#each goalLoopCounts as [label, count]}
+						<div class="flex items-center justify-between gap-3 rounded-xl bg-slate-950/70 px-3 py-2">
+							<span class="text-xs text-slate-400">{label}</span>
+							<span class="text-sm font-semibold text-white">{count}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		</div>
+
+		{#if data.goalLoop.recommendation.suggestedTaskDraft}
+			<div class="mt-4 rounded-2xl border border-amber-900/60 bg-amber-950/25 p-4">
+				<p class="text-xs font-semibold tracking-[0.16em] text-amber-300 uppercase">
+					Suggested task draft
+				</p>
+				<p class="ui-wrap-anywhere mt-2 text-sm font-medium text-white">
+					{data.goalLoop.recommendation.suggestedTaskDraft.title}
+				</p>
+				<p class="mt-2 text-sm text-slate-300">
+					{data.goalLoop.recommendation.suggestedTaskDraft.summary}
+				</p>
+			</div>
+		{/if}
+	</DetailSection>
 
 	{#if form?.message}
 		<p

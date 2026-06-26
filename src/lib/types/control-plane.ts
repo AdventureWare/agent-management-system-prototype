@@ -10,12 +10,50 @@ export const TASK_STATUS_OPTIONS = [
 	'blocked',
 	'done'
 ] as const;
-export const TASK_RISK_LEVEL_OPTIONS = ['low', 'medium', 'high'] as const;
+export const TASK_RISK_LEVEL_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
 export const TASK_APPROVAL_MODE_OPTIONS = [
 	'none',
 	'before_run',
 	'before_apply',
 	'before_complete'
+] as const;
+export const TASK_READINESS_LEVEL_OPTIONS = [
+	'R0_IDEA',
+	'R1_FRAMED',
+	'R2_SPECIFIED',
+	'R3_EXECUTABLE',
+	'R4_REVIEWABLE',
+	'R5_AUTOMATABLE'
+] as const;
+export const TASK_AUTONOMY_LEVEL_OPTIONS = [
+	'A0_HUMAN_ONLY',
+	'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+	'A2_AGENT_MAY_DRAFT_ARTIFACTS',
+	'A3_AGENT_MAY_EDIT_IN_ISOLATED_BRANCH_OR_WORKTREE',
+	'A4_AGENT_MAY_CREATE_REVIEWABLE_DIFF_OR_PR',
+	'A5_AGENT_MAY_MERGE_DEPLOY_OR_CHANGE_EXTERNAL_STATE'
+] as const;
+export const TASK_REVIEW_REQUIREMENT_OPTIONS = [
+	'NONE',
+	'SUMMARY_REVIEW',
+	'DIFF_REVIEW',
+	'EXPLICIT_APPROVAL_REQUIRED'
+] as const;
+export const TASK_CLOSEOUT_STATE_OPTIONS = [
+	'accepted',
+	'needs_revision',
+	'rejected',
+	'blocked',
+	'deferred'
+] as const;
+export const RIGOR_PROFILE_OPTIONS = [
+	'EXPLORATION',
+	'SPIKE',
+	'PROTOTYPE',
+	'INTERNAL',
+	'BETA',
+	'PRODUCTION',
+	'HIGH_STAKES'
 ] as const;
 export const RUN_STATUS_OPTIONS = [
 	'queued',
@@ -46,6 +84,7 @@ export const DECISION_TYPE_OPTIONS = [
 	'review_changes_requested',
 	'approval_approved',
 	'approval_rejected',
+	'task_closeout_recorded',
 	'task_completed'
 ] as const;
 export const GOAL_STATUS_OPTIONS = ['ready', 'running', 'review', 'blocked', 'done'] as const;
@@ -88,6 +127,11 @@ export type Priority = (typeof PRIORITY_OPTIONS)[number];
 export type TaskStatus = (typeof TASK_STATUS_OPTIONS)[number];
 export type TaskRiskLevel = (typeof TASK_RISK_LEVEL_OPTIONS)[number];
 export type TaskApprovalMode = (typeof TASK_APPROVAL_MODE_OPTIONS)[number];
+export type TaskReadinessLevel = (typeof TASK_READINESS_LEVEL_OPTIONS)[number];
+export type TaskAutonomyLevel = (typeof TASK_AUTONOMY_LEVEL_OPTIONS)[number];
+export type TaskReviewRequirement = (typeof TASK_REVIEW_REQUIREMENT_OPTIONS)[number];
+export type TaskCloseoutState = (typeof TASK_CLOSEOUT_STATE_OPTIONS)[number];
+export type RigorProfile = (typeof RIGOR_PROFILE_OPTIONS)[number];
 export type RunStatus = (typeof RUN_STATUS_OPTIONS)[number];
 export type ReviewStatus = (typeof REVIEW_STATUS_OPTIONS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUS_OPTIONS)[number];
@@ -141,8 +185,8 @@ export function normalizeTaskStatus(value: string): TaskStatus | null {
 	}
 }
 
-export function normalizeTaskBlockedReasonForStatus(status: TaskStatus, blockedReason: string) {
-	return status === 'blocked' ? blockedReason.trim() : '';
+export function normalizeTaskBlockedReasonForStatus(_status: TaskStatus, blockedReason: string) {
+	return _status === 'blocked' ? blockedReason.trim() : '';
 }
 
 function formatEnumLabel(value: string): string {
@@ -218,7 +262,23 @@ export function formatPriorityLabel(priority: string): string {
 }
 
 export function formatTaskRiskLevelLabel(riskLevel: string): string {
-	return formatEnumLabel(riskLevel);
+	return formatEnumLabel(riskLevel.toLowerCase());
+}
+
+export function formatTaskReadinessLevelLabel(readinessLevel: string): string {
+	return readinessLevel.replace(/^R(\d)_/, 'R$1 · ').replace(/_/g, ' ');
+}
+
+export function formatTaskAutonomyLevelLabel(autonomyLevel: string): string {
+	return autonomyLevel.replace(/^A(\d)_/, 'A$1 · ').replace(/_/g, ' ');
+}
+
+export function formatTaskReviewRequirementLabel(reviewRequirement: string): string {
+	return formatEnumLabel(reviewRequirement.toLowerCase());
+}
+
+export function formatRigorProfileLabel(profile: string): string {
+	return formatEnumLabel(profile.toLowerCase());
 }
 
 export function formatRunStatusLabel(status: string): string {
@@ -468,6 +528,24 @@ export type Project = {
 	name: string;
 	summary: string;
 	parentProjectId?: string | null;
+	projectBrief?: string;
+	currentStateMemo?: string;
+	decisionLog?: string;
+	agentInstructionsPath?: string;
+	setupNotes?: string;
+	validationCommands?: string[];
+	codingConventions?: string;
+	approvalRequirements?: string;
+	defaultAllowedActions?: string[];
+	defaultDisallowedActions?: string[];
+	defaultAutonomyLevel?: TaskAutonomyLevel;
+	defaultRiskThreshold?: TaskRiskLevel;
+	defaultReviewRequirement?: TaskReviewRequirement;
+	defaultRigorProfile?: RigorProfile | null;
+	defaultValidationExpectations?: string;
+	importantLinks?: string[];
+	constraints?: string;
+	nonGoals?: string;
 	projectRootFolder: string;
 	defaultArtifactRoot: string;
 	defaultRepoPath: string;
@@ -555,6 +633,14 @@ export type TaskTemplate = {
 	successCriteria: string;
 	readyCondition: string;
 	expectedOutcome: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: RigorProfile | null;
+	readinessLevel?: TaskReadinessLevel;
+	autonomyLevel?: TaskAutonomyLevel;
+	allowedActionNames?: string[];
+	reviewRequirement?: TaskReviewRequirement;
 	area: Area;
 	priority: Priority;
 	riskLevel: TaskRiskLevel;
@@ -590,6 +676,14 @@ export type Task = {
 	successCriteria?: string;
 	readyCondition?: string;
 	expectedOutcome?: string;
+	scope?: string;
+	nonGoals?: string;
+	validationSteps?: string;
+	rigorProfile?: RigorProfile | null;
+	readinessLevel?: TaskReadinessLevel;
+	autonomyLevel?: TaskAutonomyLevel;
+	allowedActionNames?: string[];
+	reviewRequirement?: TaskReviewRequirement;
 	projectId: string;
 	area: Area;
 	goalId: string;
@@ -616,6 +710,14 @@ export type Task = {
 	targetDate?: string | null;
 	runCount: number;
 	latestRunId: string | null;
+	closeoutState?: TaskCloseoutState | null;
+	closeoutSummary?: string;
+	closeoutChanged?: string;
+	closeoutValidation?: string;
+	closeoutRemainingIssues?: string;
+	closeoutFollowUps?: string[];
+	closeoutShouldUpdateMemory?: boolean;
+	closeoutRecordedAt?: string | null;
 	artifactPath: string;
 	attachments: TaskAttachment[];
 	createdAt: string;
@@ -639,6 +741,14 @@ export type Run = {
 	promptDigest: string;
 	artifactPaths: string[];
 	summary: string;
+	inputPrompt?: string;
+	contextSummary?: string;
+	actionsTaken?: string;
+	validationSummary?: string;
+	resultSummary?: string;
+	blockersFound?: string[];
+	followUpTaskIds?: string[];
+	effectiveRigorProfile?: RigorProfile | null;
 	lastHeartbeatAt: string | null;
 	errorSummary: string;
 	modelUsed?: string | null;

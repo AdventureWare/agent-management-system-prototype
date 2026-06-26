@@ -12,6 +12,23 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 					name: 'Agent Management System Prototype',
 					summary: 'Prototype summary',
 					parentProjectId: null,
+					projectBrief: 'AMS coordinates agent-managed project work.',
+					currentStateMemo: 'Project memory is being added.',
+					decisionLog: 'Use project fields for v0 memory.',
+					agentInstructionsPath: '/tmp/project/AGENTS.md',
+					setupNotes: 'npm install',
+					validationCommands: ['npm run check'],
+					codingConventions: 'Keep changes scoped.',
+					approvalRequirements: 'Request summary review.',
+					defaultAllowedActions: ['edit workspace files'],
+					defaultDisallowedActions: ['deploy production'],
+					defaultAutonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+					defaultRiskThreshold: 'medium',
+					defaultReviewRequirement: 'SUMMARY_REVIEW',
+					defaultValidationExpectations: 'Run focused checks.',
+					importantLinks: ['https://github.com/example/repo'],
+					constraints: 'No duplicate document system.',
+					nonGoals: 'No autonomous queue changes.',
 					projectRootFolder: '/tmp/project',
 					defaultArtifactRoot: '/tmp/project/agent_output',
 					defaultRepoPath: '/tmp/project',
@@ -110,6 +127,21 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 						}
 					]
 				},
+				relatedDecisionLog: [
+					{
+						id: 'decision_1',
+						taskId: 'task_1',
+						goalId: null,
+						runId: null,
+						reviewId: null,
+						approvalId: null,
+						planningSessionId: null,
+						decisionType: 'task_plan_updated',
+						summary: 'Keep project memory on Project records.',
+						createdAt: '2026-06-25T12:00:00.000Z',
+						decidedByExecutionSurfaceId: null
+					}
+				],
 				relatedGoals: [
 					{
 						id: 'goal_1',
@@ -140,6 +172,9 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 				],
 				folderOptions: [],
 				sandboxOptions: ['workspace-write'],
+				autonomyOptions: ['A1_AGENT_MAY_ANALYZE_AND_PROPOSE'],
+				riskOptions: ['medium'],
+				reviewRequirementOptions: ['SUMMARY_REVIEW'],
 				contextScope: {
 					projectIds: ['project_1', 'project_2'],
 					directTaskCount: 0,
@@ -160,6 +195,10 @@ describe('/app/projects/[projectId]/+page.svelte', () => {
 
 		expect(document.body.textContent).toContain('Parent and subproject context');
 		expect(document.body.textContent).toContain('Project skill inventory');
+		expect(document.body.textContent).toContain('Stored agent context');
+		expect(document.body.textContent).toContain('Copy Agent Context');
+		expect(document.body.textContent).toContain('Project memory is being added.');
+		expect(document.body.textContent).toContain('Keep project memory on Project records.');
 		expect(document.body.textContent).toContain('docs-writer');
 		expect(document.body.textContent).toContain('release-runner');
 		expect(document.body.textContent).toContain('Kwipoo website');

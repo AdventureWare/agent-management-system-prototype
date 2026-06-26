@@ -92,6 +92,34 @@ async function createBuildFixture(root: string) {
 	);
 }
 
+async function createBundledAdapterBuildFixture(root: string) {
+	await writeBuildFile(
+		root,
+		'build/index.js',
+		["import { handler } from './handler.js';", 'export const server = handler;', ''].join('\n')
+	);
+	await writeBuildFile(
+		root,
+		'build/handler.js',
+		[
+			"import './server/chunks/index.js-fixture.js';",
+			"import './server/chunks/manifest.js-fixture.js';",
+			'export const handler = {};',
+			''
+		].join('\n')
+	);
+	await writeBuildFile(
+		root,
+		'build/server/chunks/index.js-fixture.js',
+		'export const serverReady = true;\n'
+	);
+	await writeBuildFile(
+		root,
+		'build/server/chunks/manifest.js-fixture.js',
+		'export const manifestReady = true;\n'
+	);
+}
+
 function fixtureBuildPaths(root: string) {
 	return {
 		repoRoot: root,
@@ -137,6 +165,17 @@ describe('operator-server build validation', () => {
 		expect(validation.ok).toBe(false);
 		expect(validation.reason).toContain('Build startup imports are invalid');
 		expect(validation.reason).toContain('root.js');
+	});
+
+	it('accepts bundled adapter-node output without legacy server index and manifest files', async () => {
+		expect.assertions(1);
+
+		const root = await createFixtureRoot();
+		await createBundledAdapterBuildFixture(root);
+
+		const validation = await validateBuildArtifacts(fixtureBuildPaths(root));
+
+		expect(validation).toEqual({ ok: true });
 	});
 
 	it('fails when the server manifest references a missing client asset', async () => {

@@ -49,6 +49,7 @@ import { assistTaskWriting } from '$lib/server/task-writing-assist';
 import { buildExecutionRequirementInventory } from '$lib/server/execution-requirement-inventory';
 import { describeExecutionSurfaceTaskFit } from '$lib/server/execution-surface-api';
 import { resolveLaunchModel } from '$lib/server/task-launch-model';
+import { buildDelegationReadinessAssessment } from '$lib/server/delegation-readiness';
 import { appendGoalTaskRelationships } from '$lib/server/goal-relationships';
 import { buildTaskTemplateDraft, decorateTaskTemplates } from '$lib/server/task-templates';
 import {
@@ -102,6 +103,13 @@ function buildTaskTemplateDraftInput(input: ReturnType<typeof readCreateTaskForm
 		successCriteria: input.successCriteria,
 		readyCondition: input.readyCondition,
 		expectedOutcome: input.expectedOutcome,
+		scope: input.scope,
+		nonGoals: input.nonGoals,
+		validationSteps: input.validationSteps,
+		readinessLevel: input.readinessLevel,
+		autonomyLevel: input.autonomyLevel,
+		allowedActionNames: input.allowedActionNames,
+		reviewRequirement: input.reviewRequirement,
 		area: input.area,
 		priority: input.priority,
 		riskLevel: input.riskLevel,
@@ -131,6 +139,13 @@ function buildTaskCreateFormContext(
 		successCriteria: input.successCriteria,
 		readyCondition: input.readyCondition,
 		expectedOutcome: input.expectedOutcome,
+		scope: input.scope,
+		nonGoals: input.nonGoals,
+		validationSteps: input.validationSteps,
+		readinessLevel: input.readinessLevel,
+		autonomyLevel: input.autonomyLevel,
+		allowedActionNames: input.allowedActionNames,
+		reviewRequirement: input.reviewRequirement,
 		projectId: input.projectId,
 		taskTemplateId: input.taskTemplateId,
 		workflowId: input.workflowId,
@@ -169,6 +184,13 @@ function failTaskCreate(
 		successCriteria: string;
 		readyCondition: string;
 		expectedOutcome: string;
+		scope: string;
+		nonGoals: string;
+		validationSteps: string;
+		readinessLevel: string;
+		autonomyLevel: string;
+		allowedActionNames: string[];
+		reviewRequirement: string;
 		projectId: string;
 		taskTemplateId: string;
 		workflowId: string;
@@ -242,6 +264,12 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		})
 		.sort((left, right) => left.projectId.localeCompare(right.projectId));
+	const installedSkillNamesByProjectId = new Map(
+		projectSkillSummaries.map((summary) => [
+			summary.projectId,
+			summary.installedSkills.map((skill) => skill.id)
+		])
+	);
 	const executionRequirementInventory = buildExecutionRequirementInventory(data);
 
 	return {
@@ -266,6 +294,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		defaultDraftRoleName: defaultDraftRole?.name ?? 'Unassigned',
 		tasks: taskWorkItems.map((task) => ({
 			...task,
+			delegationReadiness: buildDelegationReadinessAssessment(
+				data,
+				data.tasks.find((candidate) => candidate.id === task.id) ?? task,
+				{
+					availablePromptSkillNames: installedSkillNamesByProjectId.get(task.projectId) ?? []
+				}
+			),
 			agentGuidanceHint: buildAgentGuidanceHint({
 				task: data.tasks.find((candidate) => candidate.id === task.id) ?? null,
 				run: task.latestRun ?? null,
@@ -288,6 +323,13 @@ export const actions: Actions = {
 			successCriteria,
 			readyCondition,
 			expectedOutcome,
+			scope,
+			nonGoals,
+			validationSteps,
+			readinessLevel,
+			autonomyLevel,
+			allowedActionNames,
+			reviewRequirement,
 			projectId,
 			taskTemplateId,
 			workflowId,
@@ -318,9 +360,9 @@ export const actions: Actions = {
 		const failureContext: Omit<Parameters<typeof failTaskCreate>[1], 'message'> =
 			buildTaskCreateFormContext(createTaskInput, submitMode);
 
-		if (!name || !instructions || !projectId) {
+		if (!name || !projectId) {
 			return failTaskCreate(400, {
-				message: 'Name, instructions, and project are required.',
+				message: 'Name and project are required.',
 				...failureContext
 			});
 		}
@@ -511,6 +553,13 @@ export const actions: Actions = {
 				successCriteria,
 				readyCondition,
 				expectedOutcome,
+				scope,
+				nonGoals,
+				validationSteps,
+				readinessLevel: readinessLevel ?? 'R1_FRAMED',
+				autonomyLevel: autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+				allowedActionNames,
+				reviewRequirement: reviewRequirement ?? 'SUMMARY_REVIEW',
 				goalId: nextGoalId,
 				area: workflowArea,
 				priority,
@@ -542,6 +591,13 @@ export const actions: Actions = {
 				...task,
 				goalId: nextGoalId,
 				area: workflowArea,
+				scope: task.scope || scope,
+				nonGoals: task.nonGoals || nonGoals,
+				validationSteps: task.validationSteps || validationSteps,
+				readinessLevel,
+				autonomyLevel,
+				allowedActionNames,
+				reviewRequirement,
 				artifactPath
 			}));
 
@@ -583,6 +639,13 @@ export const actions: Actions = {
 			successCriteria,
 			readyCondition,
 			expectedOutcome,
+			scope,
+			nonGoals,
+			validationSteps,
+			readinessLevel,
+			autonomyLevel,
+			allowedActionNames,
+			reviewRequirement,
 			projectId: project.id,
 			area,
 			goalId: nextGoalId,
@@ -666,11 +729,36 @@ export const actions: Actions = {
 			successCriteria,
 			readyCondition,
 			expectedOutcome,
+			scope: createdTask.scope,
+			nonGoals: createdTask.nonGoals,
+			validationSteps: createdTask.validationSteps,
+			readinessLevel: createdTask.readinessLevel ?? 'R1_FRAMED',
+			autonomyLevel: createdTask.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+			riskLevel: createdTask.riskLevel,
+			allowedActionNames: createdTask.allowedActionNames ?? [],
+			reviewRequirement: createdTask.reviewRequirement ?? 'SUMMARY_REVIEW',
 			delegationPacket: createdTask.delegationPacket ?? null,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder ?? '',
 			defaultArtifactRoot: project.defaultArtifactRoot,
 			additionalWritableRoots: project.additionalWritableRoots ?? [],
+			projectBrief: project.projectBrief,
+			currentStateMemo: project.currentStateMemo,
+			decisionLog: project.decisionLog,
+			agentInstructionsPath: project.agentInstructionsPath,
+			setupNotes: project.setupNotes,
+			validationCommands: project.validationCommands ?? [],
+			codingConventions: project.codingConventions,
+			approvalRequirements: project.approvalRequirements,
+			defaultAllowedActions: project.defaultAllowedActions ?? [],
+			defaultDisallowedActions: project.defaultDisallowedActions ?? [],
+			defaultAutonomyLevel: project.defaultAutonomyLevel,
+			defaultRiskThreshold: project.defaultRiskThreshold,
+			defaultReviewRequirement: project.defaultReviewRequirement,
+			defaultValidationExpectations: project.defaultValidationExpectations,
+			importantLinks: project.importantLinks ?? [],
+			constraints: project.constraints,
+			projectNonGoals: project.nonGoals,
 			availableSkillNames: projectInstalledSkills.slice(0, 12).map((skill) => skill.id),
 			requiredPromptSkillNames: effectivePromptSkillNames,
 			preferredRole
@@ -817,6 +905,13 @@ export const actions: Actions = {
 			successCriteria: createTaskInput.successCriteria,
 			readyCondition: createTaskInput.readyCondition,
 			expectedOutcome: createTaskInput.expectedOutcome,
+			scope: createTaskInput.scope,
+			nonGoals: createTaskInput.nonGoals,
+			validationSteps: createTaskInput.validationSteps,
+			readinessLevel: createTaskInput.readinessLevel,
+			autonomyLevel: createTaskInput.autonomyLevel,
+			allowedActionNames: createTaskInput.allowedActionNames,
+			reviewRequirement: createTaskInput.reviewRequirement,
 			area: createTaskInput.area,
 			priority: createTaskInput.priority,
 			riskLevel: createTaskInput.riskLevel,
@@ -932,9 +1027,9 @@ export const actions: Actions = {
 			return fail(400, { message: 'Task ID is required.' });
 		}
 
-		if (!name || !instructions || !projectId) {
+		if (!name || !projectId) {
 			return fail(400, {
-				message: 'Name, instructions, and project are required.'
+				message: 'Name and project are required.'
 			});
 		}
 
@@ -1086,11 +1181,36 @@ export const actions: Actions = {
 			successCriteria: effectiveSuccessCriteria,
 			readyCondition: effectiveReadyCondition,
 			expectedOutcome: effectiveExpectedOutcome,
+			scope: task.scope ?? '',
+			nonGoals: task.nonGoals ?? '',
+			validationSteps: task.validationSteps ?? '',
+			readinessLevel: task.readinessLevel ?? 'R1_FRAMED',
+			autonomyLevel: task.autonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
+			riskLevel: task.riskLevel,
+			allowedActionNames: task.allowedActionNames ?? [],
+			reviewRequirement: task.reviewRequirement ?? 'SUMMARY_REVIEW',
 			delegationPacket: task.delegationPacket ?? null,
 			projectName: project.name,
 			projectRootFolder: project.projectRootFolder,
 			defaultArtifactRoot: project.defaultArtifactRoot,
 			additionalWritableRoots: project.additionalWritableRoots ?? [],
+			projectBrief: project.projectBrief,
+			currentStateMemo: project.currentStateMemo,
+			decisionLog: project.decisionLog,
+			agentInstructionsPath: project.agentInstructionsPath,
+			setupNotes: project.setupNotes,
+			validationCommands: project.validationCommands ?? [],
+			codingConventions: project.codingConventions,
+			approvalRequirements: project.approvalRequirements,
+			defaultAllowedActions: project.defaultAllowedActions ?? [],
+			defaultDisallowedActions: project.defaultDisallowedActions ?? [],
+			defaultAutonomyLevel: project.defaultAutonomyLevel,
+			defaultRiskThreshold: project.defaultRiskThreshold,
+			defaultReviewRequirement: project.defaultReviewRequirement,
+			defaultValidationExpectations: project.defaultValidationExpectations,
+			importantLinks: project.importantLinks ?? [],
+			constraints: project.constraints,
+			projectNonGoals: project.nonGoals,
 			availableSkillNames: listInstalledCodexSkills(project.projectRootFolder)
 				.slice(0, 12)
 				.map((skill) => skill.id),

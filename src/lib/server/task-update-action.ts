@@ -19,7 +19,6 @@ export class TaskUpdateActionError extends Error {
 
 export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 	const taskInput = readTaskDetailForm(form);
-	const status = parseTaskStatus(form.get('status')?.toString() ?? '', 'ready');
 	const {
 		name,
 		instructions,
@@ -37,8 +36,8 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		targetDate
 	} = taskInput;
 
-	if (!name || !instructions || !projectId) {
-		throw new TaskUpdateActionError(400, 'Name, instructions, and project are required.');
+	if (!name || !projectId) {
+		throw new TaskUpdateActionError(400, 'Name and project are required.');
 	}
 
 	if (targetDate && !isValidTaskDate(targetDate)) {
@@ -80,6 +79,8 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 	if (!existingTask) {
 		throw new TaskUpdateActionError(404, 'Task not found.');
 	}
+
+	const status = parseTaskStatus(form.get('status')?.toString() ?? '', existingTask.status);
 
 	if (
 		hasDesiredRoleId &&
@@ -143,6 +144,13 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 		nextSuccessCriteria,
 		nextReadyCondition,
 		nextExpectedOutcome,
+		nextScope,
+		nextNonGoals,
+		nextValidationSteps,
+		nextReadinessLevel,
+		nextAutonomyLevel,
+		nextAllowedActionNames,
+		nextReviewRequirement,
 		nextDelegationPacket,
 		nextGoalId,
 		nextStatus,
@@ -209,6 +217,13 @@ export async function updateTaskFromDetailForm(taskId: string, form: FormData) {
 			successCriteria: nextSuccessCriteria,
 			readyCondition: nextReadyCondition,
 			expectedOutcome: nextExpectedOutcome,
+			scope: nextScope,
+			nonGoals: nextNonGoals,
+			validationSteps: nextValidationSteps,
+			readinessLevel: nextReadinessLevel,
+			autonomyLevel: nextAutonomyLevel,
+			allowedActionNames: nextAllowedActionNames,
+			reviewRequirement: nextReviewRequirement,
 			delegationPacket: nextDelegationPacket,
 			projectId: project.id,
 			goalId: nextGoalId,

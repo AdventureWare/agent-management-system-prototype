@@ -9,10 +9,37 @@ If you are in a managed run launched from another project, use the helper CLI pa
 node scripts/ams-cli.mjs doctor
 node scripts/ams-cli.mjs manifest
 node scripts/ams-cli.mjs manifest --resource task
+node scripts/ams-cli.mjs manifest --resource goal-loop
+node scripts/ams-cli.mjs manifest --resource work-packet
+node scripts/ams-cli.mjs manifest --resource run-result
+node scripts/ams-cli.mjs manifest --resource review
 node scripts/ams-cli.mjs context current
 node scripts/ams-cli.mjs context current --task <taskId>
 node scripts/ams-cli.mjs context current --run <runId>
 node scripts/ams-cli.mjs context current --thread <threadId>
+node scripts/ams-cli.mjs context get_relevant_prior_runs --task <taskId> --limit 5
+node scripts/ams-cli.mjs context get_relevant_prior_runs --goal <goalId> --status completed
+node scripts/ams-cli.mjs context get_relevant_prior_runs --project <projectId>
+node scripts/ams-cli.mjs goal-loop list_active_goals --project <projectId>
+node scripts/ams-cli.mjs goal-loop get_goal_context --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_goal_progress --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_goal_success_criteria --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_goal_blockers --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_actionable_work --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_blocked_work --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_awaiting_review --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_next_recommended_action --goal <goalId>
+node scripts/ams-cli.mjs goal-loop explain_task_eligibility --task <taskId> --goal <goalId>
+node scripts/ams-cli.mjs work-packet get_agent_work_packet --goal <goalId>
+node scripts/ams-cli.mjs run-result record_run_result --json '{"runId":"<runId>","status":"completed","resultSummary":"<what changed>","validationSummary":"<checks run>"}'
+node scripts/ams-cli.mjs run-result record_validation_result --json '{"runId":"<runId>","validationSummary":"<checks run and outcome>"}'
+node scripts/ams-cli.mjs run-result record_blocker --json '{"runId":"<runId>","blocker":"<blocking condition>"}'
+node scripts/ams-cli.mjs run-result record_followup_recommendations --json '{"runId":"<runId>","followUpTaskIds":["<taskId>"]}'
+node scripts/ams-cli.mjs run-result create_followup_task --json '{"runId":"<runId>","title":"<follow-up title>","summary":"<why this supports the same goal>"}'
+node scripts/ams-cli.mjs run-result request_review_from_run --json '{"runId":"<runId>","validateOnly":true,"summary":"Ready for review."}'
+node scripts/ams-cli.mjs run-result mark_task_blocked_from_run --json '{"runId":"<runId>","validateOnly":true,"blocker":"<blocking condition>"}'
+node scripts/ams-cli.mjs review get_review_status --task <taskId>
+node scripts/ams-cli.mjs review get_review_status --goal <goalId>
 node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}'
 node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","validateOnly":true,"review":{"summary":"Ready for review."}}'
 node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","approval":{"summary":"Ready for approval."}}'
@@ -34,10 +61,33 @@ node scripts/ams-cli.mjs task get <taskId>
 
 The same machine-readable manifest is available over the bearer-token API at `/api/agent-capabilities`.
 The current-context helper is available at `/api/agent-context/current`.
+The prior-runs helper is available at `/api/agent-context/relevant-prior-runs`; pass one of
+`taskId`, `goalId`, or `projectId`, with optional `status` and `limit`. It is read-only and returns
+bounded run summaries with task title, run status, result summary, validation summary, artifact
+paths, updated timestamp, and an inclusion reason for each run.
 Run `node scripts/ams-cli.mjs doctor` or `npm run app:doctor` before a managed run depends on
 AMS helper commands. The doctor reports operator API reachability, token availability, manifest
 access, managed-run context resolution when environment ids are present, and concrete next commands
-such as `npm run app:server:start`.
+such as `npm run app:server:start` when starting the local operator is actually viable.
+
+If doctor reports `local_listener_permission` with `EPERM` or `EACCES`, the current worker
+environment cannot bind a local operator listener. Do not keep retrying `app:server:start` from that
+worker. Finish repo or artifact work when safe, report that AMS state could not be read or mutated,
+and run AMS readback/mutations from an environment with a reachable operator API or set
+`AMS_AGENT_API_BASE_URL` to an already-running operator.
+
+## Storage Contract
+
+`data/app.sqlite` is the only writable runtime store for control-plane records. Normal mutations must
+go through the app server, AMS CLI/API/MCP helpers, or the server repository helpers that persist to
+SQLite. `data/control-plane.json` is an explicit snapshot artifact for seed, export, import, and
+recovery workflows; it is not a concurrent live mirror and should not be patched to change runtime
+state.
+
+Use `npm run db:export-json` to refresh JSON snapshots from SQLite. Use
+`npm run db:import-json` only when intentionally replacing SQLite from JSON; the helper creates a
+SQLite backup before import. In development, if an existing JSON snapshot differs from SQLite, the
+runtime logs a loud warning that points to these explicit import/export commands.
 
 `node scripts/ams-cli.mjs context current` automatically falls back to managed-run env vars when present:
 
@@ -67,12 +117,14 @@ The telemetry summary is local operator data derived from managed-run MCP usage.
 
 Follow this default loop when using AMS as a tool:
 
-1. Discover with `node scripts/ams-cli.mjs manifest`.
-2. If a managed run already has thread, task, or run ids, anchor on canonical state first with `node scripts/ams-cli.mjs context current`.
-3. Prefer a first-class `intent` command when the goal matches a common AMS workflow and you want readback context returned in one call.
-4. Inspect the current project, goal, task, or thread state with `list` or `get` when no intent command fits.
-5. Run the narrowest mutation command that matches the intent.
-6. Read the changed state back with `get`, `list`, or `context current` before treating the operation as complete.
+1. Run `node scripts/ams-cli.mjs doctor`.
+2. If doctor reports local-listener denial, stop AMS mutations and report the control-plane mismatch.
+3. Discover with `node scripts/ams-cli.mjs manifest`.
+4. If a managed run already has thread, task, or run ids, anchor on canonical state first with `node scripts/ams-cli.mjs context current`.
+5. Prefer a first-class `intent` command when the goal matches a common AMS workflow and you want readback context returned in one call.
+6. Inspect the current project, goal, task, or thread state with `list` or `get` when no intent command fits.
+7. Run the narrowest mutation command that matches the intent.
+8. Read the changed state back with `get`, `list`, or `context current` before treating the operation as complete.
 
 Agent-facing API errors now return structured guidance fields:
 

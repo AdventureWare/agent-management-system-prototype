@@ -19,6 +19,7 @@
 		formatExecutionSurfaceStatusLabel,
 		runStatusToneClass
 	} from '$lib/types/control-plane';
+	import { buildReviewerPrompt } from '$lib/workflow-prompts';
 	import { fromStore } from 'svelte/store';
 
 	let props = $props<{ data: PageData }>();
@@ -36,6 +37,8 @@
 	}));
 	let isRefreshing = $state(false);
 	let refreshError = $state<string | null>(null);
+	let reviewPrompt = $state('');
+	let reviewPromptCopyStatus = $state('');
 
 	const autoRefreshIntervalLabel = `${ACTIVE_REFRESH_INTERVAL_MS / 1000}s`;
 
@@ -94,6 +97,26 @@
 		return `${count} saved log line${count === 1 ? '' : 's'}`;
 	}
 
+	function formatSnakeLabel(value: string) {
+		return value
+			.split('_')
+			.filter(Boolean)
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join(' ');
+	}
+
+	function formatPreviewFields(fields: Record<string, unknown>) {
+		const entries = Object.entries(fields);
+
+		if (entries.length === 0) {
+			return 'No field changes';
+		}
+
+		return entries
+			.map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+			.join(', ');
+	}
+
 	function buildAgentUseHref(filters: Record<string, string | null | undefined>) {
 		const params = new URLSearchParams();
 
@@ -104,6 +127,23 @@
 		}
 
 		return `/app/agent-use${params.size > 0 ? `?${params.toString()}` : ''}`;
+	}
+
+	async function prepareReviewPrompt() {
+		if (!data.task) {
+			return;
+		}
+
+		reviewPrompt = buildReviewerPrompt({
+			project: data.project,
+			task: data.task,
+			run: data.run
+		});
+		await navigator.clipboard.writeText(reviewPrompt);
+		reviewPromptCopyStatus = 'Review prompt copied.';
+		window.setTimeout(() => {
+			reviewPromptCopyStatus = '';
+		}, 2200);
 	}
 
 	async function refreshRunDetail(options: { force?: boolean } = {}) {
@@ -197,9 +237,128 @@
 		<AppButton href="#run-logs" variant={data.run.errorSummary ? 'neutral' : 'ghost'}>
 			View logs
 		</AppButton>
+		<button
+			class="rounded-full border border-amber-800/70 bg-amber-950/40 px-3 py-2 font-medium text-amber-200 transition hover:border-amber-600 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+			type="button"
+			onclick={prepareReviewPrompt}
+			disabled={!data.task}
+		>
+			Prepare Review Prompt
+		</button>
+		{#if reviewPromptCopyStatus}
+			<span
+				class="rounded-full border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-emerald-200"
+			>
+				{reviewPromptCopyStatus}
+			</span>
+		{/if}
 	</div>
 
 	<AgentCurrentContextPanel context={data.agentCurrentContext} class="mb-6" />
+
+	{#if reviewPrompt}
+		<section class="mb-6 card border border-amber-900/50 bg-amber-950/15 p-5">
+			<p class="text-xs font-semibold tracking-[0.24em] text-amber-200 uppercase">
+				Prepared review prompt
+			</p>
+			<textarea class="mt-3 textarea min-h-72 font-mono text-xs text-white" readonly
+				>{reviewPrompt}</textarea
+			>
+		</section>
+	{/if}
+
+	<section class="mb-6 card border border-slate-800 bg-slate-950/70 p-6">
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p class="text-xs font-semibold tracking-[0.24em] text-slate-400 uppercase">
+					Result preview
+				</p>
+				<h2 class="mt-2 text-xl font-semibold text-white">Inferred result state</h2>
+				<p class="mt-2 text-sm text-slate-400">
+					Read-only classification and state-update preview for this run.
+				</p>
+			</div>
+			{#if data.runResultPreview}
+				<div class="flex flex-wrap gap-2">
+					<span class="badge border border-sky-900/70 bg-sky-950/40 text-sky-200">
+						{formatSnakeLabel(data.runResultPreview.classification)}
+					</span>
+					<span class="badge border border-slate-800 bg-slate-900 text-slate-300">
+						{formatSnakeLabel(data.runResultPreview.confidence)} confidence
+					</span>
+				</div>
+			{/if}
+		</div>
+
+		{#if data.runResultPreview}
+			<div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Next action
+					</p>
+					<p class="mt-2 text-base font-semibold text-white">
+						{formatSnakeLabel(data.runResultPreview.nextAction)}
+					</p>
+					<div class="mt-4 space-y-2">
+						{#each data.runResultPreview.reasons as reason}
+							<p class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+								{reason}
+							</p>
+						{/each}
+					</div>
+					{#if data.runResultPreview.followUpTaskIds.length > 0}
+						<div class="mt-4">
+							<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+								Follow-up tasks
+							</p>
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#each data.runResultPreview.followUpTaskIds as taskId}
+									<a
+										class="rounded-full border border-slate-700 px-3 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
+										href={resolve(`/app/tasks/${taskId}`)}
+									>
+										{taskId}
+									</a>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Proposed state updates
+					</p>
+					<div class="mt-4 space-y-3">
+						{#if data.runResultPreview.proposedUpdates.length === 0}
+							<p class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+								No state updates are proposed for this result.
+							</p>
+						{:else}
+							{#each data.runResultPreview.proposedUpdates as update}
+								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="badge border border-slate-700 bg-slate-900 text-slate-300">
+											{update.resource}
+										</span>
+										<p class="ui-wrap-anywhere font-mono text-xs text-slate-300">{update.id}</p>
+									</div>
+									<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-400">
+										{formatPreviewFields(update.fields)}
+									</p>
+									<p class="mt-2 text-sm text-slate-400">{update.reason}</p>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
+			</div>
+		{:else}
+			<p class="mt-5 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
+				No result preview is available for this run.
+			</p>
+		{/if}
+	</section>
 
 	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		<article class="card border border-slate-800 bg-slate-950/70 p-4">

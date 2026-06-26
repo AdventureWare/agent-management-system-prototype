@@ -102,14 +102,33 @@ function inferTaskFromThread(data: LoadedControlPlane, threadId: string) {
 	return matchingRun ? (data.tasks.find((task) => task.id === matchingRun.taskId) ?? null) : null;
 }
 
+function hasApprovedReviewForTask(data: LoadedControlPlane, taskId: string) {
+	return data.reviews.some((review) => review.taskId === taskId && review.status === 'approved');
+}
+
+function hasApprovedApprovalForTask(data: LoadedControlPlane, taskId: string) {
+	return data.approvals.some(
+		(approval) => approval.taskId === taskId && approval.status === 'approved'
+	);
+}
+
 function buildRecommendedActions(args: {
 	task: LoadedTask | null;
 	threadId: string | null;
 	openReview: LoadedReview | null;
 	pendingApproval: LoadedApproval | null;
+	reviewSatisfied?: boolean;
+	approvalSatisfied?: boolean;
 }) {
 	const actions: RecommendedAction[] = [];
-	const { task, threadId, openReview, pendingApproval } = args;
+	const {
+		task,
+		threadId,
+		openReview,
+		pendingApproval,
+		reviewSatisfied = false,
+		approvalSatisfied = false
+	} = args;
 
 	actions.push(
 		action({
@@ -379,7 +398,7 @@ function buildRecommendedActions(args: {
 		return uniqueRecommendedActions(actions);
 	}
 
-	if (task.status === 'done' && task.requiresReview) {
+	if (task.status === 'done' && task.requiresReview && !reviewSatisfied) {
 		actions.push(
 			action({
 				resource: 'intent',
@@ -396,7 +415,7 @@ function buildRecommendedActions(args: {
 		);
 	}
 
-	if (task.status === 'done' && task.approvalMode !== 'none') {
+	if (task.status === 'done' && task.approvalMode !== 'none' && !approvalSatisfied) {
 		actions.push(
 			action({
 				resource: 'intent',
@@ -470,6 +489,8 @@ export function buildAgentGuidanceHint(args: {
 	openReview: LoadedReview | null;
 	pendingApproval: LoadedApproval | null;
 	threadId?: string | null;
+	reviewSatisfied?: boolean;
+	approvalSatisfied?: boolean;
 }) {
 	return selectPrimaryActionHint(
 		buildRecommendedActions({
@@ -481,7 +502,9 @@ export function buildAgentGuidanceHint(args: {
 				args.task?.agentThreadId ??
 				null,
 			openReview: args.openReview,
-			pendingApproval: args.pendingApproval
+			pendingApproval: args.pendingApproval,
+			reviewSatisfied: args.reviewSatisfied,
+			approvalSatisfied: args.approvalSatisfied
 		})
 	);
 }
@@ -490,7 +513,7 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 	const requestedThreadId = readOptionalId(input.threadId);
 	const requestedTaskId = readOptionalId(input.taskId);
 	const requestedRunId = readOptionalId(input.runId);
-	const data = await loadControlPlane();
+	let data = await loadControlPlane();
 
 	const requestedRun = requestedRunId
 		? (data.runs.find((run) => run.id === requestedRunId) ?? null)
@@ -524,11 +547,13 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 		resolvedTask = inferTaskFromThread(data, requestedThreadId);
 	}
 
+	const resolvedTaskLatestRunId = resolvedTask?.latestRunId ?? null;
 	let resolvedRun =
-		requestedRun ??
-		(resolvedTask?.latestRunId
-			? (data.runs.find((run) => run.id === resolvedTask.latestRunId) ?? null)
-			: null);
+		requestedRun && (!resolvedTask || requestedRun.taskId === resolvedTask.id)
+			? requestedRun
+			: resolvedTaskLatestRunId
+				? (data.runs.find((run) => run.id === resolvedTaskLatestRunId) ?? null)
+				: null;
 
 	if (!resolvedRun && requestedThreadId) {
 		resolvedRun =
@@ -539,22 +564,59 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 				.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null;
 	}
 
+	const taskOrRunThreadId =
+		resolvedRun?.agentThreadId ?? resolvedRun?.threadId ?? resolvedTask?.agentThreadId ?? null;
 	const resolvedThreadId =
-		requestedThreadId ??
-		resolvedRun?.agentThreadId ??
-		resolvedRun?.threadId ??
-		resolvedTask?.agentThreadId ??
-		null;
+		requestedTaskId || requestedRunId
+			? (taskOrRunThreadId ?? requestedThreadId)
+			: (requestedThreadId ?? taskOrRunThreadId);
 	const thread = resolvedThreadId
 		? await getAgentThread(resolvedThreadId, { controlPlane: data })
 		: null;
 
-	if (requestedThreadId && !thread) {
+	if (requestedThreadId && resolvedThreadId === requestedThreadId && !thread) {
 		throw new AgentControlPlaneApiError(404, 'Thread not found.', {
 			code: 'thread_not_found',
 			suggestedNextCommands: ['thread:list', 'context:current'],
 			details: { threadId: requestedThreadId }
 		});
+	}
+
+	if (thread) {
+		data = await loadControlPlane();
+		const refreshedRequestedRun = requestedRunId
+			? (data.runs.find((run) => run.id === requestedRunId) ?? null)
+			: null;
+		const refreshedRequestedTask = requestedTaskId
+			? (data.tasks.find((task) => task.id === requestedTaskId) ?? null)
+			: null;
+
+		resolvedTask =
+			refreshedRequestedTask ??
+			(refreshedRequestedRun
+				? (data.tasks.find((task) => task.id === refreshedRequestedRun.taskId) ?? null)
+				: null);
+
+		if (!resolvedTask && requestedThreadId) {
+			resolvedTask = inferTaskFromThread(data, requestedThreadId);
+		}
+
+		const refreshedResolvedTaskLatestRunId = resolvedTask?.latestRunId ?? null;
+		resolvedRun =
+			refreshedRequestedRun && (!resolvedTask || refreshedRequestedRun.taskId === resolvedTask.id)
+				? refreshedRequestedRun
+				: refreshedResolvedTaskLatestRunId
+					? (data.runs.find((run) => run.id === refreshedResolvedTaskLatestRunId) ?? null)
+					: null;
+
+		if (!resolvedRun && requestedThreadId) {
+			resolvedRun =
+				[...data.runs]
+					.filter(
+						(run) => run.threadId === requestedThreadId || run.agentThreadId === requestedThreadId
+					)
+					.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null;
+		}
 	}
 
 	const project = resolvedTask
@@ -565,6 +627,8 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 		: null;
 	const openReview = resolvedTask ? getOpenReviewForTask(data, resolvedTask.id) : null;
 	const pendingApproval = resolvedTask ? getPendingApprovalForTask(data, resolvedTask.id) : null;
+	const reviewSatisfied = resolvedTask ? hasApprovedReviewForTask(data, resolvedTask.id) : false;
+	const approvalSatisfied = resolvedTask ? hasApprovedApprovalForTask(data, resolvedTask.id) : false;
 
 	return {
 		requested: {
@@ -649,14 +713,18 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 				task: resolvedTask,
 				threadId: thread?.id ?? resolvedThreadId,
 				openReview,
-				pendingApproval
+				pendingApproval,
+				reviewSatisfied,
+				approvalSatisfied
 			}),
 			primaryActionHint: buildAgentGuidanceHint({
 				task: resolvedTask,
 				run: resolvedRun,
 				openReview,
 				pendingApproval,
-				threadId: thread?.id ?? resolvedThreadId
+				threadId: thread?.id ?? resolvedThreadId,
+				reviewSatisfied,
+				approvalSatisfied
 			})
 		}
 	};

@@ -646,6 +646,35 @@ describe('tasks page server actions', () => {
 		);
 	});
 
+	it('creates a lightweight title-only task without agent-readiness fields', async () => {
+		const form = new FormData();
+		form.set('projectId', 'project_ams');
+		form.set('name', 'Capture loose follow-up');
+
+		const result = await actions.createTask({
+			request: new Request('http://localhost/app/tasks', {
+				method: 'POST',
+				body: form
+			})
+		} as never);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'createTask'
+			})
+		);
+		expect(createTaskMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: 'Capture loose follow-up',
+				summary: '',
+				successCriteria: '',
+				expectedOutcome: '',
+				validationSteps: ''
+			})
+		);
+	});
+
 	it('records the selected task template as the task provenance source', async () => {
 		const form = new FormData();
 		form.set('projectId', 'project_ams');

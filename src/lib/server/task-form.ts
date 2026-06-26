@@ -4,6 +4,9 @@ import {
 	AREA_OPTIONS,
 	PRIORITY_OPTIONS,
 	TASK_APPROVAL_MODE_OPTIONS,
+	TASK_AUTONOMY_LEVEL_OPTIONS,
+	TASK_READINESS_LEVEL_OPTIONS,
+	TASK_REVIEW_REQUIREMENT_OPTIONS,
 	TASK_RISK_LEVEL_OPTIONS
 } from '$lib/types/control-plane';
 
@@ -15,6 +18,13 @@ export type CreateTaskFormInput = {
 	successCriteria: string;
 	readyCondition: string;
 	expectedOutcome: string;
+	scope: string;
+	nonGoals: string;
+	validationSteps: string;
+	readinessLevel: (typeof TASK_READINESS_LEVEL_OPTIONS)[number];
+	autonomyLevel: (typeof TASK_AUTONOMY_LEVEL_OPTIONS)[number];
+	allowedActionNames: string[];
+	reviewRequirement: (typeof TASK_REVIEW_REQUIREMENT_OPTIONS)[number];
 	projectId: string;
 	taskTemplateId: string;
 	workflowId: string;
@@ -46,6 +56,13 @@ export type TaskDetailFormInput = CreateTaskFormInput & {
 	hasSuccessCriteria: boolean;
 	hasReadyCondition: boolean;
 	hasExpectedOutcome: boolean;
+	hasScope: boolean;
+	hasNonGoals: boolean;
+	hasValidationSteps: boolean;
+	hasReadinessLevel: boolean;
+	hasAutonomyLevel: boolean;
+	hasAllowedActionNames: boolean;
+	hasReviewRequirement: boolean;
 	hasDelegationPacketFields: boolean;
 	hasGoalId: boolean;
 	hasWorkflowId: boolean;
@@ -78,6 +95,13 @@ export type CreateTaskPrefill = {
 	successCriteria: string;
 	readyCondition: string;
 	expectedOutcome: string;
+	scope: string;
+	nonGoals: string;
+	validationSteps: string;
+	readinessLevel: (typeof TASK_READINESS_LEVEL_OPTIONS)[number];
+	autonomyLevel: (typeof TASK_AUTONOMY_LEVEL_OPTIONS)[number];
+	allowedActionNames: string;
+	reviewRequirement: (typeof TASK_REVIEW_REQUIREMENT_OPTIONS)[number];
 	requiredThreadSandbox: string;
 	assigneeExecutionSurfaceId: string;
 	targetDate: string;
@@ -156,6 +180,25 @@ export function readCreateTaskForm(form: FormData): CreateTaskFormInput {
 		successCriteria: readTrimmedValue(form.get('successCriteria')),
 		readyCondition: readTrimmedValue(form.get('readyCondition')),
 		expectedOutcome: readTrimmedValue(form.get('expectedOutcome')),
+		scope: readTrimmedValue(form.get('scope')),
+		nonGoals: readTrimmedValue(form.get('nonGoals')),
+		validationSteps: readTrimmedValue(form.get('validationSteps')),
+		readinessLevel: parseOption(
+			TASK_READINESS_LEVEL_OPTIONS,
+			form.get('readinessLevel'),
+			'R1_FRAMED'
+		),
+		autonomyLevel: parseOption(
+			TASK_AUTONOMY_LEVEL_OPTIONS,
+			form.get('autonomyLevel'),
+			'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+		),
+		allowedActionNames: parseNameList(form.get('allowedActionNames')),
+		reviewRequirement: parseOption(
+			TASK_REVIEW_REQUIREMENT_OPTIONS,
+			form.get('reviewRequirement'),
+			'SUMMARY_REVIEW'
+		),
 		projectId: readTrimmedValue(form.get('projectId')),
 		taskTemplateId: readTrimmedValue(form.get('taskTemplateId')),
 		workflowId: readTrimmedValue(form.get('workflowId')),
@@ -196,6 +239,13 @@ export function readTaskDetailForm(form: FormData): TaskDetailFormInput {
 		hasSuccessCriteria: form.has('successCriteria'),
 		hasReadyCondition: form.has('readyCondition'),
 		hasExpectedOutcome: form.has('expectedOutcome'),
+		hasScope: form.has('scope'),
+		hasNonGoals: form.has('nonGoals'),
+		hasValidationSteps: form.has('validationSteps'),
+		hasReadinessLevel: form.has('readinessLevel'),
+		hasAutonomyLevel: form.has('autonomyLevel'),
+		hasAllowedActionNames: form.has('allowedActionNames'),
+		hasReviewRequirement: form.has('reviewRequirement'),
 		hasDelegationPacketFields:
 			form.has('delegationObjective') ||
 			form.has('delegationInputContext') ||
@@ -241,6 +291,25 @@ export function readCreateTaskPrefill(url: URL): CreateTaskPrefill {
 		successCriteria: readTrimmedValue(url.searchParams.get('successCriteria')),
 		readyCondition: readTrimmedValue(url.searchParams.get('readyCondition')),
 		expectedOutcome: readTrimmedValue(url.searchParams.get('expectedOutcome')),
+		scope: readTrimmedValue(url.searchParams.get('scope')),
+		nonGoals: readTrimmedValue(url.searchParams.get('nonGoals')),
+		validationSteps: readTrimmedValue(url.searchParams.get('validationSteps')),
+		readinessLevel: parseOption(
+			TASK_READINESS_LEVEL_OPTIONS,
+			url.searchParams.get('readinessLevel'),
+			'R1_FRAMED'
+		),
+		autonomyLevel: parseOption(
+			TASK_AUTONOMY_LEVEL_OPTIONS,
+			url.searchParams.get('autonomyLevel'),
+			'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+		),
+		allowedActionNames: readTrimmedValue(url.searchParams.get('allowedActionNames')),
+		reviewRequirement: parseOption(
+			TASK_REVIEW_REQUIREMENT_OPTIONS,
+			url.searchParams.get('reviewRequirement'),
+			'SUMMARY_REVIEW'
+		),
 		requiredThreadSandbox: readTrimmedValue(url.searchParams.get('requiredThreadSandbox')),
 		assigneeExecutionSurfaceId: readTrimmedValue(
 			url.searchParams.get('assigneeExecutionSurfaceId')

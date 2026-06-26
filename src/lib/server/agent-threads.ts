@@ -1,5 +1,5 @@
 import { mkdir, open, readFile, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { closeSync, existsSync, openSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -60,10 +60,13 @@ const CODEX_STATE_DB_FILE = resolve(CODEX_HOME, 'state_5.sqlite');
 const STALE_RUN_GRACE_MS = 5 * 60 * 1000;
 const STARTUP_AUTH_FAILURE_GRACE_MS = 30 * 1000;
 const STARTUP_STDIN_STALL_GRACE_MS = 60 * 1000;
+const STREAM_DISCONNECT_GRACE_MS = 30 * 1000;
 const NATIVE_THREAD_CACHE_TTL_MS = 3_000;
 const MAX_LOG_TAIL_BYTES = 256 * 1024;
 const AUTH_REFRESH_FAILURE_MARKER = 'Auth(TokenRefreshFailed("Failed to parse server response"))';
 const STDIN_WAIT_MARKER = 'Reading additional input from stdin...';
+const STREAM_DISCONNECT_MARKER = 'stream disconnected before completion';
+const STREAM_RECONNECT_EXHAUSTED_MARKER = 'Reconnecting... 5/5';
 
 let nativeThreadCache: {
 	expiresAt: number;
@@ -569,7 +572,14 @@ function getRunPaths(agentThreadId: string, runId: string) {
 }
 
 function getConfiguredCodexBin() {
-	return process.env.CODEX_BIN?.trim() || 'codex';
+	const configured = process.env.CODEX_BIN?.trim();
+
+	if (configured) {
+		return configured;
+	}
+
+	const siblingCodexBin = resolve(dirname(process.execPath), 'codex');
+	return existsSync(siblingCodexBin) ? siblingCodexBin : 'codex';
 }
 
 export function parseAgentSandbox(value: string | null | undefined, fallback: AgentSandbox) {
@@ -1030,11 +1040,65 @@ async function writeRunnerConfig(input: {
 	await writeFile(input.run.configPath, JSON.stringify(config, null, 2));
 }
 
-function launchRunner(configPath: string) {
-	const child = spawn(process.execPath, [THREAD_RUNNER_SCRIPT, configPath], {
+async function markRunnerLaunchFailed(
+	run: Pick<AgentRun, 'statePath' | 'logPath'>,
+	message: string
+) {
+	let currentState: Partial<AgentRunState> = {};
+
+	try {
+		currentState = JSON.parse(await readFile(run.statePath, 'utf8')) as Partial<AgentRunState>;
+	} catch {
+		// No state file was written yet. Record the launch failure below.
+	}
+
+	if (currentState.status && currentState.status !== 'queued') {
+		return;
+	}
+
+	const failedAt = new Date().toISOString();
+	await mkdir(dirname(run.statePath), { recursive: true });
+	await writeFile(
+		run.statePath,
+		JSON.stringify(
+			{
+				status: 'failed',
+				pid: null,
+				startedAt: currentState.startedAt ?? failedAt,
+				finishedAt: failedAt,
+				exitCode: -1,
+				signal: null,
+				codexThreadId: currentState.codexThreadId ?? null
+			},
+			null,
+			2
+		)
+	);
+	await writeFile(run.logPath, `RUNNER LAUNCH ERROR: ${message}\n`, { flag: 'a' });
+}
+
+function launchRunner(run: AgentRun) {
+	const logFd = openSync(run.logPath, 'a');
+	const child = spawn(process.execPath, [THREAD_RUNNER_SCRIPT, run.configPath], {
 		cwd: process.cwd(),
 		detached: true,
-		stdio: 'ignore'
+		stdio: ['ignore', logFd, logFd]
+	});
+	closeSync(logFd);
+
+	child.on('error', (error) => {
+		void markRunnerLaunchFailed(run, error instanceof Error ? error.message : String(error));
+	});
+
+	child.on('exit', (code, signal) => {
+		if (code === 0 || signal === 'SIGTERM') {
+			return;
+		}
+
+		void markRunnerLaunchFailed(
+			run,
+			`runner exited before writing state (code: ${code ?? 'null'}, signal: ${signal ?? 'null'})`
+		);
 	});
 
 	child.unref();
@@ -1505,6 +1569,39 @@ function hasStartupStdinWait(run: Pick<AgentRunDetail, 'logTail'>) {
 	return run.logTail.some((line) => line.includes(STDIN_WAIT_MARKER));
 }
 
+function hasExhaustedStreamReconnects(run: Pick<AgentRunDetail, 'logTail'>) {
+	const latestLine = [...run.logTail]
+		.reverse()
+		.map((line) => line.trim())
+		.find(Boolean);
+
+	return Boolean(
+		latestLine?.includes(STREAM_RECONNECT_EXHAUSTED_MARKER) &&
+		latestLine.includes(STREAM_DISCONNECT_MARKER)
+	);
+}
+
+function isExhaustedStreamDisconnect(
+	run: Pick<AgentRunDetail, 'activityAt' | 'createdAt' | 'updatedAt' | 'state' | 'logTail'>,
+	now = Date.now()
+) {
+	if (!hasExhaustedStreamReconnects(run)) {
+		return false;
+	}
+
+	if (run.state?.finishedAt || getRunExitInfo(run)) {
+		return true;
+	}
+
+	const activityAt = Date.parse(getRunActivityAt(run));
+
+	if (Number.isNaN(activityAt)) {
+		return false;
+	}
+
+	return now - activityAt >= STREAM_DISCONNECT_GRACE_MS;
+}
+
 function isStartupAuthFailure(
 	run: Pick<
 		AgentRunDetail,
@@ -1582,6 +1679,7 @@ function deriveActiveRunCompletionFromEvidence(run: AgentRunDetail, now = Date.n
 	const finishedAt = getDerivedRunFinishedAt(run, now);
 	const startupAuthFailure = isStartupAuthFailure(run, now);
 	const startupStdinStall = isStartupStdinStall(run, now);
+	const exhaustedStreamDisconnect = isExhaustedStreamDisconnect(run, now);
 	const exitInfo = getRunExitInfo(run);
 	const withinStartupGraceWindow =
 		(run.mode === 'start' && hasAuthRefreshStartupFailure(run) && !startupAuthFailure) ||
@@ -1599,6 +1697,17 @@ function deriveActiveRunCompletionFromEvidence(run: AgentRunDetail, now = Date.n
 	}
 
 	if (startupStdinStall) {
+		return {
+			...run.state,
+			status: 'failed',
+			pid: null,
+			finishedAt,
+			exitCode: run.state.exitCode ?? exitInfo?.exitCode ?? -1,
+			signal: exitInfo?.signal ?? null
+		} satisfies AgentRunState;
+	}
+
+	if (exhaustedStreamDisconnect) {
 		return {
 			...run.state,
 			status: 'failed',
@@ -2616,6 +2725,10 @@ function deriveRunFailureDetail(
 		return 'Codex never advanced past startup because the managed run was stuck waiting for stdin input. Restart the manager and retry the task.';
 	}
 
+	if (isExhaustedStreamDisconnect(run)) {
+		return 'Codex disconnected before completing the response after exhausting stream reconnect attempts. Review any file changes from the run, then retry the task.';
+	}
+
 	const meaningfulLogLine = [...run.logTail]
 		.reverse()
 		.map((line) => line.trim())
@@ -2729,9 +2842,10 @@ export function reconcileControlPlaneThreadState(
 	let changed = false;
 
 	const tasks = data.tasks.map((task) => {
-		if (!activeUpdate && task.status !== 'in_progress') {
-			return task;
-		}
+		const canRepairLinkedThreadBlock =
+			terminalUpdate?.runStatus === 'completed' &&
+			task.status === 'blocked' &&
+			task.blockedReason.startsWith('The linked work thread ');
 
 		const latestRun = task.latestRunId
 			? (data.runs.find((candidate) => candidate.id === task.latestRunId) ?? null)
@@ -2743,7 +2857,20 @@ export function reconcileControlPlaneThreadState(
 			return task;
 		}
 
+		if (terminalUpdate && latestRun && latestRun.status !== terminalUpdate.runStatus) {
+			changed = true;
+			runIdsToUpdate.add(latestRun.id);
+		}
+
+		if (!activeUpdate && task.status !== 'in_progress' && !canRepairLinkedThreadBlock) {
+			return task;
+		}
+
 		if (activeUpdate && task.status === 'done') {
+			return task;
+		}
+
+		if (activeUpdate && task.status !== 'in_progress' && task.status !== 'blocked') {
 			return task;
 		}
 
@@ -3337,7 +3464,7 @@ export async function startAgentThread(input: {
 		runs: [run, ...db.runs],
 		contacts: db.contacts ?? []
 	}));
-	launchRunner(run.configPath);
+	launchRunner(run);
 
 	return {
 		agentThreadId,
@@ -3674,7 +3801,7 @@ export async function sendAgentThreadMessage(
 			changedCollections: ['tasks', 'runs', 'reviews', 'approvals']
 		}));
 	}
-	launchRunner(run.configPath);
+	launchRunner(run);
 
 	return {
 		agentThreadId,

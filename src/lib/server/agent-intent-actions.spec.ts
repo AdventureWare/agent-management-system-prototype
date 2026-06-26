@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -196,6 +196,91 @@ describe('agent-intent-actions', () => {
 			})
 		);
 		expect(loaded.reviews).toEqual([]);
+	});
+
+	it('prepares a task for review with an attachment and returns JSON-safe readback', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		const projectRoot = resolve(root, 'app');
+		const artifactRoot = resolve(projectRoot, 'agent_output');
+		mkdirSync(artifactRoot, { recursive: true });
+		const artifactPath = resolve(artifactRoot, 'review-artifact.md');
+		writeFileSync(artifactPath, '# Review Artifact\n');
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const intentModule = await importIntentModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: projectRoot,
+				defaultArtifactRoot: artifactRoot
+			}),
+			id: 'project_app'
+		};
+		const task = {
+			...controlPlaneModule.createTask({
+				id: 'task_review_intent',
+				title: 'Prepare review packet',
+				summary: 'Need review soon',
+				projectId: project.id,
+				goalId: '',
+				priority: 'high',
+				riskLevel: 'medium',
+				approvalMode: 'none',
+				requiresReview: true,
+				desiredRoleId: '',
+				artifactPath: project.defaultArtifactRoot
+			})
+		};
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task]
+		}));
+
+		const result = await intentModule.runAgentIntent('prepare_task_for_review', {
+			taskId: task.id,
+			attachment: { path: artifactPath },
+			review: { summary: 'Ready for review.' }
+		});
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		if ('validationOnly' in result) {
+			throw new Error('Expected a real mutation result, received validation preview.');
+		}
+
+		expect(result.intent).toBe('prepare_task_for_review');
+		expect(result.executedCommands).toEqual([
+			'context:current',
+			'task:attach',
+			'task:request-review',
+			'context:current'
+		]);
+		expect(result.attachment).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'attachTaskFile'
+			})
+		);
+		expect(result.result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'requestReview'
+			})
+		);
+		expect(result.afterContext.task?.status).toBe('review');
+		expect(result.afterContext.governance.openReview).toEqual(
+			expect.objectContaining({
+				status: 'open',
+				summary: 'Ready for review.'
+			})
+		);
+		expect(loaded.tasks.find((candidate) => candidate.id === task.id)?.attachments).toHaveLength(1);
+		expect(loaded.reviews).toHaveLength(1);
+		expect(() => JSON.stringify(result)).not.toThrow();
 	});
 
 	it('coordinates with another thread through one intent call', async () => {

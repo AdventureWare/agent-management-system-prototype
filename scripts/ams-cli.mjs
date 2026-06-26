@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
 import { summarizeAgentToolUse } from '../src/lib/server/agent-use-telemetry.js';
 import { formatAgentApiErrorMessage } from './agent-api-errors.mjs';
 
@@ -25,8 +26,13 @@ function printHelp() {
 			'',
 			'Discovery:',
 			'  doctor',
-			'  manifest [--resource <context|intent|task|goal|project|thread>] [--command <name>]',
+			'  manifest [--resource <context|intent|goal-loop|work-packet|run-result|review|task|goal|project|thread>] [--command <name>]',
 			'  context current [--thread <threadId>] [--task <taskId>] [--run <runId>]',
+			'  context get_relevant_prior_runs [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--status <status>] [--limit <n>]',
+			'  goal-loop <command> [--goal <goalId>] [--project <projectId>] [--task <taskId>] [--limit <n>]',
+			'  work-packet get_agent_work_packet [--goal <goalId>] [--project <projectId>] [--task <taskId>]',
+			'  run-result <record_run_result|record_validation_result|record_blocker|record_followup_recommendations|create_followup_task|request_review_from_run|mark_task_blocked_from_run> --json <payload> | --file <path>',
+			'  review get_review_status [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--limit <n>]',
 			'  telemetry summary [--thread <threadId>] [--task <taskId>] [--run <runId>] [--tool <toolName>] [--outcome <success|error>] [--since <1h|24h|7d|30d>]',
 			'  intent prepare_task_for_review --json <payload> | --file <path>',
 			'  intent prepare_task_for_approval --json <payload> | --file <path>',
@@ -103,6 +109,45 @@ async function fetchJsonForDoctor(path) {
 	};
 }
 
+function isLocalApiBaseUrl() {
+	try {
+		const parsed = new URL(apiBaseUrl);
+		return ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].includes(parsed.hostname);
+	} catch {
+		return false;
+	}
+}
+
+async function probeLocalListenerPermission() {
+	return new Promise((resolvePromise) => {
+		const server = net.createServer();
+		let settled = false;
+
+		const finish = (result) => {
+			if (settled) {
+				return;
+			}
+
+			settled = true;
+			resolvePromise(result);
+		};
+
+		server.once('error', (error) => {
+			finish({
+				ok: false,
+				code: error?.code ?? 'UNKNOWN',
+				message: error instanceof Error ? error.message : String(error)
+			});
+		});
+
+		server.listen({ host: '127.0.0.1', port: 0 }, () => {
+			server.close(() => {
+				finish({ ok: true });
+			});
+		});
+	});
+}
+
 async function runDoctor() {
 	const checks = [
 		{
@@ -126,6 +171,7 @@ async function runDoctor() {
 	}
 
 	if (apiToken) {
+		let apiReachabilityBlocked = false;
 		const manifestResult = await fetchJsonForDoctor('/api/agent-capabilities');
 
 		if (manifestResult.ok) {
@@ -139,6 +185,12 @@ async function runDoctor() {
 					: null
 			});
 		} else {
+			let localListenerProbe = null;
+
+			if (isLocalApiBaseUrl()) {
+				localListenerProbe = await probeLocalListenerPermission();
+			}
+
 			checks.push({
 				name: 'manifest',
 				ok: false,
@@ -148,13 +200,35 @@ async function runDoctor() {
 					`Capability manifest request failed with HTTP ${manifestResult.status}.`,
 				status: manifestResult.status ?? null
 			});
-			suggestedNextCommands.push('npm run app:server:start');
+
+			if (localListenerProbe && !localListenerProbe.ok) {
+				checks.push({
+					name: 'local_listener_permission',
+					ok: false,
+					detail: `This environment cannot bind a local operator listener (${localListenerProbe.code}: ${localListenerProbe.message}).`,
+					errorCode: localListenerProbe.code
+				});
+				apiReachabilityBlocked = true;
+				suggestedNextCommands.push(
+					'Run the AMS CLI from an environment that permits local listeners, or set AMS_AGENT_API_BASE_URL to an already-running operator.'
+				);
+			} else {
+				suggestedNextCommands.push('npm run app:server:start');
+			}
 		}
 
 		const managedContextParams = buildManagedContextParams();
 		const hasManagedContext = managedContextParams.size > 0;
 
-		if (hasManagedContext) {
+		if (apiReachabilityBlocked) {
+			checks.push({
+				name: 'current_context',
+				ok: false,
+				skipped: true,
+				detail:
+					'Current context check skipped because the local operator API is unreachable from this environment.'
+			});
+		} else if (hasManagedContext) {
 			const contextResult = await fetchJsonForDoctor(
 				`/api/agent-context/current?${managedContextParams.toString()}`
 			);
@@ -260,8 +334,19 @@ async function request(path, init = {}) {
 		});
 	} catch (error) {
 		if (error instanceof Error) {
+			if (isLocalApiBaseUrl()) {
+				const localListenerProbe = await probeLocalListenerPermission();
+
+				if (!localListenerProbe.ok) {
+					throw new Error(
+						`Unable to reach the AMS operator API at ${requestUrl.href}, and this environment cannot bind a local operator listener (${localListenerProbe.code}: ${localListenerProbe.message}). Run \`node scripts/ams-cli.mjs doctor\` for details. Do not retry \`npm run app:server:start\` from this worker; use an already-running operator via AMS_AGENT_API_BASE_URL or report that AMS state could not be updated.`,
+						{ cause: error }
+					);
+				}
+			}
+
 			throw new Error(
-				`Unable to reach the AMS operator API at ${requestUrl.href}. Start the operator server with \`npm run app:server:start\` and try again.`,
+				`Unable to reach the AMS operator API at ${requestUrl.href}. Run \`node scripts/ams-cli.mjs doctor\` to check operator reachability before retrying \`npm run app:server:start\`.`,
 				{ cause: error }
 			);
 		}
@@ -452,11 +537,43 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 	}
 
 	if (resource === 'context') {
-		if (command !== 'current') {
+		if (command !== 'current' && command !== 'get_relevant_prior_runs') {
 			throw new Error(`Unknown context command: ${command ?? '<missing>'}`);
 		}
 
 		const { options } = parseArgs(argv);
+
+		if (command === 'get_relevant_prior_runs') {
+			const params = new URLSearchParams();
+
+			if (options.project) {
+				params.set('projectId', options.project);
+			}
+
+			if (options.goal) {
+				params.set('goalId', options.goal);
+			}
+
+			if (options.task) {
+				params.set('taskId', options.task);
+			}
+
+			if (options.status) {
+				params.set('status', options.status);
+			}
+
+			if (options.limit) {
+				params.set('limit', options.limit);
+			}
+
+			printJson(
+				await request(
+					`/api/agent-context/relevant-prior-runs${params.size > 0 ? `?${params.toString()}` : ''}`
+				)
+			);
+			return;
+		}
+
 		const params = buildManagedContextParams({
 			threadId: options.thread,
 			taskId: options.task,
@@ -465,6 +582,137 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 
 		printJson(
 			await request(`/api/agent-context/current${params.size > 0 ? `?${params.toString()}` : ''}`)
+		);
+		return;
+	}
+
+	if (resource === 'goal-loop') {
+		const supportedGoalLoopCommands = new Set([
+			'list_active_goals',
+			'get_goal_context',
+			'get_goal_progress',
+			'get_goal_success_criteria',
+			'get_goal_blockers',
+			'get_actionable_work',
+			'get_blocked_work',
+			'get_awaiting_review',
+			'get_next_recommended_action',
+			'explain_task_eligibility'
+		]);
+
+		if (!supportedGoalLoopCommands.has(command)) {
+			throw new Error(`Unknown goal-loop command: ${command ?? '<missing>'}`);
+		}
+
+		const { options } = parseArgs(argv);
+		const params = new URLSearchParams();
+
+		if (options.project) {
+			params.set('projectId', options.project);
+		}
+
+		if (options.goal) {
+			params.set('goalId', options.goal);
+		}
+
+		if (options.task) {
+			params.set('taskId', options.task);
+		}
+
+		if (options.limit) {
+			params.set('limit', options.limit);
+		}
+
+		printJson(
+			await request(
+				`/api/agent-goal-loop/${encodeURIComponent(command)}${params.size > 0 ? `?${params.toString()}` : ''}`
+			)
+		);
+		return;
+	}
+
+	if (resource === 'work-packet') {
+		if (command !== 'get_agent_work_packet') {
+			throw new Error(`Unknown work-packet command: ${command ?? '<missing>'}`);
+		}
+
+		const { options } = parseArgs(argv);
+		const params = new URLSearchParams();
+
+		if (options.project) {
+			params.set('projectId', options.project);
+		}
+
+		if (options.goal) {
+			params.set('goalId', options.goal);
+		}
+
+		if (options.task) {
+			params.set('taskId', options.task);
+		}
+
+		printJson(
+			await request(
+				`/api/agent-work-packets/${encodeURIComponent(command)}${params.size > 0 ? `?${params.toString()}` : ''}`
+			)
+		);
+		return;
+	}
+
+	if (resource === 'run-result') {
+		const supportedRunResultCommands = new Set([
+			'record_run_result',
+			'record_validation_result',
+			'record_blocker',
+			'record_followup_recommendations',
+			'create_followup_task',
+			'request_review_from_run',
+			'mark_task_blocked_from_run'
+		]);
+
+		if (!supportedRunResultCommands.has(command)) {
+			throw new Error(`Unknown run-result command: ${command ?? '<missing>'}`);
+		}
+
+		const payload = await readPayload(parseArgs(argv).options);
+		printJson(
+			await request(`/api/agent-run-results/${encodeURIComponent(command)}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			})
+		);
+		return;
+	}
+
+	if (resource === 'review') {
+		if (command !== 'get_review_status') {
+			throw new Error(`Unknown review command: ${command ?? '<missing>'}`);
+		}
+
+		const { options } = parseArgs(argv);
+		const params = new URLSearchParams();
+
+		if (options.project) {
+			params.set('projectId', options.project);
+		}
+
+		if (options.goal) {
+			params.set('goalId', options.goal);
+		}
+
+		if (options.task) {
+			params.set('taskId', options.task);
+		}
+
+		if (options.limit) {
+			params.set('limit', options.limit);
+		}
+
+		printJson(
+			await request(
+				`/api/agent-reviews/${encodeURIComponent(command)}${params.size > 0 ? `?${params.toString()}` : ''}`
+			)
 		);
 		return;
 	}

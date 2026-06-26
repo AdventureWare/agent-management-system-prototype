@@ -172,12 +172,25 @@ describe('task-detail-mutation-actions', () => {
 
 		const result = await attachTaskFile('task_1', form);
 
-		expect(result).toEqual({
-			ok: true,
-			successAction: 'attachTaskFile',
-			taskId: 'task_1',
-			attachmentId: 'attachment_1'
-		});
+		expect(result).toEqual(
+			expect.objectContaining({
+				ok: true,
+				successAction: 'attachTaskFile',
+				taskId: 'task_1',
+				attachmentId: 'attachment_1',
+				attachmentCount: 1,
+				attachment: expect.objectContaining({
+					id: 'attachment_1',
+					name: 'brief.md'
+				})
+			})
+		);
+		expect(result.attachments).toEqual([
+			expect.objectContaining({
+				id: 'attachment_1',
+				name: 'brief.md'
+			})
+		]);
 		expect(current.tasks[0]?.attachments).toEqual([
 			expect.objectContaining({
 				id: 'attachment_1',
@@ -214,7 +227,9 @@ describe('task-detail-mutation-actions', () => {
 			ok: true,
 			successAction: 'removeTaskAttachment',
 			taskId: 'task_1',
-			attachmentId: 'attachment_1'
+			attachmentId: 'attachment_1',
+			attachments: [],
+			attachmentCount: 0
 		});
 		expect(current.tasks[0]?.attachments).toEqual([]);
 	});

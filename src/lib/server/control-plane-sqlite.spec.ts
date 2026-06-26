@@ -82,12 +82,15 @@ describe('control-plane sqlite backend', () => {
 		const dbPath = resolve(root, 'data', 'app.sqlite');
 
 		expect(loaded.roles).toEqual([
-			{
+			expect.objectContaining({
 				id: 'role_coordinator',
 				name: 'Coordinator',
 				area: 'shared',
-				description: 'Coordinates queued work'
-			}
+				description: 'Coordinates queued work',
+				lifecycleStatus: 'active',
+				sourceRoleId: null,
+				supersededByRoleId: null
+			})
 		]);
 		expect(existsSync(dbPath)).toBe(true);
 
@@ -468,7 +471,7 @@ describe('control-plane sqlite backend', () => {
 		expect(loaded.projects.map((project) => project.id)).toEqual(['project_serialized']);
 	});
 
-	it('preserves task writes across independent module instances and refreshes the json mirror', async () => {
+	it('preserves task writes across independent module instances without refreshing a json mirror', async () => {
 		const root = createTempDir();
 		process.chdir(root);
 		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
@@ -524,14 +527,72 @@ describe('control-plane sqlite backend', () => {
 		await firstUpdate;
 
 		const loaded = await secondModule.loadControlPlane();
-		const jsonMirror = JSON.parse(
-			readFileSync(resolve(root, 'data', 'control-plane.json'), 'utf8')
-		);
 
 		expect(loaded.tasks.map((task) => task.id)).toContain(createdTask.id);
 		expect(loaded.roles.map((role) => role.id)).toContain('role_parallel');
-		expect(jsonMirror.tasks.map((task: { id: string }) => task.id)).toContain(createdTask.id);
-		expect(jsonMirror.roles.map((role: { id: string }) => role.id)).toContain('role_parallel');
+		expect(existsSync(resolve(root, 'data', 'control-plane.json'))).toBe(false);
+	});
+
+	it('warns when an existing control-plane json export drifts from sqlite runtime state', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const jsonPath = resolve(root, 'data', 'control-plane.json');
+
+		mkdirSync(resolve(root, 'data'), { recursive: true });
+		writeFileSync(
+			jsonPath,
+			JSON.stringify({
+				providers: [],
+				roles: [
+					{
+						id: 'role_seeded',
+						name: 'Seeded role',
+						area: 'shared',
+						description: 'Loaded from json'
+					}
+				],
+				projects: [],
+				goals: [],
+				workflows: [],
+				workflowSteps: [],
+				taskTemplates: [],
+				executionSurfaces: [],
+				tasks: [],
+				runs: [],
+				reviews: [],
+				approvals: [],
+				decisions: [],
+				planningSessions: []
+			})
+		);
+
+		const controlPlaneModule = await importControlPlaneModule();
+		await controlPlaneModule.loadControlPlane();
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			roles: [
+				...data.roles,
+				{
+					id: 'role_sqlite_only',
+					name: 'SQLite only',
+					area: 'shared',
+					description: 'Created after seeding'
+				}
+			]
+		}));
+
+		const loaded = await controlPlaneModule.loadControlPlane();
+		const jsonExport = JSON.parse(readFileSync(jsonPath, 'utf8'));
+
+		expect(loaded.roles.map((role) => role.id)).toContain('role_sqlite_only');
+		expect(jsonExport.roles.map((role: { id: string }) => role.id)).not.toContain(
+			'role_sqlite_only'
+		);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining('SQLite is the runtime source of truth')
+		);
 	});
 
 	it('removes goal and governance references when deleting a goal-linked task through the repository', async () => {

@@ -1,6 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { AGENT_SANDBOX_OPTIONS } from '$lib/types/agent-thread';
+import {
+	TASK_AUTONOMY_LEVEL_OPTIONS,
+	TASK_REVIEW_REQUIREMENT_OPTIONS,
+	TASK_RISK_LEVEL_OPTIONS,
+	type TaskAutonomyLevel,
+	type TaskReviewRequirement,
+	type TaskRiskLevel
+} from '$lib/types/control-plane';
 import { parseAgentSandbox } from '$lib/server/agent-threads';
 import { buildExecutionCapabilityCatalog } from '$lib/server/execution-capability-catalog';
 import { loadFolderPickerOptions } from '$lib/server/folder-options';
@@ -26,11 +34,52 @@ function readProjectThreadSandbox(value: FormDataEntryValue | null) {
 	return sandbox ? parseAgentSandbox(sandbox, 'workspace-write') : null;
 }
 
+function readEnumValue<T extends string>(
+	value: FormDataEntryValue | null,
+	options: readonly T[],
+	fallback: T
+) {
+	const candidate = value?.toString().trim() ?? '';
+	return options.includes(candidate as T) ? (candidate as T) : fallback;
+}
+
 function readProjectForm(form: FormData) {
 	return {
 		name: form.get('name')?.toString().trim() ?? '',
 		summary: form.get('summary')?.toString().trim() ?? '',
 		parentProjectId: form.get('parentProjectId')?.toString().trim() ?? '',
+		projectBrief: form.get('projectBrief')?.toString().trim() ?? '',
+		currentStateMemo: form.get('currentStateMemo')?.toString().trim() ?? '',
+		decisionLog: form.get('decisionLog')?.toString().trim() ?? '',
+		agentInstructionsPath: normalizePathInput(form.get('agentInstructionsPath')?.toString()),
+		setupNotes: form.get('setupNotes')?.toString().trim() ?? '',
+		validationCommands: normalizePathListInput(form.get('validationCommands')?.toString()),
+		codingConventions: form.get('codingConventions')?.toString().trim() ?? '',
+		approvalRequirements: form.get('approvalRequirements')?.toString().trim() ?? '',
+		defaultAllowedActions: normalizePathListInput(form.get('defaultAllowedActions')?.toString()),
+		defaultDisallowedActions: normalizePathListInput(
+			form.get('defaultDisallowedActions')?.toString()
+		),
+		defaultAutonomyLevel: readEnumValue<TaskAutonomyLevel>(
+			form.get('defaultAutonomyLevel'),
+			TASK_AUTONOMY_LEVEL_OPTIONS,
+			'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'
+		),
+		defaultRiskThreshold: readEnumValue<TaskRiskLevel>(
+			form.get('defaultRiskThreshold'),
+			TASK_RISK_LEVEL_OPTIONS,
+			'medium'
+		),
+		defaultReviewRequirement: readEnumValue<TaskReviewRequirement>(
+			form.get('defaultReviewRequirement'),
+			TASK_REVIEW_REQUIREMENT_OPTIONS,
+			'SUMMARY_REVIEW'
+		),
+		defaultValidationExpectations:
+			form.get('defaultValidationExpectations')?.toString().trim() ?? '',
+		importantLinks: normalizePathListInput(form.get('importantLinks')?.toString()),
+		constraints: form.get('constraints')?.toString().trim() ?? '',
+		nonGoals: form.get('nonGoals')?.toString().trim() ?? '',
 		projectRootFolder: normalizePathInput(form.get('projectRootFolder')?.toString()),
 		defaultArtifactRoot: normalizePathInput(form.get('defaultArtifactRoot')?.toString()),
 		defaultRepoPath: normalizePathInput(form.get('defaultRepoPath')?.toString()),
@@ -90,6 +139,23 @@ export const load: PageServerLoad = async ({ params }) => {
 			taskCount: relatedTasks.filter((task) => task.goalId === goal.id).length
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name));
+	const relatedGoalIdSet = new Set(relatedGoals.map((goal) => goal.id));
+	const relatedTaskIdSet = new Set(relatedTasks.map((task) => task.id));
+	const relatedDecisionLog = (data.decisions ?? [])
+		.filter(
+			(decision) =>
+				(decision.taskId && relatedTaskIdSet.has(decision.taskId)) ||
+				(decision.goalId && relatedGoalIdSet.has(decision.goalId)) ||
+				(decision.planningSessionId &&
+					(data.planningSessions ?? []).some(
+						(session) =>
+							session.id === decision.planningSessionId &&
+							(session.projectId === project.id ||
+								session.taskIds.some((taskId) => relatedTaskIdSet.has(taskId)) ||
+								session.goalIds.some((goalId) => relatedGoalIdSet.has(goalId)))
+					))
+		)
+		.slice(0, 12);
 	const childProjects = getProjectChildProjects(data.projects, project.id)
 		.map((childProject) => ({
 			...childProject,
@@ -119,6 +185,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			})),
 		childProjects,
 		projectSkillInventory,
+		relatedDecisionLog,
 		permissionSurface: buildProjectPermissionSurface(project),
 		relatedGoals,
 		relatedTasks,
@@ -130,6 +197,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		},
 		folderOptions: await loadFolderPickerOptions(),
 		sandboxOptions: AGENT_SANDBOX_OPTIONS,
+		autonomyOptions: TASK_AUTONOMY_LEVEL_OPTIONS,
+		riskOptions: TASK_RISK_LEVEL_OPTIONS,
+		reviewRequirementOptions: TASK_REVIEW_REQUIREMENT_OPTIONS,
 		metrics: {
 			totalTasks: relatedTasks.length,
 			activeTasks: relatedTasks.filter((task) =>

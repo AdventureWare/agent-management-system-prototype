@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
+import { delimiter } from 'node:path';
 import { dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { buildCodexArgs } from './agent-thread-runner-args.mjs';
@@ -94,6 +95,10 @@ const agentApiToken =
 	process.env.AMS_OPERATOR_PASSWORD?.trim() ||
 	'';
 const agentApiBaseUrl = process.env.AMS_AGENT_API_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
+const nodeBinDir = dirname(process.execPath);
+const childPath = process.env.PATH?.trim()
+	? `${nodeBinDir}${delimiter}${process.env.PATH}`
+	: nodeBinDir;
 await mkdir(dirname(config.statePath), { recursive: true });
 let currentState = await writeState(config.statePath, {
 	status: 'queued',
@@ -133,6 +138,7 @@ const child = spawn(config.codexBin, buildCodexArgs(config), {
 		AMS_AGENT_THREAD_ID: config.agentThreadId ?? '',
 		AMS_AGENT_RUN_ID: config.controlPlaneRunId ?? '',
 		AMS_AGENT_TASK_ID: config.taskId ?? '',
+		PATH: childPath,
 		NO_COLOR: '1'
 	},
 	// Managed runs pass the task prompt as argv. If stdin remains as a live pipe,
