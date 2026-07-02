@@ -17,19 +17,19 @@ AI agents may generate candidate concepts freely. Accepted model concepts must p
 
 Use these locations before proposing or implementing a model change:
 
-| Concern | Source |
-| --- | --- |
-| Conceptual ontology | `docs/ontology-v1.md` |
-| Accepted glossary and maturity status | `docs/domain-glossary.md` |
-| Domain model source map and bounded contexts | `docs/domain-model.md` |
-| Text diagram of accepted or candidate relationships | `docs/model-diagram.md` |
-| Significant model decisions | `docs/model-decisions/` |
-| Model change proposals | `docs/model-change-proposals/` |
-| Representative model scenarios/evals | `docs/model-evals/golden-scenarios.md` |
-| Runtime storage policy | `docs/runtime-data-policy.md` |
-| SQLite foundation | `src/lib/server/db/migrations/001-app-foundation.sql` |
-| Current typed control-plane records, enums, and statuses | `src/lib/types/control-plane.ts` |
-| API/domain helpers | `src/lib/server/control-plane.ts`, `src/lib/server/control-plane-repository.ts`, and focused helper modules |
+| Concern                                                  | Source                                                                                                      |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Conceptual ontology                                      | `docs/ontology-v1.md`                                                                                       |
+| Accepted glossary and maturity status                    | `docs/domain-glossary.md`                                                                                   |
+| Domain model source map and bounded contexts             | `docs/domain-model.md`                                                                                      |
+| Text diagram of accepted or candidate relationships      | `docs/model-diagram.md`                                                                                     |
+| Significant model decisions                              | `docs/model-decisions/`                                                                                     |
+| Model change proposals                                   | `docs/model-change-proposals/`                                                                              |
+| Representative model scenarios/evals                     | `docs/model-evals/golden-scenarios.md`                                                                      |
+| Runtime storage policy                                   | `docs/runtime-data-policy.md`                                                                               |
+| SQLite foundation                                        | `src/lib/server/db/migrations/001-app-foundation.sql`                                                       |
+| Current typed control-plane records, enums, and statuses | `src/lib/types/control-plane.ts`                                                                            |
+| API/domain helpers                                       | `src/lib/server/control-plane.ts`, `src/lib/server/control-plane-repository.ts`, and focused helper modules |
 
 If these sources conflict, treat the conflict as a defect. Do not preserve contradictory model meanings as parallel options unless separate bounded contexts are explicitly documented.
 
@@ -205,4 +205,3 @@ Keep the v0.1 stack small:
 - Focused tests/evals for representative workflows
 
 Validation tools enforce structure. They do not decide whether the structure belongs in the model. Use this protocol for conceptual fit, then use schema/types/tests for technical conformance.
-

@@ -201,4 +201,3 @@ Status: Candidate
 Definition: An ability required by work or provided by a role, execution surface, tool, skill, or agent.
 
 Current representation: capability/tool fields and routing metadata exist, but the concept is not yet a rich standalone model.
-

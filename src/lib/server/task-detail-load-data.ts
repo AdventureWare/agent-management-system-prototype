@@ -179,12 +179,12 @@ export function buildTaskDetailCollections(input: {
 							: canceledCount === total
 								? 'canceled'
 								: reviewCount > 0 || pendingIntegrationCount > 0
-								? 'review'
-								: acceptedCount + canceledCount === total
-									? 'done'
-									: inProgressCount > 0
-										? 'in_progress'
-										: 'ready';
+									? 'review'
+									: acceptedCount + canceledCount === total
+										? 'done'
+										: inProgressCount > 0
+											? 'in_progress'
+											: 'ready';
 					const summary =
 						status === 'blocked'
 							? `${blockedCount} delegated ${blockedCount === 1 ? 'task is' : 'tasks are'} blocked, so parent integration is blocked.`
@@ -196,9 +196,9 @@ export function buildTaskDetailCollections(input: {
 									? 'All delegated subtasks have been accepted by the parent task.'
 									: status === 'canceled'
 										? 'All delegated subtasks have been canceled.'
-									: status === 'in_progress'
-										? `${inProgressCount} delegated ${inProgressCount === 1 ? 'task is' : 'tasks are'} actively moving.`
-										: `${readyCount} delegated ${readyCount === 1 ? 'task is' : 'tasks are'} queued but not started.`;
+										: status === 'in_progress'
+											? `${inProgressCount} delegated ${inProgressCount === 1 ? 'task is' : 'tasks are'} actively moving.`
+											: `${readyCount} delegated ${readyCount === 1 ? 'task is' : 'tasks are'} queued but not started.`;
 
 					return {
 						status,

@@ -185,7 +185,8 @@ function isTaskInScope(task: Task, project: Project | null, goal: Goal | null) {
 		}
 
 		return (
-			(goal.projectIds ?? []).includes(task.projectId) && (!project || task.projectId === project.id)
+			(goal.projectIds ?? []).includes(task.projectId) &&
+			(!project || task.projectId === project.id)
 		);
 	}
 
@@ -256,9 +257,7 @@ function classifyTask(input: {
 		reasons.push({
 			code: 'accepted_or_done',
 			message:
-				task.closeoutState === 'accepted'
-					? 'Task has accepted closeout.'
-					: 'Task status is done.'
+				task.closeoutState === 'accepted' ? 'Task has accepted closeout.' : 'Task status is done.'
 		});
 	}
 
@@ -269,7 +268,11 @@ function classifyTask(input: {
 		});
 	}
 
-	if (task.status === 'in_progress' || latestRun?.status === 'running' || latestRun?.status === 'starting') {
+	if (
+		task.status === 'in_progress' ||
+		latestRun?.status === 'running' ||
+		latestRun?.status === 'starting'
+	) {
 		reasons.push({
 			code: 'already_in_progress',
 			message: 'Task already has in-progress work.'
@@ -343,7 +346,11 @@ function classifyTask(input: {
 		});
 	}
 
-	if (task.riskLevel === 'high' || task.riskLevel === 'critical' || effectiveRigorProfile === 'HIGH_STAKES') {
+	if (
+		task.riskLevel === 'high' ||
+		task.riskLevel === 'critical' ||
+		effectiveRigorProfile === 'HIGH_STAKES'
+	) {
 		reasons.push({
 			code: 'too_risky',
 			message:
@@ -375,7 +382,11 @@ function classifyTask(input: {
 		}
 	}
 
-	if (!hasText(task.successCriteria) && !hasText(task.validationSteps) && !hasText(task.expectedOutcome)) {
+	if (
+		!hasText(task.successCriteria) &&
+		!hasText(task.validationSteps) &&
+		!hasText(task.expectedOutcome)
+	) {
 		reasons.push({
 			code: 'insufficient_validation',
 			message: 'No expected outcome, acceptance criteria, or validation steps are recorded.'
@@ -534,7 +545,8 @@ function buildTaskDraft(input: {
 			nonGoals: 'Do not implement production changes or mark the original task complete.',
 			successCriteria:
 				'Findings cite the inspected sources or files, resolve the uncertainty, and update recommended next work.',
-			validationSteps: 'Reviewer can trace findings to sources and see a clear next recommendation.',
+			validationSteps:
+				'Reviewer can trace findings to sources and see a clear next recommendation.',
 			dependencyTaskIds: [task.id]
 		};
 	}
@@ -549,12 +561,14 @@ function buildTaskDraft(input: {
 			autonomyLevel: 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE',
 			riskLevel: 'low',
 			reviewRequirement: 'SUMMARY_REVIEW',
-			expectedOutcome: 'The original task has enough structure to be reclassified for execution or review.',
+			expectedOutcome:
+				'The original task has enough structure to be reclassified for execution or review.',
 			scope: 'Planning and task update proposal only.',
 			nonGoals: 'Do not implement the task while planning it.',
 			successCriteria:
 				'The task has clear expected outcome, scope, non-goals, success criteria, validation steps, dependencies, and risk/autonomy recommendation.',
-			validationSteps: 'Run the goal-loop classification again and verify the original task is no longer underspecified.',
+			validationSteps:
+				'Run the goal-loop classification again and verify the original task is no longer underspecified.',
 			dependencyTaskIds: [task.id]
 		};
 	}
@@ -703,12 +717,16 @@ function buildRecommendation(input: {
 			kind: 'request_approval_or_downgrade',
 			taskIds: [unsafe[0]!.id],
 			parallelTaskIds: [],
-			reason: 'Work is outside current safety, autonomy, risk, or goal scope; request approval or downgrade mode.',
+			reason:
+				'Work is outside current safety, autonomy, risk, or goal scope; request approval or downgrade mode.',
 			suggestedTaskDraft: null
 		};
 	}
 
-	if (byClassification.accepted_done.length > 0 && byClassification.duplicate_superseded.length === 0) {
+	if (
+		byClassification.accepted_done.length > 0 &&
+		byClassification.duplicate_superseded.length === 0
+	) {
 		return {
 			kind: 'goal_complete',
 			taskIds: [],

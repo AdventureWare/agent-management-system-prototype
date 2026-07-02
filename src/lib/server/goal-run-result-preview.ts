@@ -1,7 +1,4 @@
-import {
-	getOpenReviewForTask,
-	getPendingApprovalForTask
-} from '$lib/server/control-plane';
+import { getOpenReviewForTask, getPendingApprovalForTask } from '$lib/server/control-plane';
 import { buildGoalWorkLoopClassification } from '$lib/server/goal-work-loop';
 import type { ControlPlaneData, Goal, Project, Run, Task } from '$lib/types/control-plane';
 
@@ -161,7 +158,11 @@ function classifyRunResult(data: ControlPlaneData, run: Run, task: Task) {
 		} as const;
 	}
 
-	if (changesRequested || task.closeoutState === 'needs_revision' || task.closeoutState === 'rejected') {
+	if (
+		changesRequested ||
+		task.closeoutState === 'needs_revision' ||
+		task.closeoutState === 'rejected'
+	) {
 		reasons.push(changesRequested?.summary || task.closeoutRemainingIssues || 'Changes requested.');
 		return {
 			classification: 'needs_revision',
@@ -170,7 +171,11 @@ function classifyRunResult(data: ControlPlaneData, run: Run, task: Task) {
 		} as const;
 	}
 
-	if (run.status === 'blocked' || (run.blockersFound ?? []).length > 0 || task.status === 'blocked') {
+	if (
+		run.status === 'blocked' ||
+		(run.blockersFound ?? []).length > 0 ||
+		task.status === 'blocked'
+	) {
 		reasons.push(task.blockedReason || run.blockersFound?.[0] || 'Run found a blocker.');
 		return {
 			classification: 'blocked',
@@ -215,7 +220,10 @@ function classifyRunResult(data: ControlPlaneData, run: Run, task: Task) {
 		} as const;
 	}
 
-	if (run.status === 'completed' && (openReview || task.requiresReview || task.status === 'review')) {
+	if (
+		run.status === 'completed' &&
+		(openReview || task.requiresReview || task.status === 'review')
+	) {
 		reasons.push(openReview ? 'Open review exists.' : 'Completed run requires review.');
 		return {
 			classification: 'completed_awaiting_review',
@@ -324,7 +332,9 @@ function buildEvidenceSummary(run: Run, task: Task) {
 	return [
 		`Run ${run.id} for task ${task.id} (${task.title}).`,
 		normalizeText(run.resultSummary) ? `Result: ${normalizeText(run.resultSummary)}` : '',
-		normalizeText(run.validationSummary) ? `Validation: ${normalizeText(run.validationSummary)}` : '',
+		normalizeText(run.validationSummary)
+			? `Validation: ${normalizeText(run.validationSummary)}`
+			: '',
 		normalizeText(run.summary) ? `Summary: ${normalizeText(run.summary)}` : ''
 	]
 		.filter(Boolean)
@@ -374,7 +384,12 @@ export function buildRunEvidenceProgressPreview(
 	const { run, task, classification, classificationConfidence } = input;
 	const project = findProject(data, task);
 	const goal = findGoal(data, task);
-	const evidenceIds = [run.id, task.id, ...(goal ? [goal.id] : []), ...(project ? [project.id] : [])];
+	const evidenceIds = [
+		run.id,
+		task.id,
+		...(goal ? [goal.id] : []),
+		...(project ? [project.id] : [])
+	];
 	const proposedUpdates: ProjectGoalProgressUpdatePreview[] = [];
 	const omittedUpdates: RunEvidenceProgressPreview['omittedUpdates'] = [];
 	const suggestedCommands = buildProgressSuggestedCommands({
@@ -399,7 +414,8 @@ export function buildRunEvidenceProgressPreview(
 				resource: 'project',
 				id: project.id,
 				fields: { currentStateMemo: evidenceSummary },
-				reason: 'Accepted run evidence can refresh the project current-state memo for operator review.',
+				reason:
+					'Accepted run evidence can refresh the project current-state memo for operator review.',
 				evidenceIds,
 				confidence: classificationConfidence,
 				suggestedCommands
@@ -412,7 +428,8 @@ export function buildRunEvidenceProgressPreview(
 			resource: 'goal',
 			id: goal.id,
 			fields: { progressNote: evidenceSummary },
-			reason: 'Accepted task evidence may advance goal progress, but the operator must decide how to record it durably.',
+			reason:
+				'Accepted task evidence may advance goal progress, but the operator must decide how to record it durably.',
 			evidenceIds,
 			confidence: classificationConfidence,
 			suggestedCommands: ['goal-loop:get_goal_progress', `goal:get ${goal.id}`, 'context:current']
@@ -437,7 +454,8 @@ export function buildRunEvidenceProgressPreview(
 				resource: 'goal',
 				id: goal.id,
 				fields: { blockerNote: blockerSummary },
-				reason: 'The blocker affects progress on the linked goal and should be reviewed before durable goal-state changes.',
+				reason:
+					'The blocker affects progress on the linked goal and should be reviewed before durable goal-state changes.',
 				evidenceIds,
 				confidence: 'high',
 				suggestedCommands: ['run-result:mark_task_blocked_from_run', 'goal-loop:get_goal_blockers']
@@ -451,7 +469,8 @@ export function buildRunEvidenceProgressPreview(
 			id: goal.id,
 			fields: {
 				progressNote: evidenceSummary,
-				remainingWork: normalizeText(task.closeoutRemainingIssues) || 'Run result indicates remaining work.'
+				remainingWork:
+					normalizeText(task.closeoutRemainingIssues) || 'Run result indicates remaining work.'
 			},
 			reason: 'Partial run evidence can inform goal progress, but remaining scope is uncertain.',
 			evidenceIds,
@@ -478,7 +497,8 @@ export function buildRunEvidenceProgressPreview(
 	if (classification === 'requires_user_decision') {
 		omittedUpdates.push({
 			resource: 'goal',
-			reason: 'Goal progress update omitted because a user decision is required before interpreting the run result as progress.',
+			reason:
+				'Goal progress update omitted because a user decision is required before interpreting the run result as progress.',
 			evidenceIds,
 			confidence: 'low'
 		});
@@ -487,7 +507,8 @@ export function buildRunEvidenceProgressPreview(
 	if (classification === 'failed') {
 		omittedUpdates.push({
 			resource: 'project',
-			reason: 'Project memory update omitted because failed run evidence is diagnostic, not durable progress.',
+			reason:
+				'Project memory update omitted because failed run evidence is diagnostic, not durable progress.',
 			evidenceIds,
 			confidence: 'low'
 		});

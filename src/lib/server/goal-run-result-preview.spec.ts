@@ -225,7 +225,10 @@ describe('buildRunResultPreview', () => {
 			})
 		);
 		expect(preview?.proposedUpdates).toContainEqual(
-			expect.objectContaining({ resource: 'task', fields: expect.objectContaining({ status: 'done' }) })
+			expect.objectContaining({
+				resource: 'task',
+				fields: expect.objectContaining({ status: 'done' })
+			})
 		);
 		expect(preview?.projectGoalProgressPreview).toEqual(
 			expect.objectContaining({
@@ -257,7 +260,10 @@ describe('buildRunResultPreview', () => {
 		expect(preview?.classification).toBe('completed_awaiting_review');
 		expect(preview?.nextAction).toBe('request_review');
 		expect(preview?.proposedUpdates).toContainEqual(
-			expect.objectContaining({ resource: 'review', fields: expect.objectContaining({ status: 'open' }) })
+			expect.objectContaining({
+				resource: 'review',
+				fields: expect.objectContaining({ status: 'open' })
+			})
 		);
 	});
 
@@ -292,7 +298,9 @@ describe('buildRunResultPreview', () => {
 			expect.arrayContaining([
 				expect.objectContaining({
 					resource: 'goal',
-					fields: expect.objectContaining({ blockerNote: expect.stringContaining('Missing credentials') }),
+					fields: expect.objectContaining({
+						blockerNote: expect.stringContaining('Missing credentials')
+					}),
 					confidence: 'high',
 					suggestedCommands: expect.arrayContaining(['run-result:mark_task_blocked_from_run'])
 				})
@@ -346,7 +354,9 @@ describe('buildRunResultPreview', () => {
 	it('marks partial progress proposals as low confidence', () => {
 		const preview = buildRunResultPreview(
 			createControlPlane({
-				run: createRun({ resultSummary: 'Partial implementation; remaining UI polish is incomplete.' })
+				run: createRun({
+					resultSummary: 'Partial implementation; remaining UI polish is incomplete.'
+				})
 			}),
 			{ runId: 'run_1' }
 		);

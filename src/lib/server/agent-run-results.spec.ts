@@ -135,7 +135,9 @@ function createRun(overrides: Partial<Run> = {}): Run {
 	};
 }
 
-function createControlPlane(input: { project?: Project; goal?: Goal; task?: Task; run?: Run } = {}): ControlPlaneData {
+function createControlPlane(
+	input: { project?: Project; goal?: Goal; task?: Task; run?: Run } = {}
+): ControlPlaneData {
 	const task = input.task ?? createTask();
 	const run = input.run ?? createRun({ taskId: task.id });
 	const project = input.project ?? createProject();

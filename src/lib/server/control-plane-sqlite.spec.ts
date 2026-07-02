@@ -708,9 +708,7 @@ describe('control-plane sqlite backend', () => {
 
 		const controlPlaneModule = await importControlPlaneModule();
 		const repositoryModule = await import('./control-plane-repository');
-		const { CONTINUATION_PLANNING_TASK_TITLE } = await import(
-			'./goal-continuation-reconciliation'
-		);
+		const { CONTINUATION_PLANNING_TASK_TITLE } = await import('./goal-continuation-reconciliation');
 		const project = controlPlaneModule.createProject({
 			name: 'AMS',
 			summary: 'Agent management system',

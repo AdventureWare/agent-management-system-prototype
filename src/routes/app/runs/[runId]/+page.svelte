@@ -301,7 +301,9 @@
 					</p>
 					<div class="mt-4 space-y-2">
 						{#each data.runResultPreview.reasons as reason}
-							<p class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+							<p
+								class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300"
+							>
 								{reason}
 							</p>
 						{/each}
@@ -331,7 +333,9 @@
 					</p>
 					<div class="mt-4 space-y-3">
 						{#if data.runResultPreview.proposedUpdates.length === 0}
-							<p class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+							<p
+								class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500"
+							>
 								No state updates are proposed for this result.
 							</p>
 						{:else}
@@ -372,7 +376,9 @@
 
 				<div class="mt-4 space-y-3">
 					{#if data.runResultPreview.projectGoalProgressPreview.proposedUpdates.length === 0}
-						<p class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+						<p
+							class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500"
+						>
 							No project or goal progress updates are proposed for this result.
 						</p>
 					{:else}
@@ -410,7 +416,9 @@
 							Omitted low-confidence updates
 						</p>
 						{#each data.runResultPreview.projectGoalProgressPreview.omittedUpdates as omitted}
-							<p class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-400">
+							<p
+								class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-400"
+							>
 								{omitted.resource}: {omitted.reason}
 							</p>
 						{/each}
@@ -418,7 +426,9 @@
 				{/if}
 			</div>
 		{:else}
-			<p class="mt-5 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
+			<p
+				class="mt-5 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500"
+			>
 				No result preview is available for this run.
 			</p>
 		{/if}

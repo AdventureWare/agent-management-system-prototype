@@ -59,7 +59,9 @@ function resolveMode(kind: GoalWorkLoopRecommendationKind): GoalLoopWorkPacketMo
 }
 
 function recommendationKindForClassification(
-	classification: ReturnType<typeof buildGoalWorkLoopClassification>['tasks'][number]['classification']
+	classification: ReturnType<
+		typeof buildGoalWorkLoopClassification
+	>['tasks'][number]['classification']
 ): GoalWorkLoopRecommendationKind {
 	switch (classification) {
 		case 'actionable_now':
@@ -198,11 +200,15 @@ export function buildGoalLoopWorkPacket(
 		? (data.tasks.find((candidate) => candidate.id === selectedTaskId) ?? null)
 		: null;
 	const project =
-		(task ? data.projects.find((candidate) => candidate.id === task.projectId) : goalLoop.project) ??
+		(task
+			? data.projects.find((candidate) => candidate.id === task.projectId)
+			: goalLoop.project) ??
 		goalLoop.project ??
 		null;
 	const goal =
-		(task && task.goalId ? data.goals.find((candidate) => candidate.id === task.goalId) : goalLoop.goal) ??
+		(task && task.goalId
+			? data.goals.find((candidate) => candidate.id === task.goalId)
+			: goalLoop.goal) ??
 		goalLoop.goal ??
 		null;
 
@@ -221,7 +227,9 @@ export function buildGoalLoopWorkPacket(
 		: recommendation.reason;
 	const validationExpectations = task?.validationSteps?.trim()
 		? [task.validationSteps.trim()]
-		: ['Use the smallest checks that can validate the selected work and report if validation is unavailable.'];
+		: [
+				'Use the smallest checks that can validate the selected work and report if validation is unavailable.'
+			];
 	const stoppingConditions = defaultStoppingConditions(mode);
 	const resultShape = expectedResultShape(mode);
 

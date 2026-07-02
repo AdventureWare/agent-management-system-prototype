@@ -160,9 +160,7 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Diagnose Failure');
 		expect(document.body.textContent).toContain('Run failed.');
 		expect(document.body.textContent).toContain('Proposed state updates');
-		expect(document.body.textContent).toContain(
-			'Failed run should preserve diagnostic evidence.'
-		);
+		expect(document.body.textContent).toContain('Failed run should preserve diagnostic evidence.');
 		expect(
 			Array.from(document.querySelectorAll('a')).some(
 				(link) => link.getAttribute('href') === '/app/tasks/task_followup'

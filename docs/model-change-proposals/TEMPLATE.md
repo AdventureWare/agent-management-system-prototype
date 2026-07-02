@@ -76,4 +76,3 @@ Is this a core domain concept, implementation detail, UI concern, metadata, deri
 ## Follow-Up
 
 [Docs, types, tests, migrations, examples, decision record, cleanup tasks.]
-

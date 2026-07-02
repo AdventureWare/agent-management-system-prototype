@@ -1529,7 +1529,7 @@
 				</div>
 				<pre
 					data-testid="thread-message-code-block"
-					class="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-6 whitespace-pre text-slate-200 [tab-size:2]"><code
+					class="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-6 whitespace-pre [tab-size:2] text-slate-200"><code
 						>{block.text}</code
 					></pre>
 			</div>

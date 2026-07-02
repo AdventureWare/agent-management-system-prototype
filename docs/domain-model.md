@@ -51,4 +51,3 @@ Use the bounded contexts from `docs/domain-model-governance-protocol-v0.1.md` wh
 ## Model Change Rule
 
 Before changing accepted model vocabulary, types, statuses, schema, API fields, CLI/MCP parameters, or relationship semantics, create or reference a model change proposal. Small implementation changes that only use existing accepted constructs do not need a proposal.
-

@@ -33,4 +33,3 @@ erDiagram
 ```
 
 Candidate or under-modeled concepts from `docs/domain-glossary.md` should be added only after a model change proposal accepts their representation.
-

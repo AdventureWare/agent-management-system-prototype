@@ -823,7 +823,10 @@ function buildReviewedProgressNote(input: {
 	reason: string;
 }) {
 	const valueText = Array.isArray(input.value)
-		? input.value.map((entry) => String(entry).trim()).filter(Boolean).join(', ')
+		? input.value
+				.map((entry) => String(entry).trim())
+				.filter(Boolean)
+				.join(', ')
 		: String(input.value ?? '').trim();
 
 	return [
@@ -847,16 +850,20 @@ function assertNoDuplicateReviewedProgress(input: {
 		return;
 	}
 
-	throw new AgentControlPlaneApiError(409, 'Selected progress update already appears to be applied.', {
-		code: 'run_result_progress_update_duplicate',
-		suggestedNextCommands: ['project:get', 'goal:get', 'run-result:preview_progress_updates'],
-		details: {
-			resource: input.resource,
-			id: input.id,
-			fieldName: input.fieldName,
-			runId: input.runId
+	throw new AgentControlPlaneApiError(
+		409,
+		'Selected progress update already appears to be applied.',
+		{
+			code: 'run_result_progress_update_duplicate',
+			suggestedNextCommands: ['project:get', 'goal:get', 'run-result:preview_progress_updates'],
+			details: {
+				resource: input.resource,
+				id: input.id,
+				fieldName: input.fieldName,
+				runId: input.runId
+			}
 		}
-	});
+	);
 }
 
 function applyReviewedProgressUpdates(
@@ -873,7 +880,10 @@ function applyReviewedProgressUpdates(
 	if (!progressPreview) {
 		throw new AgentControlPlaneApiError(409, 'Run progress preview is unavailable.', {
 			code: 'run_result_progress_preview_unavailable',
-			suggestedNextCommands: ['run-result:record_run_result', 'run-result:preview_progress_updates'],
+			suggestedNextCommands: [
+				'run-result:record_run_result',
+				'run-result:preview_progress_updates'
+			],
 			details: { runId: input.run.id }
 		});
 	}
@@ -909,31 +919,43 @@ function applyReviewedProgressUpdates(
 
 	for (const { update } of selectedUpdates) {
 		if (update.resource === 'task') {
-			throw new AgentControlPlaneApiError(400, 'Task progress proposals must use task-specific commands.', {
-				code: 'run_result_progress_task_update_rejected',
-				suggestedNextCommands: ['task:update', 'run-result:preview_progress_updates'],
-				details: { runId: input.run.id, update }
-			});
+			throw new AgentControlPlaneApiError(
+				400,
+				'Task progress proposals must use task-specific commands.',
+				{
+					code: 'run_result_progress_task_update_rejected',
+					suggestedNextCommands: ['task:update', 'run-result:preview_progress_updates'],
+					details: { runId: input.run.id, update }
+				}
+			);
 		}
 
 		if (update.resource === 'project') {
 			const project = data.projects.find((candidate) => candidate.id === update.id) ?? null;
 
 			if (!project) {
-				throw new AgentControlPlaneApiError(404, 'Project for selected progress update was not found.', {
-					code: 'run_result_progress_project_not_found',
-					suggestedNextCommands: ['project:list', 'run-result:preview_progress_updates'],
-					details: { runId: input.run.id, projectId: update.id }
-				});
+				throw new AgentControlPlaneApiError(
+					404,
+					'Project for selected progress update was not found.',
+					{
+						code: 'run_result_progress_project_not_found',
+						suggestedNextCommands: ['project:list', 'run-result:preview_progress_updates'],
+						details: { runId: input.run.id, projectId: update.id }
+					}
+				);
 			}
 
 			for (const [fieldName, value] of Object.entries(update.fields)) {
 				if (fieldName !== 'currentStateMemo' && fieldName !== 'decisionLog') {
-					throw new AgentControlPlaneApiError(400, 'Project progress update field is not allowed.', {
-						code: 'run_result_progress_project_field_rejected',
-						suggestedNextCommands: ['run-result:preview_progress_updates', 'project:get'],
-						details: { runId: input.run.id, projectId: update.id, fieldName }
-					});
+					throw new AgentControlPlaneApiError(
+						400,
+						'Project progress update field is not allowed.',
+						{
+							code: 'run_result_progress_project_field_rejected',
+							suggestedNextCommands: ['run-result:preview_progress_updates', 'project:get'],
+							details: { runId: input.run.id, projectId: update.id, fieldName }
+						}
+					);
 				}
 
 				const note = buildReviewedProgressNote({
@@ -982,11 +1004,15 @@ function applyReviewedProgressUpdates(
 			const goal = data.goals.find((candidate) => candidate.id === update.id) ?? null;
 
 			if (!goal) {
-				throw new AgentControlPlaneApiError(404, 'Goal for selected progress update was not found.', {
-					code: 'run_result_progress_goal_not_found',
-					suggestedNextCommands: ['goal:list', 'run-result:preview_progress_updates'],
-					details: { runId: input.run.id, goalId: update.id }
-				});
+				throw new AgentControlPlaneApiError(
+					404,
+					'Goal for selected progress update was not found.',
+					{
+						code: 'run_result_progress_goal_not_found',
+						suggestedNextCommands: ['goal:list', 'run-result:preview_progress_updates'],
+						details: { runId: input.run.id, goalId: update.id }
+					}
+				);
 			}
 
 			for (const [fieldName, value] of Object.entries(update.fields)) {
@@ -1080,7 +1106,10 @@ function applyReviewedProgressUpdates(
 		...data,
 		projects:
 			projectPatches.size > 0
-				? data.projects.map((project) => ({ ...project, ...(projectPatches.get(project.id) ?? {}) }))
+				? data.projects.map((project) => ({
+						...project,
+						...(projectPatches.get(project.id) ?? {})
+					}))
 				: data.projects,
 		goals:
 			goalPatches.size > 0

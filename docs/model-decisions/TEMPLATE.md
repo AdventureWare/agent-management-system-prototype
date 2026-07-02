@@ -27,4 +27,3 @@ Superseded by:
 ## Source Updates
 
 [Glossary, ontology, diagram, types, schema, tests, routes, CLI/MCP docs.]
-

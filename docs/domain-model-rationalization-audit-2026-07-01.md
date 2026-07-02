@@ -55,70 +55,70 @@ The highest-risk drift areas are:
 
 ## Architecture Zones
 
-| Zone | Main files | Current role | Model status |
-| --- | --- | --- | --- |
-| Control plane | `src/lib/types/control-plane.ts`, `src/lib/server/control-plane.ts`, `control_plane_records` | Durable project/goal/task/run/governance/workflow/routing state | Accepted core |
-| Agent threads | `src/lib/types/agent-thread.ts`, `agent_thread_records`, `src/lib/server/agent-threads.ts` | Managed thread context, thread-level runs, contacts, resumability | Adjacent execution context |
-| Self-improvement | `src/lib/types/self-improvement.ts`, `self_improvement_entries` | Suggestions, signals, knowledge items, impressions, suggestion decisions | Adjacent improvement context |
-| Derived work views | `src/lib/types/task-work-item.ts`, queue/planning/task pages | UI and recommendation-ready projections over core records | Derived, not core |
-| Agent-facing proposals | `src/lib/server/intent-interpretation.ts`, run-result previews, goal-loop recommendations | Read-only proposals, classification, previews, work packets | Proposal layer |
-| Docs and skills | `AGENTS.md`, `.agents/skills/*`, `docs/*` | Durable instructions, glossary, protocols, ontology, decisions | Governance/context layer |
+| Zone                   | Main files                                                                                   | Current role                                                             | Model status                 |
+| ---------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| Control plane          | `src/lib/types/control-plane.ts`, `src/lib/server/control-plane.ts`, `control_plane_records` | Durable project/goal/task/run/governance/workflow/routing state          | Accepted core                |
+| Agent threads          | `src/lib/types/agent-thread.ts`, `agent_thread_records`, `src/lib/server/agent-threads.ts`   | Managed thread context, thread-level runs, contacts, resumability        | Adjacent execution context   |
+| Self-improvement       | `src/lib/types/self-improvement.ts`, `self_improvement_entries`                              | Suggestions, signals, knowledge items, impressions, suggestion decisions | Adjacent improvement context |
+| Derived work views     | `src/lib/types/task-work-item.ts`, queue/planning/task pages                                 | UI and recommendation-ready projections over core records                | Derived, not core            |
+| Agent-facing proposals | `src/lib/server/intent-interpretation.ts`, run-result previews, goal-loop recommendations    | Read-only proposals, classification, previews, work packets              | Proposal layer               |
+| Docs and skills        | `AGENTS.md`, `.agents/skills/*`, `docs/*`                                                    | Durable instructions, glossary, protocols, ontology, decisions           | Governance/context layer     |
 
 ## Accepted Core Records
 
 These should remain accepted model concepts unless a later model proposal proves otherwise:
 
-| Construct | Current definition | Keep? | Rationalization note |
-| --- | --- | --- | --- |
-| `Project` | Durable context container for goals, tasks, repo roots, memory, constraints, defaults, skills, and non-goals. | Keep | Good boundary. Needs clearer split between project memory prose and structured decisions/proposals. |
-| `Goal` | Desired future state/outcome, with hierarchy and project/task links. | Keep | Good anchor for continuation. Do not add a separate milestone abstraction. |
-| `Task` | Bounded unit of work with execution contract, routing, readiness, review, dependencies, attachments, and closeout. | Keep, clarify | Too much meaning is stored in prose. Needs rationale/uncertainty/work-kind strategy before adding fields. |
-| `Run` | Control-plane execution attempt/evidence record linked to a task. | Keep | Should be explicitly documented as the control-plane subtype of conceptual `WorkAttempt`. |
-| `Review` | Work evaluation gate after evidence exists. | Keep | Needs richer review findings later, but do not duplicate. |
-| `Approval` | Permission gate before risky/blocked action. | Keep | Boundary from review is good and should stay explicit. |
-| `Decision` | Durable planning/governance/work-direction decision linked to task/goal/run/review/approval/session. | Keep, clarify | Needs stronger guidance for model decisions vs operational decisions vs self-improvement decisions. |
-| `PlanningSession` | Planning process/window over goals/tasks/decisions. | Keep, clarify | Correctly not a primary work object. Needs relationship to intent interpretation/proposals clarified. |
-| `Workflow` | Reusable work pattern. | Keep | Good. Keep separate from task instance and planning session. |
-| `WorkflowStep` | Step inside a workflow with role and dependencies. | Keep | Could later inherit skill/capability requirements, but no immediate model change. |
-| `TaskTemplate` | Reusable task shape carrying execution contract/routing fields. | Keep | Good canonicalization surface for repeatable tasks. |
-| `Role` | Desired perspective/responsibility with prompts/checklists/skills/tools. | Keep, clarify | Blends role, persona, and capability hints. Needs boundary from `Skill` and `Capability`. |
-| `Provider` | Infrastructure/service metadata for execution. | Keep | Good boundary. Should not become "agent." |
-| `ExecutionSurface` | Runnable surface where work can execute. | Keep | Good current representation for assistant-created "agents." Boundary from provider/role/thread should be preserved. |
+| Construct          | Current definition                                                                                                 | Keep?         | Rationalization note                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `Project`          | Durable context container for goals, tasks, repo roots, memory, constraints, defaults, skills, and non-goals.      | Keep          | Good boundary. Needs clearer split between project memory prose and structured decisions/proposals.                 |
+| `Goal`             | Desired future state/outcome, with hierarchy and project/task links.                                               | Keep          | Good anchor for continuation. Do not add a separate milestone abstraction.                                          |
+| `Task`             | Bounded unit of work with execution contract, routing, readiness, review, dependencies, attachments, and closeout. | Keep, clarify | Too much meaning is stored in prose. Needs rationale/uncertainty/work-kind strategy before adding fields.           |
+| `Run`              | Control-plane execution attempt/evidence record linked to a task.                                                  | Keep          | Should be explicitly documented as the control-plane subtype of conceptual `WorkAttempt`.                           |
+| `Review`           | Work evaluation gate after evidence exists.                                                                        | Keep          | Needs richer review findings later, but do not duplicate.                                                           |
+| `Approval`         | Permission gate before risky/blocked action.                                                                       | Keep          | Boundary from review is good and should stay explicit.                                                              |
+| `Decision`         | Durable planning/governance/work-direction decision linked to task/goal/run/review/approval/session.               | Keep, clarify | Needs stronger guidance for model decisions vs operational decisions vs self-improvement decisions.                 |
+| `PlanningSession`  | Planning process/window over goals/tasks/decisions.                                                                | Keep, clarify | Correctly not a primary work object. Needs relationship to intent interpretation/proposals clarified.               |
+| `Workflow`         | Reusable work pattern.                                                                                             | Keep          | Good. Keep separate from task instance and planning session.                                                        |
+| `WorkflowStep`     | Step inside a workflow with role and dependencies.                                                                 | Keep          | Could later inherit skill/capability requirements, but no immediate model change.                                   |
+| `TaskTemplate`     | Reusable task shape carrying execution contract/routing fields.                                                    | Keep          | Good canonicalization surface for repeatable tasks.                                                                 |
+| `Role`             | Desired perspective/responsibility with prompts/checklists/skills/tools.                                           | Keep, clarify | Blends role, persona, and capability hints. Needs boundary from `Skill` and `Capability`.                           |
+| `Provider`         | Infrastructure/service metadata for execution.                                                                     | Keep          | Good boundary. Should not become "agent."                                                                           |
+| `ExecutionSurface` | Runnable surface where work can execute.                                                                           | Keep          | Good current representation for assistant-created "agents." Boundary from provider/role/thread should be preserved. |
 
 ## Adjacent Records That Need Boundary Labels
 
-| Construct | Current location | Risk | Recommended treatment |
-| --- | --- | --- | --- |
-| `AgentThread` | `src/lib/types/agent-thread.ts` | Can be confused with task, run, or worker. | Define as reusable AI context container. Never task completion surface. |
-| `AgentRun` | `src/lib/types/agent-thread.ts` | Name overlaps with control-plane `Run`; stores runner/process/log artifacts, not reviewed task evidence. | Rename only if justified later; document as thread-run/process record distinct from control-plane `Run`. |
-| `AgentThreadContact` | `src/lib/types/agent-thread.ts` | Could become a parallel task/approval system if overused. | Keep as coordination message, not work ownership or governance. |
-| `SelfImprovementOpportunity` | `src/lib/types/self-improvement.ts` | Can duplicate tasks or planning recommendations. | Keep as suggestion/proposal, not accepted work until it creates or links a task. |
-| `SelfImprovementKnowledgeItem` | `src/lib/types/self-improvement.ts` | Can duplicate docs/skills/project memory. | Treat as reusable lesson/procedure candidate; promote to docs/skill only through review. |
-| `SelfImprovementSuggestionDecision` | `src/lib/types/self-improvement.ts` | Name overlaps with control-plane `Decision`. | Keep local to suggestion lifecycle; significant accepted changes should also create/control-plane `Decision` or model decision record. |
-| `TaskWorkItem` | `src/lib/types/task-work-item.ts` | Sounds like a domain entity. | Document as derived UI/view model over `Task`, not core entity. |
-| `IntentInterpretationProposal` | `src/lib/server/intent-interpretation.ts` | Could become hidden planning state or duplicate task/decision/blocker systems. | Keep read-only proposal until model proposal decides persistence. |
+| Construct                           | Current location                          | Risk                                                                                                     | Recommended treatment                                                                                                                  |
+| ----------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentThread`                       | `src/lib/types/agent-thread.ts`           | Can be confused with task, run, or worker.                                                               | Define as reusable AI context container. Never task completion surface.                                                                |
+| `AgentRun`                          | `src/lib/types/agent-thread.ts`           | Name overlaps with control-plane `Run`; stores runner/process/log artifacts, not reviewed task evidence. | Rename only if justified later; document as thread-run/process record distinct from control-plane `Run`.                               |
+| `AgentThreadContact`                | `src/lib/types/agent-thread.ts`           | Could become a parallel task/approval system if overused.                                                | Keep as coordination message, not work ownership or governance.                                                                        |
+| `SelfImprovementOpportunity`        | `src/lib/types/self-improvement.ts`       | Can duplicate tasks or planning recommendations.                                                         | Keep as suggestion/proposal, not accepted work until it creates or links a task.                                                       |
+| `SelfImprovementKnowledgeItem`      | `src/lib/types/self-improvement.ts`       | Can duplicate docs/skills/project memory.                                                                | Treat as reusable lesson/procedure candidate; promote to docs/skill only through review.                                               |
+| `SelfImprovementSuggestionDecision` | `src/lib/types/self-improvement.ts`       | Name overlaps with control-plane `Decision`.                                                             | Keep local to suggestion lifecycle; significant accepted changes should also create/control-plane `Decision` or model decision record. |
+| `TaskWorkItem`                      | `src/lib/types/task-work-item.ts`         | Sounds like a domain entity.                                                                             | Document as derived UI/view model over `Task`, not core entity.                                                                        |
+| `IntentInterpretationProposal`      | `src/lib/server/intent-interpretation.ts` | Could become hidden planning state or duplicate task/decision/blocker systems.                           | Keep read-only proposal until model proposal decides persistence.                                                                      |
 
 ## Status And Enum Rationalization
 
 The system has many status-like fields. That is not automatically wrong, but each status should belong to a bounded context and change behavior.
 
-| Enum | Context | Current assessment |
-| --- | --- | --- |
-| `TaskStatus` | Work execution lifecycle | Necessary. Good behavior impact. |
-| `RunStatus` | Control-plane execution evidence | Necessary. Good behavior impact. |
-| `AgentRunStatus` | Thread process lifecycle | Necessary but overlaps name with `RunStatus`; document boundary. |
-| `AgentThreadState` | Thread availability/contact state | Necessary derived/operational state. Not task status. |
-| `ReviewStatus` | Work review gate | Necessary. |
-| `ApprovalStatus` | Permission gate | Necessary. |
-| `TaskCloseoutState` | Post-review task closeout outcome | Useful but overlaps with review decision and task status; clarify when it is set and what reads it. |
-| `GoalStatus` | Goal lifecycle | Necessary but small; avoid adding statuses unless goal-loop behavior changes. |
-| `WorkflowStatus` | Reusable workflow lifecycle | Necessary but possibly too close to task statuses; document context. |
-| `CatalogLifecycleStatus` | Role/template catalog lifecycle | Necessary for reusable catalog items; not execution status. |
-| `ProjectSkillAvailability` | Project skill policy | Useful policy enum. |
-| `SelfImprovementStatus` | Suggestion lifecycle | Necessary inside self-improvement context; not task/review status. |
-| `SelfImprovementKnowledgeStatus` | Knowledge item lifecycle | Reasonable, but should not duplicate docs publication unless intentionally separate. |
-| `SelfImprovementDecisionType` | Suggestion decision event | Local event type, not control-plane decision type. |
-| `DecisionType` | Control-plane decision event | Too narrow today; may need expansion through proposals, especially for model-governance decisions. |
+| Enum                             | Context                           | Current assessment                                                                                  |
+| -------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `TaskStatus`                     | Work execution lifecycle          | Necessary. Good behavior impact.                                                                    |
+| `RunStatus`                      | Control-plane execution evidence  | Necessary. Good behavior impact.                                                                    |
+| `AgentRunStatus`                 | Thread process lifecycle          | Necessary but overlaps name with `RunStatus`; document boundary.                                    |
+| `AgentThreadState`               | Thread availability/contact state | Necessary derived/operational state. Not task status.                                               |
+| `ReviewStatus`                   | Work review gate                  | Necessary.                                                                                          |
+| `ApprovalStatus`                 | Permission gate                   | Necessary.                                                                                          |
+| `TaskCloseoutState`              | Post-review task closeout outcome | Useful but overlaps with review decision and task status; clarify when it is set and what reads it. |
+| `GoalStatus`                     | Goal lifecycle                    | Necessary but small; avoid adding statuses unless goal-loop behavior changes.                       |
+| `WorkflowStatus`                 | Reusable workflow lifecycle       | Necessary but possibly too close to task statuses; document context.                                |
+| `CatalogLifecycleStatus`         | Role/template catalog lifecycle   | Necessary for reusable catalog items; not execution status.                                         |
+| `ProjectSkillAvailability`       | Project skill policy              | Useful policy enum.                                                                                 |
+| `SelfImprovementStatus`          | Suggestion lifecycle              | Necessary inside self-improvement context; not task/review status.                                  |
+| `SelfImprovementKnowledgeStatus` | Knowledge item lifecycle          | Reasonable, but should not duplicate docs publication unless intentionally separate.                |
+| `SelfImprovementDecisionType`    | Suggestion decision event         | Local event type, not control-plane decision type.                                                  |
+| `DecisionType`                   | Control-plane decision event      | Too narrow today; may need expansion through proposals, especially for model-governance decisions.  |
 
 Recommendation: add a "status owner and behavior" table to `docs/domain-glossary.md` or a future `docs/status-model.md`. Do not add new statuses unless they affect allowed behavior, filtering, sequencing, validation, UI state, or review.
 
@@ -262,16 +262,16 @@ Recommendation: create guidance that self-improvement suggestion decisions are l
 
 ## Bounded Context Map
 
-| Context | Owned concepts | Boundary warning |
-| --- | --- | --- |
-| Project and memory | `Project`, project defaults, constraints, current-state memo, decision log, skill availability | Do not turn every project note into schema. |
-| Goal and planning | `Goal`, `PlanningSession`, goal-loop classification, success criteria, progress previews | Do not add milestone or parallel planning systems. |
-| Work execution | `Task`, dependencies, readiness, autonomy, risk, runs, launch/preflight | Do not make task status carry review/approval/run/thread state. |
-| Governance | `Review`, `Approval`, `Decision`, closeout state | Do not use runs as final human decision surface. |
-| Routing and capability | `Role`, `Provider`, `ExecutionSurface`, skills, capability/tool requirement strings | Do not collapse role, skill, capability, tool, provider, and execution surface. |
-| Thread coordination | `AgentThread`, `AgentRun`, `AgentThreadContact` | Do not make thread/contact a second task system. |
-| Improvement loop | self-improvement opportunities/signals/knowledge/decisions | Do not let suggestions mutate core rules without review. |
-| Artifacts and context | task attachments, run artifact paths, artifact API, work packets | Do not add artifact/context records without identity and lifecycle. |
+| Context                | Owned concepts                                                                                 | Boundary warning                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Project and memory     | `Project`, project defaults, constraints, current-state memo, decision log, skill availability | Do not turn every project note into schema.                                     |
+| Goal and planning      | `Goal`, `PlanningSession`, goal-loop classification, success criteria, progress previews       | Do not add milestone or parallel planning systems.                              |
+| Work execution         | `Task`, dependencies, readiness, autonomy, risk, runs, launch/preflight                        | Do not make task status carry review/approval/run/thread state.                 |
+| Governance             | `Review`, `Approval`, `Decision`, closeout state                                               | Do not use runs as final human decision surface.                                |
+| Routing and capability | `Role`, `Provider`, `ExecutionSurface`, skills, capability/tool requirement strings            | Do not collapse role, skill, capability, tool, provider, and execution surface. |
+| Thread coordination    | `AgentThread`, `AgentRun`, `AgentThreadContact`                                                | Do not make thread/contact a second task system.                                |
+| Improvement loop       | self-improvement opportunities/signals/knowledge/decisions                                     | Do not let suggestions mutate core rules without review.                        |
+| Artifacts and context  | task attachments, run artifact paths, artifact API, work packets                               | Do not add artifact/context records without identity and lifecycle.             |
 
 ## Rationalization Backlog
 
@@ -324,4 +324,3 @@ Do not start by renaming entities or adding fields. Start with the highest-lever
 3. Then create one model change proposal for `Task rationale and uncertainty representation`.
 
 That sequence turns the mess into reviewable decisions without freezing the system or creating another architecture layer.
-

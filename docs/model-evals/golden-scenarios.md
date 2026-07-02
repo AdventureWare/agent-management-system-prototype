@@ -44,4 +44,3 @@ Model check: Run evidence, review, approval, task state, and decisions stay sepa
 4. Docs and instructions are updated if the duplicate keeps recurring.
 
 Model check: The protocol prevents duplicate systems for goals, tasks, workflows, reviews, approvals, skills, planning, and milestones.
-

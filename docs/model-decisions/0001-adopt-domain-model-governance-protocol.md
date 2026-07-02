@@ -40,4 +40,3 @@ Agents must check the model sources before adding constructs. Unauthorized model
 - `docs/model-evals/golden-scenarios.md`
 - `AGENTS.md`
 - `.agents/skills/ams-agent-interface/SKILL.md`
-

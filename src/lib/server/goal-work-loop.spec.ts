@@ -516,7 +516,11 @@ describe('buildGoalWorkLoopClassification', () => {
 	it('recommends one actionable task and independent parallel candidates', () => {
 		const alpha = createTask({ id: 'task_alpha', title: 'Alpha' });
 		const beta = createTask({ id: 'task_beta', title: 'Beta' });
-		const gamma = createTask({ id: 'task_gamma', title: 'Gamma', dependencyTaskIds: ['task_alpha'] });
+		const gamma = createTask({
+			id: 'task_gamma',
+			title: 'Gamma',
+			dependencyTaskIds: ['task_alpha']
+		});
 		const result = classify({ tasks: [gamma, beta, alpha] });
 
 		expect(result.recommendation).toEqual(

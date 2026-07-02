@@ -628,7 +628,9 @@ export async function loadAgentCurrentContext(input: AgentCurrentContextInput = 
 	const openReview = resolvedTask ? getOpenReviewForTask(data, resolvedTask.id) : null;
 	const pendingApproval = resolvedTask ? getPendingApprovalForTask(data, resolvedTask.id) : null;
 	const reviewSatisfied = resolvedTask ? hasApprovedReviewForTask(data, resolvedTask.id) : false;
-	const approvalSatisfied = resolvedTask ? hasApprovedApprovalForTask(data, resolvedTask.id) : false;
+	const approvalSatisfied = resolvedTask
+		? hasApprovedApprovalForTask(data, resolvedTask.id)
+		: false;
 
 	return {
 		requested: {
