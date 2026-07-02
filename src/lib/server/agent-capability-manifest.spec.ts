@@ -1,6 +1,50 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { AMS_CLI_DOCS_PATH, buildAmsCliCommand } from './ams-cli-paths';
+import { AGENT_CAPABILITY_COMMANDS } from './agent-capability-commands.js';
 import { getAgentCapabilityManifest } from './agent-capability-manifest';
+
+function buildCommandKey(command: { resource: string; command: string }) {
+	return `${command.resource}:${command.command}`;
+}
+
+function buildMcpToolName(command: { resource: string; command: string }) {
+	return `ams_${command.resource.replaceAll('-', '_')}_${command.command.replaceAll('-', '_')}`;
+}
+
+function routeExistsForApiPath(apiPath: string) {
+	const routeSegments = apiPath.replace(/^\/+/, '').split('/');
+	let candidateDirs = [resolve(process.cwd(), 'src/routes')];
+
+	for (const segment of routeSegments) {
+		const nextDirs: string[] = [];
+
+		for (const candidateDir of candidateDirs) {
+			const literalDir = resolve(candidateDir, segment);
+
+			if (existsSync(literalDir)) {
+				nextDirs.push(literalDir);
+			}
+
+			if (!existsSync(candidateDir)) {
+				continue;
+			}
+
+			for (const entry of readdirSync(candidateDir, { withFileTypes: true })) {
+				if (!entry.isDirectory() || !entry.name.startsWith('[') || !entry.name.endsWith(']')) {
+					continue;
+				}
+
+				nextDirs.push(resolve(candidateDir, entry.name));
+			}
+		}
+
+		candidateDirs = [...new Set(nextDirs)];
+	}
+
+	return candidateDirs.some((candidateDir) => existsSync(resolve(candidateDir, '+server.ts')));
+}
 
 describe('agent-capability-manifest', () => {
 	it('returns the full discovery manifest with task coverage', () => {
@@ -73,6 +117,27 @@ describe('agent-capability-manifest', () => {
 					examples: expect.arrayContaining([
 						expect.objectContaining({
 							title: expect.stringContaining('prior runs')
+						})
+					])
+				}),
+				expect.objectContaining({
+					resource: 'intent',
+					command: 'interpret_intent',
+					path: '/api/agent-intent-interpretation/interpret_intent',
+					payloadMode: 'json_or_file',
+					whenToUse: expect.arrayContaining([expect.stringContaining('without mutating')]),
+					examples: expect.arrayContaining([
+						expect.objectContaining({
+							title: expect.stringContaining('Interpret raw intent'),
+							input: expect.objectContaining({
+								rawIntent: expect.any(String)
+							}),
+							output: expect.objectContaining({
+								safety: expect.objectContaining({
+									readOnly: true,
+									mutationCount: 0
+								})
+							})
 						})
 					])
 				}),
@@ -179,6 +244,20 @@ describe('agent-capability-manifest', () => {
 					path: '/api/agent-run-results/mark_task_blocked_from_run',
 					whenToUse: expect.arrayContaining([expect.stringContaining('blocker')]),
 					nextCommands: expect.arrayContaining(['goal-loop:get_goal_blockers'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'preview_progress_updates',
+					path: '/api/agent-run-results/preview_progress_updates',
+					whenToUse: expect.arrayContaining([expect.stringContaining('preview-only')]),
+					nextCommands: expect.arrayContaining(['goal-loop:get_goal_progress'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'apply_progress_updates',
+					path: '/api/agent-run-results/apply_progress_updates',
+					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
+					nextCommands: expect.arrayContaining(['goal-loop:get_goal_progress'])
 				}),
 				expect.objectContaining({
 					resource: 'review',
@@ -334,9 +413,13 @@ describe('agent-capability-manifest', () => {
 			resource: 'work-packet',
 			command: 'get_agent_work_packet'
 		});
+		const intentInterpretationManifest = getAgentCapabilityManifest({
+			resource: 'intent',
+			command: 'interpret_intent'
+		});
 		const runResultManifest = getAgentCapabilityManifest({
 			resource: 'run-result',
-			command: 'record_run_result'
+			command: 'apply_progress_updates'
 		});
 		const reviewManifest = getAgentCapabilityManifest({
 			resource: 'review',
@@ -373,10 +456,18 @@ describe('agent-capability-manifest', () => {
 				method: 'GET'
 			})
 		]);
+		expect(intentInterpretationManifest.commands).toEqual([
+			expect.objectContaining({
+				resource: 'intent',
+				command: 'interpret_intent',
+				method: 'POST',
+				path: '/api/agent-intent-interpretation/interpret_intent'
+			})
+		]);
 		expect(runResultManifest.commands).toEqual([
 			expect.objectContaining({
 				resource: 'run-result',
-				command: 'record_run_result',
+				command: 'apply_progress_updates',
 				method: 'POST'
 			})
 		]);
@@ -387,5 +478,57 @@ describe('agent-capability-manifest', () => {
 				method: 'GET'
 			})
 		]);
+	});
+
+	it('keeps the shared capability registry aligned with CLI, MCP, and API routes', async () => {
+		const registryCommands = AGENT_CAPABILITY_COMMANDS.map((command) => ({
+			resource: command.resource,
+			command: command.command,
+			summary: command.summary,
+			cli: command.cli,
+			method: command.method,
+			path: command.path
+		}));
+		const registryKeys = registryCommands.map(buildCommandKey).sort();
+		const uniqueRegistryKeys = [...new Set(registryKeys)];
+
+		expect(registryKeys).toEqual(uniqueRegistryKeys);
+
+		for (const command of registryCommands) {
+			expect(command.summary, buildCommandKey(command)).toEqual(expect.any(String));
+			expect(command.method, buildCommandKey(command)).toMatch(/^(GET|POST|PATCH|DELETE)$/);
+			expect(command.path, buildCommandKey(command)).toEqual(expect.stringMatching(/^\/api\//));
+			expect(routeExistsForApiPath(command.path), command.path).toBe(true);
+
+			if (command.cli) {
+				const cliMatch = command.cli.match(/^node scripts\/ams-cli\.mjs\s+(\S+)\s+(\S+)/);
+				expect(cliMatch?.[1], command.cli).toBe(command.resource);
+				expect(cliMatch?.[2], command.cli).toBe(command.command);
+			}
+		}
+
+		const [{ getCliManifestCommandKeys }, { getManifestBackedToolSchemaKeys, getTools }] =
+			await Promise.all([
+				import('../../../scripts/ams-cli.mjs'),
+				import('../../../scripts/ams-control-plane-mcp.mjs')
+			]);
+
+		expect(getCliManifestCommandKeys()).toEqual(registryKeys);
+		expect(getManifestBackedToolSchemaKeys()).toEqual(registryKeys);
+
+		const toolsByName = new Map(getTools().map((tool) => [tool.name, tool]));
+
+		for (const command of registryCommands) {
+			const toolName = buildMcpToolName(command);
+			expect(toolsByName.get(toolName), toolName).toEqual(
+				expect.objectContaining({
+					name: toolName,
+					description: command.summary,
+					inputSchema: expect.objectContaining({
+						type: 'object'
+					})
+				})
+			);
+		}
 	});
 });

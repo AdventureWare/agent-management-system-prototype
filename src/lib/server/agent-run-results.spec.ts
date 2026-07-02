@@ -135,15 +135,17 @@ function createRun(overrides: Partial<Run> = {}): Run {
 	};
 }
 
-function createControlPlane(input: { task?: Task; run?: Run } = {}): ControlPlaneData {
+function createControlPlane(input: { project?: Project; goal?: Goal; task?: Task; run?: Run } = {}): ControlPlaneData {
 	const task = input.task ?? createTask();
 	const run = input.run ?? createRun({ taskId: task.id });
+	const project = input.project ?? createProject();
+	const goal = input.goal ?? createGoal({ taskIds: [task.id] });
 
 	return {
 		providers: [],
 		roles: [],
-		projects: [createProject()],
-		goals: [createGoal({ taskIds: [task.id] })],
+		projects: [project],
+		goals: [goal],
 		workflows: [],
 		workflowSteps: [],
 		taskTemplates: [],
@@ -406,5 +408,170 @@ describe('applyAgentRunResultToData', () => {
 			})
 		);
 		expect(result.changedCollections).toEqual(['tasks', 'runs', 'decisions']);
+	});
+
+	it('previews project and goal progress updates without mutating state', () => {
+		const task = createTask({ status: 'done', closeoutState: 'accepted' });
+		const run = createRun({
+			taskId: task.id,
+			status: 'completed',
+			resultSummary: 'Implemented preview-only project and goal progress updates.',
+			validationSummary: 'Focused tests passed.'
+		});
+		const data = createControlPlane({ task, run });
+		const result = applyAgentRunResultToData(data, {
+			command: 'preview_progress_updates',
+			runId: 'run_1'
+		});
+
+		expect(result.changedCollections).toEqual([]);
+		expect(result.data).toBe(data);
+		expect(result.record.validationOnly).toBe(true);
+		expect(result.record.safety).toEqual(
+			expect.objectContaining({
+				mutation: 'none',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: false
+			})
+		);
+		expect(result.record.preview?.projectGoalProgressPreview.proposedUpdates).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					resource: 'project',
+					confidence: 'high',
+					evidenceIds: expect.arrayContaining(['run_1', 'task_1'])
+				}),
+				expect.objectContaining({
+					resource: 'goal',
+					confidence: 'high',
+					suggestedCommands: expect.arrayContaining(['goal-loop:get_goal_progress'])
+				})
+			])
+		);
+	});
+
+	it('applies selected reviewed progress proposals to project and goal state', () => {
+		const project = createProject({ currentStateMemo: 'Existing current state.' });
+		const goal = createGoal({ summary: 'Existing goal summary.' });
+		const task = createTask({ status: 'done', closeoutState: 'accepted' });
+		const run = createRun({
+			taskId: task.id,
+			status: 'completed',
+			resultSummary: 'Implemented reviewed apply flow for progress previews.',
+			validationSummary: 'Focused tests passed.'
+		});
+		const data = createControlPlane({ project, goal, task, run });
+		const result = applyAgentRunResultToData(data, {
+			command: 'apply_progress_updates',
+			runId: 'run_1',
+			selectedProposalIndexes: [0, 1]
+		});
+
+		expect(result.changedCollections).toEqual(['projects', 'goals', 'decisions']);
+		expect(result.record.safety).toEqual(
+			expect.objectContaining({
+				mutation: 'reviewed_progress_update',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: false
+			})
+		);
+		expect(result.record.appliedUpdates).toEqual([
+			expect.objectContaining({ resource: 'project', id: 'project_1', field: 'currentStateMemo' }),
+			expect.objectContaining({ resource: 'goal', id: 'goal_1', field: 'progressNote' })
+		]);
+		expect(result.data.projects[0].currentStateMemo).toContain(
+			'Reviewed run progress update from run run_1'
+		);
+		expect(result.data.projects[0].currentStateMemo).toContain(
+			'Implemented reviewed apply flow for progress previews.'
+		);
+		expect(result.data.goals[0].summary).toContain('progressNote');
+		expect(result.data.decisions).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					taskId: 'task_1',
+					goalId: 'goal_1',
+					runId: 'run_1',
+					decisionType: 'task_plan_updated'
+				}),
+				expect.objectContaining({
+					taskId: 'task_1',
+					goalId: 'goal_1',
+					runId: 'run_1',
+					decisionType: 'goal_plan_updated'
+				})
+			])
+		);
+		expect(result.record.readbackCommands).toEqual(
+			expect.arrayContaining(['project:get project_1', 'goal:get goal_1'])
+		);
+	});
+
+	it('validates selected reviewed progress proposals without mutating state', () => {
+		const task = createTask({ status: 'done', closeoutState: 'accepted' });
+		const run = createRun({
+			taskId: task.id,
+			status: 'completed',
+			resultSummary: 'Implemented reviewed apply flow.',
+			validationSummary: 'Focused tests passed.'
+		});
+		const data = createControlPlane({ task, run });
+		const result = applyAgentRunResultToData(data, {
+			command: 'apply_progress_updates',
+			runId: 'run_1',
+			selectedProposalIndexes: [0],
+			validateOnly: true
+		});
+
+		expect(result.changedCollections).toEqual([]);
+		expect(result.data).toBe(data);
+		expect(result.record.validationOnly).toBe(true);
+		expect(result.record.wouldExecuteCommands).toEqual(
+			expect.arrayContaining(['run-result:apply_progress_updates', 'project:get project_1'])
+		);
+	});
+
+	it('rejects duplicate reviewed progress proposals', () => {
+		const task = createTask({ status: 'done', closeoutState: 'accepted' });
+		const run = createRun({
+			taskId: task.id,
+			status: 'completed',
+			resultSummary: 'Implemented duplicate guard.',
+			validationSummary: 'Focused tests passed.'
+		});
+		const firstResult = applyAgentRunResultToData(createControlPlane({ task, run }), {
+			command: 'apply_progress_updates',
+			runId: 'run_1',
+			selectedProposalIndexes: [1]
+		});
+
+		expect(() =>
+			applyAgentRunResultToData(firstResult.data, {
+				command: 'apply_progress_updates',
+				runId: 'run_1',
+				selectedProposalIndexes: [1]
+			})
+		).toThrow(AgentControlPlaneApiError);
+	});
+
+	it('rejects progress apply requests with no selected proposals', () => {
+		const data = createControlPlane({
+			task: createTask({ status: 'done', closeoutState: 'accepted' }),
+			run: createRun({
+				status: 'completed',
+				resultSummary: 'Implemented apply guard.',
+				validationSummary: 'Focused tests passed.'
+			})
+		});
+
+		expect(() =>
+			applyAgentRunResultToData(data, {
+				command: 'apply_progress_updates',
+				runId: 'run_1',
+				selectedProposalIndexes: []
+			})
+		).toThrow(AgentControlPlaneApiError);
 	});
 });

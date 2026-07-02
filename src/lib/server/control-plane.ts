@@ -1516,7 +1516,11 @@ function deriveWorkflowParentTaskStatus(childTasks: readonly Task[]): TaskStatus
 		return 'in_draft';
 	}
 
-	if (childTasks.every((task) => task.status === 'done')) {
+	if (childTasks.every((task) => task.status === 'canceled')) {
+		return 'canceled';
+	}
+
+	if (childTasks.every((task) => task.status === 'done' || task.status === 'canceled')) {
 		return 'done';
 	}
 
@@ -2313,7 +2317,7 @@ export function summarizeControlPlane(data: ControlPlaneData) {
 	const dependencyBlockedTasks = data.tasks.filter((task) => taskHasUnmetDependencies(data, task));
 	const reviewRequiredTasks = reviewTasks.filter((task) => task.requiresReview);
 	const highRiskTasks = data.tasks.filter(
-		(task) => task.riskLevel === 'high' && task.status !== 'done'
+		(task) => task.riskLevel === 'high' && task.status !== 'done' && task.status !== 'canceled'
 	);
 	const activeRuns = data.runs.filter(
 		(run) => run.status === 'starting' || run.status === 'running'

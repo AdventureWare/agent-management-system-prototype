@@ -700,4 +700,63 @@ describe('control-plane sqlite backend', () => {
 		expect((loaded.planningSessions ?? [])[0]?.taskIds).toEqual([taskToKeep.id]);
 		expect((loaded.planningSessions ?? [])[0]?.decisionIds).toEqual([]);
 	});
+
+	it('does not recreate a continuation-planning task when deleting that task through the repository', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const repositoryModule = await import('./control-plane-repository');
+		const { CONTINUATION_PLANNING_TASK_TITLE } = await import(
+			'./goal-continuation-reconciliation'
+		);
+		const project = controlPlaneModule.createProject({
+			name: 'AMS',
+			summary: 'Agent management system',
+			projectRootFolder: root,
+			defaultArtifactRoot: resolve(root, 'agent_output')
+		});
+		const continuationTask = controlPlaneModule.createTask({
+			id: 'task_continue',
+			title: CONTINUATION_PLANNING_TASK_TITLE,
+			summary: 'Assess remaining goal work.',
+			projectId: project.id,
+			goalId: 'goal_1',
+			priority: 'medium',
+			status: 'ready',
+			riskLevel: 'low',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			goals: [
+				{
+					id: 'goal_1',
+					name: 'Goal',
+					area: 'product',
+					status: 'running',
+					summary: 'Goal summary',
+					artifactPath: project.defaultArtifactRoot,
+					projectIds: [project.id],
+					taskIds: [continuationTask.id]
+				}
+			],
+			tasks: [continuationTask]
+		}));
+
+		await repositoryModule.deleteTaskRecords([continuationTask.id]);
+
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(loaded.tasks.filter((task) => task.title === CONTINUATION_PLANNING_TASK_TITLE)).toEqual(
+			[]
+		);
+		expect(loaded.goals[0]?.taskIds).toEqual([]);
+	});
 });

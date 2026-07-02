@@ -76,6 +76,8 @@ Do not dump all project memory, all prior runs, or all task fields into every pa
 
 - Do not create a milestone abstraction separate from `Goal`.
 - Do not create duplicate task, workflow, skill, run, planning, review, or approval systems.
+- Do not add or rename domain entities, fields, relationships, enums, statuses, lifecycles, or core constructs unless the task explicitly authorizes the exact model change or a model change proposal has been created under `docs/model-change-proposals/`.
+- Before proposing or implementing a model change, review `docs/domain-model-governance-protocol-v0.1.md`, `docs/ontology-v1.md`, `docs/domain-glossary.md`, `docs/domain-model.md`, `docs/model-diagram.md`, `docs/model-decisions/`, and `src/lib/types/control-plane.ts`.
 - Do not use giant prompt prefixes as the primary integration method.
 - Do not treat long chat memory as source of truth.
 - Do not self-approve work that requires human or summary review.

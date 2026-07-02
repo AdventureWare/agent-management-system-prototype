@@ -2,6 +2,22 @@ import { spawnSync } from 'node:child_process';
 
 const forbiddenPatterns = [
 	{
+		pattern: /(^|\/)__pycache__\//,
+		reason: 'Python bytecode cache directories are generated artifacts.'
+	},
+	{
+		pattern: /\.py[cod]$/,
+		reason: 'Python bytecode files are generated artifacts.'
+	},
+	{
+		pattern: /(^|\/)\.DS_Store$/,
+		reason: 'macOS Finder metadata should stay local.'
+	},
+	{
+		pattern: /(^|\/)Thumbs\.db$/,
+		reason: 'OS thumbnail metadata should stay local.'
+	},
+	{
 		pattern: /^\.playwright-cli\//,
 		reason: 'Playwright CLI captures are local debugging artifacts.'
 	},
@@ -24,6 +40,11 @@ const forbiddenPatterns = [
 	{
 		pattern: /^screenshots\//,
 		reason: 'Ad hoc screenshots should stay local unless intentionally moved elsewhere.'
+	},
+	{
+		pattern: /^data\/app\.sqlite(?:[-.].*)?$/,
+		reason:
+			'SQLite runtime databases and backups are local state; export JSON intentionally when a snapshot is needed.'
 	}
 ];
 

@@ -112,6 +112,10 @@ function hasText(value: string | null | undefined) {
 	return Boolean(value?.trim());
 }
 
+function isClosedTask(task: Pick<Task, 'status'>) {
+	return task.status === 'done' || task.status === 'canceled';
+}
+
 function getTaskReadinessLevel(task: Task): TaskReadinessLevel {
 	return task.readinessLevel ?? 'R1_FRAMED';
 }
@@ -339,7 +343,7 @@ export function buildAutonomousQueue(data: ControlPlaneData): AutonomousQueueDat
 	const projectMap = new Map(data.projects.map((project) => [project.id, project]));
 	const goalMap = new Map(data.goals.map((goal) => [goal.id, goal]));
 	const queueItems = data.tasks
-		.filter((task) => task.status !== 'done')
+		.filter((task) => !isClosedTask(task))
 		.map((task) => {
 			const project = projectMap.get(task.projectId);
 			const goal = task.goalId ? (goalMap.get(task.goalId) ?? null) : null;

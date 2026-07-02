@@ -1,10 +1,18 @@
 import type { ControlPlaneCollection } from '$lib/server/db/control-plane-store';
-import { updateControlPlaneCollections } from '$lib/server/control-plane';
+import {
+	syncWorkflowParentTaskStatuses,
+	updateControlPlaneCollections
+} from '$lib/server/control-plane';
 import {
 	applyGoalRelationships,
 	getGoalLinkedProjectIds,
 	getGoalLinkedTaskIds
 } from '$lib/server/goal-relationships';
+import {
+	getGoalIdsAffectedByTaskChange,
+	isContinuationPlanningTask,
+	reconcileGoalsContinuationInData
+} from '$lib/server/goal-continuation-reconciliation';
 import type { ControlPlaneData, Decision, Run, Task } from '$lib/types/control-plane';
 
 const TASK_DELETE_COLLECTIONS = [
@@ -192,6 +200,21 @@ export async function updateTaskRecord(input: {
 			changedCollections.push('decisions');
 		}
 
+		const affectedGoalIds = getGoalIdsAffectedByTaskChange({
+			data: nextData,
+			previousTask: existingTask,
+			nextTask
+		});
+		const reconciliation = reconcileGoalsContinuationInData(
+			syncWorkflowParentTaskStatuses(nextData),
+			affectedGoalIds
+		);
+		nextData = reconciliation.data;
+
+		if (reconciliation.createdTaskIds.length > 0) {
+			changedCollections.push('tasks', 'goals', 'decisions');
+		}
+
 		return {
 			data: nextData,
 			changedCollections: uniqueCollections(changedCollections)
@@ -225,10 +248,24 @@ export async function mutateTaskCollections(input: {
 
 		const plan = input.mutate(existingTask, data);
 		updatedTask = plan.data.tasks.find((candidate) => candidate.id === input.taskId) ?? null;
+		const affectedGoalIds = getGoalIdsAffectedByTaskChange({
+			data: plan.data,
+			previousTask: existingTask,
+			nextTask: updatedTask
+		});
+		const reconciliation = reconcileGoalsContinuationInData(
+			syncWorkflowParentTaskStatuses(plan.data),
+			affectedGoalIds
+		);
 
 		return {
-			data: plan.data,
-			changedCollections: uniqueCollections([...plan.changedCollections])
+			data: reconciliation.data,
+			changedCollections: uniqueCollections([
+				...plan.changedCollections,
+				...(reconciliation.createdTaskIds.length > 0
+					? (['tasks', 'goals', 'decisions'] satisfies ControlPlaneCollection[])
+					: [])
+			])
 		};
 	});
 
@@ -249,11 +286,57 @@ export async function deleteTaskRecords(taskIds: readonly string[]) {
 			};
 		}
 
+		const deletedTasks = data.tasks.filter((task) => deletedTaskIds.includes(task.id));
+		let nextData: ControlPlaneData = deleteTasksFromData(data, deletedTaskIds);
+		const affectedGoalIds = [
+			...new Set(
+				deletedTasks
+					.filter((task) => !isContinuationPlanningTask(task))
+					.flatMap((task) =>
+						getGoalIdsAffectedByTaskChange({
+							data: nextData,
+							previousTask: task,
+							deletedTaskIds
+						})
+					)
+			)
+		];
+		const reconciliation = reconcileGoalsContinuationInData(
+			syncWorkflowParentTaskStatuses(nextData),
+			affectedGoalIds
+		);
+		nextData = reconciliation.data;
+
 		return {
-			data: deleteTasksFromData(data, deletedTaskIds),
+			data: nextData,
 			changedCollections: [...TASK_DELETE_COLLECTIONS]
 		};
 	});
 
 	return deletedTaskIds;
+}
+
+export async function reconcileAllActiveGoalContinuations() {
+	let checkedCount = 0;
+	let createdTaskIds: string[] = [];
+
+	await updateControlPlaneCollections((data) => {
+		const reconciliation = reconcileGoalsContinuationInData(
+			syncWorkflowParentTaskStatuses(data),
+			data.goals.map((goal) => goal.id)
+		);
+		checkedCount = reconciliation.results.filter((result) => result.checked).length;
+		createdTaskIds = reconciliation.createdTaskIds;
+
+		return {
+			data: reconciliation.data,
+			changedCollections: createdTaskIds.length > 0 ? ['tasks', 'goals', 'decisions'] : []
+		};
+	});
+
+	return {
+		checkedCount,
+		createdCount: createdTaskIds.length,
+		createdTaskIds
+	};
 }

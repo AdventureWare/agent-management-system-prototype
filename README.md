@@ -60,7 +60,7 @@ JSON export:
 npm run db:export-json
 ```
 
-The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store and app-managed agent threads. The JSON files under `data/` are for explicit export/import and recovery workflows, not normal runtime persistence.
+The prototype now uses `data/app.sqlite` as the runtime source of truth for the control-plane store and app-managed agent threads. The JSON files under `data/` are for explicit seed, export/import, and recovery workflows, not normal runtime persistence. See [`docs/runtime-data-policy.md`](/Users/colinfreed/Projects/Experiments/agent-management-system-prototype/docs/runtime-data-policy.md) for the commit and artifact policy.
 
 Runtime mutations should go through the app server, AMS CLI/API/MCP helpers, or server-side repository helpers that write SQLite. Do not patch `data/control-plane.json` as a live store. To intentionally move data between SQLite and JSON, use the database helpers below; `import-json` replaces SQLite from the JSON snapshot after creating a SQLite backup, and `export-json` refreshes the JSON files from SQLite.
 

@@ -353,6 +353,70 @@
 					</div>
 				</div>
 			</div>
+
+			<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+					<div>
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Project and goal progress
+						</p>
+						<p class="mt-2 text-sm text-slate-400">
+							Preview only. Operator review is required before durable project memory or goal
+							progress changes.
+						</p>
+					</div>
+					<span class="badge border border-slate-700 bg-slate-950 text-slate-300">
+						{data.runResultPreview.projectGoalProgressPreview.safety.mutation}
+					</span>
+				</div>
+
+				<div class="mt-4 space-y-3">
+					{#if data.runResultPreview.projectGoalProgressPreview.proposedUpdates.length === 0}
+						<p class="rounded-xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+							No project or goal progress updates are proposed for this result.
+						</p>
+					{:else}
+						{#each data.runResultPreview.projectGoalProgressPreview.proposedUpdates as update}
+							<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="badge border border-slate-700 bg-slate-900 text-slate-300">
+										{update.resource}
+									</span>
+									<span class="badge border border-sky-900/70 bg-sky-950/40 text-sky-200">
+										{formatSnakeLabel(update.confidence)} confidence
+									</span>
+									<p class="ui-wrap-anywhere font-mono text-xs text-slate-300">{update.id}</p>
+								</div>
+								<p class="ui-wrap-anywhere mt-2 font-mono text-xs text-slate-400">
+									{formatPreviewFields(update.fields)}
+								</p>
+								<p class="mt-2 text-sm text-slate-400">{update.reason}</p>
+								<div class="mt-3 grid gap-2 lg:grid-cols-2">
+									<p class="ui-wrap-anywhere text-xs text-slate-500">
+										Evidence: {update.evidenceIds.join(', ')}
+									</p>
+									<p class="ui-wrap-anywhere text-xs text-slate-500">
+										Commands: {update.suggestedCommands.join(', ')}
+									</p>
+								</div>
+							</div>
+						{/each}
+					{/if}
+				</div>
+
+				{#if data.runResultPreview.projectGoalProgressPreview.omittedUpdates.length > 0}
+					<div class="mt-4 space-y-2">
+						<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+							Omitted low-confidence updates
+						</p>
+						{#each data.runResultPreview.projectGoalProgressPreview.omittedUpdates as omitted}
+							<p class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-400">
+								{omitted.resource}: {omitted.reason}
+							</p>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		{:else}
 			<p class="mt-5 rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-500">
 				No result preview is available for this run.

@@ -1,11 +1,15 @@
 import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 import type { ControlPlaneCollection } from '$lib/server/db/control-plane-store';
-import { buildRunResultPreview } from '$lib/server/goal-run-result-preview';
+import {
+	buildRunEvidenceProgressPreview,
+	buildRunResultPreview
+} from '$lib/server/goal-run-result-preview';
 import {
 	createDecision,
 	createReview,
 	createTask,
 	getOpenReviewForTask,
+	loadControlPlane,
 	parseRunStatus,
 	updateControlPlaneCollections
 } from '$lib/server/control-plane';
@@ -18,7 +22,9 @@ export const AGENT_RUN_RESULT_COMMANDS = [
 	'record_followup_recommendations',
 	'create_followup_task',
 	'request_review_from_run',
-	'mark_task_blocked_from_run'
+	'mark_task_blocked_from_run',
+	'preview_progress_updates',
+	'apply_progress_updates'
 ] as const;
 
 export type AgentRunResultCommand = (typeof AGENT_RUN_RESULT_COMMANDS)[number];
@@ -41,6 +47,7 @@ export type AgentRunResultInput = {
 	validationSteps?: string | null;
 	blocker?: string | null;
 	validateOnly?: boolean;
+	selectedProposalIndexes?: unknown;
 	blockersFound?: unknown;
 	followUpTaskIds?: unknown;
 	artifactPaths?: unknown;
@@ -55,7 +62,9 @@ export type AgentRunResultRecord = {
 			| 'run_evidence_only'
 			| 'run_evidence_and_draft_task'
 			| 'task_review_request'
-			| 'task_blocked_update';
+			| 'task_blocked_update'
+			| 'reviewed_progress_update'
+			| 'none';
 		taskStateChanged: boolean;
 		reviewStateChanged: boolean;
 		approvalStateChanged: false;
@@ -67,6 +76,13 @@ export type AgentRunResultRecord = {
 	dedupedExistingTask?: boolean;
 	validationOnly?: boolean;
 	wouldExecuteCommands?: string[];
+	appliedUpdates?: Array<{
+		resource: 'project' | 'goal';
+		id: string;
+		field: string;
+		evidenceIds: string[];
+	}>;
+	readbackCommands?: string[];
 	suggestedNextCommands: string[];
 };
 
@@ -107,6 +123,24 @@ function requireId(value: string | null | undefined, fieldName: string) {
 function normalizeOptionalString(value: string | null | undefined) {
 	const normalized = value?.trim() ?? '';
 	return normalized || null;
+}
+
+function hasSimilarText(existing: string | null | undefined, proposed: string) {
+	const normalizedExisting = existing?.trim().replace(/\s+/g, ' ').toLowerCase() ?? '';
+	const normalizedProposed = proposed.trim().replace(/\s+/g, ' ').toLowerCase();
+
+	if (!normalizedExisting || !normalizedProposed) {
+		return false;
+	}
+
+	const proposedSnippet = normalizedProposed.slice(0, 120);
+	const existingSnippet = normalizedExisting.slice(0, 120);
+
+	return (
+		normalizedExisting.includes(proposedSnippet) ||
+		normalizedProposed.includes(existingSnippet) ||
+		normalizedExisting.includes(normalizedProposed.slice(0, 80))
+	);
 }
 
 function normalizeStringList(value: unknown): string[] {
@@ -329,6 +363,44 @@ export function applyAgentRunResultToData(
 
 	if (command === 'mark_task_blocked_from_run') {
 		return applyBlockedTaskFromRun(data, {
+			input,
+			run: existingRun,
+			sourceTask: task
+		});
+	}
+
+	if (command === 'preview_progress_updates') {
+		const preview = buildRunResultPreview(data, { runId });
+
+		return {
+			data,
+			record: {
+				command,
+				run: existingRun,
+				preview,
+				task,
+				validationOnly: true,
+				wouldExecuteCommands: [],
+				safety: {
+					mutation: 'none',
+					taskStateChanged: false,
+					reviewStateChanged: false,
+					approvalStateChanged: false,
+					note: 'Preview only. This operation does not edit project memory, decision logs, goal state, tasks, reviews, or approvals.'
+				},
+				suggestedNextCommands: [
+					'project:get',
+					'goal-loop:get_goal_progress',
+					'task:get',
+					'context:current'
+				]
+			},
+			changedCollections: []
+		};
+	}
+
+	if (command === 'apply_progress_updates') {
+		return applyReviewedProgressUpdates(data, {
 			input,
 			run: existingRun,
 			sourceTask: task
@@ -715,7 +787,342 @@ function applyBlockedTaskFromRun(
 	};
 }
 
+function normalizeSelectedProposalIndexes(value: unknown) {
+	if (Array.isArray(value)) {
+		return [
+			...new Set(
+				value
+					.map((entry) => (typeof entry === 'number' ? entry : Number.parseInt(String(entry), 10)))
+					.filter((entry) => Number.isInteger(entry) && entry >= 0)
+			)
+		];
+	}
+
+	if (typeof value === 'string') {
+		return normalizeSelectedProposalIndexes(value.split(','));
+	}
+
+	return [];
+}
+
+function appendReviewedNote(existing: string | null | undefined, note: string) {
+	const current = existing?.trim() ?? '';
+
+	if (!current) {
+		return note;
+	}
+
+	return `${current}\n\n${note}`;
+}
+
+function buildReviewedProgressNote(input: {
+	run: Run;
+	task: Task;
+	fieldName: string;
+	value: unknown;
+	reason: string;
+}) {
+	const valueText = Array.isArray(input.value)
+		? input.value.map((entry) => String(entry).trim()).filter(Boolean).join(', ')
+		: String(input.value ?? '').trim();
+
+	return [
+		`Reviewed run progress update from run ${input.run.id} for task ${input.task.id}.`,
+		`${input.fieldName}: ${valueText}`,
+		`Reason: ${input.reason}`
+	]
+		.filter(Boolean)
+		.join(' ');
+}
+
+function assertNoDuplicateReviewedProgress(input: {
+	existing: string | null | undefined;
+	note: string;
+	resource: 'project' | 'goal';
+	id: string;
+	fieldName: string;
+	runId: string;
+}) {
+	if (!hasSimilarText(input.existing, input.note)) {
+		return;
+	}
+
+	throw new AgentControlPlaneApiError(409, 'Selected progress update already appears to be applied.', {
+		code: 'run_result_progress_update_duplicate',
+		suggestedNextCommands: ['project:get', 'goal:get', 'run-result:preview_progress_updates'],
+		details: {
+			resource: input.resource,
+			id: input.id,
+			fieldName: input.fieldName,
+			runId: input.runId
+		}
+	});
+}
+
+function applyReviewedProgressUpdates(
+	data: ControlPlaneData,
+	input: {
+		input: AgentRunResultInput;
+		run: Run;
+		sourceTask: Task;
+	}
+): AgentRunResultApplyResult {
+	const preview = buildRunResultPreview(data, { runId: input.run.id });
+	const progressPreview = preview?.projectGoalProgressPreview;
+
+	if (!progressPreview) {
+		throw new AgentControlPlaneApiError(409, 'Run progress preview is unavailable.', {
+			code: 'run_result_progress_preview_unavailable',
+			suggestedNextCommands: ['run-result:record_run_result', 'run-result:preview_progress_updates'],
+			details: { runId: input.run.id }
+		});
+	}
+
+	const selectedIndexes = normalizeSelectedProposalIndexes(input.input.selectedProposalIndexes);
+
+	if (selectedIndexes.length === 0) {
+		throw new AgentControlPlaneApiError(400, 'selectedProposalIndexes is required.', {
+			code: 'run_result_progress_selection_required',
+			suggestedNextCommands: ['run-result:preview_progress_updates'],
+			details: { runId: input.run.id }
+		});
+	}
+
+	const selectedUpdates = selectedIndexes.map((index) => {
+		const update = progressPreview.proposedUpdates[index];
+
+		if (!update) {
+			throw new AgentControlPlaneApiError(400, 'Selected progress proposal index is invalid.', {
+				code: 'run_result_progress_selection_invalid',
+				suggestedNextCommands: ['run-result:preview_progress_updates'],
+				details: { runId: input.run.id, selectedProposalIndex: index }
+			});
+		}
+
+		return { index, update };
+	});
+	const projectPatches = new Map<string, Partial<ControlPlaneData['projects'][number]>>();
+	const goalPatches = new Map<string, Partial<ControlPlaneData['goals'][number]>>();
+	const appliedUpdates: NonNullable<AgentRunResultRecord['appliedUpdates']> = [];
+	const decisions: ControlPlaneData['decisions'] = [];
+	const now = new Date().toISOString();
+
+	for (const { update } of selectedUpdates) {
+		if (update.resource === 'task') {
+			throw new AgentControlPlaneApiError(400, 'Task progress proposals must use task-specific commands.', {
+				code: 'run_result_progress_task_update_rejected',
+				suggestedNextCommands: ['task:update', 'run-result:preview_progress_updates'],
+				details: { runId: input.run.id, update }
+			});
+		}
+
+		if (update.resource === 'project') {
+			const project = data.projects.find((candidate) => candidate.id === update.id) ?? null;
+
+			if (!project) {
+				throw new AgentControlPlaneApiError(404, 'Project for selected progress update was not found.', {
+					code: 'run_result_progress_project_not_found',
+					suggestedNextCommands: ['project:list', 'run-result:preview_progress_updates'],
+					details: { runId: input.run.id, projectId: update.id }
+				});
+			}
+
+			for (const [fieldName, value] of Object.entries(update.fields)) {
+				if (fieldName !== 'currentStateMemo' && fieldName !== 'decisionLog') {
+					throw new AgentControlPlaneApiError(400, 'Project progress update field is not allowed.', {
+						code: 'run_result_progress_project_field_rejected',
+						suggestedNextCommands: ['run-result:preview_progress_updates', 'project:get'],
+						details: { runId: input.run.id, projectId: update.id, fieldName }
+					});
+				}
+
+				const note = buildReviewedProgressNote({
+					run: input.run,
+					task: input.sourceTask,
+					fieldName,
+					value,
+					reason: update.reason
+				});
+				const existing =
+					fieldName === 'currentStateMemo' ? project.currentStateMemo : project.decisionLog;
+				assertNoDuplicateReviewedProgress({
+					existing,
+					note,
+					resource: 'project',
+					id: project.id,
+					fieldName,
+					runId: input.run.id
+				});
+				const patch = projectPatches.get(project.id) ?? {};
+				patch[fieldName] = appendReviewedNote(
+					fieldName in patch ? (patch[fieldName] as string) : existing,
+					note
+				);
+				projectPatches.set(project.id, patch);
+				appliedUpdates.push({
+					resource: 'project',
+					id: project.id,
+					field: fieldName,
+					evidenceIds: update.evidenceIds
+				});
+				decisions.push(
+					createDecision({
+						taskId: input.sourceTask.id,
+						goalId: input.sourceTask.goalId || null,
+						runId: input.run.id,
+						decisionType: 'task_plan_updated',
+						summary: `Applied reviewed project ${fieldName} progress update from run ${input.run.id}.`,
+						createdAt: now
+					})
+				);
+			}
+		}
+
+		if (update.resource === 'goal') {
+			const goal = data.goals.find((candidate) => candidate.id === update.id) ?? null;
+
+			if (!goal) {
+				throw new AgentControlPlaneApiError(404, 'Goal for selected progress update was not found.', {
+					code: 'run_result_progress_goal_not_found',
+					suggestedNextCommands: ['goal:list', 'run-result:preview_progress_updates'],
+					details: { runId: input.run.id, goalId: update.id }
+				});
+			}
+
+			for (const [fieldName, value] of Object.entries(update.fields)) {
+				if (
+					fieldName !== 'progressNote' &&
+					fieldName !== 'blockerNote' &&
+					fieldName !== 'remainingWork' &&
+					fieldName !== 'followUpWork'
+				) {
+					throw new AgentControlPlaneApiError(400, 'Goal progress update field is not allowed.', {
+						code: 'run_result_progress_goal_field_rejected',
+						suggestedNextCommands: ['run-result:preview_progress_updates', 'goal:get'],
+						details: { runId: input.run.id, goalId: update.id, fieldName }
+					});
+				}
+
+				const note = buildReviewedProgressNote({
+					run: input.run,
+					task: input.sourceTask,
+					fieldName,
+					value,
+					reason: update.reason
+				});
+				const existingSummary = goalPatches.get(goal.id)?.summary ?? goal.summary;
+				assertNoDuplicateReviewedProgress({
+					existing: existingSummary,
+					note,
+					resource: 'goal',
+					id: goal.id,
+					fieldName,
+					runId: input.run.id
+				});
+				goalPatches.set(goal.id, {
+					...(goalPatches.get(goal.id) ?? {}),
+					summary: appendReviewedNote(existingSummary, note)
+				});
+				appliedUpdates.push({
+					resource: 'goal',
+					id: goal.id,
+					field: fieldName,
+					evidenceIds: update.evidenceIds
+				});
+				decisions.push(
+					createDecision({
+						taskId: input.sourceTask.id,
+						goalId: goal.id,
+						runId: input.run.id,
+						decisionType: 'goal_plan_updated',
+						summary: `Applied reviewed goal ${fieldName} progress update from run ${input.run.id}.`,
+						createdAt: now
+					})
+				);
+			}
+		}
+	}
+
+	const readbackCommands = [
+		...new Set([
+			...appliedUpdates.map((update) => `${update.resource}:get ${update.id}`),
+			'goal-loop:get_goal_progress',
+			'context:current'
+		])
+	];
+
+	if (input.input.validateOnly === true) {
+		return {
+			data,
+			record: {
+				command: 'apply_progress_updates',
+				run: input.run,
+				task: input.sourceTask,
+				preview,
+				validationOnly: true,
+				wouldExecuteCommands: ['run-result:apply_progress_updates', ...readbackCommands],
+				appliedUpdates,
+				readbackCommands,
+				safety: {
+					mutation: 'reviewed_progress_update',
+					taskStateChanged: false,
+					reviewStateChanged: false,
+					approvalStateChanged: false,
+					note: 'Validation only. This would apply selected progress proposals to existing project or goal fields after operator review.'
+				},
+				suggestedNextCommands: ['run-result:apply_progress_updates', ...readbackCommands]
+			},
+			changedCollections: []
+		};
+	}
+
+	const nextData = {
+		...data,
+		projects:
+			projectPatches.size > 0
+				? data.projects.map((project) => ({ ...project, ...(projectPatches.get(project.id) ?? {}) }))
+				: data.projects,
+		goals:
+			goalPatches.size > 0
+				? data.goals.map((goal) => ({ ...goal, ...(goalPatches.get(goal.id) ?? {}) }))
+				: data.goals,
+		decisions: [...decisions, ...(data.decisions ?? [])]
+	};
+	const changedCollections: ControlPlaneCollection[] = [
+		...(projectPatches.size > 0 ? (['projects'] as const) : []),
+		...(goalPatches.size > 0 ? (['goals'] as const) : []),
+		...(decisions.length > 0 ? (['decisions'] as const) : [])
+	];
+
+	return {
+		data: nextData,
+		record: {
+			command: 'apply_progress_updates',
+			run: input.run,
+			task: input.sourceTask,
+			preview: buildRunResultPreview(nextData, { runId: input.run.id }),
+			appliedUpdates,
+			readbackCommands,
+			safety: {
+				mutation: 'reviewed_progress_update',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: false,
+				note: 'Applied selected reviewed progress proposals to project or goal state. This did not accept work or change task, review, or approval state.'
+			},
+			suggestedNextCommands: readbackCommands
+		},
+		changedCollections
+	};
+}
+
 export async function recordAgentRunResult(input: AgentRunResultInput) {
+	const command = normalizeCommand(input.command);
+
+	if (command === 'preview_progress_updates') {
+		return previewAgentRunProgressUpdates(input);
+	}
+
 	let record: AgentRunResultRecord | null = null;
 
 	await updateControlPlaneCollections((data) => {
@@ -737,4 +1144,55 @@ export async function recordAgentRunResult(input: AgentRunResultInput) {
 	}
 
 	return record;
+}
+
+export async function previewAgentRunProgressUpdates(input: AgentRunResultInput) {
+	const runId = requireId(input.runId, 'runId');
+	const data = await loadControlPlane();
+	const run = data.runs.find((candidate) => candidate.id === runId) ?? null;
+
+	if (!run) {
+		throw new AgentControlPlaneApiError(404, 'Run not found.', {
+			code: 'run_not_found',
+			suggestedNextCommands: ['context:current', 'task:get'],
+			details: { runId }
+		});
+	}
+
+	const task = data.tasks.find((candidate) => candidate.id === run.taskId) ?? null;
+
+	if (!task) {
+		throw new AgentControlPlaneApiError(404, 'Linked task not found for run.', {
+			code: 'run_task_not_found',
+			suggestedNextCommands: ['task:list', 'context:current'],
+			details: { runId, taskId: run.taskId }
+		});
+	}
+
+	const preview = buildRunResultPreview(data, { runId });
+	const progressPreview =
+		preview?.projectGoalProgressPreview ??
+		buildRunEvidenceProgressPreview(data, {
+			run,
+			task,
+			classification: 'requires_user_decision',
+			classificationConfidence: 'low'
+		});
+
+	return {
+		command: 'preview_progress_updates' as AgentRunResultCommand,
+		run,
+		task,
+		preview,
+		progressPreview,
+		validationOnly: true,
+		safety: {
+			mutation: 'none' as const,
+			taskStateChanged: false,
+			reviewStateChanged: false,
+			approvalStateChanged: false,
+			note: 'Preview only. This operation does not edit project memory, decision logs, goal state, tasks, reviews, or approvals.'
+		},
+		suggestedNextCommands: progressPreview.suggestedNextCommands
+	};
 }

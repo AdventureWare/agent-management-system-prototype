@@ -13,6 +13,7 @@ export type WorkflowRollup = {
 	reviewCount: number;
 	blockedCount: number;
 	doneCount: number;
+	canceledCount: number;
 	waitingOnDependenciesCount: number;
 	pendingAcceptanceCount: number;
 	runnableTaskCount: number;
@@ -97,6 +98,7 @@ export function getWorkflowRollup(
 	const reviewCount = tasks.filter((task) => task.status === 'review').length;
 	const blockedCount = tasks.filter((task) => task.status === 'blocked').length;
 	const doneCount = tasks.filter((task) => task.status === 'done').length;
+	const canceledCount = tasks.filter((task) => task.status === 'canceled').length;
 	const waitingOnDependenciesCount = tasks.filter((task) =>
 		taskHasUnmetDependencies(data, task)
 	).length;
@@ -114,6 +116,10 @@ export function getWorkflowRollup(
 		derivedStatus = 'canceled';
 	} else if (tasks.length === 0) {
 		derivedStatus = workflow.status === 'done' ? 'draft' : workflow.status;
+	} else if (canceledCount === tasks.length) {
+		derivedStatus = 'canceled';
+	} else if (doneCount + canceledCount === tasks.length && pendingAcceptanceCount === 0) {
+		derivedStatus = 'done';
 	} else if (doneCount === tasks.length && pendingAcceptanceCount === 0) {
 		derivedStatus = 'done';
 	} else if (inProgressCount > 0 || runnableTaskCount > 0) {
@@ -136,6 +142,7 @@ export function getWorkflowRollup(
 		reviewCount,
 		blockedCount,
 		doneCount,
+		canceledCount,
 		waitingOnDependenciesCount,
 		pendingAcceptanceCount,
 		runnableTaskCount,

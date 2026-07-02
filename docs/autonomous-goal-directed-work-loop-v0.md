@@ -12,21 +12,21 @@ The v0 loop should reuse existing projects, goals, tasks, task templates, workfl
 
 | Area | Assessment | Concrete repo state |
 | --- | --- | --- |
-| Goals | Partially usable; disconnected from the current managed task. | `Goal` already exists in `src/lib/types/control-plane.ts` with status, summary, success signal, parent goal, project IDs, task IDs, target date, planning priority, and confidence. Goal routes exist at `src/routes/app/goals`, `src/routes/app/goals/[goalId]`, `src/routes/api/goals`, and `src/routes/api/goals/[goalId]`. Goal context is included by `src/lib/workflow-prompts.ts`. This managed run resolved a project but no `goalId`, and `node scripts/ams-cli.mjs goal list --project project_8d6f064a-e10a-46fe-a8ef-9fe0f1fd11e1` returned a 500, so this planning task should document the active Goal rather than mutate persisted goal data. |
-| Projects | Usable as-is for durable context; partially connected to continuation. | `Project` in `src/lib/types/control-plane.ts` stores `projectBrief`, `currentStateMemo`, `decisionLog`, `agentInstructionsPath`, setup notes, validation commands, coding conventions, approval requirements, default allowed/disallowed actions, default autonomy/risk/review, default rigor, constraints, non-goals, repo paths, artifact roots, sandbox, model, and skill policies. Project UI/API surfaces live under `src/routes/app/projects` and `src/routes/api/projects`. The missing piece is automatic or guided update after task results. |
+| Goals | Usable for v0 goal-loop anchoring. | `Goal` already exists in `src/lib/types/control-plane.ts` with status, summary, success signal, parent goal, project IDs, task IDs, target date, planning priority, and confidence. Goal routes exist at `src/routes/app/goals`, `src/routes/app/goals/[goalId]`, `src/routes/api/goals`, and `src/routes/api/goals/[goalId]`. Manifest-backed goal-loop read APIs expose active goals, bounded goal context, progress, success criteria, blockers, actionable work, awaiting-review work, next recommended action, and task eligibility through `/api/agent-goal-loop/*`, `node scripts/ams-cli.mjs goal-loop ...`, and MCP tools generated from the shared capability registry. |
+| Projects | Usable as-is for durable context; connected to reviewed run progress application. | `Project` in `src/lib/types/control-plane.ts` stores `projectBrief`, `currentStateMemo`, `decisionLog`, `agentInstructionsPath`, setup notes, validation commands, coding conventions, approval requirements, default allowed/disallowed actions, default autonomy/risk/review, default rigor, constraints, non-goals, repo paths, artifact roots, sandbox, model, and skill policies. Project UI/API surfaces live under `src/routes/app/projects` and `src/routes/api/projects`. Run evidence can produce preview-only project-memory and goal-progress proposals, and `run-result apply_progress_updates` can apply selected reviewed project current-state and decision-log proposals. |
 | Tasks and subtasks | Usable as-is. | `Task` includes project/goal linkage, template/workflow linkage, parent task linkage, delegation packet/acceptance, execution contract fields, status, risk, approval mode, review requirement, dependencies, blockers, assignee/thread/run links, result/review metadata, and attachments in `src/lib/types/control-plane.ts`. Child handoff and decomposition routes exist at `src/routes/api/tasks/[taskId]/decompose` and `src/routes/api/tasks/[taskId]/child-handoff`. |
-| Task status | Partially usable. | Status is currently `in_draft`, `ready`, `in_progress`, `review`, `blocked`, or `done` in `src/lib/types/control-plane.ts`. This is enough as the stored lifecycle. The loop still needs derived classifications such as actionable now, awaiting review, needs planning, needs research, needs clarification, approval required, unsafe, duplicate, or superseded. Those should be computed views, not necessarily new task statuses. |
+| Task status | Partially usable. | Status is currently `in_draft`, `ready`, `in_progress`, `review`, `blocked`, `done`, or `canceled` in `src/lib/types/control-plane.ts`. This is enough as the stored lifecycle: `done` is completed work, while `canceled` is terminal non-actionable work that should not appear in open queues. The loop still needs derived classifications such as actionable now, awaiting review, needs planning, needs research, needs clarification, approval required, unsafe, duplicate, or superseded. Those should be computed views, not necessarily new task statuses. |
 | Blockers and dependencies | Usable as-is for v0; explanations need centralization. | Tasks have `blockedReason` and `dependencyTaskIds`; `taskHasUnmetDependencies`, `getOpenReviewForTask`, and `getPendingApprovalForTask` live in `src/lib/server/control-plane.ts`. `src/lib/server/autonomous-queue.ts`, `src/lib/server/delegation-readiness.ts`, `src/lib/server/planning.ts`, and `src/lib/server/workflows.ts` already reason about blockers and dependencies, but they do it for separate screens. |
 | Planning | Partially usable. | Planning summaries and backlog buckets exist in `src/lib/server/planning.ts` and `/app/planning`. `docs/autonomous-work-queue-v0.md` and `src/lib/server/autonomous-queue.ts` select next work, while `buildPlannerPrompt` in `src/lib/workflow-prompts.ts` produces planner packets. Planner output is not yet captured as proposed tasks, blockers, questions, or state updates. |
 | Workflows | Usable as-is for repeatable sequences. | `Workflow` and `WorkflowStep` exist in `src/lib/types/control-plane.ts`; `src/lib/server/workflows.ts` computes rollups, runnable task counts, dependencies, review gates, and parallelizable steps. Workflow pages live under `src/routes/app/workflows`. The goal loop should use workflow rollups for sequencing/parallelism instead of creating a duplicate workflow system. |
 | Task templates | Usable as-is; should be reused for repeatable task shapes. | `TaskTemplate` mirrors task execution contract, governance, routing, skill, capability, tool, goal, and workflow fields in `src/lib/types/control-plane.ts`. Server/UI support exists in `src/lib/server/task-templates.ts`, `src/lib/server/task-template-form-actions.ts`, `src/lib/task-templates/editor.ts`, `src/lib/components/task-templates/TaskTemplateEditorForm.svelte`, and `/app/task-templates`. |
 | Skills | Partially usable. | Skills are discovered by `src/lib/server/codex-skills.ts` and shown in `/app/skills`. Tasks/templates can require `requiredPromptSkillNames`. The repo-local `.agents/skills/ams-control-plane-operations/SKILL.md` gives managed-run control-plane guidance. The loop should use skill availability as an actionability factor but should not create a duplicate skill router for v0. |
-| Runs and threads | Partially usable. | `Run` stores task ID, execution surface, provider, thread links, status, prompt digest/input, context summary, actions, validation, results, blockers, follow-up task IDs, rigor profile, model/usage/cost, and errors in `src/lib/types/control-plane.ts`. Thread launch/recovery lives in `src/lib/server/task-launch-planning.ts`, `src/lib/server/task-threads.ts`, routes under `src/routes/api/tasks/[taskId]/session-*`, and scripts under `scripts/`. Runs are good evidence records, but result-to-task/project/goal update behavior is not yet a full continuation loop. |
-| Review and approval | Partially usable. | `Review` and `Approval` exist in `src/lib/types/control-plane.ts`; helper logic and sync live in `src/lib/server/control-plane.ts`; UI exists at `/app/governance`, task detail, and run detail. `docs/contextual-procedural-knowledge-v0.md` and `AGENTS.md` correctly say task detail and `/app/governance` are the decision surfaces, while runs are evidence. The loop needs more structured result classification and follow-up creation around these records. |
+| Runs and threads | Usable for evidence capture; continuation remains partial. | `Run` stores task ID, execution surface, provider, thread links, status, prompt digest/input, context summary, actions, validation, results, blockers, follow-up task IDs, rigor profile, model/usage/cost, and errors in `src/lib/types/control-plane.ts`. Thread launch/recovery lives in `src/lib/server/task-launch-planning.ts`, `src/lib/server/task-threads.ts`, routes under `src/routes/api/tasks/[taskId]/session-*`, and scripts under `scripts/`. Manifest-backed run-result APIs expose `record_run_result`, `record_validation_result`, `record_blocker`, `record_followup_recommendations`, `create_followup_task`, `request_review_from_run`, `mark_task_blocked_from_run`, `preview_progress_updates`, and `apply_progress_updates` through `/api/agent-run-results/*`, `node scripts/ams-cli.mjs run-result ...`, and MCP. Result-to-project/goal progress previews remain preview-first and operator-reviewed before selected proposals are applied. |
+| Review and approval | Usable with guarded transitions. | `Review` and `Approval` exist in `src/lib/types/control-plane.ts`; helper logic and sync live in `src/lib/server/control-plane.ts`; UI exists at `/app/governance`, task detail, and run detail. `docs/contextual-procedural-knowledge-v0.md` and `AGENTS.md` correctly say task detail and `/app/governance` are the decision surfaces, while runs are evidence. Review/approval task commands and intent commands support `validateOnly` previews where appropriate, and `run-result request_review_from_run` can preview or open review from completed run evidence. Automatic acceptance and broader project/goal progress mutations remain intentionally unimplemented. |
 | Project memory/current state | Partially usable. | Project memory fields exist and are included in prompts by `src/lib/server/task-threads.ts` and `src/lib/workflow-prompts.ts`. Memory updates should happen through explicit project/task/run operations when a result changes project direction, constraints, validation expectations, or next work. |
 | Readiness and delegation logic | Usable as-is for v0 classification. | `docs/progressive-delegation-readiness-v0.md` and `src/lib/server/delegation-readiness.ts` compute `CAPTURED`, `NEEDS_CLARIFICATION`, `NEEDS_PLANNING`, `NEEDS_RESEARCH`, `READY_FOR_EXECUTION`, `AWAITING_REVIEW`, and `AUTOMATION_CANDIDATE`, with missing information, risk flags, suggested actions, and rationale. Task detail and task list use the assessment. |
 | Risk, autonomy, and rigor | Usable as-is; queue enforcement is partial. | `docs/task-readiness-autonomy-metadata.md`, `docs/contextual-rigor-profiles-v0.md`, `src/lib/rigor-profiles.ts`, `src/lib/server/delegation-readiness.ts`, `src/lib/server/task-launch-planning.ts`, and prompt builders support readiness, autonomy, risk, review, approval, and rigor profile. `src/lib/server/autonomous-queue.ts` excludes high/critical risk and A5 work, but profile-aware queue behavior remains future work. |
-| Prompt and work-packet generation | Partially usable. | `src/lib/workflow-prompts.ts` builds planner, executor, research, and reviewer prompts from selected task/project/goal/run/review fields. `src/lib/server/task-threads.ts` builds managed-run prompts with project memory, validation, allowed actions, AMS CLI guidance, skills, and selected knowledge. The design is mode-aware and selective, but planner/result outputs still need structured ingestion. |
+| Prompt and work-packet generation | Usable as a bounded packet surface; prompt boilerplate remains high. | `src/lib/workflow-prompts.ts` builds planner, executor, research, and reviewer prompts from selected task/project/goal/run/review fields. `src/lib/server/goal-work-packets.ts` and `src/lib/server/agent-work-packets.ts` expose `work-packet get_agent_work_packet` as structured packet fields plus rendered prompt through `/api/agent-work-packets/get_agent_work_packet`, CLI, and MCP. `src/lib/server/task-threads.ts` still builds managed-run prompts with project memory, validation, allowed actions, AMS CLI guidance, skills, and selected knowledge, so the remaining work is reducing boilerplate and relying more on structured packet/tool output. |
 | Dashboards and queues | Partially usable; some overlap. | `/app/autonomous-queue` uses `src/lib/server/autonomous-queue.ts` to show recommended, blocked, needs-planning, and high-risk-review work. `/app/governance`, `/app/tasks`, `/app/planning`, `/app/runs`, and `/app/goals` expose adjacent pieces. The duplication/confusion risk is that queue, planning, governance, and goal detail each answer part of "what next?" instead of sharing one goal-loop classification. |
 | AGENTS.md and durable agent instructions | Usable as-is with a minimal future update. | `AGENTS.md` points agents to goal-loop/readiness/rigor/contextual knowledge docs, says simple task capture stays lightweight, treats conflicts as defects, and requires result summaries and durable state updates when direction changes. |
 
@@ -79,22 +79,26 @@ The v0 Goal is complete when AMS can, using existing concepts as much as possibl
 
 ## Implementation Progress
 
-As of June 25, 2026, the first goal-loop helper slices are implemented and accepted:
+As of June 28, 2026, the first goal-loop helper slices and agent-facing surfaces are implemented and accepted:
 
 - Goal-scoped task classification exists in `src/lib/server/goal-work-loop.ts`.
 - Next-action recommendation, parallel candidate selection, and planner/research/clarification fallback drafts exist in `src/lib/server/goal-work-loop.ts`.
 - Goal detail surfaces the goal-loop recommendation and task classification summary.
 - Run-result classification and proposed state-update preview exists in `src/lib/server/goal-run-result-preview.ts`.
 - Run detail surfaces the run-result preview read-only for operator review.
+- Manifest-backed goal-loop read commands exist for `list_active_goals`, `get_goal_context`, `get_goal_progress`, `get_goal_success_criteria`, `get_goal_blockers`, `get_actionable_work`, `get_blocked_work`, `get_awaiting_review`, `get_next_recommended_action`, and `explain_task_eligibility`.
+- Manifest-backed work-packet preparation exists as `work-packet get_agent_work_packet`, backed by `src/lib/server/goal-work-packets.ts` and `src/lib/server/agent-work-packets.ts`.
+- Manifest-backed run-result recording, progress preview, reviewed progress apply, and guarded task transitions exist as `run-result record_run_result`, `record_validation_result`, `record_blocker`, `record_followup_recommendations`, `create_followup_task`, `request_review_from_run`, `mark_task_blocked_from_run`, `preview_progress_updates`, and `apply_progress_updates`, backed by `src/lib/server/agent-run-results.ts`.
+- MCP tool definitions for goal-loop, work-packet, and run-result commands are generated from the shared capability registry in `scripts/ams-control-plane-mcp.mjs` and described in `plugins/ams-control-plane/README.md`.
 
-The main remaining gaps are work-packet preparation from the selected recommendation, explicit guarded intent/API actions that consume run-result previews, follow-up task creation from run discoveries, and goal/project progress update previews.
+The main remaining gaps are further prompt boilerplate reduction in managed-run packets, operator workflow consolidation across goal detail, governance, task detail, planning, and queue surfaces, and any guarded state transitions not yet exposed beyond review request, blocked-task updates, follow-up task creation, progress previews, and reviewed project/goal progress application from run evidence. Automatic acceptance of work remains intentionally unimplemented.
 
 ## Work Selection Rules
 
 A task is actionable for an agent only if:
 
 - it is connected to the active Goal, a linked project, or an explicitly in-scope project
-- it is not already accepted, done, cancelled, rejected, duplicate, or superseded
+- it is not already accepted, done, canceled, rejected, duplicate, or superseded
 - it is not blocked by `blockedReason` or blocked status
 - it is not awaiting review, approval, or child handoff acceptance
 - all required task dependencies or workflow-step dependencies are complete or accepted
@@ -271,6 +275,8 @@ Status: Partially completed. Recommendation-only planner, research, clarificatio
 
 ### 5. Improve Agent Work Packet Preparation for Selected Tasks
 
+Status: Completed for the agent-facing packet API. `work-packet get_agent_work_packet` returns structured packet fields plus a rendered prompt through CLI/API/MCP. Further work should reduce launch-prompt boilerplate and keep the rendered prompt as a view of structured packet state.
+
 - Objective: Use the next-action recommendation to prepare bounded planner, research, executor, or reviewer packets for the selected task without stuffing all context into prompts.
 - Scope: Reuse `src/lib/workflow-prompts.ts` and `src/lib/server/task-threads.ts`; include active Goal context, reason for selection, allowed actions, stopping conditions, validation, and expected result shape.
 - Likely files/areas affected: `src/lib/workflow-prompts.ts`, `src/lib/server/task-launch-planning.ts`, `src/lib/server/task-threads.ts`, prompt tests.
@@ -293,7 +299,7 @@ Status: Completed as preview-only. The helper returns classification, confidence
 
 ### 7. Add Minimal Goal-Loop UI/API Integration
 
-Status: Partially completed. Goal detail exposes goal-loop task classification and next action. Run detail exposes run-result preview. Remaining integration should focus on launch/work-packet preparation and guarded state transitions instead of more dashboard surface area.
+Status: Partially completed. Goal detail exposes goal-loop task classification and next action. Run detail exposes run-result preview, including project/goal progress preview proposals. Agent-facing CLI/API/MCP exposes goal-loop reads, work packets, run-result recording, progress previews, reviewed progress apply, guarded review request from run evidence, blocked-task updates from run evidence, and follow-up task creation. Remaining integration should focus on operator workflow consolidation, prompt boilerplate reduction, and any unimplemented guarded state transitions instead of more dashboard surface area.
 
 - Objective: Expose current Goal progress, actionable work, blockers, open gates, planner fallback, and next recommended action in an existing surface.
 - Scope: Prefer existing `/app/goals/[goalId]`, `/app/autonomous-queue`, `/app/governance`, `/app/tasks`, or `/app/planning`; do not add a random dashboard unless one existing surface cannot support the loop.
@@ -303,29 +309,15 @@ Status: Partially completed. Goal detail exposes goal-loop task classification a
 - Risk level: Medium.
 - Codex can safely implement now: Not before the helper logic lands.
 
-## Immediate Next Task
+## Immediate Next Tasks
 
-The single best next implementation task is Task 5: improve agent work-packet preparation for selected goal-loop tasks. The classification, recommendation, and run-result preview helpers already exist, so the next useful step is to make selected work launchable with a bounded packet that explains why the task was selected, what mode it is in, what context is relevant, and what result shape should come back.
+The single best next implementation task is no longer work-packet preparation, progress-preview generation, or reviewed progress application; those surfaces exist as `work-packet get_agent_work_packet`, `run-result preview_progress_updates`, and `run-result apply_progress_updates`. The next useful work should target one of these remaining gaps:
 
-Ready-to-paste Codex prompt:
+1. Reduce managed-run prompt boilerplate by moving repeated AMS command maps and source-of-truth instructions into manifest discovery, current context, work packets, and repo-local skills.
+2. Consolidate the operator workflow so goal detail, governance, task detail, planning, and queue surfaces do not each present a different answer to "what should happen next?"
+3. Expose additional guarded state transitions only where domain helpers can validate them and return readback, keeping automatic acceptance out of v0.
 
-```text
-You are working in the Agent Management System prototype repo.
-
-Implement the next read-only/work-packet helper for Autonomous Goal-Directed Work Loop v0: goal-loop selected-task work packet preparation.
-
-Before editing, read AGENTS.md, docs/autonomous-goal-directed-work-loop-v0.md, docs/progressive-delegation-readiness-v0.md, docs/contextual-rigor-profiles-v0.md, and the existing helpers in src/lib/server/goal-work-loop.ts, src/lib/workflow-prompts.ts, src/lib/server/task-launch-planning.ts, src/lib/server/task-threads.ts, and src/lib/server/control-plane.ts.
-
-Do not create a milestone model, engine, route, page, schema migration, or automatic launcher. Use the existing Goal, Project, Task, Workflow, Run, Review, Approval, readiness, risk, autonomy, rigor, dependency, blocker, and workflow-prompt concepts.
-
-Add a read-only server helper that accepts control-plane data plus a selected goal-loop recommendation/task and returns a bounded work packet for planner, research, executor, or reviewer mode.
-
-The packet should include active goal context, project/task identity, why the task was selected, mode, allowed actions, stopping conditions, validation expectations, relevant dependencies/gates, and a structured result shape the agent should return. Reuse `buildPlannerPrompt`, `buildExecutorPrompt`, `buildResearchPrompt`, and `buildReviewerPrompt` where appropriate instead of creating a second prompt system.
-
-Add focused unit tests that prove the packet includes the selection reason and active goal context, routes planner/research/reviewer/executor modes correctly, includes validation and stopping conditions, and does not dump unrelated project/task context wholesale.
-
-Keep task creation, launch behavior, and state mutation unchanged. Do not make broad UI changes. Run the relevant tests and report validation.
-```
+The prior ready-to-paste prompt for reviewed progress application is complete. New task prompts should target one of the remaining gaps above.
 
 ## What Not To Build
 
@@ -344,6 +336,5 @@ Keep task creation, launch behavior, and state mutation unchanged. Do not make b
 
 ## Open Questions
 
-- Should AMS automatically create or update the persisted "Autonomous Goal-Directed Work Loop v0" Goal once the current goal-list API failure is resolved, or should this remain a documented project goal until the operator explicitly approves data mutation?
 - Which existing surface should become the primary operator view for the goal loop: goal detail, autonomous queue, governance, tasks, planning, or a consolidated section inside one of those pages?
 - When a run result appears complete and low-risk, may AMS mark it accepted automatically under any v0 conditions, or should every acceptance remain a review/approval decision?

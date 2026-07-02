@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
+import { AGENT_CAPABILITY_COMMANDS } from '../src/lib/server/agent-capability-commands.js';
 import { summarizeAgentToolUse } from '../src/lib/server/agent-use-telemetry.js';
 import { formatAgentApiErrorMessage } from './agent-api-errors.mjs';
 
@@ -18,6 +19,90 @@ const apiToken =
 	process.env.AMS_OPERATOR_SESSION_SECRET?.trim() ||
 	process.env.AMS_OPERATOR_PASSWORD?.trim() ||
 	'';
+
+const CLI_MANIFEST_COMMAND_KEYS = new Set([
+	'context:current',
+	'context:get_relevant_prior_runs',
+	'intent:interpret_intent',
+	'intent:prepare_task_for_review',
+	'intent:prepare_task_for_approval',
+	'intent:reject_task_approval',
+	'intent:accept_child_handoff',
+	'intent:request_child_handoff_changes',
+	'goal-loop:list_active_goals',
+	'goal-loop:get_goal_context',
+	'goal-loop:get_goal_progress',
+	'goal-loop:get_goal_success_criteria',
+	'goal-loop:get_goal_blockers',
+	'goal-loop:get_actionable_work',
+	'goal-loop:get_blocked_work',
+	'goal-loop:get_awaiting_review',
+	'goal-loop:get_next_recommended_action',
+	'goal-loop:explain_task_eligibility',
+	'work-packet:get_agent_work_packet',
+	'run-result:record_run_result',
+	'run-result:record_validation_result',
+	'run-result:record_blocker',
+	'run-result:record_followup_recommendations',
+	'run-result:create_followup_task',
+	'run-result:request_review_from_run',
+	'run-result:mark_task_blocked_from_run',
+	'run-result:preview_progress_updates',
+	'run-result:apply_progress_updates',
+	'review:get_review_status',
+	'intent:coordinate_with_another_thread',
+	'task:list',
+	'task:get',
+	'task:create',
+	'task:update',
+	'task:attach',
+	'task:remove-attachment',
+	'task:request-review',
+	'task:approve-review',
+	'task:request-review-changes',
+	'task:request-approval',
+	'task:approve-approval',
+	'task:reject-approval',
+	'task:decompose',
+	'task:accept-child-handoff',
+	'task:request-child-handoff-changes',
+	'task:launch-session',
+	'task:recover-session',
+	'goal:list',
+	'goal:get',
+	'goal:create',
+	'goal:update',
+	'project:list',
+	'project:get',
+	'project:create',
+	'project:update',
+	'thread:start',
+	'thread:get',
+	'thread:panel',
+	'thread:set-handle-alias',
+	'thread:cancel',
+	'thread:archive',
+	'thread:status',
+	'thread:best-target',
+	'thread:list',
+	'thread:resolve',
+	'thread:contact',
+	'thread:contacts',
+	'thread:contact-targets',
+	'thread:attachment-read'
+]);
+
+export function getCliManifestCommandKeys() {
+	return [...CLI_MANIFEST_COMMAND_KEYS].sort();
+}
+
+function getManifestCommandsForResource(resource) {
+	return new Set(
+		AGENT_CAPABILITY_COMMANDS.filter((entry) => entry.resource === resource).map(
+			(entry) => entry.command
+		)
+	);
+}
 
 function printHelp() {
 	process.stdout.write(
@@ -31,9 +116,10 @@ function printHelp() {
 			'  context get_relevant_prior_runs [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--status <status>] [--limit <n>]',
 			'  goal-loop <command> [--goal <goalId>] [--project <projectId>] [--task <taskId>] [--limit <n>]',
 			'  work-packet get_agent_work_packet [--goal <goalId>] [--project <projectId>] [--task <taskId>]',
-			'  run-result <record_run_result|record_validation_result|record_blocker|record_followup_recommendations|create_followup_task|request_review_from_run|mark_task_blocked_from_run> --json <payload> | --file <path>',
+			'  run-result <record_run_result|record_validation_result|record_blocker|record_followup_recommendations|create_followup_task|request_review_from_run|mark_task_blocked_from_run|preview_progress_updates|apply_progress_updates> --json <payload> | --file <path>',
 			'  review get_review_status [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--limit <n>]',
 			'  telemetry summary [--thread <threadId>] [--task <taskId>] [--run <runId>] [--tool <toolName>] [--outcome <success|error>] [--since <1h|24h|7d|30d>]',
+			'  intent interpret_intent --json <payload> | --file <path>',
 			'  intent prepare_task_for_review --json <payload> | --file <path>',
 			'  intent prepare_task_for_approval --json <payload> | --file <path>',
 			'  intent reject_task_approval --json <payload> | --file <path>',
@@ -587,18 +673,7 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 	}
 
 	if (resource === 'goal-loop') {
-		const supportedGoalLoopCommands = new Set([
-			'list_active_goals',
-			'get_goal_context',
-			'get_goal_progress',
-			'get_goal_success_criteria',
-			'get_goal_blockers',
-			'get_actionable_work',
-			'get_blocked_work',
-			'get_awaiting_review',
-			'get_next_recommended_action',
-			'explain_task_eligibility'
-		]);
+		const supportedGoalLoopCommands = getManifestCommandsForResource('goal-loop');
 
 		if (!supportedGoalLoopCommands.has(command)) {
 			throw new Error(`Unknown goal-loop command: ${command ?? '<missing>'}`);
@@ -660,15 +735,7 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 	}
 
 	if (resource === 'run-result') {
-		const supportedRunResultCommands = new Set([
-			'record_run_result',
-			'record_validation_result',
-			'record_blocker',
-			'record_followup_recommendations',
-			'create_followup_task',
-			'request_review_from_run',
-			'mark_task_blocked_from_run'
-		]);
+		const supportedRunResultCommands = getManifestCommandsForResource('run-result');
 
 		if (!supportedRunResultCommands.has(command)) {
 			throw new Error(`Unknown run-result command: ${command ?? '<missing>'}`);
@@ -718,22 +785,19 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 	}
 
 	if (resource === 'intent') {
-		const supportedIntents = new Set([
-			'prepare_task_for_review',
-			'prepare_task_for_approval',
-			'reject_task_approval',
-			'accept_child_handoff',
-			'request_child_handoff_changes',
-			'coordinate_with_another_thread'
-		]);
+		const supportedIntents = getManifestCommandsForResource('intent');
 
 		if (!supportedIntents.has(command)) {
 			throw new Error(`Unknown intent command: ${command ?? '<missing>'}`);
 		}
 
 		const payload = await readPayload(parseArgs(argv).options);
+		const intentEndpoint =
+			command === 'interpret_intent'
+				? `/api/agent-intent-interpretation/${encodeURIComponent(command)}`
+				: `/api/agent-intents/${encodeURIComponent(command)}`;
 		printJson(
-			await request(`/api/agent-intents/${encodeURIComponent(command)}`, {
+			await request(intentEndpoint, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload)

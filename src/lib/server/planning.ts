@@ -90,8 +90,13 @@ const STATUS_WEIGHTS: Record<Task['status'], number> = {
 	in_progress: 7,
 	review: 6,
 	blocked: -8,
-	done: -20
+	done: -20,
+	canceled: -20
 };
+
+function isClosedTask(task: Pick<Task, 'status'>) {
+	return task.status === 'done' || task.status === 'canceled';
+}
 
 function getExecutionSurfaceCapacityHours(executionSurface: ExecutionSurface) {
 	return (
@@ -451,7 +456,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 						if (
 							!taskMatchesFilters(task, filters, projectScopeIds) ||
 							task.targetDate ||
-							task.status === 'done'
+							isClosedTask(task)
 						) {
 							return false;
 						}
@@ -473,16 +478,16 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				)
 			)
 		: [];
-	const scheduledOpenTasks = scheduledTasks.filter((task) => task.status !== 'done');
+	const scheduledOpenTasks = scheduledTasks.filter((task) => !isClosedTask(task));
 	const inScopeTasks = uniqueTasks([...scheduledTasks, ...unscheduledTasks]);
-	const openInScopeTasks = inScopeTasks.filter((task) => task.status !== 'done');
+	const openInScopeTasks = inScopeTasks.filter((task) => !isClosedTask(task));
 	const taskMap = new Map(data.tasks.map((task) => [task.id, task]));
 	const dependentTaskCounts = new Map<string, number>();
 	for (const candidate of data.tasks) {
 		for (const dependencyTaskId of candidate.dependencyTaskIds) {
 			dependentTaskCounts.set(
 				dependencyTaskId,
-				(dependentTaskCounts.get(dependencyTaskId) ?? 0) + (candidate.status === 'done' ? 0 : 1)
+				(dependentTaskCounts.get(dependencyTaskId) ?? 0) + (isClosedTask(candidate) ? 0 : 1)
 			);
 		}
 	}
@@ -623,7 +628,7 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				(executionSurface) => executionSurface.overAllocated
 			).length,
 			unestimatedTaskCount: inScopeTasks.filter(
-				(task) => task.status !== 'done' && task.estimateHours === null
+				(task) => !isClosedTask(task) && task.estimateHours === null
 			).length,
 			unscheduledTaskCount: unscheduledTasks.length
 		},
@@ -648,10 +653,10 @@ export function buildPlanningPageData(data: ControlPlaneData, filters: PlanningP
 				scheduledTaskCount: scheduledGoalTasks.length,
 				unscheduledTaskCount: unscheduledGoalTasks.length,
 				plannedHours: scheduledGoalTasks
-					.filter((task) => task.status !== 'done')
+					.filter((task) => !isClosedTask(task))
 					.reduce((total, task) => total + (task.estimateHours ?? 0), 0),
 				unestimatedTaskCount: goalTasks.filter(
-					(task) => task.status !== 'done' && task.estimateHours === null
+					(task) => !isClosedTask(task) && task.estimateHours === null
 				).length
 			};
 		}),

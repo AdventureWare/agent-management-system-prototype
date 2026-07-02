@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
+import { getAgentCapabilityManifest } from '$lib/server/agent-capability-manifest';
+import { buildAgentGoalLoopResponse } from '$lib/server/agent-goal-loop';
+import { applyAgentRunResultToData } from '$lib/server/agent-run-results';
 import { buildAgentWorkPacketResponse } from '$lib/server/agent-work-packets';
-import type { ControlPlaneData, Goal, Project, Task } from '$lib/types/control-plane';
+import type { ControlPlaneData, Goal, Project, Run, Task } from '$lib/types/control-plane';
 
 function createProject(overrides: Partial<Project> = {}): Project {
 	return {
@@ -105,6 +108,50 @@ function createTask(overrides: Partial<Task> = {}): Task {
 	};
 }
 
+function createRun(overrides: Partial<Run> = {}): Run {
+	return {
+		id: overrides.id ?? 'run_1',
+		taskId: overrides.taskId ?? 'task_1',
+		executionSurfaceId: overrides.executionSurfaceId ?? null,
+		assumedRoleId: overrides.assumedRoleId ?? null,
+		providerId: overrides.providerId ?? null,
+		agentThreadRunId: overrides.agentThreadRunId ?? null,
+		status: overrides.status ?? 'running',
+		createdAt: overrides.createdAt ?? '2026-06-01T12:00:00.000Z',
+		updatedAt: overrides.updatedAt ?? '2026-06-01T12:00:00.000Z',
+		startedAt: overrides.startedAt ?? '2026-06-01T12:00:00.000Z',
+		endedAt: overrides.endedAt ?? null,
+		threadId: overrides.threadId ?? null,
+		agentThreadId: overrides.agentThreadId ?? null,
+		promptDigest: overrides.promptDigest ?? '',
+		artifactPaths: overrides.artifactPaths ?? [],
+		summary: overrides.summary ?? '',
+		inputPrompt: overrides.inputPrompt ?? '',
+		contextSummary: overrides.contextSummary ?? '',
+		actionsTaken: overrides.actionsTaken ?? '',
+		validationSummary: overrides.validationSummary ?? '',
+		resultSummary: overrides.resultSummary ?? '',
+		blockersFound: overrides.blockersFound ?? [],
+		followUpTaskIds: overrides.followUpTaskIds ?? [],
+		effectiveRigorProfile: overrides.effectiveRigorProfile ?? null,
+		lastHeartbeatAt: overrides.lastHeartbeatAt ?? null,
+		errorSummary: overrides.errorSummary ?? '',
+		modelUsed: overrides.modelUsed ?? null,
+		modelSource: overrides.modelSource ?? 'unknown',
+		observedModelUsed: overrides.observedModelUsed ?? null,
+		modelMismatchSummary: overrides.modelMismatchSummary ?? null,
+		usageSource: overrides.usageSource ?? 'missing',
+		inputTokens: overrides.inputTokens ?? null,
+		cachedInputTokens: overrides.cachedInputTokens ?? null,
+		outputTokens: overrides.outputTokens ?? null,
+		uncachedInputTokens: overrides.uncachedInputTokens ?? null,
+		usageCapturedAt: overrides.usageCapturedAt ?? null,
+		estimatedCostUsd: overrides.estimatedCostUsd ?? null,
+		costSource: overrides.costSource ?? 'missing_usage',
+		pricingVersion: overrides.pricingVersion ?? null
+	};
+}
+
 function createControlPlane(tasks: Task[]): ControlPlaneData {
 	return {
 		providers: [],
@@ -122,6 +169,14 @@ function createControlPlane(tasks: Task[]): ControlPlaneData {
 		approvals: [],
 		decisions: []
 	};
+}
+
+function getRecommendation(response: unknown) {
+	if (!response || typeof response !== 'object' || !('recommendation' in response)) {
+		throw new Error('Expected a goal-loop recommendation response.');
+	}
+
+	return (response as { recommendation: unknown }).recommendation;
 }
 
 describe('buildAgentWorkPacketResponse', () => {
@@ -177,5 +232,163 @@ describe('buildAgentWorkPacketResponse', () => {
 				command: 'unknown'
 			})
 		).toThrow(AgentControlPlaneApiError);
+	});
+
+	it('keeps the goal-loop recommendation, work packet, run result, review, and follow-up task path aligned', () => {
+		const task = createTask({ id: 'task_roundtrip' });
+		let data = createControlPlane([task]);
+		const manifest = getAgentCapabilityManifest();
+
+		expect(manifest.commands).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					resource: 'goal-loop',
+					command: 'get_next_recommended_action',
+					path: '/api/agent-goal-loop/get_next_recommended_action'
+				}),
+				expect.objectContaining({
+					resource: 'work-packet',
+					command: 'get_agent_work_packet',
+					path: '/api/agent-work-packets/get_agent_work_packet'
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'record_run_result',
+					path: '/api/agent-run-results/record_run_result'
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'request_review_from_run',
+					path: '/api/agent-run-results/request_review_from_run'
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'create_followup_task',
+					path: '/api/agent-run-results/create_followup_task'
+				})
+			])
+		);
+
+		expect(
+			getRecommendation(
+				buildAgentGoalLoopResponse(data, {
+					command: 'get_next_recommended_action',
+					goalId: 'goal_1'
+				})
+			)
+		).toEqual(
+			expect.objectContaining({
+				kind: 'execute_task',
+				taskIds: ['task_roundtrip']
+			})
+		);
+
+		const packet = buildAgentWorkPacketResponse(data, {
+			command: 'get_agent_work_packet',
+			goalId: 'goal_1',
+			taskId: 'task_roundtrip'
+		});
+		expect(packet.packet).toEqual(
+			expect.objectContaining({
+				mode: 'executor',
+				recommendationKind: 'execute_task',
+				taskId: 'task_roundtrip',
+				includedTaskIds: ['task_roundtrip']
+			})
+		);
+		expect(packet.structuredSections.expectedResult.shape).toEqual(
+			expect.arrayContaining(['What changed', 'Validation commands and results'])
+		);
+
+		const run = createRun({ id: 'run_roundtrip', taskId: task.id });
+		data = {
+			...data,
+			tasks: [
+				{
+					...task,
+					status: 'in_progress',
+					runCount: 1,
+					latestRunId: run.id
+				}
+			],
+			runs: [run]
+		};
+
+		let result = applyAgentRunResultToData(data, {
+			command: 'record_run_result',
+			runId: run.id,
+			status: 'completed',
+			resultSummary: 'Implemented the round-trip test.',
+			validationSummary: 'Focused Vitest command passed.',
+			artifactPaths: ['/repo/agent_output/roundtrip.md']
+		});
+		expect(result.record.preview).toEqual(
+			expect.objectContaining({
+				classification: 'completed_awaiting_review',
+				nextAction: 'request_review'
+			})
+		);
+		expect(result.record.safety.taskStateChanged).toBe(false);
+
+		result = applyAgentRunResultToData(result.data, {
+			command: 'request_review_from_run',
+			runId: run.id,
+			summary: 'Review the completed round-trip test.'
+		});
+		expect(result.record.task).toEqual(
+			expect.objectContaining({
+				id: task.id,
+				status: 'review'
+			})
+		);
+		expect(result.data.reviews).toEqual([
+			expect.objectContaining({
+				taskId: task.id,
+				runId: run.id,
+				status: 'open'
+			})
+		]);
+		expect(
+			getRecommendation(
+				buildAgentGoalLoopResponse(result.data, {
+					command: 'get_next_recommended_action',
+					goalId: 'goal_1'
+				})
+			)
+		).toEqual(
+			expect.objectContaining({
+				kind: 'review_result',
+				taskIds: [task.id]
+			})
+		);
+
+		const followup = applyAgentRunResultToData(result.data, {
+			command: 'create_followup_task',
+			runId: run.id,
+			title: 'Document round-trip test coverage',
+			summary: 'Document what the regression covers.'
+		});
+		expect(followup.record.task).toEqual(
+			expect.objectContaining({
+				title: 'Document round-trip test coverage',
+				status: 'in_draft',
+				projectId: 'project_1',
+				goalId: 'goal_1'
+			})
+		);
+		expect(followup.record.run.followUpTaskIds).toEqual([followup.record.task?.id]);
+		expect(followup.data.goals[0]?.taskIds).toEqual(
+			expect.arrayContaining([task.id, followup.record.task?.id])
+		);
+
+		const deduped = applyAgentRunResultToData(followup.data, {
+			command: 'create_followup_task',
+			runId: run.id,
+			title: ' document   round-trip test coverage '
+		});
+		expect(deduped.record.createdTask).toBe(false);
+		expect(deduped.record.dedupedExistingTask).toBe(true);
+		expect(deduped.data.tasks).toHaveLength(2);
+		expect(deduped.record.run.followUpTaskIds).toEqual([followup.record.task?.id]);
 	});
 });

@@ -87,6 +87,48 @@ export const AGENT_CAPABILITY_COMMANDS = [
 	},
 	{
 		resource: 'intent',
+		command: 'interpret_intent',
+		summary:
+			'Interpret raw operator intent into a read-only IntentInterpretationProposal with assumptions, constraints, uncertainties, candidate mappings, routing, safety metadata, and source links.',
+		cli: 'node scripts/ams-cli.mjs intent interpret_intent --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-intent-interpretation/interpret_intent',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use before creating or updating AMS goals, tasks, decisions, blockers, reviews, approvals, runs, or project memory from messy operator intent.',
+			'Use when an agent needs explicit assumptions, constraints, uncertainty, routing rationale, and source-linked candidate mappings without mutating durable state.'
+		],
+		readAfter: ['context:current'],
+		nextCommands: ['task:create', 'goal:create', 'goal-loop:get_next_recommended_action'],
+		examples: [
+			{
+				title: 'Interpret raw intent against existing project and goal context',
+				input: {
+					rawIntent: 'Create a task to expose the intent helper through CLI and MCP.',
+					projectId: 'project_123',
+					goalId: 'goal_123',
+					sourceKind: 'assistant_request'
+				},
+				output: {
+					source: {
+						rawIntent: 'Create a task to expose the intent helper through CLI and MCP.',
+						projectId: 'project_123',
+						goalId: 'goal_123'
+					},
+					routing: {
+						recommendedNextAction: 'create_task',
+						workPacketMode: 'executor'
+					},
+					safety: {
+						readOnly: true,
+						mutationCount: 0
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'intent',
 		command: 'prepare_task_for_review',
 		summary:
 			'Prepare a task for review by optionally attaching support material, opening the review gate, and returning readback context.',
@@ -621,6 +663,115 @@ export const AGENT_CAPABILITY_COMMANDS = [
 						taskStateChanged: true,
 						approvalStateChanged: false
 					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
+		command: 'preview_progress_updates',
+		summary:
+			'Preview proposed project memory and goal progress updates from run evidence without mutating state.',
+		cli: 'node scripts/ams-cli.mjs run-result preview_progress_updates --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/preview_progress_updates',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after recording run evidence to inspect proposed project current-state, decision-log, blocker, follow-up, or goal-progress updates.',
+			'This command is preview-only and requires operator review before durable project or goal memory changes.'
+		],
+		readAfter: ['project:get', 'goal-loop:get_goal_progress', 'context:current'],
+		nextCommands: ['project:get', 'goal-loop:get_goal_progress', 'task:get', 'context:current'],
+		examples: [
+			{
+				title: 'Preview project and goal progress updates from a run',
+				input: {
+					runId: 'run_123'
+				},
+				output: {
+					command: 'preview_progress_updates',
+					validationOnly: true,
+					safety: {
+						mutation: 'none',
+						taskStateChanged: false
+					},
+					progressPreview: {
+						safety: {
+							mutation: 'none',
+							operatorReviewRequired: true
+						},
+						proposedUpdates: [
+							{
+								resource: 'project',
+								confidence: 'high',
+								evidenceIds: ['run_123', 'task_123'],
+								suggestedCommands: ['project:update project_123']
+							}
+						]
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
+		command: 'apply_progress_updates',
+		summary:
+			'Apply selected reviewed project memory and goal progress proposals from run evidence through guarded structured updates.',
+		cli: 'node scripts/ams-cli.mjs run-result apply_progress_updates --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/apply_progress_updates',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after an operator has inspected run-result preview_progress_updates and selected the project or goal proposals to apply.',
+			'Set validateOnly=true first to verify selected proposal indexes, allowed fields, duplicate guards, and readback commands before mutation.',
+			'This command does not accept work, approve reviews, resolve approvals, or apply task-specific proposal fields.'
+		],
+		readAfter: ['project:get', 'goal:get', 'goal-loop:get_goal_progress', 'context:current'],
+		nextCommands: ['project:get', 'goal:get', 'goal-loop:get_goal_progress', 'context:current'],
+		examples: [
+			{
+				title: 'Preview applying selected progress proposals',
+				input: {
+					runId: 'run_123',
+					selectedProposalIndexes: [0, 1],
+					validateOnly: true
+				},
+				output: {
+					command: 'apply_progress_updates',
+					validationOnly: true,
+					safety: {
+						mutation: 'reviewed_progress_update',
+						taskStateChanged: false,
+						reviewStateChanged: false,
+						approvalStateChanged: false
+					},
+					wouldExecuteCommands: [
+						'run-result:apply_progress_updates',
+						'project:get project_123',
+						'goal:get goal_123'
+					]
+				}
+			},
+			{
+				title: 'Apply selected reviewed project and goal updates',
+				input: {
+					runId: 'run_123',
+					selectedProposalIndexes: [0, 1]
+				},
+				output: {
+					command: 'apply_progress_updates',
+					safety: {
+						mutation: 'reviewed_progress_update',
+						taskStateChanged: false,
+						approvalStateChanged: false
+					},
+					readbackCommands: [
+						'project:get project_123',
+						'goal:get goal_123',
+						'goal-loop:get_goal_progress',
+						'context:current'
+					]
 				}
 			}
 		]

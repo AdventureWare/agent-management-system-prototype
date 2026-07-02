@@ -69,6 +69,19 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		status: { type: 'string' },
 		limit: { type: 'number' }
 	}),
+	'intent:interpret_intent': buildObjectSchema(
+		{
+			rawIntent: { type: 'string' },
+			sourceKind: { type: 'string' },
+			sourceId: { type: 'string' },
+			projectId: { type: 'string' },
+			goalId: { type: 'string' },
+			taskId: { type: 'string' },
+			runId: { type: 'string' },
+			context: { type: 'object' }
+		},
+		['rawIntent']
+	),
 	'intent:prepare_task_for_review': buildObjectSchema({
 		taskId: { type: 'string' },
 		attachment: { type: 'object' },
@@ -211,6 +224,17 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 	'run-result:mark_task_blocked_from_run': buildObjectSchema({
 		runId: { type: 'string' },
 		blocker: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
+	'run-result:preview_progress_updates': buildObjectSchema({
+		runId: { type: 'string' }
+	}),
+	'run-result:apply_progress_updates': buildObjectSchema({
+		runId: { type: 'string' },
+		selectedProposalIndexes: {
+			type: 'array',
+			items: { type: 'number' }
+		},
 		validateOnly: { type: 'boolean' }
 	}),
 	'review:get_review_status': buildObjectSchema({
@@ -374,6 +398,10 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		['projectId', 'payload']
 	)
 };
+
+export function getManifestBackedToolSchemaKeys() {
+	return Object.keys(MANIFEST_BACKED_TOOL_SCHEMAS).sort();
+}
 
 function buildManifestToolKey(resource, command) {
 	return `${resource}:${command}`;

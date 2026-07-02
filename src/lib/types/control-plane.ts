@@ -8,7 +8,8 @@ export const TASK_STATUS_OPTIONS = [
 	'in_progress',
 	'review',
 	'blocked',
-	'done'
+	'done',
+	'canceled'
 ] as const;
 export const TASK_RISK_LEVEL_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
 export const TASK_APPROVAL_MODE_OPTIONS = [
@@ -225,6 +226,8 @@ export function formatTaskStatusLabel(status: string): string {
 			return 'Blocked';
 		case 'done':
 			return 'Done';
+		case 'canceled':
+			return 'Canceled';
 		default:
 			return status.replace(/_/g, ' ');
 	}
@@ -242,6 +245,8 @@ export function taskStatusToneClass(status: string): string {
 			return statusToneClass('attention');
 		case 'done':
 			return statusToneClass('success');
+		case 'canceled':
+			return statusToneClass('neutral');
 		case 'in_draft':
 		default:
 			return statusToneClass('neutral');

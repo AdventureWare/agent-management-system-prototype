@@ -8,6 +8,41 @@ beforeEach(() => {
 });
 
 describe('ams-cli', () => {
+	it('routes read-only intent interpretation to the dedicated endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn().mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				source: { rawIntent: 'Create a task.', projectId: 'project_123' },
+				safety: { readOnly: true, mutationCount: 0 }
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli([
+			'intent',
+			'interpret_intent',
+			'--json',
+			JSON.stringify({ rawIntent: 'Create a task.', projectId: 'project_123' })
+		]);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-intent-interpretation/interpret_intent'),
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token',
+					'content-type': 'application/json'
+				}),
+				body: JSON.stringify({ rawIntent: 'Create a task.', projectId: 'project_123' })
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
 	it('resolves the current task from managed-run context for task writeback commands', async () => {
 		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
 		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');

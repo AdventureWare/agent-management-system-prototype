@@ -329,6 +329,28 @@ describe('buildGoalWorkLoopClassification', () => {
 		expect(result.actionableTasks).toHaveLength(0);
 	});
 
+	it('classifies canceled work as terminal and non-actionable', () => {
+		const result = classify({
+			tasks: [
+				createTask({
+					id: 'task_canceled',
+					status: 'canceled'
+				})
+			]
+		});
+
+		expect(result.byClassification.duplicate_superseded.map((task) => task.id)).toEqual([
+			'task_canceled'
+		]);
+		expect(result.byClassification.duplicate_superseded[0]?.reasons).toContainEqual(
+			expect.objectContaining({
+				code: 'duplicate_or_superseded',
+				message: 'Task status is canceled.'
+			})
+		);
+		expect(result.actionableTasks).toHaveLength(0);
+	});
+
 	it('classifies in-progress work separately from new action candidates', () => {
 		const result = classify({
 			tasks: [createTask({ id: 'task_progress', status: 'in_progress', latestRunId: 'run_1' })],

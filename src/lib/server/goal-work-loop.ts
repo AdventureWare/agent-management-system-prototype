@@ -123,6 +123,10 @@ function hasText(value: string | null | undefined) {
 	return Boolean(value?.trim());
 }
 
+function isClosedTask(task: Pick<Task, 'status' | 'closeoutState'>) {
+	return task.status === 'done' || task.status === 'canceled' || task.closeoutState === 'accepted';
+}
+
 function latestRunForTask(data: Pick<ControlPlaneData, 'runs'>, task: Task): Run | null {
 	const latestLinkedRun = task.latestRunId
 		? (data.runs.find((run) => run.id === task.latestRunId) ?? null)
@@ -219,7 +223,7 @@ function detectDuplicateOrSuperseded(data: ControlPlaneData, task: Task) {
 			candidate.projectId === task.projectId &&
 			candidate.goalId === task.goalId &&
 			candidate.title.trim().toLowerCase() === normalizedTitle &&
-			candidate.status !== 'done'
+			!isClosedTask(candidate)
 	);
 
 	return duplicate ? `Possible duplicate of ${duplicate.id}.` : '';
@@ -255,6 +259,13 @@ function classifyTask(input: {
 				task.closeoutState === 'accepted'
 					? 'Task has accepted closeout.'
 					: 'Task status is done.'
+		});
+	}
+
+	if (task.status === 'canceled') {
+		reasons.push({
+			code: 'duplicate_or_superseded',
+			message: 'Task status is canceled.'
 		});
 	}
 

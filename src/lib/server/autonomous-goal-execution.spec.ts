@@ -224,7 +224,7 @@ describe('autonomous goal execution proof', () => {
 			goalId: goal.id
 		});
 
-			expect(recommendationFrom(next)).toEqual(
+		expect(recommendationFrom(next)).toEqual(
 			expect.objectContaining({
 				kind: 'execute_task',
 				taskIds: [task.id]
@@ -280,7 +280,7 @@ describe('autonomous goal execution proof', () => {
 			goalId: goal.id
 		});
 
-			expect(recommendationFrom(next)).toEqual(
+		expect(recommendationFrom(next)).toEqual(
 			expect.objectContaining({
 				kind: 'review_result',
 				taskIds: [task.id]
@@ -300,10 +300,21 @@ describe('autonomous goal execution proof', () => {
 				status: 'done'
 			})
 		);
-			expect(recommendationFrom(next)).toEqual(
+		const continuationTask = data.tasks.find(
+			(candidate) => candidate.title === 'Continue goal: assess remaining gap and create next work'
+		);
+
+		expect(continuationTask).toEqual(
 			expect.objectContaining({
-				kind: 'goal_complete',
-				taskIds: []
+				goalId: goal.id,
+				status: 'ready'
+			})
+		);
+		const continuationTaskId = continuationTask?.id ?? '';
+		expect(recommendationFrom(next)).toEqual(
+			expect.objectContaining({
+				kind: 'execute_task',
+				taskIds: [continuationTaskId]
 			})
 		);
 
@@ -314,7 +325,7 @@ describe('autonomous goal execution proof', () => {
 		expect(data.goals.find((candidate) => candidate.id === goal.id)).toEqual(
 			expect.objectContaining({
 				status: 'done',
-				taskIds: [task.id]
+				taskIds: expect.arrayContaining([task.id, continuationTaskId])
 			})
 		);
 		expect(data.reviews.find((review) => review.taskId === task.id)).toEqual(
@@ -392,7 +403,7 @@ describe('autonomous goal execution proof', () => {
 			goalId: goal.id
 		});
 
-			expect(recommendationFrom(next)).toEqual(
+		expect(recommendationFrom(next)).toEqual(
 			expect.objectContaining({
 				kind: 'execute_task',
 				taskIds: [task.id]
@@ -424,14 +435,16 @@ describe('autonomous goal execution proof', () => {
 			command: 'get_next_recommended_action',
 			goalId: goal.id
 		});
-			expect(recommendationFrom(next)).toEqual(
+		expect(recommendationFrom(next)).toEqual(
 			expect.objectContaining({
 				kind: 'review_result',
 				taskIds: [task.id]
 			})
 		);
 
-		expect(data.reviews.find((review) => review.taskId === task.id && review.status === 'open')).toEqual(
+		expect(
+			data.reviews.find((review) => review.taskId === task.id && review.status === 'open')
+		).toEqual(
 			expect.objectContaining({
 				taskId: task.id,
 				status: 'open'
@@ -448,10 +461,20 @@ describe('autonomous goal execution proof', () => {
 		expect(data.tasks.find((candidate) => candidate.id === task.id)).toEqual(
 			expect.objectContaining({ status: 'done' })
 		);
-			expect(recommendationFrom(next)).toEqual(
+		const continuationTask = data.tasks.find(
+			(candidate) => candidate.title === 'Continue goal: assess remaining gap and create next work'
+		);
+
+		expect(continuationTask).toEqual(
 			expect.objectContaining({
-				kind: 'goal_complete',
-				taskIds: []
+				goalId: goal.id,
+				status: 'ready'
+			})
+		);
+		expect(recommendationFrom(next)).toEqual(
+			expect.objectContaining({
+				kind: 'execute_task',
+				taskIds: [continuationTask?.id ?? '']
 			})
 		);
 

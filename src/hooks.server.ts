@@ -14,6 +14,7 @@ export function isAgentControlPlaneApiPath(pathname: string) {
 	return (
 		pathname === '/api/agent-capabilities' ||
 		pathname === '/api/agent-context/current' ||
+		pathname.startsWith('/api/agent-intent-interpretation/') ||
 		pathname.startsWith('/api/agent-intents/') ||
 		pathname.startsWith('/api/agent-goal-loop/') ||
 		pathname.startsWith('/api/agent-work-packets/') ||

@@ -6,6 +6,7 @@ import {
 	suggestGoalArtifactPath,
 	wouldCreateGoalCycle
 } from '$lib/server/goal-relationships';
+import { reconcileGoalContinuationInData } from '$lib/server/goal-continuation-reconciliation';
 import {
 	attachTaskFileFromPath,
 	removeTaskAttachmentById,
@@ -964,6 +965,8 @@ export async function updateAgentApiGoal(
 			projectIds,
 			taskIds
 		});
+		const reconciliation = reconcileGoalContinuationInData(nextData, normalizedGoalId);
+		nextData = reconciliation.data;
 		updatedGoal = nextData.goals.find((candidate) => candidate.id === normalizedGoalId) ?? null;
 
 		if (requestedFields.length > 0) {
@@ -984,7 +987,9 @@ export async function updateAgentApiGoal(
 		return {
 			data: nextData,
 			changedCollections:
-				requestedFields.length > 0 ? ['goals', 'tasks', 'decisions'] : ['goals', 'tasks']
+				requestedFields.length > 0 || reconciliation.createdTaskIds.length > 0
+					? ['goals', 'tasks', 'decisions']
+					: ['goals', 'tasks']
 		};
 	});
 

@@ -38,9 +38,10 @@ export type ChildTaskView = {
 };
 
 export type ChildTaskRollup = {
-	status: 'blocked' | 'review' | 'done' | 'in_progress' | 'ready';
+	status: 'blocked' | 'review' | 'done' | 'in_progress' | 'ready' | 'canceled';
 	total: number;
 	doneCount: number;
+	canceledCount: number;
 	blockedCount: number;
 	reviewCount: number;
 	inProgressCount: number;
@@ -151,7 +152,8 @@ export function buildTaskDetailCollections(input: {
 			in_progress: 0,
 			review: 0,
 			blocked: 0,
-			done: 0
+			done: 0,
+			canceled: 0
 		}
 	);
 
@@ -162,6 +164,7 @@ export function buildTaskDetailCollections(input: {
 					const blockedCount = childTaskStatusCounts.blocked;
 					const reviewCount = childTaskStatusCounts.review;
 					const doneCount = childTaskStatusCounts.done;
+					const canceledCount = childTaskStatusCounts.canceled;
 					const inProgressCount = childTaskStatusCounts.in_progress;
 					const readyCount = childTaskStatusCounts.ready;
 					const acceptedCount = childTasks.filter(
@@ -173,9 +176,11 @@ export function buildTaskDetailCollections(input: {
 					const status =
 						blockedCount > 0
 							? 'blocked'
-							: reviewCount > 0 || pendingIntegrationCount > 0
+							: canceledCount === total
+								? 'canceled'
+								: reviewCount > 0 || pendingIntegrationCount > 0
 								? 'review'
-								: acceptedCount === total
+								: acceptedCount + canceledCount === total
 									? 'done'
 									: inProgressCount > 0
 										? 'in_progress'
@@ -189,6 +194,8 @@ export function buildTaskDetailCollections(input: {
 									: `${reviewCount} delegated ${reviewCount === 1 ? 'task is' : 'tasks are'} waiting on review before integration can finish.`
 								: status === 'done'
 									? 'All delegated subtasks have been accepted by the parent task.'
+									: status === 'canceled'
+										? 'All delegated subtasks have been canceled.'
 									: status === 'in_progress'
 										? `${inProgressCount} delegated ${inProgressCount === 1 ? 'task is' : 'tasks are'} actively moving.`
 										: `${readyCount} delegated ${readyCount === 1 ? 'task is' : 'tasks are'} queued but not started.`;
@@ -197,6 +204,7 @@ export function buildTaskDetailCollections(input: {
 						status,
 						total,
 						doneCount,
+						canceledCount,
 						blockedCount,
 						reviewCount,
 						inProgressCount,

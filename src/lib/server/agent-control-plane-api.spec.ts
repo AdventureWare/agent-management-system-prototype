@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CONTINUATION_PLANNING_TASK_TITLE } from './goal-continuation-reconciliation';
 
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
@@ -321,6 +322,132 @@ describe('agent-control-plane-api', () => {
 				status: 'ready',
 				blockedReason: ''
 			})
+		);
+	});
+
+	it('persists canceled task status through the agent API', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const agentApiModule = await importAgentApiModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const task = controlPlaneModule.createTask({
+			id: 'task_superseded',
+			title: 'Superseded follow-up',
+			summary: 'This work was replaced by a newer task',
+			projectId: project.id,
+			goalId: '',
+			priority: 'medium',
+			status: 'blocked',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			blockedReason: 'Superseded by current plan.',
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			tasks: [task]
+		}));
+
+		await agentApiModule.updateAgentApiTask('task_superseded', {
+			status: 'canceled'
+		});
+		const loaded = await controlPlaneModule.loadControlPlane();
+
+		expect(loaded.tasks.find((candidate) => candidate.id === 'task_superseded')).toEqual(
+			expect.objectContaining({
+				status: 'canceled',
+				blockedReason: ''
+			})
+		);
+	});
+
+	it('reconciles an active goal when the last open linked task is completed through the agent API', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+		mkdirSync(resolve(root, 'app', 'agent_output'), { recursive: true });
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const agentApiModule = await importAgentApiModule();
+		const project = {
+			...controlPlaneModule.createProject({
+				name: 'Agent App',
+				summary: 'App project',
+				projectRootFolder: resolve(root, 'app'),
+				defaultArtifactRoot: resolve(root, 'app', 'agent_output')
+			}),
+			id: 'project_app'
+		};
+		const goal = {
+			...controlPlaneModule.createGoal({
+				name: 'Keep goal moving',
+				summary: 'Active goal should not stall',
+				status: 'running',
+				artifactPath: project.defaultArtifactRoot,
+				projectIds: [project.id],
+				taskIds: ['task_last']
+			}),
+			id: 'goal_active'
+		};
+		const task = controlPlaneModule.createTask({
+			id: 'task_last',
+			title: 'Last open task',
+			summary: 'Completing this task empties open work',
+			projectId: project.id,
+			goalId: goal.id,
+			priority: 'medium',
+			status: 'ready',
+			riskLevel: 'medium',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			goals: [goal],
+			tasks: [task]
+		}));
+
+		await agentApiModule.updateAgentApiTask(task.id, {
+			status: 'done'
+		});
+		await agentApiModule.updateAgentApiTask(task.id, {
+			status: 'done'
+		});
+		const loaded = await controlPlaneModule.loadControlPlane();
+		const continuationTasks = loaded.tasks.filter(
+			(candidate) => candidate.title === CONTINUATION_PLANNING_TASK_TITLE
+		);
+
+		expect(continuationTasks).toHaveLength(1);
+		expect(continuationTasks[0]).toEqual(
+			expect.objectContaining({
+				goalId: goal.id,
+				projectId: project.id,
+				status: 'ready'
+			})
+		);
+		expect(loaded.goals.find((candidate) => candidate.id === goal.id)?.taskIds).toContain(
+			continuationTasks[0]?.id
 		);
 	});
 

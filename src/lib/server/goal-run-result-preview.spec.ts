@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { buildRunResultPreview } from './goal-run-result-preview';
-import type { Approval, ControlPlaneData, Review, Run, Task, TaskTemplate } from '$lib/types/control-plane';
+import type {
+	Approval,
+	ControlPlaneData,
+	Project,
+	Review,
+	Run,
+	Task,
+	TaskTemplate
+} from '$lib/types/control-plane';
 
 function createTask(overrides: Partial<Task> = {}): Task {
 	return {
@@ -149,9 +157,26 @@ function createTemplate(overrides: Partial<TaskTemplate> = {}): TaskTemplate {
 	};
 }
 
+function createProject(overrides: Partial<Project> = {}): Project {
+	return {
+		id: overrides.id ?? 'project_1',
+		name: overrides.name ?? 'AMS',
+		summary: overrides.summary ?? '',
+		projectBrief: overrides.projectBrief ?? '',
+		currentStateMemo: overrides.currentStateMemo ?? '',
+		decisionLog: overrides.decisionLog ?? '',
+		projectRootFolder: overrides.projectRootFolder ?? '/tmp/project',
+		defaultArtifactRoot: overrides.defaultArtifactRoot ?? '/tmp/project/agent_output',
+		defaultRepoPath: overrides.defaultRepoPath ?? '',
+		defaultRepoUrl: overrides.defaultRepoUrl ?? '',
+		defaultBranch: overrides.defaultBranch ?? ''
+	};
+}
+
 function createControlPlane(input: {
 	task?: Task;
 	run?: Run;
+	project?: Project;
 	reviews?: Review[];
 	approvals?: Approval[];
 	templates?: TaskTemplate[];
@@ -162,18 +187,7 @@ function createControlPlane(input: {
 	return {
 		providers: [],
 		roles: [],
-		projects: [
-			{
-				id: 'project_1',
-				name: 'AMS',
-				summary: '',
-				projectRootFolder: '/tmp/project',
-				defaultArtifactRoot: '/tmp/project/agent_output',
-				defaultRepoPath: '',
-				defaultRepoUrl: '',
-				defaultBranch: ''
-			}
-		],
+		projects: [input.project ?? createProject()],
 		goals: [
 			{
 				id: 'goal_1',
@@ -212,6 +226,28 @@ describe('buildRunResultPreview', () => {
 		);
 		expect(preview?.proposedUpdates).toContainEqual(
 			expect.objectContaining({ resource: 'task', fields: expect.objectContaining({ status: 'done' }) })
+		);
+		expect(preview?.projectGoalProgressPreview).toEqual(
+			expect.objectContaining({
+				safety: expect.objectContaining({
+					mutation: 'none',
+					operatorReviewRequired: true
+				}),
+				proposedUpdates: expect.arrayContaining([
+					expect.objectContaining({
+						resource: 'project',
+						fields: expect.objectContaining({ currentStateMemo: expect.stringContaining('run_1') }),
+						evidenceIds: expect.arrayContaining(['run_1', 'task_1']),
+						confidence: 'high',
+						suggestedCommands: expect.arrayContaining(['project:update project_1'])
+					}),
+					expect.objectContaining({
+						resource: 'goal',
+						fields: expect.objectContaining({ progressNote: expect.stringContaining('run_1') }),
+						evidenceIds: expect.arrayContaining(['run_1', 'task_1', 'goal_1'])
+					})
+				])
+			})
 		);
 	});
 
@@ -252,6 +288,16 @@ describe('buildRunResultPreview', () => {
 				fields: expect.objectContaining({ status: 'blocked' })
 			})
 		);
+		expect(preview?.projectGoalProgressPreview.proposedUpdates).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					resource: 'goal',
+					fields: expect.objectContaining({ blockerNote: expect.stringContaining('Missing credentials') }),
+					confidence: 'high',
+					suggestedCommands: expect.arrayContaining(['run-result:mark_task_blocked_from_run'])
+				})
+			])
+		);
 	});
 
 	it('detects failed runs', () => {
@@ -264,6 +310,13 @@ describe('buildRunResultPreview', () => {
 
 		expect(preview?.classification).toBe('failed');
 		expect(preview?.nextAction).toBe('diagnose_failure');
+		expect(preview?.projectGoalProgressPreview.proposedUpdates).toEqual([]);
+		expect(preview?.projectGoalProgressPreview.omittedUpdates).toContainEqual(
+			expect.objectContaining({
+				resource: 'project',
+				reason: expect.stringContaining('failed run evidence')
+			})
+		);
 	});
 
 	it('detects out-of-scope follow-up discoveries', () => {
@@ -280,6 +333,58 @@ describe('buildRunResultPreview', () => {
 		expect(preview?.classification).toBe('out_of_scope_follow_up');
 		expect(preview?.nextAction).toBe('create_follow_up_task');
 		expect(preview?.followUpTaskIds).toEqual(['task_followup']);
+		expect(preview?.projectGoalProgressPreview.proposedUpdates).toContainEqual(
+			expect.objectContaining({
+				resource: 'goal',
+				fields: expect.objectContaining({ followUpWork: ['task_followup'] }),
+				confidence: 'low',
+				evidenceIds: expect.arrayContaining(['run_1', 'task_followup'])
+			})
+		);
+	});
+
+	it('marks partial progress proposals as low confidence', () => {
+		const preview = buildRunResultPreview(
+			createControlPlane({
+				run: createRun({ resultSummary: 'Partial implementation; remaining UI polish is incomplete.' })
+			}),
+			{ runId: 'run_1' }
+		);
+
+		expect(preview?.classification).toBe('partial_completion');
+		expect(preview?.projectGoalProgressPreview.proposedUpdates).toContainEqual(
+			expect.objectContaining({
+				resource: 'goal',
+				fields: expect.objectContaining({ remainingWork: expect.any(String) }),
+				confidence: 'low'
+			})
+		);
+	});
+
+	it('omits duplicate project memory proposals', () => {
+		const existingMemo =
+			'Run run_1 for task task_1 (task_1 title). Result: Feature is ready. Validation: Checks passed.';
+		const task = createTask({ status: 'done', closeoutState: 'accepted' });
+		const preview = buildRunResultPreview(
+			createControlPlane({
+				task,
+				project: createProject({ currentStateMemo: existingMemo })
+			}),
+			{ runId: 'run_1' }
+		);
+
+		expect(preview?.projectGoalProgressPreview.proposedUpdates).not.toContainEqual(
+			expect.objectContaining({
+				resource: 'project',
+				fields: expect.objectContaining({ currentStateMemo: expect.any(String) })
+			})
+		);
+		expect(preview?.projectGoalProgressPreview.omittedUpdates).toContainEqual(
+			expect.objectContaining({
+				resource: 'project',
+				reason: expect.stringContaining('already appears')
+			})
+		);
 	});
 
 	it('detects duplicate or superseded task context', () => {

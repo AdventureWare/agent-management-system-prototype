@@ -13,6 +13,7 @@ node scripts/ams-cli.mjs manifest --resource goal-loop
 node scripts/ams-cli.mjs manifest --resource work-packet
 node scripts/ams-cli.mjs manifest --resource run-result
 node scripts/ams-cli.mjs manifest --resource review
+node scripts/ams-cli.mjs manifest --resource intent --command interpret_intent
 node scripts/ams-cli.mjs context current
 node scripts/ams-cli.mjs context current --task <taskId>
 node scripts/ams-cli.mjs context current --run <runId>
@@ -38,8 +39,11 @@ node scripts/ams-cli.mjs run-result record_followup_recommendations --json '{"ru
 node scripts/ams-cli.mjs run-result create_followup_task --json '{"runId":"<runId>","title":"<follow-up title>","summary":"<why this supports the same goal>"}'
 node scripts/ams-cli.mjs run-result request_review_from_run --json '{"runId":"<runId>","validateOnly":true,"summary":"Ready for review."}'
 node scripts/ams-cli.mjs run-result mark_task_blocked_from_run --json '{"runId":"<runId>","validateOnly":true,"blocker":"<blocking condition>"}'
+node scripts/ams-cli.mjs run-result preview_progress_updates --json '{"runId":"<runId>"}'
+node scripts/ams-cli.mjs run-result apply_progress_updates --json '{"runId":"<runId>","selectedProposalIndexes":[0],"validateOnly":true}'
 node scripts/ams-cli.mjs review get_review_status --task <taskId>
 node scripts/ams-cli.mjs review get_review_status --goal <goalId>
+node scripts/ams-cli.mjs intent interpret_intent --json '{"rawIntent":"<messy operator intent>","projectId":"<projectId>","goalId":"<goalId>"}'
 node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}'
 node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","validateOnly":true,"review":{"summary":"Ready for review."}}'
 node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","approval":{"summary":"Ready for approval."}}'
@@ -137,11 +141,34 @@ The manifest also includes compact playbooks for common intents such as `create_
 For the most important commands, the manifest also includes compact `examples` with sample input and output shapes. Prefer copying those when the payload shape is uncertain.
 For higher-risk approval, decomposition, and coordination flows, prefer a dry-run first with `validateOnly: true` when supported so you can inspect checks and preview output before mutating AMS state.
 
+## Capability registry ownership
+
+The canonical place to add or change an agent-facing AMS capability is
+`src/lib/server/agent-capability-commands.js`. Update that registry entry first, then keep the
+matching implementation surfaces in sync:
+
+1. Add or update the route handler under `src/routes/api/...`.
+2. Add or update CLI dispatch in `scripts/ams-cli.mjs`.
+3. Add or update the generated MCP input schema or path/body metadata in
+   `scripts/ams-control-plane-mcp.mjs`.
+4. Update `plugins/ams-control-plane/README.md` and this CLI reference when the user-facing command
+   set or workflow changes.
+
+The focused manifest tests are the drift guard for this path. They fail when registry command keys
+are duplicated, a registry API path no longer maps to a SvelteKit `+server.ts` route, CLI support is
+missing for a registry command, or MCP schema/tool metadata no longer covers the same command key.
+Run:
+
+```bash
+npm run test:unit -- --run src/lib/server/agent-capability-manifest.spec.ts src/lib/server/ams-control-plane-mcp.spec.ts src/lib/server/ams-cli.spec.ts
+```
+
 ## First-class intents
 
 These commands collapse common AMS playbooks into one call and return before/after readback context:
 
 ```bash
+node scripts/ams-cli.mjs intent interpret_intent --json '{"rawIntent":"<messy operator intent>","projectId":"<projectId>","goalId":"<goalId>","taskId":"<taskId>"}'
 node scripts/ams-cli.mjs intent prepare_task_for_review --json '{"taskId":"<taskId>","attachment":{"path":"<absolute-file-path>"},"review":{"summary":"Ready for review."}}'
 node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","approval":{"summary":"Ready for approval.","mode":"before_complete"}}'
 node scripts/ams-cli.mjs intent prepare_task_for_approval --json '{"taskId":"<taskId>","validateOnly":true,"approval":{"summary":"Ready for approval.","mode":"before_complete"}}'

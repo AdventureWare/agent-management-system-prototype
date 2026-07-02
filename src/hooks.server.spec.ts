@@ -5,6 +5,9 @@ describe('server hooks agent API auth paths', () => {
 	it('includes structured agent control-plane API routes', () => {
 		expect(isAgentControlPlaneApiPath('/api/agent-capabilities')).toBe(true);
 		expect(isAgentControlPlaneApiPath('/api/agent-context/current')).toBe(true);
+		expect(isAgentControlPlaneApiPath('/api/agent-intent-interpretation/interpret_intent')).toBe(
+			true
+		);
 		expect(isAgentControlPlaneApiPath('/api/agent-goal-loop/get_actionable_work')).toBe(true);
 		expect(isAgentControlPlaneApiPath('/api/agent-work-packets/get_agent_work_packet')).toBe(true);
 		expect(isAgentControlPlaneApiPath('/api/agent-run-results/record_run_result')).toBe(true);
