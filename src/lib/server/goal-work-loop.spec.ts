@@ -182,6 +182,7 @@ function createControlPlane(input: {
 	reviews?: Review[];
 	approvals?: Approval[];
 	templates?: TaskTemplate[];
+	goalStatus?: 'ready' | 'running' | 'review' | 'blocked' | 'done';
 }): ControlPlaneData {
 	return {
 		providers: [
@@ -210,7 +211,7 @@ function createControlPlane(input: {
 				id: 'goal_1',
 				name: 'Autonomous Goal-Directed Work Loop v0',
 				area: 'product',
-				status: 'running',
+				status: input.goalStatus ?? 'running',
 				summary: 'Keep making progress toward active goals.',
 				artifactPath: '',
 				projectIds: ['project_1'],
@@ -559,6 +560,42 @@ describe('buildGoalWorkLoopClassification', () => {
 		);
 		expect(result.recommendation.suggestedTaskDraft?.nonGoals).toContain(
 			'Do not implement the task while planning it.'
+		);
+	});
+
+	it('keeps running goals with only closed work in the planning loop', () => {
+		const result = classify({
+			tasks: [createTask({ id: 'task_done', status: 'done', closeoutState: 'accepted' })]
+		});
+
+		expect(result.recommendation).toEqual(
+			expect.objectContaining({
+				kind: 'create_planning_task',
+				taskIds: [],
+				reason: 'Goal is not complete and no execution task is available; create a planning task.'
+			})
+		);
+		expect(result.recommendation.suggestedTaskDraft).toEqual(
+			expect.objectContaining({
+				title: 'Plan next work for Autonomous Goal-Directed Work Loop v0',
+				projectId: 'project_1',
+				goalId: 'goal_1'
+			})
+		);
+	});
+
+	it('returns goal complete only for explicitly done goals with accepted work', () => {
+		const result = classify({
+			goalStatus: 'done',
+			tasks: [createTask({ id: 'task_done', status: 'done', closeoutState: 'accepted' })]
+		});
+
+		expect(result.recommendation).toEqual(
+			expect.objectContaining({
+				kind: 'goal_complete',
+				taskIds: [],
+				reason: 'No remaining goal-linked work is actionable or blocked.'
+			})
 		);
 	});
 });

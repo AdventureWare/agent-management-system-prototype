@@ -724,6 +724,7 @@ function buildRecommendation(input: {
 	}
 
 	if (
+		goal?.status === 'done' &&
 		byClassification.accepted_done.length > 0 &&
 		byClassification.duplicate_superseded.length === 0
 	) {

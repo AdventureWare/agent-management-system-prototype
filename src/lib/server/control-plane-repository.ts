@@ -37,6 +37,13 @@ function prependRecords<T>(records: readonly T[] | undefined, existing: readonly
 	return records && records.length > 0 ? [...records, ...existing] : [...existing];
 }
 
+function shouldReconcileTaskChange(previousTask: Task | null, nextTask: Task | null) {
+	return !(
+		(previousTask && isContinuationPlanningTask(previousTask)) ||
+		(nextTask && isContinuationPlanningTask(nextTask))
+	);
+}
+
 function deleteTasksFromData(data: ControlPlaneData, deletedTaskIds: readonly string[]) {
 	const deletedTaskIdSet = new Set(deletedTaskIds);
 	const relatedRunIds = new Set(
@@ -200,11 +207,13 @@ export async function updateTaskRecord(input: {
 			changedCollections.push('decisions');
 		}
 
-		const affectedGoalIds = getGoalIdsAffectedByTaskChange({
-			data: nextData,
-			previousTask: existingTask,
-			nextTask
-		});
+		const affectedGoalIds = shouldReconcileTaskChange(existingTask, nextTask)
+			? getGoalIdsAffectedByTaskChange({
+					data: nextData,
+					previousTask: existingTask,
+					nextTask
+				})
+			: [];
 		const reconciliation = reconcileGoalsContinuationInData(
 			syncWorkflowParentTaskStatuses(nextData),
 			affectedGoalIds
@@ -248,11 +257,13 @@ export async function mutateTaskCollections(input: {
 
 		const plan = input.mutate(existingTask, data);
 		updatedTask = plan.data.tasks.find((candidate) => candidate.id === input.taskId) ?? null;
-		const affectedGoalIds = getGoalIdsAffectedByTaskChange({
-			data: plan.data,
-			previousTask: existingTask,
-			nextTask: updatedTask
-		});
+		const affectedGoalIds = shouldReconcileTaskChange(existingTask, updatedTask)
+			? getGoalIdsAffectedByTaskChange({
+					data: plan.data,
+					previousTask: existingTask,
+					nextTask: updatedTask
+				})
+			: [];
 		const reconciliation = reconcileGoalsContinuationInData(
 			syncWorkflowParentTaskStatuses(plan.data),
 			affectedGoalIds

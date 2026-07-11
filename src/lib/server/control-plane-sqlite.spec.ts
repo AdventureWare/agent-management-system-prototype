@@ -757,4 +757,75 @@ describe('control-plane sqlite backend', () => {
 		);
 		expect(loaded.goals[0]?.taskIds).toEqual([]);
 	});
+
+	it('does not recreate a continuation-planning task when canceling that task through the repository', async () => {
+		const root = createTempDir();
+		process.chdir(root);
+		vi.stubEnv('APP_STORAGE_BACKEND', 'sqlite');
+
+		const controlPlaneModule = await importControlPlaneModule();
+		const repositoryModule = await import('./control-plane-repository');
+		const { CONTINUATION_PLANNING_TASK_TITLE } = await import('./goal-continuation-reconciliation');
+		const project = controlPlaneModule.createProject({
+			name: 'AMS',
+			summary: 'Agent management system',
+			projectRootFolder: root,
+			defaultArtifactRoot: resolve(root, 'agent_output')
+		});
+		const continuationTask = controlPlaneModule.createTask({
+			id: 'task_continue',
+			title: CONTINUATION_PLANNING_TASK_TITLE,
+			summary: 'Assess remaining goal work.',
+			projectId: project.id,
+			goalId: 'goal_1',
+			priority: 'medium',
+			status: 'ready',
+			riskLevel: 'low',
+			approvalMode: 'none',
+			requiresReview: true,
+			desiredRoleId: '',
+			artifactPath: project.defaultArtifactRoot
+		});
+
+		await applyControlPlaneUpdate(controlPlaneModule, (data) => ({
+			...data,
+			projects: [project],
+			goals: [
+				{
+					id: 'goal_1',
+					name: 'Goal',
+					area: 'product',
+					status: 'running',
+					summary: 'Goal summary',
+					artifactPath: project.defaultArtifactRoot,
+					projectIds: [project.id],
+					taskIds: [continuationTask.id]
+				}
+			],
+			tasks: [continuationTask]
+		}));
+
+		await repositoryModule.updateTaskRecord({
+			taskId: continuationTask.id,
+			update: (task) => ({
+				...task,
+				status: 'canceled',
+				updatedAt: '2026-07-02T20:45:00.000Z'
+			})
+		});
+
+		const loaded = await controlPlaneModule.loadControlPlane();
+		const continuationTasks = loaded.tasks.filter(
+			(task) => task.title === CONTINUATION_PLANNING_TASK_TITLE
+		);
+
+		expect(continuationTasks).toHaveLength(1);
+		expect(continuationTasks[0]).toEqual(
+			expect.objectContaining({
+				id: continuationTask.id,
+				status: 'canceled'
+			})
+		);
+		expect(loaded.goals[0]?.taskIds).toEqual([continuationTask.id]);
+	});
 });
