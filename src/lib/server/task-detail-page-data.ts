@@ -15,6 +15,8 @@ import { getTaskAttachmentRoot } from '$lib/server/task-attachments';
 import { getExecutionSurfaceAssignmentSuggestions } from '$lib/server/execution-surface-api';
 import { buildTaskExecutionPreflight } from '$lib/server/task-execution-preflight';
 import { collectLaunchModelOptions } from '$lib/server/task-launch-model';
+import { buildTaskLoopReport } from '$lib/server/task-loop-report';
+import { buildOperatorGoalLoopConsole } from '$lib/server/operator-goal-loop-console';
 import { TASK_STATUS_OPTIONS } from '$lib/types/control-plane';
 import { buildDelegationReadinessAssessment } from './delegation-readiness';
 import {
@@ -141,6 +143,12 @@ export async function loadTaskDetailPageData(taskId: string) {
 		goalId: task.goalId || null,
 		taskId: task.id
 	});
+	const taskLoopReport = buildTaskLoopReport(data, task.id);
+	const operatorGoalLoopConsole = buildOperatorGoalLoopConsole(data, {
+		projectId: task.projectId,
+		goalId: task.goalId || null,
+		taskId: task.id
+	});
 
 	return {
 		task: buildTaskDetailTaskView({
@@ -168,6 +176,8 @@ export async function loadTaskDetailPageData(taskId: string) {
 		projectInstalledSkills: availableSkills,
 		launchContext,
 		goalLoopWorkPacket,
+		taskLoopReport,
+		operatorGoalLoopConsole,
 		artifactBrowser,
 		project,
 		linkedGoal: task.goalId ? (goalMap.get(task.goalId) ?? null) : null,

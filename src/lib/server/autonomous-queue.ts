@@ -3,6 +3,11 @@ import {
 	getPendingApprovalForTask,
 	taskHasUnmetDependencies
 } from '$lib/server/control-plane';
+import {
+	GOAL_LOOP_AUTONOMOUS_QUEUE_ROW_KEYS,
+	buildGoalLoopCountRows,
+	type GoalLoopCountRow
+} from '$lib/goal-loop-readback';
 import type {
 	ControlPlaneData,
 	Goal,
@@ -56,6 +61,7 @@ export type AutonomousQueueSection = {
 };
 
 export type AutonomousQueueData = {
+	controlLoopRows: GoalLoopCountRow[];
 	sections: AutonomousQueueSection[];
 	recommendedTasks: AutonomousQueueTask[];
 	blockedTasks: AutonomousQueueTask[];
@@ -415,8 +421,18 @@ export function buildAutonomousQueue(data: ControlPlaneData): AutonomousQueueDat
 	const highRiskReviewTasks = queueItems
 		.filter((item) => item.riskLevel === 'high' || item.riskLevel === 'critical')
 		.sort(compareQueueTasks);
+	const controlLoopRows = buildGoalLoopCountRows(
+		{
+			actionableNow: recommendedTasks.length,
+			blocked: blockedTasks.length,
+			needsPlanning: needsPlanningTasks.length,
+			unsafeOutOfScope: highRiskReviewTasks.length
+		},
+		GOAL_LOOP_AUTONOMOUS_QUEUE_ROW_KEYS
+	);
 
 	return {
+		controlLoopRows,
 		sections: [
 			{
 				id: 'recommended',

@@ -20,6 +20,7 @@
 	import TaskDetailHero from '$lib/components/tasks/TaskDetailHero.svelte';
 	import TaskDelegationReadinessPanel from '$lib/components/tasks/TaskDelegationReadinessPanel.svelte';
 	import TaskDetailOverview from '$lib/components/tasks/TaskDetailOverview.svelte';
+	import TaskLoopReportPanel from '$lib/components/tasks/TaskLoopReportPanel.svelte';
 	import TaskResourcesPanel from '$lib/components/tasks/TaskResourcesPanel.svelte';
 	import { getTaskThreadActionLabel, isActiveTaskThread } from '$lib/task-thread-context';
 	import { ACTIVE_REFRESH_INTERVAL_MS } from '$lib/thread-activity';
@@ -682,6 +683,36 @@
 	/>
 
 	<TaskDelegationReadinessPanel assessment={data.delegationReadiness} />
+
+	<TaskLoopReportPanel report={data.taskLoopReport} />
+
+	{#if data.operatorGoalLoopConsole}
+		<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<p class="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+						Operator path
+					</p>
+					<p class="ui-wrap-anywhere mt-2 text-sm font-semibold text-white">
+						{data.operatorGoalLoopConsole.path.label}
+					</p>
+					<p class="ui-wrap-anywhere mt-1 text-sm text-slate-400">
+						{data.operatorGoalLoopConsole.path.reason}
+					</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<span class="badge border border-slate-700 bg-slate-950/70 text-slate-300">
+						{data.operatorGoalLoopConsole.path.surface.replace(/_/g, ' ')}
+					</span>
+					{#each data.operatorGoalLoopConsole.path.suggestedCommands.slice(0, 3) as command (command)}
+						<span class="badge border border-slate-700 bg-slate-900/80 text-slate-200">
+							{command.replace(/:/g, ' ')}
+						</span>
+					{/each}
+				</div>
+			</div>
+		</section>
+	{/if}
 
 	<section class="card border border-slate-800/90 bg-slate-950/75 px-5 py-4">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

@@ -219,6 +219,7 @@ vi.mock('$lib/server/control-plane', () => ({
 	formatRelativeTime: vi.fn(() => 'just now'),
 	getOpenReviewForTask: vi.fn(() => null),
 	getPendingApprovalForTask: vi.fn(() => null),
+	taskHasUnmetDependencies: vi.fn(() => false),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current),
 	parseTaskStatus: vi.fn((_value: string, fallback: string) => fallback),
 	projectMatchesPath,
@@ -376,6 +377,7 @@ vi.mock('$lib/server/agent-threads', () => ({
 
 vi.mock('$lib/server/task-threads', () => ({
 	buildPromptDigest: vi.fn(() => 'digest_test'),
+	buildTaskLaunchRunContextSummary: vi.fn(() => 'Structured launch context readback.'),
 	buildTaskThreadName: vi.fn(
 		(input: { projectName: string; taskName: string; taskId: string }) =>
 			`Task thread · ${input.taskName} · ${input.projectName} · ${input.taskId}`
@@ -428,6 +430,8 @@ vi.mock('$lib/task-thread-context', () => ({
 }));
 
 import { actions } from './+page.server';
+import { loadTaskDetailPageData } from '$lib/server/task-detail-page-data';
+import { buildOperatorGoalLoopConsole } from '$lib/server/operator-goal-loop-console';
 
 describe('task detail page server actions', () => {
 	beforeEach(() => {
@@ -553,6 +557,17 @@ describe('task detail page server actions', () => {
 			approvals: []
 		};
 		controlPlaneState.saved = null;
+	});
+
+	it('loads the same operator path as the shared goal-loop console projection', async () => {
+		const pageData = await loadTaskDetailPageData('task_1');
+		const expected = buildOperatorGoalLoopConsole(controlPlaneState.current as ControlPlaneData, {
+			projectId: 'project_1',
+			goalId: 'goal_launch',
+			taskId: 'task_1'
+		});
+
+		expect(pageData?.operatorGoalLoopConsole.path).toEqual(expected.path);
 	});
 
 	it('updates the task target date from the detail form', async () => {

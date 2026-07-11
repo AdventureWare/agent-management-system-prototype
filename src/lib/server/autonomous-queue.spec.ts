@@ -120,6 +120,13 @@ describe('buildAutonomousQueue', () => {
 
 		expect(queue.recommendedTasks.map((task) => task.id)).toEqual(['task_r4', 'task_r3']);
 		expect(queue.recommendedTasks[0]?.recommendationReason).toContain('R4_REVIEWABLE');
+		expect(queue.controlLoopRows.map((row) => row.key)).toEqual([
+			'actionableNow',
+			'blocked',
+			'needsPlanning',
+			'unsafeOutOfScope'
+		]);
+		expect(queue.controlLoopRows.find((row) => row.key === 'actionableNow')?.count).toBe(2);
 	});
 
 	it('keeps blocked, high-risk, A5, and unvalidated tasks out of recommendations', () => {
@@ -154,6 +161,8 @@ describe('buildAutonomousQueue', () => {
 		expect(queue.recommendedTasks).toHaveLength(0);
 		expect(queue.blockedTasks.map((task) => task.id)).toContain('task_blocked');
 		expect(queue.highRiskReviewTasks.map((task) => task.id)).toContain('task_high_risk');
+		expect(queue.controlLoopRows.find((row) => row.key === 'blocked')?.count).toBe(1);
+		expect(queue.controlLoopRows.find((row) => row.key === 'unsafeOutOfScope')?.count).toBe(1);
 	});
 
 	it('surfaces high-priority underspecified tasks as planning work', () => {

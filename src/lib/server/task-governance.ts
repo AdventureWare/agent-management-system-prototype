@@ -10,6 +10,15 @@ import {
 } from '$lib/server/control-plane';
 import { mutateTaskCollections } from '$lib/server/control-plane-repository';
 import { buildTaskWorkItems } from '$lib/server/task-work-items';
+import {
+	buildOperatorGoalLoopConsole,
+	type OperatorGoalLoopConsole
+} from '$lib/server/operator-goal-loop-console';
+import {
+	GOAL_LOOP_OPERATOR_INTERVENTION_ROW_KEYS,
+	buildGoalLoopCountRows,
+	type GoalLoopCountRow
+} from '$lib/goal-loop-readback';
 import type { Run, Task } from '$lib/types/control-plane';
 import type { TaskStaleSignalKey, TaskWorkItem } from '$lib/types/task-work-item';
 
@@ -24,6 +33,7 @@ export type GovernanceInboxQueueItem = GovernanceInboxItem & {
 	queueKinds: GovernanceInboxQueueKind[];
 	primaryQueueKind: GovernanceInboxQueueKind;
 	queueSummary: string;
+	operatorPath: OperatorGoalLoopConsole['path'];
 };
 
 export type GovernanceInboxData = {
@@ -31,6 +41,7 @@ export type GovernanceInboxData = {
 	approvalItems: GovernanceInboxItem[];
 	escalationItems: GovernanceInboxItem[];
 	queueItems: GovernanceInboxQueueItem[];
+	controlLoopRows: GoalLoopCountRow[];
 	summary: {
 		queueCount: number;
 		reviewCount: number;
@@ -456,24 +467,39 @@ export async function loadGovernanceInboxData(): Promise<GovernanceInboxData> {
 				...task,
 				queueKinds,
 				primaryQueueKind: queueKinds[0],
-				queueSummary: buildQueueSummary(task)
+				queueSummary: buildQueueSummary(task),
+				operatorPath: buildOperatorGoalLoopConsole(controlPlane, {
+					projectId: task.projectId,
+					goalId: task.goalId || null,
+					taskId: task.id
+				}).path
 			} satisfies GovernanceInboxQueueItem;
 		})
 		.filter((task): task is GovernanceInboxQueueItem => Boolean(task))
 		.sort(compareQueueItems);
 	const reviewFollowUpCount = governanceItems.filter(isReviewFollowUpTask).length;
+	const blockedCount = governanceItems.filter((task) => task.status === 'blocked').length;
+	const controlLoopRows = buildGoalLoopCountRows(
+		{
+			awaitingReview: reviewFollowUpCount,
+			approvalRequired: approvalItems.length,
+			blocked: blockedCount
+		},
+		GOAL_LOOP_OPERATOR_INTERVENTION_ROW_KEYS
+	);
 
 	return {
 		reviewItems,
 		approvalItems,
 		escalationItems,
 		queueItems,
+		controlLoopRows,
 		summary: {
 			queueCount: queueItems.length,
 			reviewCount: reviewItems.length,
 			reviewFollowUpCount,
 			approvalCount: approvalItems.length,
-			blockedCount: governanceItems.filter((task) => task.status === 'blocked').length,
+			blockedCount,
 			dependencyCount: governanceItems.filter((task) => task.hasUnmetDependencies).length,
 			staleCount: governanceItems.filter((task) => task.freshness.isStale).length,
 			escalationCount: escalationItems.length

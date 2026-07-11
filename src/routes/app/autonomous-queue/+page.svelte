@@ -53,22 +53,14 @@
 	/>
 
 	<section class="grid gap-3 md:grid-cols-4">
-		<div class="ui-panel">
-			<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Ready</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.recommendedTasks.length}</p>
-		</div>
-		<div class="ui-panel">
-			<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Blocked</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.blockedTasks.length}</p>
-		</div>
-		<div class="ui-panel">
-			<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Planning</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.needsPlanningTasks.length}</p>
-		</div>
-		<div class="ui-panel">
-			<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">High Risk</p>
-			<p class="mt-2 text-3xl font-semibold text-white">{data.highRiskReviewTasks.length}</p>
-		</div>
+		{#each data.controlLoopRows as row (row.key)}
+			<div class="ui-panel">
+				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+					{row.label}
+				</p>
+				<p class="mt-2 text-3xl font-semibold text-white">{row.count}</p>
+			</div>
+		{/each}
 	</section>
 
 	{#each data.sections as section (section.id)}

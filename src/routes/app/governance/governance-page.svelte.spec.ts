@@ -1,6 +1,7 @@
 import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { buildGoalLoopCountRows } from '$lib/goal-loop-readback';
 import Page from './+page.svelte';
 
 function createGovernanceQueueItem(overrides: Record<string, unknown> = {}) {
@@ -70,18 +71,30 @@ function createGovernanceQueueItem(overrides: Record<string, unknown> = {}) {
 }
 
 function renderPage(queueItems: ReturnType<typeof createGovernanceQueueItem>[]) {
+	const reviewFollowUpCount = queueItems.filter((item) => item.queueKinds.includes('review')).length;
+	const approvalCount = queueItems.filter((item) => item.queueKinds.includes('approval')).length;
+	const blockedCount = queueItems.filter((item) => item.status === 'blocked').length;
+
 	render(Page, {
 		data: {
 			reviewItems: queueItems.filter((item) => item.openReview),
 			approvalItems: queueItems.filter((item) => item.pendingApproval),
 			escalationItems: queueItems.filter((item) => item.queueKinds.includes('escalation')),
 			queueItems,
+			controlLoopRows: buildGoalLoopCountRows(
+				{
+					awaitingReview: reviewFollowUpCount,
+					approvalRequired: approvalCount,
+					blocked: blockedCount
+				},
+				['awaitingReview', 'approvalRequired', 'blocked']
+			),
 			summary: {
 				queueCount: queueItems.length,
 				reviewCount: queueItems.filter((item) => item.openReview).length,
-				reviewFollowUpCount: queueItems.filter((item) => item.queueKinds.includes('review')).length,
-				approvalCount: queueItems.filter((item) => item.queueKinds.includes('approval')).length,
-				blockedCount: queueItems.filter((item) => item.status === 'blocked').length,
+				reviewFollowUpCount,
+				approvalCount,
+				blockedCount,
 				dependencyCount: queueItems.filter((item) => item.hasUnmetDependencies).length,
 				staleCount: queueItems.filter((item) => item.freshness.isStale).length,
 				escalationCount: queueItems.filter((item) => item.queueKinds.includes('escalation')).length

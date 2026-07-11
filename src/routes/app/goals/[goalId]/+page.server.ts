@@ -16,6 +16,11 @@ import {
 import { normalizePathInput } from '$lib/server/path-tools';
 import { assistGoalWriting } from '$lib/server/goal-writing-assist';
 import { buildGoalWorkLoopClassification } from '$lib/server/goal-work-loop';
+import { buildOperatorGoalLoopConsole } from '$lib/server/operator-goal-loop-console';
+import {
+	buildGoalLoopCountRows,
+	buildGoalLoopCountsFromClassificationBuckets
+} from '$lib/goal-loop-readback';
 import { AREA_OPTIONS, GOAL_STATUS_OPTIONS } from '$lib/types/control-plane';
 import {
 	deleteGoal as removeGoalFromControlPlane,
@@ -199,6 +204,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		goalId: goal.id,
 		projectId: linkedProjects[0]?.id ?? null
 	});
+	const goalLoopCounts = buildGoalLoopCountsFromClassificationBuckets(goalLoop.byClassification);
 
 	return {
 		goal: {
@@ -224,20 +230,12 @@ export const load: PageServerLoad = async ({ params }) => {
 		},
 		goalLoop: {
 			recommendation: goalLoop.recommendation,
-			counts: {
-				actionableNow: goalLoop.byClassification.actionable_now.length,
-				inProgress: goalLoop.byClassification.in_progress.length,
-				awaitingReview: goalLoop.byClassification.awaiting_review.length,
-				acceptedDone: goalLoop.byClassification.accepted_done.length,
-				needsRevision: goalLoop.byClassification.needs_revision.length,
-				blocked: goalLoop.byClassification.blocked.length,
-				needsClarification: goalLoop.byClassification.needs_clarification.length,
-				needsResearch: goalLoop.byClassification.needs_research.length,
-				needsPlanning: goalLoop.byClassification.needs_planning.length,
-				approvalRequired: goalLoop.byClassification.approval_required.length,
-				unsafeOutOfScope: goalLoop.byClassification.unsafe_out_of_scope.length,
-				duplicateSuperseded: goalLoop.byClassification.duplicate_superseded.length
-			},
+			operatorConsole: buildOperatorGoalLoopConsole(data, {
+				projectId: linkedProjects[0]?.id ?? null,
+				goalId: goal.id
+			}),
+			counts: goalLoopCounts,
+			countRows: buildGoalLoopCountRows(goalLoopCounts),
 			classifiedTasks: goalLoop.tasks.map((task) => ({
 				id: task.id,
 				title: task.title,

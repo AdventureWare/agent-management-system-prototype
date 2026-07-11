@@ -107,6 +107,7 @@ function buildTaskDetailPageData(overrides: Record<string, unknown> = {}) {
 			}
 		},
 		goalLoopWorkPacket: null,
+		taskLoopReport: null,
 		delegationReadiness: {
 			recommendedMode: 'READY_FOR_EXECUTION',
 			readinessLabel: 'Ready for execution',
@@ -523,6 +524,143 @@ describe('/app/tasks/[taskId]/+page.svelte', () => {
 			(document.querySelector('textarea[readonly]') as HTMLTextAreaElement | null)?.value
 		).toContain('Goal Loop Selected Work Packet');
 		expect(document.body.textContent).toContain('Run task');
+	});
+
+	it('surfaces the production task loop report as compact operator readback', async () => {
+		render(Page, {
+			form: {} as never,
+			data: buildTaskDetailPageData({
+				taskLoopReport: {
+					task: {
+						id: 'task_1',
+						status: 'review',
+						blockedReason: ''
+					},
+					classification: {
+						value: 'awaiting_review',
+						actionable: false,
+						reasons: [
+							{
+								code: 'awaiting_review',
+								message: 'Open review must resolve first.'
+							}
+						],
+						recommendationKind: 'review_result',
+						recommendationReason: 'Review completed work before continuing.'
+					},
+					readiness: {
+						readinessMode: 'AWAITING_REVIEW',
+						effectiveRigorProfile: 'INTERNAL',
+						hasUnmetDependencies: true,
+						hasOpenReview: true,
+						hasPendingApproval: false,
+						isTerminal: false
+					},
+					latestRun: {
+						id: 'run_1',
+						taskId: 'task_1',
+						status: 'completed',
+						summary: 'Run completed.',
+						resultSummary: 'Implemented the readback.',
+						validationSummary: 'Focused tests passed.',
+						errorSummary: '',
+						artifactPaths: ['docs/task-loop-report.md'],
+						updatedAt: '2026-07-04T12:00:00.000Z'
+					},
+					openReview: {
+						id: 'review_1',
+						taskId: 'task_1',
+						runId: 'run_1',
+						status: 'open',
+						summary: 'Review the readback.',
+						createdAt: '2026-07-04T12:00:00.000Z',
+						updatedAt: '2026-07-04T12:00:00.000Z',
+						resolvedAt: null
+					},
+					pendingApproval: null,
+					dependencies: {
+						all: [
+							{
+								id: 'task_dependency',
+								title: 'Dependency task',
+								status: 'in_progress',
+								closeoutState: null
+							}
+						],
+						open: [
+							{
+								id: 'task_dependency',
+								title: 'Dependency task',
+								status: 'in_progress',
+								closeoutState: null
+							}
+						],
+						missingTaskIds: ['task_missing']
+					},
+					followUps: {
+						fromLatestRunTaskIds: ['task_follow_up'],
+						tasks: [
+							{
+								id: 'task_follow_up',
+								title: 'Follow-up task',
+								status: 'ready',
+								projectId: 'project_1',
+								goalId: ''
+							}
+						],
+						openCount: 1
+					},
+					artifacts: {
+						taskArtifactPath: '',
+						attachmentPaths: [],
+						latestRunArtifactPaths: ['docs/task-loop-report.md'],
+						allPaths: ['docs/task-loop-report.md']
+					},
+					decisions: [
+						{
+							id: 'decision_1',
+							taskId: 'task_1',
+							goalId: '',
+							runId: 'run_1',
+							reviewId: null,
+							approvalId: null,
+							decisionType: 'task_plan_updated',
+							summary: 'Use the shared report.',
+							createdAt: '2026-07-04T12:00:00.000Z'
+						}
+					],
+					workPacket: {
+						mode: 'reviewer',
+						recommendationKind: 'review_result',
+						includedTaskIds: ['task_1'],
+						relevantRunIds: ['run_1'],
+						command: 'work-packet:get_agent_work_packet --task task_1'
+					},
+					nextAction: {
+						action: 'review_result',
+						reason: 'The task has open review work before it can be accepted.',
+						suggestedCommands: [
+							'goal-loop:explain_task_eligibility',
+							'work-packet:get_agent_work_packet'
+						]
+					},
+					source: {
+						readOnly: true
+					}
+				}
+			}) as never
+		});
+
+		expect(document.body.textContent).toContain('Task loop report');
+		expect(document.body.textContent).toContain('Open review must resolve first.');
+		expect(document.body.textContent).toContain('Review Result');
+		expect(document.body.textContent).toContain('Review Open');
+		expect(document.body.textContent).toContain('Latest run Completed');
+		expect(document.body.textContent).toContain('Dependency task');
+		expect(document.body.textContent).toContain('Missing dependency record task_missing');
+		expect(document.body.textContent).toContain('Follow-up task');
+		expect(document.body.textContent).toContain('goal-loop explain_task_eligibility');
+		expect(document.body.textContent).toContain('work-packet:get_agent_work_packet --task task_1');
 	});
 
 	it('renders attached files with open, download, and detach controls', async () => {

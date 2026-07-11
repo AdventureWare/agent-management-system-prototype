@@ -399,6 +399,20 @@ describe('task-detail-page-data', () => {
 				projectId: 'project_a',
 				goalId: 'goal_child'
 			},
+			taskLoopReport: {
+				task: {
+					id: 'task_1'
+				},
+				classification: {
+					value: 'in_progress'
+				},
+				nextAction: {
+					action: 'continue_run'
+				},
+				source: {
+					readOnly: true
+				}
+			},
 			relatedRuns: [{ id: 'run_1' }],
 			candidateThreads: [{ id: 'thread_1' }],
 			suggestedThread: { id: 'thread_1' },

@@ -190,7 +190,7 @@ export function normalizeTaskBlockedReasonForStatus(_status: TaskStatus, blocked
 	return _status === 'blocked' ? blockedReason.trim() : '';
 }
 
-function formatEnumLabel(value: string): string {
+export function formatEnumLabel(value: string): string {
 	return value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 

@@ -178,25 +178,17 @@
 			value={data.summary.queueCount}
 			detail="Unique tasks that currently need operator intervention."
 		/>
-		<MetricCard
-			label="Review follow-ups"
-			value={data.summary.reviewFollowUpCount}
-			detail="Formal reviews plus tasks paused in review without a separate queue record."
-		/>
-		<MetricCard
-			label="Approval gates"
-			value={data.summary.approvalCount}
-			detail="Approval objects currently blocking execution or completion."
-		/>
+		{#each data.controlLoopRows as row (row.key)}
+			<MetricCard
+				label={row.label}
+				value={row.count}
+				detail="Shared control-loop intervention count for this operator inbox."
+			/>
+		{/each}
 		<MetricCard
 			label="Escalations"
 			value={data.summary.escalationCount}
 			detail="Blocked, dependency-held, or stale items that still need judgment."
-		/>
-		<MetricCard
-			label="Blocked tasks"
-			value={data.summary.blockedCount}
-			detail="Tasks explicitly marked blocked."
 		/>
 		<MetricCard
 			label="Stale work"
@@ -385,7 +377,15 @@
 								</div>
 								<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
 									<p class="text-[11px] tracking-[0.16em] text-slate-500 uppercase">Next step</p>
-									<p class="mt-2 text-sm text-white">{item.queueSummary}</p>
+									{#if item.operatorPath}
+										<p class="mt-2 text-sm font-semibold text-white">{item.operatorPath.label}</p>
+										<p class="mt-1 text-xs text-slate-400">{item.operatorPath.reason}</p>
+										<p class="mt-2 text-xs text-slate-500">
+											Surface: {item.operatorPath.surface.replace(/_/g, ' ')}
+										</p>
+									{:else}
+										<p class="mt-2 text-sm text-white">{item.queueSummary}</p>
+									{/if}
 								</div>
 							</div>
 

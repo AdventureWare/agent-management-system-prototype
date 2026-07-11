@@ -7,7 +7,9 @@
 	import GoalEditor from '$lib/components/GoalEditor.svelte';
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageTabs from '$lib/components/PageTabs.svelte';
+	import { buildGoalLoopCountRows } from '$lib/goal-loop-readback';
 	import {
+		formatEnumLabel,
 		formatGoalStatusLabel,
 		formatTaskStatusLabel,
 		goalStatusToneClass,
@@ -65,10 +67,6 @@
 		}).format(new Date(Date.UTC(year, month - 1, day)));
 	}
 
-	function formatLoopLabel(value: string) {
-		return value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
-	}
-
 	function taskTitleForId(taskId: string) {
 		return (
 			data.goalLoop.classifiedTasks.find(
@@ -77,19 +75,9 @@
 		);
 	}
 
-	let goalLoopCounts = $derived([
-		['Actionable now', data.goalLoop.counts.actionableNow],
-		['In progress', data.goalLoop.counts.inProgress],
-		['Awaiting review', data.goalLoop.counts.awaitingReview],
-		['Approval required', data.goalLoop.counts.approvalRequired],
-		['Blocked', data.goalLoop.counts.blocked],
-		['Needs planning', data.goalLoop.counts.needsPlanning],
-		['Needs research', data.goalLoop.counts.needsResearch],
-		['Needs clarification', data.goalLoop.counts.needsClarification],
-		['Unsafe/out of scope', data.goalLoop.counts.unsafeOutOfScope],
-		['Duplicate/superseded', data.goalLoop.counts.duplicateSuperseded],
-		['Accepted/done', data.goalLoop.counts.acceptedDone]
-	]);
+	let goalLoopCountRows = $derived(
+		data.goalLoop.countRows ?? buildGoalLoopCountRows(data.goalLoop.counts)
+	);
 </script>
 
 <AppPage width="full">
@@ -147,7 +135,7 @@
 		<div class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-					{formatLoopLabel(data.goalLoop.recommendation.kind)}
+					{formatEnumLabel(data.goalLoop.recommendation.kind)}
 				</p>
 				{#if data.goalLoop.recommendation.taskIds.length > 0}
 					<div class="mt-3 space-y-2">
@@ -183,15 +171,42 @@
 				{/if}
 			</div>
 
+			{#if data.goalLoop.operatorConsole}
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Operator path
+					</p>
+					<p class="ui-wrap-anywhere mt-3 text-sm font-semibold text-white">
+						{data.goalLoop.operatorConsole.path.label}
+					</p>
+					<p class="ui-wrap-anywhere mt-2 text-sm text-slate-400">
+						{data.goalLoop.operatorConsole.path.reason}
+					</p>
+					<div class="mt-3 flex flex-wrap gap-2">
+						<span class="badge border border-slate-700 bg-slate-950/70 text-slate-300">
+							{formatEnumLabel(data.goalLoop.operatorConsole.path.surface)}
+						</span>
+						{#if data.goalLoop.operatorConsole.path.href}
+							<a
+								class="badge border border-sky-800/70 bg-sky-950/40 text-sky-200"
+								href={data.goalLoop.operatorConsole.path.href}
+							>
+								Open path
+							</a>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 				<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Work state</p>
 				<div class="mt-3 grid gap-2 sm:grid-cols-2">
-					{#each goalLoopCounts as [label, count]}
+					{#each goalLoopCountRows as row (row.key)}
 						<div
 							class="flex items-center justify-between gap-3 rounded-xl bg-slate-950/70 px-3 py-2"
 						>
-							<span class="text-xs text-slate-400">{label}</span>
-							<span class="text-sm font-semibold text-white">{count}</span>
+							<span class="text-xs text-slate-400">{row.label}</span>
+							<span class="text-sm font-semibold text-white">{row.count}</span>
 						</div>
 					{/each}
 				</div>

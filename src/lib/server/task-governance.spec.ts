@@ -73,6 +73,7 @@ vi.mock('$lib/server/control-plane', () => ({
 			) ?? null
 		);
 	}),
+	taskHasUnmetDependencies: vi.fn(() => false),
 	loadControlPlane: vi.fn(async () => controlPlaneState.current)
 }));
 
@@ -112,6 +113,7 @@ import {
 	requestTaskReviewChanges,
 	TaskGovernanceActionError
 } from './task-governance';
+import { buildOperatorGoalLoopConsole } from './operator-goal-loop-console';
 
 function createTaskWorkItem(
 	input: Partial<TaskWorkItem> & Pick<TaskWorkItem, 'id' | 'title'>
@@ -507,6 +509,25 @@ describe('task-governance helpers', () => {
 				staleCount: 1,
 				escalationCount: 2
 			})
+		);
+		expect(result.controlLoopRows.map((row) => ({ key: row.key, count: row.count }))).toEqual([
+			{ key: 'awaitingReview', count: 2 },
+			{ key: 'approvalRequired', count: 1 },
+			{ key: 'blocked', count: 1 }
+		]);
+		expect(result.queueItems.find((item) => item.id === 'task_review')?.operatorPath).toEqual(
+			buildOperatorGoalLoopConsole(controlPlaneState.current as ControlPlaneData, {
+				projectId: 'project_1',
+				goalId: 'goal_1',
+				taskId: 'task_review'
+			}).path
+		);
+		expect(result.queueItems.find((item) => item.id === 'task_approval')?.operatorPath).toEqual(
+			buildOperatorGoalLoopConsole(controlPlaneState.current as ControlPlaneData, {
+				projectId: 'project_1',
+				goalId: 'goal_1',
+				taskId: 'task_approval'
+			}).path
 		);
 	});
 
