@@ -35,7 +35,9 @@ The current implementation stores typed JSON control-plane records in SQLite. Th
 - `Provider`
 - `ExecutionSurface`
 
-The conceptual ontology also names concepts that are not fully first-class implementation records yet, such as `WorkAttempt`, `Actor`, `Capability`, `Tool`, `ContextResource`, and richer `Artifact`. Treat those as conceptual or under-modeled unless a proposal and decision accept a concrete implementation change.
+The conceptual ontology also names concepts that are not fully first-class implementation records yet, such as `WorkAttempt`, `Actor`, `ContextResource`, and richer `Artifact`. Treat those as conceptual or under-modeled unless a proposal and decision accept a concrete implementation change.
+
+`Capability`, `Tool`, `ToolExecution`, `Model`, `EvaluationScenario`, `EvaluationResult`, and `MemoryItem` are accepted minimal concepts by their 2026-07-03 model decisions in `docs/model-decisions/`, but they do not yet have accepted production schema or migration. Current `v2_preview_*` tables remain preview storage until a later schema decision.
 
 ## Bounded Contexts
 

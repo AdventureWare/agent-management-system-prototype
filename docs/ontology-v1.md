@@ -321,7 +321,12 @@ Notes:
 
 Definition:
 
-A reusable ability relevant to planning, routing, or execution.
+A reusable ability, competency, or work affordance relevant to planning, routing, execution, evaluation, or dependency reduction.
+
+Status note:
+
+- `Capability` is accepted as a minimal AMS/v2 concept by `docs/model-decisions/2026-07-03-accept-minimal-capability-concept.md`.
+- Current capability strings remain source/candidate labels until a production registry, alias policy, hierarchy, and migration are accepted.
 
 Examples:
 
@@ -337,16 +342,53 @@ Key properties:
 - `heldByActor`
 - `requiredByTask`
 - `supportedByExecutionSurface`
+- `supportedByModel`
+- `evaluatedByScenario`
 
 Notes:
 
-- This should exist as a first-class concept even if the app initially stores it as strings.
+- Capability is not a role, skill, tool, provider, model, or execution surface.
+- Capability labels need future alias and hierarchy governance.
 
-### 4.11 Tool
+### 4.11 Model
+
+Definition:
+
+A specific AI model, local model, runtime option, or model-like engine offered by a provider or local runtime.
+
+Status note:
+
+- `Model` is accepted as a minimal AMS/v2 concept by `docs/model-decisions/2026-07-03-accept-minimal-model-concept.md`.
+- Current model names, provider default-model strings, pricing rows, and run telemetry labels remain source data until a production registry, alias/version policy, pricing refresh, and migration are accepted.
+
+Examples:
+
+- `gpt-5-codex`
+- `qwen-coder-local`
+- `local-summary-model`
+
+Key properties:
+
+- `offeredByProvider`
+- `supportsCapability`
+- `hasLocality`
+- `hasContextWindow`
+- `hasCostSummary`
+
+Notes:
+
+- Model is not provider, execution surface, run, or evaluation result.
+- Provider can offer many models.
+
+### 4.12 Tool
 
 Definition:
 
 A software or external system needed to perform task work.
+
+Status note:
+
+- `Tool` is accepted as a minimal AMS/v2 concept by `docs/model-decisions/2026-07-03-accept-minimal-tool-concept.md`.
 
 Examples:
 
@@ -365,7 +407,120 @@ Notes:
 - Tools are not roles.
 - Tools are not capabilities.
 
-### 4.12 ResourceRequirement
+### 4.13 EvaluationScenario
+
+Definition:
+
+A reusable benchmark, golden scenario, rubric-backed prompt/task, or capability check used to evaluate whether AMS, a model, provider, tool, or workflow performs a class of work well enough.
+
+Examples:
+
+- Source-linked work-packet generation scenario
+- Local retrieval quality check
+- Provider/model comparison scenario
+
+Key properties:
+
+- `definedByProject`
+- `evaluatesCapability`
+- `hasRubric`
+- `hasVersion`
+
+Notes:
+
+- `EvaluationScenario` is accepted as a minimal AMS/v2 concept by `docs/model-decisions/2026-07-03-accept-minimal-evaluation-scenario-concept.md`.
+- An evaluation scenario is not a task, workflow, review, or evaluation result.
+- `EvaluationResult` records one scenario outcome.
+
+### 4.14 ToolExecution
+
+Definition:
+
+A task-linked event/log record that describes one requested, completed, failed, skipped, or otherwise recorded use of an accepted tool.
+
+Examples:
+
+- `npm test` execution for a task
+- browser automation attempt
+- source-control inspection command
+
+Key properties:
+
+- `executionOfTool`
+- `executionForTask`
+- `executionDuringRun`
+- `executionStatus`
+- `hasValidationSummary`
+- `authorizedByApproval`
+
+Notes:
+
+- `ToolExecution` is accepted as a minimal AMS/v2 evidence concept by `docs/model-decisions/2026-07-03-accept-minimal-tool-execution-concept.md`.
+- A tool execution is not a task run, tool definition, approval, or artifact.
+- Current preview records remain preview storage until a later schema decision.
+
+### 4.15 EvaluationResult
+
+Definition:
+
+A status-bearing evidence record that reports how one task, run, tool execution, provider, model, or workflow performed against an accepted evaluation scenario.
+
+Examples:
+
+- local retrieval scenario passed with rubric evidence
+- provider/model comparison result
+- failed tool workflow evaluation
+
+Key properties:
+
+- `resultForScenario`
+- `resultForTask`
+- `resultForRun`
+- `resultForToolExecution`
+- `resultStatus`
+- `hasScenarioScopedScore`
+- `hasRubricSummary`
+
+Notes:
+
+- `EvaluationResult` is accepted as a minimal AMS/v2 evidence concept by `docs/model-decisions/2026-07-03-accept-minimal-evaluation-result-concept.md`.
+- An evaluation result is not a task run, review, decision, or evaluation scenario.
+- Numeric scores are scenario-scoped until a later decision defines comparability.
+- Current preview records remain preview storage until a later schema decision.
+
+### 4.16 MemoryItem
+
+Definition:
+
+A source-linked reusable local knowledge record scoped to a project and optionally a task, with lifecycle status controlling whether it can be treated as candidate or trusted retrieval context.
+
+Examples:
+
+- preview database boundary guidance
+- local retrieval policy note
+- source-linked project constraint
+- reusable lesson extracted from a decision
+
+Key properties:
+
+- `memoryForProject`
+- `memoryForTask`
+- `memoryStatus`
+- `hasSourceTask`
+- `hasSourceRun`
+- `hasSourceDecision`
+- `hasSourceEvaluationResult`
+- `supersedesMemoryItem`
+- `hasRetrievalScope`
+
+Notes:
+
+- `MemoryItem` is accepted as a minimal AMS/v2 governed knowledge concept by `docs/model-decisions/2026-07-03-accept-minimal-memory-item-concept.md`.
+- A memory item is not a transcript, prompt cache, decision, run, artifact, or skill.
+- Draft memory is not trusted retrieval context.
+- Current preview records remain preview storage until a later schema decision.
+
+### 4.17 ResourceRequirement
 
 Definition:
 
@@ -390,7 +545,7 @@ Notes:
 
 - This is broader and more useful than only modeling blocked reasons as free text.
 
-### 4.13 Review
+### 4.18 Review
 
 Definition:
 
@@ -405,7 +560,7 @@ Key properties:
 - `reviewStatus`
 - `reviewSummary`
 
-### 4.14 Approval
+### 4.19 Approval
 
 Definition:
 
@@ -419,7 +574,7 @@ Key properties:
 - `approvalStatus`
 - `performedByActor`
 
-### 4.15 Decision
+### 4.20 Decision
 
 Definition:
 
@@ -447,7 +602,7 @@ Notes:
 - This is missing from the current model and is important.
 - Planning is mostly made of decisions over the work graph.
 
-### 4.16 PlanningSession
+### 4.21 PlanningSession
 
 Definition:
 
@@ -469,7 +624,7 @@ Notes:
 - The horizon/window is an attribute of the planning session, not a peer to goals and tasks.
 - If the app wants to save reusable planning presets later, that should be treated as a saved filter or configuration, not as the ontological center of planning.
 
-### 4.17 Project
+### 4.22 Project
 
 Definition:
 
@@ -510,8 +665,14 @@ These are the most important first-class relations in the v1 ontology.
 - `Task requiresCapability Capability`
 - `Task requiresTool Tool`
 - `Task requiresResource ResourceRequirement`
+- `Project defines EvaluationScenario`
+- `Project hasMemoryItem MemoryItem`
+- `MemoryItem hasSource Decision|Run|EvaluationResult|Task`
+- `MemoryItem supersedes MemoryItem`
 - `Actor hasCapability Capability`
 - `Actor playsRole Role`
+- `Provider offers Model`
+- `Model supportsCapability Capability`
 - `ExecutionSurface executes WorkAttempt`
 - `ExecutionSurface uses Provider`
 - `PlanningSession produces Decision`
@@ -584,8 +745,6 @@ Current types in `src/lib/types/control-plane.ts` map roughly like this:
 Current missing or under-modeled concepts:
 
 - `Actor`
-- `Capability`
-- `Tool`
 - `ResourceRequirement`
 - `Decision`
 - `WorkAttempt` as a superclass
@@ -601,10 +760,12 @@ Recommended v1 implementation steps:
 1. Keep `Goal`, `Task`, `Run`, `Project`, `Review`, and `Approval`.
 2. Treat `Run` explicitly as a subtype of a broader conceptual `WorkAttempt`.
 3. Rename the user-facing `session` concept fully to `Thread`.
-4. Add first-class `Capability` and `Tool` concepts, even if stored simply at first.
+4. Add production registries for accepted `Capability`, `Tool`, and `Model` concepts only after schema and migration decisions.
 5. Add a structured `Decision` record for planning and coordination changes.
-6. Reframe `PlanningHorizon` into `PlanningSession` plus window fields or saved filters.
-7. Make `Artifact` and `ContextResource` richer over time instead of relying mostly on paths.
+6. Treat `EvaluationScenario` as a first-class definition for repeatable capability checks.
+7. Treat `MemoryItem` as a first-class governed knowledge concept, while keeping production storage and retrieval policy separate.
+8. Reframe `PlanningHorizon` into `PlanningSession` plus window fields or saved filters.
+9. Make `Artifact` and `ContextResource` richer over time instead of relying mostly on paths.
 
 ## 9. Anti-patterns to avoid
 
