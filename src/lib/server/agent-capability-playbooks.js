@@ -55,6 +55,38 @@ export const AGENT_CAPABILITY_PLAYBOOKS = [
 		]
 	},
 	{
+		intent: 'close_out_run_result',
+		steps: [
+			{
+				tool: 'ams_manifest',
+				phase: 'discover',
+				purpose: 'Confirm the run-result evidence and conversion commands before closing out a run.'
+			},
+			{
+				tool: 'ams_context_current',
+				phase: 'inspect',
+				purpose: 'Resolve the current run, task, goal, and thread before recording evidence.'
+			},
+			{
+				tool: 'ams_run_result_record_run_result',
+				phase: 'mutate',
+				purpose:
+					'Record result, validation, artifact, blocker, or follow-up evidence without changing task state.'
+			},
+			{
+				tool: 'ams_run_result_request_review_from_run | ams_run_result_request_approval_from_run | ams_run_result_create_followup_task | ams_run_result_mark_task_blocked_from_run',
+				phase: 'mutate',
+				purpose:
+					'Use the first suggested closeout conversion from the run-result response instead of falling back to task-level mutations.'
+			},
+			{
+				tool: 'ams_goal_loop_get_task_loop_report',
+				phase: 'readback',
+				purpose: 'Verify the task, run, review, approval, blocker, or follow-up state after closeout.'
+			}
+		]
+	},
+	{
 		intent: 'prepare_task_for_approval',
 		steps: [
 			{

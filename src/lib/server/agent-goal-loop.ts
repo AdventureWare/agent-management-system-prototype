@@ -1,5 +1,7 @@
 import { buildGoalWorkLoopClassification } from '$lib/server/goal-work-loop';
 import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
+import { buildTaskLoopReport } from '$lib/server/task-loop-report';
+import { buildOperatorGoalLoopConsole } from '$lib/server/operator-goal-loop-console';
 import type {
 	ControlPlaneData,
 	Goal,
@@ -20,7 +22,9 @@ export const AGENT_GOAL_LOOP_COMMANDS = [
 	'get_blocked_work',
 	'get_awaiting_review',
 	'get_next_recommended_action',
-	'explain_task_eligibility'
+	'get_operator_console',
+	'explain_task_eligibility',
+	'get_task_loop_report'
 ] as const;
 
 export type AgentGoalLoopCommand = (typeof AGENT_GOAL_LOOP_COMMANDS)[number];
@@ -409,6 +413,33 @@ export function buildAgentGoalLoopResponse(data: ControlPlaneData, input: AgentG
 		};
 	}
 
+	if (command === 'get_operator_console') {
+		const console = buildOperatorGoalLoopConsole(data, {
+			projectId: normalizeText(input.projectId) || null,
+			goalId: normalizeText(input.goalId) || null,
+			taskId: normalizeText(input.taskId) || null
+		});
+
+		return {
+			...base,
+			resolved: {
+				projectId: console.project?.id ?? goalLoop.project?.id ?? null,
+				goalId: console.goal?.id ?? goalLoop.goal?.id ?? null,
+				taskId: console.path.taskId
+			},
+			source: {
+				domainHelper: 'src/lib/server/operator-goal-loop-console.ts',
+				route: '/api/agent-goal-loop/get_operator_console'
+			},
+			console,
+			suggestedReadbackCommands: [
+				...(console.path.suggestedCommands ?? []),
+				'goal-loop:get_task_loop_report',
+				'context:current'
+			]
+		};
+	}
+
 	if (command === 'explain_task_eligibility') {
 		const taskId = normalizeText(input.taskId);
 
@@ -437,6 +468,50 @@ export function buildAgentGoalLoopResponse(data: ControlPlaneData, input: AgentG
 		return {
 			...base,
 			eligibility: taskWithGoalLoopFields(data, classifiedTask)
+		};
+	}
+
+	if (command === 'get_task_loop_report') {
+		const taskId = normalizeText(input.taskId);
+
+		if (!taskId) {
+			throw new AgentControlPlaneApiError(400, 'Task id is required for task loop report.', {
+				code: 'goal_loop_task_id_required',
+				suggestedNextCommands: ['context:current', 'task:list', 'goal-loop:get_actionable_work']
+			});
+		}
+
+		const report = buildTaskLoopReport(data, taskId);
+
+		if (!report) {
+			throw new AgentControlPlaneApiError(404, 'Task loop report could not be built.', {
+				code: 'goal_loop_task_report_not_found',
+				suggestedNextCommands: ['task:get', 'goal-loop:explain_task_eligibility'],
+				details: {
+					taskId,
+					projectId: goalLoop.project?.id ?? null,
+					goalId: goalLoop.goal?.id ?? null
+				}
+			});
+		}
+
+		return {
+			...base,
+			resolved: {
+				projectId: report.project?.id ?? goalLoop.project?.id ?? null,
+				goalId: report.goal?.id ?? goalLoop.goal?.id ?? null,
+				taskId: report.task.id
+			},
+			source: {
+				domainHelper: 'src/lib/server/task-loop-report.ts',
+				route: '/api/agent-goal-loop/get_task_loop_report'
+			},
+			report,
+			suggestedReadbackCommands: [
+				'goal-loop:get_next_recommended_action',
+				'goal-loop:explain_task_eligibility',
+				'work-packet:get_agent_work_packet'
+			]
 		};
 	}
 

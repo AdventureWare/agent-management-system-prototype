@@ -8,6 +8,317 @@ beforeEach(() => {
 });
 
 describe('ams-cli', () => {
+	it('routes task loop reports through the goal-loop endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn().mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				command: 'get_task_loop_report',
+				report: { task: { id: 'task_123' } }
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli(['goal-loop', 'get_task_loop_report', '--task', 'task_123']);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-goal-loop/get_task_loop_report?taskId=task_123'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
+	it('routes operator console reads through the goal-loop endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const fetchMock = vi.fn().mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				command: 'get_operator_console',
+				console: { path: { taskId: 'task_123' } }
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli([
+			'goal-loop',
+			'get_operator_console',
+			'--goal',
+			'goal_123',
+			'--task',
+			'task_123'
+		]);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL(
+				'http://127.0.0.1:3000/api/agent-goal-loop/get_operator_console?goalId=goal_123&taskId=task_123'
+			),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
+	it('resolves operator console scope from managed-run context when no ids are passed', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		vi.stubEnv('AMS_AGENT_RUN_ID', 'run_current');
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					resolved: {
+						projectId: 'project_current',
+						goalId: 'goal_current',
+						taskId: 'task_current',
+						runId: 'run_current'
+					}
+				})
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					command: 'get_operator_console',
+					resolved: {
+						projectId: 'project_current',
+						goalId: 'goal_current',
+						taskId: 'task_current'
+					},
+					console: { path: { taskId: 'task_current' } }
+				})
+			});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli(['goal-loop', 'get_operator_console']);
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			new URL('http://127.0.0.1:3000/api/agent-context/current?runId=run_current'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			new URL(
+				'http://127.0.0.1:3000/api/agent-goal-loop/get_operator_console?projectId=project_current&goalId=goal_current&taskId=task_current'
+			),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
+	it('fails clearly when managed-run context cannot resolve operator console scope', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		vi.stubEnv('AMS_AGENT_RUN_ID', 'run_current');
+		const fetchMock = vi.fn().mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				resolved: {
+					projectId: null,
+					goalId: null,
+					taskId: null,
+					runId: null
+				}
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+
+		await expect(runCli(['goal-loop', 'get_operator_console'])).rejects.toThrow(
+			'No project, goal, or task could be resolved from the current managed-run context. Run `node scripts/ams-cli.mjs context current` to inspect the available thread/task/run ids or pass --goal, --project, or --task explicitly.'
+		);
+	});
+
+	it('routes goal-loop suggested task materialization through a POST endpoint', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		const payload = { goalId: 'goal_123', validateOnly: true };
+		const fetchMock = vi.fn().mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				command: 'materialize_suggested_task',
+				validationOnly: true,
+				wouldCreateTask: true
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli([
+			'goal-loop',
+			'materialize_suggested_task',
+			'--json',
+			JSON.stringify(payload)
+		]);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('http://127.0.0.1:3000/api/agent-goal-loop/materialize_suggested_task'),
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token',
+					'content-type': 'application/json'
+				}),
+				body: JSON.stringify(payload)
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
+	it('resolves materialize suggested task scope from managed-run context when payload omits ids', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		vi.stubEnv('AMS_AGENT_RUN_ID', 'run_current');
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					resolved: {
+						projectId: 'project_current',
+						goalId: 'goal_current',
+						taskId: 'task_current',
+						runId: 'run_current'
+					}
+				})
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					command: 'materialize_suggested_task',
+					validationOnly: true,
+					wouldCreateTask: true
+				})
+			});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli([
+			'goal-loop',
+			'materialize_suggested_task',
+			'--json',
+			JSON.stringify({ validateOnly: true })
+		]);
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			new URL('http://127.0.0.1:3000/api/agent-context/current?runId=run_current'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			new URL('http://127.0.0.1:3000/api/agent-goal-loop/materialize_suggested_task'),
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token',
+					'content-type': 'application/json'
+				}),
+				body: JSON.stringify({
+					validateOnly: true,
+					projectId: 'project_current',
+					goalId: 'goal_current'
+				})
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
+	it('resolves managed continuation runner scope from managed-run context when payload omits ids', async () => {
+		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
+		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');
+		vi.stubEnv('AMS_AGENT_RUN_ID', 'run_current');
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					resolved: {
+						projectId: 'project_current',
+						goalId: 'goal_current',
+						taskId: 'task_current',
+						runId: 'run_current'
+					}
+				})
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					command: 'managed_continuation_runner',
+					mode: 'preview',
+					stop: { mustStop: true }
+				})
+			});
+		vi.stubGlobal('fetch', fetchMock);
+		const stdoutWrite = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+
+		const { runCli } = await import('../../../scripts/ams-cli.mjs');
+		await runCli([
+			'goal-loop',
+			'managed_continuation_runner',
+			'--json',
+			JSON.stringify({ mode: 'preview' })
+		]);
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			new URL('http://127.0.0.1:3000/api/agent-context/current?runId=run_current'),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token'
+				})
+			})
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			new URL('http://127.0.0.1:3000/api/agent-goal-loop/managed_continuation_runner'),
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({
+					authorization: 'Bearer test-token',
+					'content-type': 'application/json'
+				}),
+				body: JSON.stringify({
+					mode: 'preview',
+					projectId: 'project_current',
+					goalId: 'goal_current',
+					taskId: 'task_current'
+				})
+			})
+		);
+		expect(stdoutWrite).toHaveBeenCalled();
+	});
+
 	it('routes read-only intent interpretation to the dedicated endpoint', async () => {
 		vi.stubEnv('AMS_AGENT_API_TOKEN', 'test-token');
 		vi.stubEnv('AMS_AGENT_API_BASE_URL', 'http://127.0.0.1:3000');

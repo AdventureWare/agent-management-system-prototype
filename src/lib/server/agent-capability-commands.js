@@ -1,6 +1,14 @@
 // @ts-nocheck
 
-export const AGENT_CAPABILITY_MANIFEST_VERSION = '2026-04-22';
+export const AGENT_CAPABILITY_MANIFEST_VERSION = '2026-07-04';
+
+const TASK_LOOP_READBACK_COMMANDS = ['goal-loop:get_task_loop_report', 'task:get', 'context:current'];
+const RUN_RESULT_CLOSEOUT_COMMANDS = [
+	'run-result:request_review_from_run',
+	'run-result:request_approval_from_run',
+	'run-result:create_followup_task',
+	'run-result:mark_task_blocked_from_run'
+];
 
 export const AGENT_CAPABILITY_COMMANDS = [
 	{
@@ -140,8 +148,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when you want the review preparation playbook as a single AMS operation instead of sequencing attach and request-review manually.',
 			'Set validateOnly=true first when you want a dry-run preview of the review payload and checks before opening the real review gate.'
 		],
-		readAfter: ['context:current'],
-		nextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'task:get',
+			'task:approve-review',
+			'task:request-review-changes'
+		],
 		examples: [
 			{
 				title: 'Preview review preparation without mutating the task',
@@ -179,8 +192,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when you want the approval preparation playbook as a single AMS operation instead of sequencing the low-level calls yourself.',
 			'Set validateOnly=true first when you want a dry-run preview of the approval payload and checks before opening the real gate.'
 		],
-		readAfter: ['context:current'],
-		nextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'task:get',
+			'task:approve-approval',
+			'task:reject-approval'
+		],
 		examples: [
 			{
 				title: 'Open an approval gate in one intent call',
@@ -245,8 +263,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a pending approval should be rejected and you want before/after context in one response.',
 			'Set validateOnly=true first when you want to confirm that a pending approval exists before rejecting it.'
 		],
-		readAfter: ['context:current'],
-		nextCommands: ['task:get'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		examples: [
 			{
 				title: 'Preview rejection of a pending approval',
@@ -281,8 +299,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a delegated child task is done and the parent should accept the handoff without manually sequencing inspection and acceptance.',
 			'Set validateOnly=true first when you want to confirm the parent-child relationship and completion state before accepting the handoff.'
 		],
-		readAfter: ['context:current'],
-		nextCommands: ['task:get'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		examples: [
 			{
 				title: 'Preview acceptance of a completed child handoff',
@@ -318,8 +336,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a delegated child handoff is not acceptable yet and should go back for follow-up in one AMS operation.',
 			'Set validateOnly=true first when you want to confirm the handoff is complete and returnable before requesting changes.'
 		],
-		readAfter: ['context:current'],
-		nextCommands: ['task:get'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		examples: [
 			{
 				title: 'Preview a child handoff follow-up request',
@@ -461,7 +479,25 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		whenToUse: [
 			'Use when an agent needs the single best next action without reading every task manually.'
 		],
-		nextCommands: ['goal-loop:get_actionable_work', 'goal-loop:get_goal_blockers']
+		nextCommands: ['goal-loop:get_operator_console', 'goal-loop:get_actionable_work', 'goal-loop:get_goal_blockers']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_operator_console',
+		summary:
+			'Return the canonical operator path for the resolved goal or selected task, including the surface, reason, href, selected task, and suggested commands.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_operator_console --goal <goalId> [--project <projectId>] [--task <taskId>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_operator_console',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use when an agent or operator needs the same next-path projection shown on goal detail, task detail, and governance surfaces.'
+		],
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'work-packet:get_agent_work_packet',
+			'context:current'
+		]
 	},
 	{
 		resource: 'goal-loop',
@@ -475,6 +511,104 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use before changing task status, launching a session, or creating follow-up work from a blocked task.'
 		],
 		nextCommands: ['task:get', 'goal-loop:get_next_recommended_action']
+	},
+	{
+		resource: 'goal-loop',
+		command: 'get_task_loop_report',
+		summary:
+			'Return a compact read-only control-loop report for one task, including classification, latest run, review, approval, dependencies, artifacts, decisions, and next action.',
+		cli: 'node scripts/ams-cli.mjs goal-loop get_task_loop_report --task <taskId> [--goal <goalId>] [--project <projectId>]',
+		method: 'GET',
+		path: '/api/agent-goal-loop/get_task_loop_report',
+		payloadMode: 'none',
+		whenToUse: [
+			'Use after selecting or resolving a task when an agent needs the canonical per-task control-loop state before acting.',
+			'Use after recording run evidence, review, approval, blockers, or follow-ups to read back what changed without relying on chat memory.'
+		],
+		nextCommands: [
+			'work-packet:get_agent_work_packet',
+			'run-result:record_run_result',
+			'goal-loop:get_next_recommended_action'
+		]
+	},
+	{
+		resource: 'goal-loop',
+		command: 'materialize_suggested_task',
+		summary:
+			'Create or link a durable draft task from the current goal-loop suggestedTaskDraft when no execution task is currently actionable.',
+		cli: 'node scripts/ams-cli.mjs goal-loop materialize_suggested_task --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-goal-loop/materialize_suggested_task',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use only after goal-loop:get_next_recommended_action returns a suggestedTaskDraft for planning, research, clarification, or next-work planning.',
+			'Set validateOnly=true first to preview whether a draft task would be created or deduped.'
+		],
+		readAfter: ['goal-loop:get_next_recommended_action', 'task:get', 'context:current'],
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'goal-loop:get_next_recommended_action',
+			'work-packet:get_agent_work_packet'
+		],
+		examples: [
+			{
+				title: 'Preview materializing the current fallback draft task',
+				input: {
+					goalId: 'goal_123',
+					validateOnly: true
+				},
+				output: {
+					command: 'materialize_suggested_task',
+					validationOnly: true,
+					wouldCreateTask: true,
+					safety: {
+						mutation: 'validation_only',
+						taskStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'goal-loop',
+		command: 'managed_continuation_runner',
+		summary:
+			'Run one guarded managed continuation step: read the operator path, optionally preview or materialize one fallback task, read back state, and stop.',
+		cli: 'node scripts/ams-cli.mjs goal-loop managed_continuation_runner --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-goal-loop/managed_continuation_runner',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after goal-loop:get_operator_console when the operator wants AMS to perform exactly one safe continuation-control step.',
+			'Use mode=preview to validate a materializable fallback without mutation, or mode=materialize_one to create at most one fallback draft task after preview.'
+		],
+		readAfter: ['goal-loop:get_task_loop_report', 'goal-loop:get_next_recommended_action', 'context:current'],
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'work-packet:get_agent_work_packet',
+			'task:request-review'
+		],
+		examples: [
+			{
+				title: 'Preview one managed continuation step',
+				input: {
+					goalId: 'goal_123',
+					mode: 'preview'
+				},
+				output: {
+					command: 'managed_continuation_runner',
+					mode: 'preview',
+					stop: {
+						mustStop: true
+					},
+					safety: {
+						taskStateChanged: false,
+						autoLaunch: false,
+						autoApprove: false
+					}
+				}
+			}
+		]
 	},
 	{
 		resource: 'work-packet',
@@ -504,8 +638,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a run produced changed files, artifacts, validation evidence, blockers, or result summary.',
 			'Use this before review/approval mutations so run evidence is durable and inspectable.'
 		],
-		readAfter: ['context:current', 'task:get'],
-		nextCommands: ['task:request-review', 'task:update', 'task:create', 'context:current'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			...RUN_RESULT_CLOSEOUT_COMMANDS,
+			'goal-loop:get_task_loop_report',
+			'review:get_review_status',
+			'context:current'
+		],
 		examples: [
 			{
 				title: 'Record completed run evidence',
@@ -535,8 +674,12 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		path: '/api/agent-run-results/record_validation_result',
 		payloadMode: 'json_or_file',
 		whenToUse: ['Use when validation was run and should be attached to run evidence.'],
-		readAfter: ['context:current', 'task:get'],
-		nextCommands: ['run-result:record_run_result', 'task:request-review']
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			...RUN_RESULT_CLOSEOUT_COMMANDS,
+			'goal-loop:get_task_loop_report',
+			'run-result:record_run_result'
+		]
 	},
 	{
 		resource: 'run-result',
@@ -549,8 +692,12 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		whenToUse: [
 			'Use when a run found missing access, missing input, failed dependency, or another blocker.'
 		],
-		readAfter: ['context:current', 'task:get'],
-		nextCommands: ['task:update', 'goal-loop:get_goal_blockers']
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'run-result:mark_task_blocked_from_run',
+			'goal-loop:get_task_loop_report',
+			'goal-loop:get_goal_blockers'
+		]
 	},
 	{
 		resource: 'run-result',
@@ -563,8 +710,12 @@ export const AGENT_CAPABILITY_COMMANDS = [
 		whenToUse: [
 			'Use when a run identified follow-up work but task creation should remain a separate explicit operation.'
 		],
-		readAfter: ['context:current', 'task:get'],
-		nextCommands: ['task:create', 'goal-loop:get_next_recommended_action']
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'run-result:create_followup_task',
+			'goal-loop:get_task_loop_report',
+			'goal-loop:get_next_recommended_action'
+		]
 	},
 	{
 		resource: 'run-result',
@@ -578,8 +729,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use after recording run evidence when a concrete follow-up task is needed for the same project or goal.',
 			'This command dedupes by open task title in the same project and goal before creating a new draft task.'
 		],
-		readAfter: ['task:get', 'context:current'],
-		nextCommands: ['task:get', 'task:update', 'goal-loop:get_next_recommended_action'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'task:get',
+			'task:update',
+			'goal-loop:get_next_recommended_action'
+		],
 		examples: [
 			{
 				title: 'Create a draft follow-up task from a run',
@@ -612,8 +768,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use after recording completed run evidence when the linked task should enter review.',
 			'Set validateOnly=true first to preview the review request and task status transition.'
 		],
-		readAfter: ['task:get', 'context:current'],
-		nextCommands: ['task:get', 'context:current'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'context:current'],
 		examples: [
 			{
 				title: 'Preview review request from a completed run',
@@ -636,6 +792,46 @@ export const AGENT_CAPABILITY_COMMANDS = [
 	},
 	{
 		resource: 'run-result',
+		command: 'request_approval_from_run',
+		summary:
+			'Open a pending task approval from completed run evidence without approving, rejecting, or accepting the task.',
+		cli: 'node scripts/ams-cli.mjs run-result request_approval_from_run --json <payload> | --file <path>',
+		method: 'POST',
+		path: '/api/agent-run-results/request_approval_from_run',
+		payloadMode: 'json_or_file',
+		whenToUse: [
+			'Use after recording completed run evidence when the linked task requires an approval gate before state can safely change.',
+			'Set validateOnly=true first to preview the approval request without opening the gate.'
+		],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'review:get_review_status',
+			'task:get',
+			'context:current'
+		],
+		examples: [
+			{
+				title: 'Preview approval request from a completed run',
+				input: {
+					runId: 'run_123',
+					mode: 'before_complete',
+					validateOnly: true,
+					summary: 'Approve before closeout.'
+				},
+				output: {
+					command: 'request_approval_from_run',
+					validationOnly: true,
+					safety: {
+						mutation: 'task_approval_request',
+						approvalStateChanged: false
+					}
+				}
+			}
+		]
+	},
+	{
+		resource: 'run-result',
 		command: 'mark_task_blocked_from_run',
 		summary:
 			'Mark the linked task blocked from run blocker evidence without review or approval changes.',
@@ -647,8 +843,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when run evidence identifies a concrete blocker that prevents linked task progress.',
 			'Set validateOnly=true first when the agent should preview the task/run state transition.'
 		],
-		readAfter: ['task:get', 'goal-loop:get_goal_blockers', 'context:current'],
-		nextCommands: ['task:get', 'goal-loop:get_goal_blockers', 'context:current'],
+		readAfter: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_goal_blockers', 'context:current'],
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_goal_blockers', 'context:current'],
 		examples: [
 			{
 				title: 'Mark linked task blocked from run evidence',
@@ -1046,8 +1242,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when work is ready for review and no open review exists yet.',
 			'Set payload.validateOnly=true first when you want to preview review checks and execution-surface resolution without opening the review.'
 		],
-		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'task:approve-review', 'task:request-review-changes'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'task:get',
+			'task:approve-review',
+			'task:request-review-changes'
+		],
 		examples: [
 			{
 				title: 'Preview a review request without creating the review record',
@@ -1079,6 +1280,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when an open review should be approved.',
 			'Set validateOnly=true first when you want to preview whether approving the review would close the task or keep it open.'
 		],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		examples: [
 			{
 				title: 'Preview review approval without resolving the review',
@@ -1112,6 +1315,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when an open review should send the task back with changes requested.',
 			'Set validateOnly=true first when you want to preview the resulting blocked state before resolving the review.'
 		],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		mcp: {
 			body: {
 				defaults: { decision: 'changes_requested' }
@@ -1130,8 +1335,13 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when work is ready for an approval gate and no pending approval exists.',
 			'Set payload.validateOnly=true first when you want to preview approval-mode resolution and execution-surface checks without mutating the task.'
 		],
-		readAfter: ['task:get'],
-		nextCommands: ['task:get', 'task:approve-approval', 'task:reject-approval'],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: [
+			'goal-loop:get_task_loop_report',
+			'task:get',
+			'task:approve-approval',
+			'task:reject-approval'
+		],
 		examples: [
 			{
 				title: 'Request approval on a completed task',
@@ -1182,6 +1392,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a pending approval should be approved.',
 			'Set validateOnly=true first when you want to preview whether approving the gate would close the task or keep it open.'
 		],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		mcp: {
 			body: {
 				defaults: { decision: 'approve' }
@@ -1200,6 +1412,8 @@ export const AGENT_CAPABILITY_COMMANDS = [
 			'Use when a pending approval should be rejected.',
 			'Set validateOnly=true first when you want to preview the resulting blocked state before rejecting the gate.'
 		],
+		readAfter: TASK_LOOP_READBACK_COMMANDS,
+		nextCommands: ['goal-loop:get_task_loop_report', 'task:get', 'goal-loop:get_next_recommended_action'],
 		examples: [
 			{
 				title: 'Preview approval rejection without resolving the gate',

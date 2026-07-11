@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 import { applyAgentRunResultToData } from '$lib/server/agent-run-results';
-import type { ControlPlaneData, Goal, Project, Run, Task } from '$lib/types/control-plane';
+import type { Approval, ControlPlaneData, Goal, Project, Run, Task } from '$lib/types/control-plane';
 
 function createProject(overrides: Partial<Project> = {}): Project {
 	return {
@@ -135,8 +135,24 @@ function createRun(overrides: Partial<Run> = {}): Run {
 	};
 }
 
+function createApproval(overrides: Partial<Approval> = {}): Approval {
+	return {
+		id: overrides.id ?? 'approval_1',
+		taskId: overrides.taskId ?? 'task_1',
+		runId: overrides.runId ?? 'run_1',
+		mode: overrides.mode ?? 'before_complete',
+		status: overrides.status ?? 'pending',
+		createdAt: overrides.createdAt ?? '2026-06-01T12:00:00.000Z',
+		updatedAt: overrides.updatedAt ?? '2026-06-01T12:00:00.000Z',
+		resolvedAt: overrides.resolvedAt ?? null,
+		requestedByExecutionSurfaceId: overrides.requestedByExecutionSurfaceId ?? null,
+		approverExecutionSurfaceId: overrides.approverExecutionSurfaceId ?? null,
+		summary: overrides.summary ?? 'Approval is pending.'
+	};
+}
+
 function createControlPlane(
-	input: { project?: Project; goal?: Goal; task?: Task; run?: Run } = {}
+	input: { project?: Project; goal?: Goal; task?: Task; run?: Run; approvals?: Approval[] } = {}
 ): ControlPlaneData {
 	const task = input.task ?? createTask();
 	const run = input.run ?? createRun({ taskId: task.id });
@@ -156,7 +172,7 @@ function createControlPlane(
 		runs: [run],
 		reviews: [],
 		planningSessions: [],
-		approvals: [],
+		approvals: input.approvals ?? [],
 		decisions: []
 	};
 }
@@ -199,6 +215,111 @@ describe('applyAgentRunResultToData', () => {
 		);
 	});
 
+	it('suggests guarded review conversion after completed run evidence requires review', () => {
+		const task = createTask({ status: 'in_progress', requiresReview: true });
+		const data = createControlPlane({ task, run: createRun({ taskId: task.id }) });
+		const result = applyAgentRunResultToData(data, {
+			command: 'record_run_result',
+			runId: 'run_1',
+			status: 'completed',
+			resultSummary: 'Implemented the API.',
+			validationSummary: 'Unit tests passed.'
+		});
+
+		expect(result.record.preview).toEqual(expect.objectContaining({ nextAction: 'request_review' }));
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:request_review_from_run',
+				'goal-loop:get_task_loop_report'
+			])
+		);
+		expect(result.record.suggestedNextCommands[0]).toBe('run-result:request_review_from_run');
+	});
+
+	it('suggests guarded revision follow-up creation for partial run evidence', () => {
+		const data = createControlPlane();
+		const result = applyAgentRunResultToData(data, {
+			command: 'record_run_result',
+			runId: 'run_1',
+			status: 'completed',
+			resultSummary: 'Partial implementation landed; remaining API docs are not complete.',
+			validationSummary: 'Focused tests passed.'
+		});
+
+		expect(result.record.preview).toEqual(
+			expect.objectContaining({
+				classification: 'partial_completion',
+				nextAction: 'plan_revision'
+			})
+		);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:create_followup_task',
+				'goal-loop:get_task_loop_report'
+			])
+		);
+		expect(result.record.suggestedNextCommands[0]).toBe('run-result:create_followup_task');
+	});
+
+	it('suggests guarded diagnosis follow-up creation for failed run evidence', () => {
+		const data = createControlPlane();
+		const result = applyAgentRunResultToData(data, {
+			command: 'record_run_result',
+			runId: 'run_1',
+			status: 'failed',
+			errorSummary: 'Build failed because the generated route imported a missing helper.'
+		});
+
+		expect(result.record.preview).toEqual(
+			expect.objectContaining({
+				classification: 'failed',
+				nextAction: 'diagnose_failure'
+			})
+		);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:create_followup_task',
+				'goal-loop:get_task_loop_report'
+			])
+		);
+		expect(result.record.suggestedNextCommands[0]).toBe('run-result:create_followup_task');
+	});
+
+	it('suggests guarded approval conversion when completed run evidence requires user decision', () => {
+		const task = createTask({
+			status: 'review',
+			approvalMode: 'before_complete',
+			requiresReview: false
+		});
+		const run = createRun({
+			taskId: task.id,
+			status: 'completed',
+			resultSummary: 'Implemented the risky change and needs approval before closeout.'
+		});
+		const data = createControlPlane({ task, run });
+		const result = applyAgentRunResultToData(data, {
+			command: 'record_run_result',
+			runId: 'run_1',
+			status: 'completed',
+			resultSummary: 'Implemented the risky change and needs approval before closeout.'
+		});
+
+		expect(result.record.preview).toEqual(
+			expect.objectContaining({
+				classification: 'requires_user_decision',
+				nextAction: 'request_user_decision'
+			})
+		);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:request_approval_from_run',
+				'review:get_review_status',
+				'goal-loop:get_task_loop_report'
+			])
+		);
+		expect(result.record.suggestedNextCommands[0]).toBe('run-result:request_approval_from_run');
+	});
+
 	it('records blockers on the run without setting the task blocked', () => {
 		const data = createControlPlane();
 		const result = applyAgentRunResultToData(data, {
@@ -210,7 +331,16 @@ describe('applyAgentRunResultToData', () => {
 		expect(result.record.run.status).toBe('blocked');
 		expect(result.record.run.blockersFound).toEqual(['Missing credentials.']);
 		expect(result.data.tasks[0]?.status).toBe('in_progress');
-		expect(result.record.suggestedNextCommands).toEqual(expect.arrayContaining(['task:update']));
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:mark_task_blocked_from_run',
+				'goal-loop:get_task_loop_report',
+				'task:update'
+			])
+		);
+		expect(result.record.suggestedNextCommands[0]).toBe(
+			'run-result:mark_task_blocked_from_run'
+		);
 	});
 
 	it('requires validation summary for validation result command', () => {
@@ -235,7 +365,9 @@ describe('applyAgentRunResultToData', () => {
 
 		expect(result.record.run.followUpTaskIds).toEqual(['task_followup']);
 		expect(result.data.tasks).toHaveLength(1);
-		expect(result.record.suggestedNextCommands).toEqual(expect.arrayContaining(['task:create']));
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining(['goal-loop:get_task_loop_report', 'task:create'])
+		);
 	});
 
 	it('creates a draft follow-up task from run evidence and links it to the run', () => {
@@ -356,7 +488,133 @@ describe('applyAgentRunResultToData', () => {
 			})
 		);
 		expect(result.record.safety.approvalStateChanged).toBe(false);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining(['goal-loop:get_task_loop_report', 'task:get'])
+		);
 		expect(result.changedCollections).toEqual(['tasks', 'reviews', 'decisions']);
+	});
+
+	it('previews requesting approval from a completed run without mutating state', () => {
+		const task = createTask({
+			status: 'review',
+			approvalMode: 'before_complete',
+			requiresReview: false
+		});
+		const data = createControlPlane({
+			task,
+			run: createRun({
+				taskId: task.id,
+				status: 'completed',
+				resultSummary: 'Needs approval before closeout.'
+			})
+		});
+		const result = applyAgentRunResultToData(data, {
+			command: 'request_approval_from_run',
+			runId: 'run_1',
+			validateOnly: true
+		});
+
+		expect(result.record.validationOnly).toBe(true);
+		expect(result.record.safety).toEqual(
+			expect.objectContaining({
+				mutation: 'task_approval_request',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: false
+			})
+		);
+		expect(result.record.wouldExecuteCommands).toEqual(
+			expect.arrayContaining([
+				'run-result:request_approval_from_run',
+				'goal-loop:get_task_loop_report',
+				'review:get_review_status'
+			])
+		);
+		expect(result.data.approvals).toHaveLength(0);
+		expect(result.data.tasks[0]?.status).toBe('review');
+		expect(result.changedCollections).toEqual([]);
+	});
+
+	it('requests approval from a completed run without approving or accepting the task', () => {
+		const task = createTask({
+			status: 'review',
+			approvalMode: 'before_complete',
+			requiresReview: false
+		});
+		const data = createControlPlane({
+			task,
+			run: createRun({
+				taskId: task.id,
+				status: 'completed',
+				resultSummary: 'Needs approval before closeout.'
+			})
+		});
+		const result = applyAgentRunResultToData(data, {
+			command: 'request_approval_from_run',
+			runId: 'run_1',
+			summary: 'Approve before closeout.'
+		});
+
+		expect(result.data.approvals).toEqual([
+			expect.objectContaining({
+				taskId: 'task_1',
+				runId: 'run_1',
+				mode: 'before_complete',
+				status: 'pending',
+				summary: 'Approve before closeout.'
+			})
+		]);
+		expect(result.record.approvalId).toBe(result.data.approvals[0]?.id);
+		expect(result.record.task).toEqual(
+			expect.objectContaining({
+				id: 'task_1',
+				status: 'review'
+			})
+		);
+		expect(result.record.safety).toEqual(
+			expect.objectContaining({
+				mutation: 'task_approval_request',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: true
+			})
+		);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining([
+				'goal-loop:get_task_loop_report',
+				'review:get_review_status',
+				'task:get'
+			])
+		);
+		expect(result.data.decisions).toEqual([
+			expect.objectContaining({
+				taskId: 'task_1',
+				runId: 'run_1',
+				approvalId: result.data.approvals[0]?.id,
+				decisionType: 'task_plan_updated'
+			})
+		]);
+		expect(result.changedCollections).toEqual(['tasks', 'approvals', 'decisions']);
+	});
+
+	it('rejects approval requests from run evidence when a pending approval already exists', () => {
+		const task = createTask({
+			status: 'review',
+			approvalMode: 'before_complete',
+			requiresReview: false
+		});
+		const data = createControlPlane({
+			task,
+			run: createRun({ taskId: task.id, status: 'completed' }),
+			approvals: [createApproval({ taskId: task.id, runId: 'run_1' })]
+		});
+
+		expect(() =>
+			applyAgentRunResultToData(data, {
+				command: 'request_approval_from_run',
+				runId: 'run_1'
+			})
+		).toThrow(AgentControlPlaneApiError);
 	});
 
 	it('previews marking the task blocked from run evidence', () => {
@@ -380,6 +638,9 @@ describe('applyAgentRunResultToData', () => {
 			})
 		);
 		expect(result.data.tasks[0]?.status).toBe('in_progress');
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining(['goal-loop:get_task_loop_report'])
+		);
 		expect(result.changedCollections).toEqual([]);
 	});
 
@@ -408,6 +669,9 @@ describe('applyAgentRunResultToData', () => {
 				taskStateChanged: true,
 				reviewStateChanged: false
 			})
+		);
+		expect(result.record.suggestedNextCommands).toEqual(
+			expect.arrayContaining(['goal-loop:get_task_loop_report', 'goal-loop:get_goal_blockers'])
 		);
 		expect(result.changedCollections).toEqual(['tasks', 'runs', 'decisions']);
 	});

@@ -5,11 +5,14 @@ import {
 	buildRunResultPreview
 } from '$lib/server/goal-run-result-preview';
 import {
+	createApproval,
 	createDecision,
 	createReview,
 	createTask,
 	getOpenReviewForTask,
+	getPendingApprovalForTask,
 	loadControlPlane,
+	parseTaskApprovalMode,
 	parseRunStatus,
 	updateControlPlaneCollections
 } from '$lib/server/control-plane';
@@ -22,6 +25,7 @@ export const AGENT_RUN_RESULT_COMMANDS = [
 	'record_followup_recommendations',
 	'create_followup_task',
 	'request_review_from_run',
+	'request_approval_from_run',
 	'mark_task_blocked_from_run',
 	'preview_progress_updates',
 	'apply_progress_updates'
@@ -46,6 +50,7 @@ export type AgentRunResultInput = {
 	nonGoals?: string | null;
 	validationSteps?: string | null;
 	blocker?: string | null;
+	mode?: string | null;
 	validateOnly?: boolean;
 	selectedProposalIndexes?: unknown;
 	blockersFound?: unknown;
@@ -62,16 +67,18 @@ export type AgentRunResultRecord = {
 			| 'run_evidence_only'
 			| 'run_evidence_and_draft_task'
 			| 'task_review_request'
+			| 'task_approval_request'
 			| 'task_blocked_update'
 			| 'reviewed_progress_update'
 			| 'none';
 		taskStateChanged: boolean;
 		reviewStateChanged: boolean;
-		approvalStateChanged: false;
+		approvalStateChanged: boolean;
 		note: string;
 	};
 	task?: Task | null;
 	reviewId?: string | null;
+	approvalId?: string | null;
 	createdTask?: boolean;
 	dedupedExistingTask?: boolean;
 	validationOnly?: boolean;
@@ -118,6 +125,10 @@ function requireId(value: string | null | undefined, fieldName: string) {
 	}
 
 	return normalized;
+}
+
+function taskLoopReadbackCommands(task: Pick<Task, 'id'> | null | undefined) {
+	return task ? ['goal-loop:get_task_loop_report'] : [];
 }
 
 function normalizeOptionalString(value: string | null | undefined) {
@@ -272,6 +283,29 @@ function buildPatch(command: AgentRunResultCommand, run: Run, input: AgentRunRes
 	return patch;
 }
 
+function conversionCommandsFor(preview: ReturnType<typeof buildRunResultPreview>) {
+	if (!preview) {
+		return [];
+	}
+
+	switch (preview.nextAction) {
+		case 'request_review':
+			return ['run-result:request_review_from_run'];
+		case 'resolve_blocker':
+			return ['run-result:mark_task_blocked_from_run'];
+		case 'plan_revision':
+		case 'diagnose_failure':
+		case 'create_follow_up_task':
+			return ['run-result:create_followup_task'];
+		case 'request_user_decision':
+			return ['run-result:request_approval_from_run', 'review:get_review_status', 'task:request-approval'];
+		case 'accept_or_close_task':
+		case 'resolve_duplicate':
+		default:
+			return [];
+	}
+}
+
 function buildRecordResponse(input: {
 	command: AgentRunResultCommand;
 	run: Run;
@@ -305,15 +339,17 @@ function buildRecordResponse(input: {
 		},
 		...(createdOrLinkedTask ? { task, createdTask, dedupedExistingTask } : {}),
 		suggestedNextCommands: [
-			'run-result:record_run_result',
+			...conversionCommandsFor(preview),
 			...(preview?.nextAction === 'request_review' ? ['task:request-review'] : []),
 			...(command === 'record_followup_recommendations' ||
 			command === 'create_followup_task' ||
 			preview?.nextAction === 'create_follow_up_task'
 				? ['task:create']
 				: []),
+			...taskLoopReadbackCommands(task),
 			...(createdOrLinkedTask ? ['task:get'] : []),
 			...(preview?.nextAction === 'resolve_blocker' ? ['task:update'] : []),
+			'run-result:record_run_result',
 			'context:current'
 		]
 	};
@@ -355,6 +391,14 @@ export function applyAgentRunResultToData(
 
 	if (command === 'request_review_from_run') {
 		return applyReviewRequestFromRun(data, {
+			input,
+			run: existingRun,
+			sourceTask: task
+		});
+	}
+
+	if (command === 'request_approval_from_run') {
+		return applyApprovalRequestFromRun(data, {
 			input,
 			run: existingRun,
 			sourceTask: task
@@ -424,7 +468,8 @@ export function applyAgentRunResultToData(
 		record: buildRecordResponse({
 			command,
 			run: updatedRun,
-			preview
+			preview,
+			task
 		}),
 		changedCollections: ['runs']
 	};
@@ -579,9 +624,10 @@ function buildTransitionPreviewRecord(input: {
 	run: Run;
 	task: Task;
 	preview: ReturnType<typeof buildRunResultPreview>;
-	mutation: 'task_review_request' | 'task_blocked_update';
+	mutation: 'task_review_request' | 'task_approval_request' | 'task_blocked_update';
 	note: string;
 	wouldExecuteCommands: string[];
+	approvalStateChanged?: boolean;
 }): AgentRunResultRecord {
 	return {
 		command: input.command,
@@ -594,11 +640,21 @@ function buildTransitionPreviewRecord(input: {
 			mutation: input.mutation,
 			taskStateChanged: false,
 			reviewStateChanged: false,
-			approvalStateChanged: false,
+			approvalStateChanged: input.approvalStateChanged ?? false,
 			note: input.note
 		},
-		suggestedNextCommands: [`run-result:${input.command}`, 'task:get', 'context:current']
+		suggestedNextCommands: [
+			`run-result:${input.command}`,
+			...taskLoopReadbackCommands(input.task),
+			...(input.mutation === 'task_approval_request' ? ['review:get_review_status'] : []),
+			'task:get',
+			'context:current'
+		]
 	};
+}
+
+function approvalReadbackCommands() {
+	return ['goal-loop:get_task_loop_report', 'review:get_review_status', 'task:get', 'context:current'];
 }
 
 function applyReviewRequestFromRun(
@@ -637,7 +693,12 @@ function applyReviewRequestFromRun(
 				preview,
 				mutation: 'task_review_request',
 				note: 'Validation only. This would open a review and move the linked task to review if it is not done.',
-				wouldExecuteCommands: ['run-result:request_review_from_run', 'task:get', 'context:current']
+				wouldExecuteCommands: [
+					'run-result:request_review_from_run',
+					'goal-loop:get_task_loop_report',
+					'task:get',
+					'context:current'
+				]
 			}),
 			changedCollections: []
 		};
@@ -693,9 +754,130 @@ function applyReviewRequestFromRun(
 				approvalStateChanged: false,
 				note: 'Opened a review from completed run evidence. This did not approve or accept the task.'
 			},
-			suggestedNextCommands: ['task:get', 'context:current']
+			suggestedNextCommands: [
+				...taskLoopReadbackCommands(updatedTask),
+				'task:get',
+				'context:current'
+			]
 		},
 		changedCollections: ['tasks', 'reviews', 'decisions']
+	};
+}
+
+function applyApprovalRequestFromRun(
+	data: ControlPlaneData,
+	input: {
+		input: AgentRunResultInput;
+		run: Run;
+		sourceTask: Task;
+	}
+): AgentRunResultApplyResult {
+	if (input.run.status !== 'completed') {
+		throw new AgentControlPlaneApiError(409, 'Run must be completed before requesting approval.', {
+			code: 'run_result_run_not_completed',
+			suggestedNextCommands: ['run-result:record_run_result', 'context:current'],
+			details: { runId: input.run.id, status: input.run.status }
+		});
+	}
+
+	if (getPendingApprovalForTask(data, input.sourceTask.id)) {
+		throw new AgentControlPlaneApiError(409, 'A pending approval already exists for this task.', {
+			code: 'task_approval_already_pending',
+			suggestedNextCommands: ['review:get_review_status', 'task:get', 'context:current'],
+			details: { taskId: input.sourceTask.id, runId: input.run.id }
+		});
+	}
+
+	const mode = parseTaskApprovalMode(
+		normalizeOptionalString(input.input.mode) ?? '',
+		input.sourceTask.approvalMode
+	);
+
+	if (mode === 'none') {
+		throw new AgentControlPlaneApiError(
+			400,
+			'Task approval mode must be set before requesting approval from run evidence.',
+			{
+				code: 'run_result_task_approval_mode_required',
+				suggestedNextCommands: ['task:update', 'task:request-approval', 'context:current'],
+				details: { taskId: input.sourceTask.id, runId: input.run.id }
+			}
+		);
+	}
+
+	const preview = buildRunResultPreview(data, { runId: input.run.id });
+
+	if (input.input.validateOnly === true) {
+		return {
+			data,
+			record: buildTransitionPreviewRecord({
+				command: 'request_approval_from_run',
+				run: input.run,
+				task: input.sourceTask,
+				preview,
+				mutation: 'task_approval_request',
+				note: 'Validation only. This would open a pending approval gate from completed run evidence without approving or accepting the task.',
+				wouldExecuteCommands: [
+					'run-result:request_approval_from_run',
+					...approvalReadbackCommands()
+				]
+			}),
+			changedCollections: []
+		};
+	}
+
+	const now = new Date().toISOString();
+	const approvalSummary =
+		normalizeOptionalString(input.input.summary) ||
+		input.run.resultSummary ||
+		`Approval requested from completed run ${input.run.id}.`;
+	const approval = createApproval({
+		taskId: input.sourceTask.id,
+		runId: input.run.id,
+		mode,
+		summary: approvalSummary
+	});
+	const updatedTask = {
+		...input.sourceTask,
+		updatedAt: now
+	} satisfies Task;
+	const nextData = {
+		...data,
+		tasks: data.tasks.map((candidate) =>
+			candidate.id === updatedTask.id ? updatedTask : candidate
+		),
+		approvals: [approval, ...data.approvals],
+		decisions: [
+			createDecision({
+				taskId: input.sourceTask.id,
+				runId: input.run.id,
+				approvalId: approval.id,
+				decisionType: 'task_plan_updated',
+				summary: approvalSummary,
+				createdAt: now
+			}),
+			...(data.decisions ?? [])
+		]
+	};
+
+	return {
+		data: nextData,
+		record: {
+			command: 'request_approval_from_run',
+			run: input.run,
+			preview: buildRunResultPreview(nextData, { runId: input.run.id }),
+			task: updatedTask,
+			approvalId: approval.id,
+			safety: {
+				mutation: 'task_approval_request',
+				taskStateChanged: false,
+				reviewStateChanged: false,
+				approvalStateChanged: true,
+				note: 'Opened a pending approval from completed run evidence. This did not approve, reject, or accept the task.'
+			},
+			suggestedNextCommands: approvalReadbackCommands()
+		},
+		changedCollections: ['tasks', 'approvals', 'decisions']
 	};
 }
 
@@ -726,6 +908,7 @@ function applyBlockedTaskFromRun(
 				note: 'Validation only. This would mark the linked task blocked using run blocker evidence.',
 				wouldExecuteCommands: [
 					'run-result:mark_task_blocked_from_run',
+					'goal-loop:get_task_loop_report',
 					'task:get',
 					'context:current'
 				]
@@ -781,7 +964,12 @@ function applyBlockedTaskFromRun(
 				approvalStateChanged: false,
 				note: 'Marked the linked task blocked from run evidence. This did not approve, reject, or accept work.'
 			},
-			suggestedNextCommands: ['task:get', 'goal-loop:get_goal_blockers', 'context:current']
+			suggestedNextCommands: [
+				...taskLoopReadbackCommands(updatedTask),
+				'task:get',
+				'goal-loop:get_goal_blockers',
+				'context:current'
+			]
 		},
 		changedCollections: ['tasks', 'runs', 'decisions']
 	};

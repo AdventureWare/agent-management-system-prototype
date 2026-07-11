@@ -71,6 +71,9 @@ describe('agent-capability-manifest', () => {
 					intent: 'prepare_task_for_approval'
 				}),
 				expect.objectContaining({
+					intent: 'close_out_run_result'
+				}),
+				expect.objectContaining({
 					intent: 'accept_child_handoff'
 				}),
 				expect.objectContaining({
@@ -199,9 +202,34 @@ describe('agent-capability-manifest', () => {
 				}),
 				expect.objectContaining({
 					resource: 'goal-loop',
+					command: 'get_operator_console',
+					path: '/api/agent-goal-loop/get_operator_console',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('same next-path projection')]),
+					nextCommands: expect.arrayContaining(['goal-loop:get_task_loop_report'])
+				}),
+				expect.objectContaining({
+					resource: 'goal-loop',
 					command: 'explain_task_eligibility',
 					path: '/api/agent-goal-loop/explain_task_eligibility',
 					nextCommands: expect.arrayContaining(['task:get'])
+				}),
+				expect.objectContaining({
+					resource: 'goal-loop',
+					command: 'get_task_loop_report',
+					path: '/api/agent-goal-loop/get_task_loop_report',
+					payloadMode: 'none',
+					whenToUse: expect.arrayContaining([expect.stringContaining('per-task control-loop')]),
+					nextCommands: expect.arrayContaining(['work-packet:get_agent_work_packet'])
+				}),
+				expect.objectContaining({
+					resource: 'goal-loop',
+					command: 'materialize_suggested_task',
+					path: '/api/agent-goal-loop/materialize_suggested_task',
+					method: 'POST',
+					payloadMode: 'json_or_file',
+					whenToUse: expect.arrayContaining([expect.stringContaining('suggestedTaskDraft')]),
+					nextCommands: expect.arrayContaining(['goal-loop:get_task_loop_report'])
 				}),
 				expect.objectContaining({
 					resource: 'work-packet',
@@ -216,13 +244,18 @@ describe('agent-capability-manifest', () => {
 					path: '/api/agent-run-results/record_run_result',
 					payloadMode: 'json_or_file',
 					whenToUse: expect.arrayContaining([expect.stringContaining('run produced')]),
-					nextCommands: expect.arrayContaining(['task:request-review'])
+					nextCommands: expect.arrayContaining([
+						'run-result:request_review_from_run',
+						'run-result:request_approval_from_run',
+						'run-result:create_followup_task',
+						'run-result:mark_task_blocked_from_run'
+					])
 				}),
 				expect.objectContaining({
 					resource: 'run-result',
 					command: 'record_blocker',
 					path: '/api/agent-run-results/record_blocker',
-					nextCommands: expect.arrayContaining(['task:update'])
+					nextCommands: expect.arrayContaining(['run-result:mark_task_blocked_from_run'])
 				}),
 				expect.objectContaining({
 					resource: 'run-result',
@@ -237,6 +270,13 @@ describe('agent-capability-manifest', () => {
 					path: '/api/agent-run-results/request_review_from_run',
 					whenToUse: expect.arrayContaining([expect.stringContaining('validateOnly=true')]),
 					nextCommands: expect.arrayContaining(['context:current'])
+				}),
+				expect.objectContaining({
+					resource: 'run-result',
+					command: 'request_approval_from_run',
+					path: '/api/agent-run-results/request_approval_from_run',
+					whenToUse: expect.arrayContaining([expect.stringContaining('approval gate')]),
+					nextCommands: expect.arrayContaining(['review:get_review_status'])
 				}),
 				expect.objectContaining({
 					resource: 'run-result',
@@ -478,6 +518,116 @@ describe('agent-capability-manifest', () => {
 				method: 'GET'
 			})
 		]);
+	});
+
+	it('advertises task-loop readback after task-scoped run-result commands', () => {
+		const taskScopedRunResultCommands = [
+			'record_run_result',
+			'record_validation_result',
+			'record_blocker',
+			'record_followup_recommendations',
+			'create_followup_task',
+			'request_review_from_run',
+			'request_approval_from_run',
+			'mark_task_blocked_from_run'
+		];
+
+		for (const command of taskScopedRunResultCommands) {
+			const manifest = getAgentCapabilityManifest({ resource: 'run-result', command });
+
+			expect(manifest.commands).toEqual([
+				expect.objectContaining({
+					resource: 'run-result',
+					command,
+					readAfter: expect.arrayContaining(['goal-loop:get_task_loop_report']),
+					nextCommands: expect.arrayContaining(['goal-loop:get_task_loop_report'])
+				})
+			]);
+		}
+	});
+
+	it('advertises run-result-native closeout commands before generic readback after recording evidence', () => {
+		const manifest = getAgentCapabilityManifest({
+			resource: 'run-result',
+			command: 'record_run_result'
+		});
+		const command = manifest.commands[0];
+
+		expect(command?.nextCommands?.slice(0, 4)).toEqual([
+			'run-result:request_review_from_run',
+			'run-result:request_approval_from_run',
+			'run-result:create_followup_task',
+			'run-result:mark_task_blocked_from_run'
+		]);
+		expect(command?.nextCommands).toContain('goal-loop:get_task_loop_report');
+	});
+
+	it('advertises a run-result closeout playbook with closeout conversion before readback', () => {
+		const manifest = getAgentCapabilityManifest();
+		const playbook = manifest.guidance.playbooks.find(
+			(candidate) => candidate.intent === 'close_out_run_result'
+		);
+
+		expect(playbook?.steps).toEqual([
+			expect.objectContaining({ phase: 'discover', tool: 'ams_manifest' }),
+			expect.objectContaining({ phase: 'inspect', tool: 'ams_context_current' }),
+			expect.objectContaining({ phase: 'mutate', tool: 'ams_run_result_record_run_result' }),
+			expect.objectContaining({
+				phase: 'mutate',
+				tool: expect.stringContaining('ams_run_result_request_review_from_run')
+			}),
+			expect.objectContaining({
+				phase: 'readback',
+				tool: 'ams_goal_loop_get_task_loop_report'
+			})
+		]);
+	});
+
+	it('advertises task-loop readback after task review and approval mutations', () => {
+		const taskGovernanceCommands = [
+			'request-review',
+			'approve-review',
+			'request-review-changes',
+			'request-approval',
+			'approve-approval',
+			'reject-approval'
+		];
+
+		for (const command of taskGovernanceCommands) {
+			const manifest = getAgentCapabilityManifest({ resource: 'task', command });
+
+			expect(manifest.commands).toEqual([
+				expect.objectContaining({
+					resource: 'task',
+					command,
+					readAfter: expect.arrayContaining(['goal-loop:get_task_loop_report']),
+					nextCommands: expect.arrayContaining(['goal-loop:get_task_loop_report'])
+				})
+			]);
+		}
+	});
+
+	it('advertises task-loop readback after task review and approval intent playbooks', () => {
+		const taskGovernanceIntents = [
+			'prepare_task_for_review',
+			'prepare_task_for_approval',
+			'reject_task_approval',
+			'accept_child_handoff',
+			'request_child_handoff_changes'
+		];
+
+		for (const command of taskGovernanceIntents) {
+			const manifest = getAgentCapabilityManifest({ resource: 'intent', command });
+
+			expect(manifest.commands).toEqual([
+				expect.objectContaining({
+					resource: 'intent',
+					command,
+					readAfter: expect.arrayContaining(['goal-loop:get_task_loop_report']),
+					nextCommands: expect.arrayContaining(['goal-loop:get_task_loop_report'])
+				})
+			]);
+		}
 	});
 
 	it('keeps the shared capability registry aligned with CLI, MCP, and API routes', async () => {

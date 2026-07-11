@@ -166,10 +166,25 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		projectId: { type: 'string' },
 		goalId: { type: 'string' }
 	}),
+	'goal-loop:get_operator_console': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' }
+	}),
 	'goal-loop:explain_task_eligibility': buildObjectSchema({
 		projectId: { type: 'string' },
 		goalId: { type: 'string' },
 		taskId: { type: 'string' }
+	}),
+	'goal-loop:get_task_loop_report': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' }
+	}),
+	'goal-loop:materialize_suggested_task': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		validateOnly: { type: 'boolean' }
 	}),
 	'work-packet:get_agent_work_packet': buildObjectSchema({
 		projectId: { type: 'string' },
@@ -221,6 +236,12 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 		summary: { type: 'string' },
 		validateOnly: { type: 'boolean' }
 	}),
+	'run-result:request_approval_from_run': buildObjectSchema({
+		runId: { type: 'string' },
+		mode: { type: 'string' },
+		summary: { type: 'string' },
+		validateOnly: { type: 'boolean' }
+	}),
 	'run-result:mark_task_blocked_from_run': buildObjectSchema({
 		runId: { type: 'string' },
 		blocker: { type: 'string' },
@@ -236,6 +257,12 @@ const MANIFEST_BACKED_TOOL_SCHEMAS = {
 			items: { type: 'number' }
 		},
 		validateOnly: { type: 'boolean' }
+	}),
+	'goal-loop:managed_continuation_runner': buildObjectSchema({
+		projectId: { type: 'string' },
+		goalId: { type: 'string' },
+		taskId: { type: 'string' },
+		mode: { type: 'string' }
 	}),
 	'review:get_review_status': buildObjectSchema({
 		projectId: { type: 'string' },

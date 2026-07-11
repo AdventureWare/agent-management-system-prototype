@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AgentControlPlaneApiError } from '$lib/server/agent-api-errors';
 import { buildAgentGoalLoopResponse } from '$lib/server/agent-goal-loop';
-import type { ControlPlaneData, Goal, Project, Review, Task } from '$lib/types/control-plane';
+import type { ControlPlaneData, Goal, Project, Review, Run, Task } from '$lib/types/control-plane';
 
 function createProject(overrides: Partial<Project> = {}): Project {
 	return {
@@ -112,7 +112,37 @@ function createReview(overrides: Partial<Review> = {}): Review {
 	};
 }
 
-function createControlPlane(tasks: Task[], reviews: Review[] = []): ControlPlaneData {
+function createRun(overrides: Partial<Run> = {}): Run {
+	return {
+		id: overrides.id ?? 'run_1',
+		taskId: overrides.taskId ?? 'task_1',
+		executionSurfaceId: overrides.executionSurfaceId ?? null,
+		providerId: overrides.providerId ?? null,
+		status: overrides.status ?? 'completed',
+		createdAt: overrides.createdAt ?? '2026-06-01T12:00:00.000Z',
+		updatedAt: overrides.updatedAt ?? '2026-06-01T12:30:00.000Z',
+		startedAt: overrides.startedAt ?? '2026-06-01T12:00:00.000Z',
+		endedAt: overrides.endedAt ?? '2026-06-01T12:30:00.000Z',
+		threadId: overrides.threadId ?? null,
+		agentThreadId: overrides.agentThreadId ?? null,
+		promptDigest: overrides.promptDigest ?? 'digest',
+		artifactPaths: overrides.artifactPaths ?? [],
+		summary: overrides.summary ?? 'Run completed.',
+		actionsTaken: overrides.actionsTaken ?? 'Did the work.',
+		validationSummary: overrides.validationSummary ?? 'Checks passed.',
+		resultSummary: overrides.resultSummary ?? 'Ready for review.',
+		blockersFound: overrides.blockersFound ?? [],
+		followUpTaskIds: overrides.followUpTaskIds ?? [],
+		lastHeartbeatAt: overrides.lastHeartbeatAt ?? null,
+		errorSummary: overrides.errorSummary ?? ''
+	};
+}
+
+function createControlPlane(
+	tasks: Task[],
+	reviews: Review[] = [],
+	runs: Run[] = []
+): ControlPlaneData {
 	return {
 		providers: [],
 		roles: [],
@@ -123,7 +153,7 @@ function createControlPlane(tasks: Task[], reviews: Review[] = []): ControlPlane
 		taskTemplates: [],
 		executionSurfaces: [],
 		tasks,
-		runs: [],
+		runs,
 		reviews,
 		planningSessions: [],
 		approvals: [],
@@ -184,6 +214,95 @@ describe('buildAgentGoalLoopResponse', () => {
 					kind: 'execute_task',
 					taskIds: ['task_ready']
 				})
+			})
+		);
+	});
+
+	it('returns a read-only task loop report for a resolved task', () => {
+		const task = createTask({
+			id: 'task_report',
+			title: 'Report task',
+			latestRunId: 'run_report',
+			runCount: 1
+		});
+		const run = createRun({
+			id: 'run_report',
+			taskId: 'task_report',
+			resultSummary: 'Report evidence is available.'
+		});
+		const data = createControlPlane([task], [], [run]);
+		const result = buildAgentGoalLoopResponse(data, {
+			command: 'get_task_loop_report',
+			goalId: 'goal_1',
+			taskId: 'task_report'
+		});
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				command: 'get_task_loop_report',
+				resolved: expect.objectContaining({
+					projectId: 'project_1',
+					goalId: 'goal_1',
+					taskId: 'task_report'
+				}),
+				source: expect.objectContaining({
+					domainHelper: 'src/lib/server/task-loop-report.ts',
+					route: '/api/agent-goal-loop/get_task_loop_report'
+				}),
+				report: expect.objectContaining({
+					task: expect.objectContaining({ id: 'task_report' }),
+					latestRun: expect.objectContaining({
+						id: 'run_report',
+						resultSummary: 'Report evidence is available.'
+					}),
+					source: expect.objectContaining({ readOnly: true })
+				}),
+				suggestedReadbackCommands: expect.arrayContaining([
+					'goal-loop:get_next_recommended_action',
+					'work-packet:get_agent_work_packet'
+				])
+			})
+		);
+	});
+
+	it('returns the shared operator console projection for a selected task', () => {
+		const task = createTask({
+			id: 'task_operator',
+			title: 'Operator task'
+		});
+		const data = createControlPlane([task]);
+		const result = buildAgentGoalLoopResponse(data, {
+			command: 'get_operator_console',
+			goalId: 'goal_1',
+			taskId: 'task_operator'
+		});
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				command: 'get_operator_console',
+				resolved: expect.objectContaining({
+					projectId: 'project_1',
+					goalId: 'goal_1',
+					taskId: 'task_operator'
+				}),
+				source: expect.objectContaining({
+					domainHelper: 'src/lib/server/operator-goal-loop-console.ts',
+					route: '/api/agent-goal-loop/get_operator_console'
+				}),
+				console: expect.objectContaining({
+					selectedTask: expect.objectContaining({ id: 'task_operator' }),
+					path: expect.objectContaining({
+						kind: 'execute',
+						surface: 'task_detail',
+						href: '/app/tasks/task_operator',
+						taskId: 'task_operator'
+					})
+				}),
+				suggestedReadbackCommands: expect.arrayContaining([
+					'work-packet:get_agent_work_packet',
+					'goal-loop:get_task_loop_report',
+					'context:current'
+				])
 			})
 		);
 	});

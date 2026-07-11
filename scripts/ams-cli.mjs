@@ -38,7 +38,11 @@ const CLI_MANIFEST_COMMAND_KEYS = new Set([
 	'goal-loop:get_blocked_work',
 	'goal-loop:get_awaiting_review',
 	'goal-loop:get_next_recommended_action',
+	'goal-loop:get_operator_console',
 	'goal-loop:explain_task_eligibility',
+	'goal-loop:get_task_loop_report',
+	'goal-loop:materialize_suggested_task',
+	'goal-loop:managed_continuation_runner',
 	'work-packet:get_agent_work_packet',
 	'run-result:record_run_result',
 	'run-result:record_validation_result',
@@ -46,6 +50,7 @@ const CLI_MANIFEST_COMMAND_KEYS = new Set([
 	'run-result:record_followup_recommendations',
 	'run-result:create_followup_task',
 	'run-result:request_review_from_run',
+	'run-result:request_approval_from_run',
 	'run-result:mark_task_blocked_from_run',
 	'run-result:preview_progress_updates',
 	'run-result:apply_progress_updates',
@@ -115,8 +120,9 @@ function printHelp() {
 			'  context current [--thread <threadId>] [--task <taskId>] [--run <runId>]',
 			'  context get_relevant_prior_runs [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--status <status>] [--limit <n>]',
 			'  goal-loop <command> [--goal <goalId>] [--project <projectId>] [--task <taskId>] [--limit <n>]',
+			'    commands include get_next_recommended_action, explain_task_eligibility, and get_task_loop_report',
 			'  work-packet get_agent_work_packet [--goal <goalId>] [--project <projectId>] [--task <taskId>]',
-			'  run-result <record_run_result|record_validation_result|record_blocker|record_followup_recommendations|create_followup_task|request_review_from_run|mark_task_blocked_from_run|preview_progress_updates|apply_progress_updates> --json <payload> | --file <path>',
+			'  run-result <record_run_result|record_validation_result|record_blocker|record_followup_recommendations|create_followup_task|request_review_from_run|request_approval_from_run|mark_task_blocked_from_run|preview_progress_updates|apply_progress_updates> --json <payload> | --file <path>',
 			'  review get_review_status [--task <taskId>] [--goal <goalId>] [--project <projectId>] [--limit <n>]',
 			'  telemetry summary [--thread <threadId>] [--task <taskId>] [--run <runId>] [--tool <toolName>] [--outcome <success|error>] [--since <1h|24h|7d|30d>]',
 			'  intent interpret_intent --json <payload> | --file <path>',
@@ -501,6 +507,40 @@ async function resolveManagedTaskId(explicitTaskId, label = 'task id') {
 	);
 }
 
+async function resolveManagedGoalLoopScope(options = {}) {
+	const explicitScope = {
+		projectId: options.project?.trim() || '',
+		goalId: options.goal?.trim() || '',
+		taskId: options.task?.trim() || ''
+	};
+
+	if (explicitScope.projectId || explicitScope.goalId || explicitScope.taskId) {
+		return explicitScope;
+	}
+
+	const managedContextParams = buildManagedContextParams();
+
+	if (managedContextParams.size === 0) {
+		return explicitScope;
+	}
+
+	const context = await loadManagedContext();
+	const resolved = context?.resolved ?? {};
+	const resolvedScope = {
+		projectId: typeof resolved.projectId === 'string' ? resolved.projectId.trim() : '',
+		goalId: typeof resolved.goalId === 'string' ? resolved.goalId.trim() : '',
+		taskId: typeof resolved.taskId === 'string' ? resolved.taskId.trim() : ''
+	};
+
+	if (resolvedScope.projectId || resolvedScope.goalId || resolvedScope.taskId) {
+		return resolvedScope;
+	}
+
+	throw new Error(
+		'No project, goal, or task could be resolved from the current managed-run context. Run `node scripts/ams-cli.mjs context current` to inspect the available thread/task/run ids or pass --goal, --project, or --task explicitly.'
+	);
+}
+
 function buildSearchParams(options) {
 	const params = new URLSearchParams();
 
@@ -680,18 +720,60 @@ export async function runCli(argvInput = process.argv.slice(2)) {
 		}
 
 		const { options } = parseArgs(argv);
+		const manifestCommand = AGENT_CAPABILITY_COMMANDS.find(
+			(entry) => entry.resource === 'goal-loop' && entry.command === command
+		);
+
+		if (manifestCommand?.method === 'POST') {
+			let payload = await readPayload(options);
+
+			if (command === 'materialize_suggested_task' || command === 'managed_continuation_runner') {
+				const goalLoopScope = await resolveManagedGoalLoopScope({
+					project: payload.projectId,
+					goal: payload.goalId,
+					...(command === 'managed_continuation_runner' ? { task: payload.taskId } : {})
+				});
+				payload = {
+					...payload,
+					...(payload.projectId ? {} : { projectId: goalLoopScope.projectId || undefined }),
+					...(payload.goalId ? {} : { goalId: goalLoopScope.goalId || undefined }),
+					...(command === 'managed_continuation_runner' && !payload.taskId
+						? { taskId: goalLoopScope.taskId || undefined }
+						: {})
+				};
+			}
+
+			printJson(
+				await request(`/api/agent-goal-loop/${encodeURIComponent(command)}`, {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify(payload)
+				})
+			);
+			return;
+		}
+
 		const params = new URLSearchParams();
 
-		if (options.project) {
-			params.set('projectId', options.project);
+		const goalLoopScope =
+			command === 'get_operator_console'
+				? await resolveManagedGoalLoopScope(options)
+				: {
+						projectId: options.project?.trim() || '',
+						goalId: options.goal?.trim() || '',
+						taskId: options.task?.trim() || ''
+					};
+
+		if (goalLoopScope.projectId) {
+			params.set('projectId', goalLoopScope.projectId);
 		}
 
-		if (options.goal) {
-			params.set('goalId', options.goal);
+		if (goalLoopScope.goalId) {
+			params.set('goalId', goalLoopScope.goalId);
 		}
 
-		if (options.task) {
-			params.set('taskId', options.task);
+		if (goalLoopScope.taskId) {
+			params.set('taskId', goalLoopScope.taskId);
 		}
 
 		if (options.limit) {

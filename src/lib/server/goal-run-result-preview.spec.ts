@@ -428,4 +428,165 @@ describe('buildRunResultPreview', () => {
 		expect(preview?.classification).toBe('requires_user_decision');
 		expect(preview?.nextAction).toBe('request_user_decision');
 	});
+
+	it('detects completed approval-gated tasks as user decisions before opening approval', () => {
+		const preview = buildRunResultPreview(
+			createControlPlane({
+				task: createTask({
+					approvalMode: 'before_complete',
+					requiresReview: false,
+					status: 'review'
+				}),
+				run: createRun({
+					status: 'completed',
+					resultSummary: 'Ready for approval before closeout.'
+				})
+			}),
+			{ runId: 'run_1' }
+		);
+
+		expect(preview).toEqual(
+			expect.objectContaining({
+				classification: 'requires_user_decision',
+				nextAction: 'request_user_decision',
+				proposedUpdates: expect.arrayContaining([
+					expect.objectContaining({
+						resource: 'approval',
+						fields: expect.objectContaining({
+							taskId: 'task_1',
+							runId: 'run_1',
+							status: 'pending',
+							mode: 'before_complete'
+						})
+					})
+				])
+			})
+		);
+	});
+
+	it('keeps the result-conversion classification matrix aligned with proposed updates', () => {
+		const matrix = [
+			{
+				name: 'accepted completion',
+				data: createControlPlane({
+					task: createTask({ status: 'done', closeoutState: 'accepted' }),
+					run: createRun({ resultSummary: '' })
+				}),
+				classification: 'completed_accepted',
+				nextAction: 'accept_or_close_task',
+				proposedResources: ['task', 'run']
+			},
+			{
+				name: 'completed awaiting review',
+				data: createControlPlane({
+					run: createRun({ resultSummary: '' })
+				}),
+				classification: 'completed_awaiting_review',
+				nextAction: 'request_review',
+				proposedResources: ['task', 'review']
+			},
+			{
+				name: 'partial completion',
+				data: createControlPlane({
+					run: createRun({
+						resultSummary: 'Partial implementation; remaining UI polish is incomplete.'
+					})
+				}),
+				classification: 'partial_completion',
+				nextAction: 'plan_revision',
+				proposedResources: ['task', 'run']
+			},
+			{
+				name: 'needs revision',
+				data: createControlPlane({
+					run: createRun({ resultSummary: '' }),
+					reviews: [createReview({ status: 'changes_requested', summary: 'Needs smaller scope.' })]
+				}),
+				classification: 'needs_revision',
+				nextAction: 'plan_revision',
+				proposedResources: ['task']
+			},
+			{
+				name: 'blocked',
+				data: createControlPlane({
+					run: createRun({
+						status: 'blocked',
+						resultSummary: '',
+						blockersFound: ['Missing credentials.']
+					})
+				}),
+				classification: 'blocked',
+				nextAction: 'resolve_blocker',
+				proposedResources: ['task']
+			},
+			{
+				name: 'failed',
+				data: createControlPlane({
+					run: createRun({ status: 'failed', resultSummary: '', errorSummary: 'Tests crashed.' })
+				}),
+				classification: 'failed',
+				nextAction: 'diagnose_failure',
+				proposedResources: ['run']
+			},
+			{
+				name: 'out-of-scope follow-up',
+				data: createControlPlane({
+					run: createRun({
+						resultSummary: 'Completed the task, but found a separate follow-up outside scope.',
+						followUpTaskIds: ['task_followup']
+					})
+				}),
+				classification: 'out_of_scope_follow_up',
+				nextAction: 'create_follow_up_task',
+				proposedResources: ['run']
+			},
+			{
+				name: 'duplicate or superseded',
+				data: createControlPlane({
+					task: createTask({ taskTemplateId: 'template_old' }),
+					run: createRun({ resultSummary: '' }),
+					templates: [
+						createTemplate({
+							id: 'template_old',
+							lifecycleStatus: 'superseded',
+							supersededByTaskTemplateId: 'template_new'
+						})
+					]
+				}),
+				classification: 'duplicate_superseded',
+				nextAction: 'resolve_duplicate',
+				proposedResources: []
+			},
+			{
+				name: 'requires user decision',
+				data: createControlPlane({
+					run: createRun({ resultSummary: '' }),
+					approvals: [createApproval()]
+				}),
+				classification: 'requires_user_decision',
+				nextAction: 'request_user_decision',
+				proposedResources: ['approval']
+			}
+		] as const;
+
+		for (const entry of matrix) {
+			const preview = buildRunResultPreview(entry.data, { runId: 'run_1' });
+
+			expect(preview, entry.name).toEqual(
+				expect.objectContaining({
+					classification: entry.classification,
+					nextAction: entry.nextAction
+				})
+			);
+			expect(preview?.proposedUpdates.map((update) => update.resource), entry.name).toEqual(
+				entry.proposedResources
+			);
+			expect(preview?.projectGoalProgressPreview.safety, entry.name).toEqual(
+				expect.objectContaining({
+					mutation: 'none',
+					operatorReviewRequired: true
+				})
+			);
+		}
+	});
 });

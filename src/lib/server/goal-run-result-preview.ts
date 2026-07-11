@@ -220,6 +220,15 @@ function classifyRunResult(data: ControlPlaneData, run: Run, task: Task) {
 		} as const;
 	}
 
+	if (run.status === 'completed' && task.approvalMode !== 'none') {
+		reasons.push(`Completed run requires ${task.approvalMode} approval.`);
+		return {
+			classification: 'requires_user_decision',
+			confidence: 'high',
+			reasons
+		} as const;
+	}
+
 	if (
 		run.status === 'completed' &&
 		(openReview || task.requiresReview || task.status === 'review')
@@ -312,7 +321,12 @@ function proposedUpdatesFor(input: {
 		updates.push({
 			resource: 'approval',
 			id: `approval:${task.id}`,
-			fields: { taskId: task.id, runId: run.id, status: 'pending' },
+			fields: {
+				taskId: task.id,
+				runId: run.id,
+				status: 'pending',
+				mode: task.approvalMode === 'none' ? 'before_complete' : task.approvalMode
+			},
 			reason: 'A user decision is required before task state changes.'
 		});
 	}
