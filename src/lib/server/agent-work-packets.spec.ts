@@ -203,6 +203,10 @@ describe('buildAgentWorkPacketResponse', () => {
 					recommendationKind: 'execute_task',
 					prompt: expect.stringContaining('Goal Loop Selected Work Packet')
 				}),
+				suggestedReadbackCommands: [
+					'goal-loop:get_task_loop_report',
+					'context:current'
+				],
 				structuredSections: expect.objectContaining({
 					selection: expect.objectContaining({
 						includedTaskIds: ['task_packet']
@@ -218,10 +222,60 @@ describe('buildAgentWorkPacketResponse', () => {
 					}),
 					expectedResult: expect.objectContaining({
 						shape: expect.arrayContaining(['What changed'])
+					}),
+					commandGuidance: expect.objectContaining({
+						readBeforeWork: expect.arrayContaining([
+							'work-packet:get_agent_work_packet',
+							'goal-loop:get_task_loop_report'
+						]),
+						recordResult: expect.arrayContaining([
+							'run-result:record_run_result',
+							'run-result:request_review_from_run',
+							'run-result:create_followup_task'
+						]),
+						readAfterMutation: ['goal-loop:get_task_loop_report', 'context:current']
 					})
 				})
 			})
 		);
+	});
+
+	it('resolves task-only packet requests to the selected task project and goal', () => {
+		const task = createTask({
+			id: 'task_packet_2',
+			projectId: 'project_2',
+			goalId: 'goal_2',
+			title: 'Plan selected goal'
+		});
+		const data = createControlPlane([task]);
+		data.projects = [
+			createProject({ id: 'project_1', name: 'Default project' }),
+			createProject({ id: 'project_2', name: 'Selected task project' })
+		];
+		data.goals = [
+			createGoal({ id: 'goal_1', projectIds: ['project_1'], taskIds: [] }),
+			createGoal({ id: 'goal_2', projectIds: ['project_2'], taskIds: [task.id] })
+		];
+
+		const result = buildAgentWorkPacketResponse(data, {
+			command: 'get_agent_work_packet',
+			taskId: task.id
+		});
+
+		expect(result.resolved).toEqual({
+			projectId: 'project_2',
+			goalId: 'goal_2',
+			taskId: task.id
+		});
+		expect(result.packet).toMatchObject({
+			projectId: 'project_2',
+			goalId: 'goal_2',
+			taskId: task.id,
+			includedTaskIds: [task.id]
+		});
+		expect(result.structuredSections.context.project).toMatchObject({ id: 'project_2' });
+		expect(result.structuredSections.context.goal).toMatchObject({ id: 'goal_2' });
+		expect(result.structuredSections.context.task).toMatchObject({ id: task.id });
 	});
 
 	it('throws structured guidance for unknown commands', () => {
@@ -298,6 +352,12 @@ describe('buildAgentWorkPacketResponse', () => {
 		);
 		expect(packet.structuredSections.expectedResult.shape).toEqual(
 			expect.arrayContaining(['What changed', 'Validation commands and results'])
+		);
+		expect(packet.suggestedReadbackCommands).toEqual(
+			expect.arrayContaining(['goal-loop:get_task_loop_report'])
+		);
+		expect(packet.structuredSections.commandGuidance.recordResult).toEqual(
+			expect.arrayContaining(['run-result:record_run_result', 'run-result:request_review_from_run'])
 		);
 
 		const run = createRun({ id: 'run_roundtrip', taskId: task.id });

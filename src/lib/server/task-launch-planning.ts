@@ -24,6 +24,7 @@ import { selectProjectTaskThreadContext } from '$lib/server/task-thread-compatib
 import {
 	buildTaskThreadName,
 	buildTaskThreadPrompt,
+	buildTaskLaunchRunContextSummary,
 	buildPromptDigest
 } from '$lib/server/task-threads';
 import {
@@ -638,6 +639,7 @@ export async function launchTaskFromPlan(
 
 	const now = new Date().toISOString();
 	const providerId = plan.provider?.id ?? null;
+	const promptDigest = buildPromptDigest(plan.prompt);
 	const run = createRun({
 		id: controlPlaneRunId,
 		taskId,
@@ -652,7 +654,12 @@ export async function launchTaskFromPlan(
 		modelUsed: launchModel.model,
 		modelSource: launchModel.source,
 		effectiveRigorProfile: plan.effectiveRigorProfile,
-		promptDigest: buildPromptDigest(plan.prompt),
+		promptDigest,
+		contextSummary: buildTaskLaunchRunContextSummary({
+			taskId,
+			runId: controlPlaneRunId,
+			promptDigest
+		}),
 		artifactPaths:
 			plan.project.defaultArtifactRoot || plan.project.projectRootFolder
 				? [plan.project.defaultArtifactRoot || plan.project.projectRootFolder]

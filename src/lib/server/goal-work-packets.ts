@@ -26,7 +26,15 @@ export type GoalLoopWorkPacket = {
 	stoppingConditions: string[];
 	validationExpectations: string[];
 	expectedResultShape: string[];
+	commandGuidance: GoalLoopWorkPacketCommandGuidance;
 	prompt: string;
+};
+
+export type GoalLoopWorkPacketCommandGuidance = {
+	readBeforeWork: string[];
+	recordResult: string[];
+	readAfterMutation: string[];
+	note: string;
 };
 
 export type BuildGoalLoopWorkPacketInput = {
@@ -151,6 +159,31 @@ function expectedResultShape(mode: GoalLoopWorkPacketMode) {
 	];
 }
 
+function commandGuidance(mode: GoalLoopWorkPacketMode, task: Task | null): GoalLoopWorkPacketCommandGuidance {
+	const taskReadback = task
+		? ['goal-loop:get_task_loop_report', 'goal-loop:explain_task_eligibility']
+		: ['goal-loop:get_next_recommended_action'];
+	const recordResult =
+		mode === 'reviewer'
+			? ['review:get_review_status']
+			: mode === 'executor'
+				? [
+						'run-result:record_run_result',
+						'run-result:request_review_from_run',
+						'run-result:request_approval_from_run',
+						'run-result:create_followup_task',
+						'run-result:record_blocker'
+					]
+				: ['run-result:create_followup_task', 'run-result:record_blocker'];
+
+	return {
+		readBeforeWork: ['work-packet:get_agent_work_packet', ...taskReadback],
+		recordResult,
+		readAfterMutation: task ? ['goal-loop:get_task_loop_report', 'context:current'] : ['context:current'],
+		note: 'Use these AMS operations for durable state. The rendered prompt is a convenience view, not the source of truth.'
+	};
+}
+
 function wrapPrompt(input: {
 	basePrompt: string;
 	mode: GoalLoopWorkPacketMode;
@@ -158,8 +191,7 @@ function wrapPrompt(input: {
 	project: Project;
 	task: Task | null;
 	selectionReason: string;
-	stoppingConditions: string[];
-	expectedResultShape: string[];
+	commandGuidance: GoalLoopWorkPacketCommandGuidance;
 }) {
 	return [
 		'# Goal Loop Selected Work Packet',
@@ -172,11 +204,11 @@ function wrapPrompt(input: {
 		input.task ? `Selected task: ${input.task.title} (${input.task.id})` : 'Selected task: None',
 		`Selection reason: ${input.selectionReason}`,
 		'',
-		'## Goal-Loop Stopping Conditions',
-		input.stoppingConditions.map((condition) => `- ${condition}`).join('\n'),
-		'',
-		'## Expected Result Shape',
-		input.expectedResultShape.map((item) => `- ${item}`).join('\n'),
+		'## Structured AMS Operations',
+		`Read before work: ${input.commandGuidance.readBeforeWork.join(', ')}`,
+		`Record result with: ${input.commandGuidance.recordResult.join(', ')}`,
+		`Read after mutation: ${input.commandGuidance.readAfterMutation.join(', ')}`,
+		input.commandGuidance.note,
 		'',
 		'## Base Work Packet',
 		input.basePrompt
@@ -187,12 +219,16 @@ export function buildGoalLoopWorkPacket(
 	data: ControlPlaneData,
 	input: BuildGoalLoopWorkPacketInput = {}
 ): GoalLoopWorkPacket | null {
+	const inputTaskId = input.taskId ?? null;
+	const inputTask = inputTaskId
+		? (data.tasks.find((task) => task.id === inputTaskId) ?? null)
+		: null;
 	const goalLoop = buildGoalWorkLoopClassification(data, {
-		projectId: input.projectId,
-		goalId: input.goalId
+		projectId: input.projectId ?? inputTask?.projectId ?? null,
+		goalId: input.goalId ?? inputTask?.goalId ?? null
 	});
-	const selectedClassifiedTask = input.taskId
-		? (goalLoop.tasks.find((task) => task.id === input.taskId) ?? null)
+	const selectedClassifiedTask = inputTaskId
+		? (goalLoop.tasks.find((task) => task.id === inputTaskId) ?? null)
 		: null;
 	const recommendation = goalLoop.recommendation;
 	const selectedTaskId = selectedClassifiedTask?.id ?? recommendation.taskIds[0] ?? null;
@@ -232,6 +268,7 @@ export function buildGoalLoopWorkPacket(
 			];
 	const stoppingConditions = defaultStoppingConditions(mode);
 	const resultShape = expectedResultShape(mode);
+	const commands = commandGuidance(mode, task);
 
 	let basePrompt: string;
 
@@ -262,6 +299,7 @@ export function buildGoalLoopWorkPacket(
 		stoppingConditions,
 		validationExpectations,
 		expectedResultShape: resultShape,
+		commandGuidance: commands,
 		prompt: wrapPrompt({
 			basePrompt,
 			mode,
@@ -269,8 +307,7 @@ export function buildGoalLoopWorkPacket(
 			project,
 			task,
 			selectionReason,
-			stoppingConditions,
-			expectedResultShape: resultShape
+			commandGuidance: commands
 		})
 	};
 }

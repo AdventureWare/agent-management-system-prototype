@@ -64,6 +64,10 @@ function action(input: RecommendedAction): RecommendedAction {
 	return input;
 }
 
+function taskLoopReadbackCommands(...commands: string[]) {
+	return [...new Set(['goal-loop:get_task_loop_report', ...commands])];
+}
+
 function selectPrimaryActionHint(actions: RecommendedAction[]): AgentGuidanceHint | null {
 	const actionable =
 		actions.find(
@@ -182,7 +186,7 @@ function buildRecommendedActions(args: {
 			stateSignals: [`Resolved task ${task.id} is the current control-plane anchor.`],
 			expectedOutcome:
 				'Return the latest task fields, linked thread, run, and governance state before mutating.',
-			suggestedReadbackCommands: ['task:get']
+			suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current')
 		})
 	);
 
@@ -197,7 +201,7 @@ function buildRecommendedActions(args: {
 					`Approval mode is ${pendingApproval.mode}.`
 				],
 				expectedOutcome: 'Resolve the pending approval by approving the task output.',
-				suggestedReadbackCommands: ['task:get', 'context:current'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -214,7 +218,7 @@ function buildRecommendedActions(args: {
 					'Use this when the current output should not pass the approval gate yet.'
 				],
 				expectedOutcome: 'Resolve the pending approval by rejecting the task output.',
-				suggestedReadbackCommands: ['task:get', 'context:current'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -232,7 +236,7 @@ function buildRecommendedActions(args: {
 				reason: 'There is an open review gate on this task.',
 				stateSignals: [`Task ${task.id} has open review ${openReview.id}.`],
 				expectedOutcome: 'Resolve the open review by approving the current task output.',
-				suggestedReadbackCommands: ['task:get', 'context:current'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -249,7 +253,7 @@ function buildRecommendedActions(args: {
 					'Use this when the current output is not ready to pass review.'
 				],
 				expectedOutcome: 'Keep the review loop open and record requested follow-up changes.',
-				suggestedReadbackCommands: ['task:get', 'context:current'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -270,7 +274,7 @@ function buildRecommendedActions(args: {
 					'The child task is done and no delegation acceptance has been recorded yet.'
 				],
 				expectedOutcome: 'Accept the child handoff into the parent task in one intent call.',
-				suggestedReadbackCommands: ['context:current', 'task:get'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current', 'task:get'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -287,7 +291,7 @@ function buildRecommendedActions(args: {
 					'The child task is done but may still require follow-up before acceptance.'
 				],
 				expectedOutcome: 'Return the child handoff for follow-up work in one intent call.',
-				suggestedReadbackCommands: ['context:current', 'task:get'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current', 'task:get'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -311,7 +315,7 @@ function buildRecommendedActions(args: {
 				],
 				expectedOutcome:
 					'Update the task so the blocked state or blocker details reflect the next action.',
-				suggestedReadbackCommands: ['task:get', 'context:current']
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current')
 			})
 		);
 		return uniqueRecommendedActions(actions);
@@ -325,7 +329,7 @@ function buildRecommendedActions(args: {
 				reason: 'The task is still in draft and likely needs planning fields filled in.',
 				stateSignals: [`Task ${task.id} is still in_draft.`],
 				expectedOutcome: 'Fill in or revise the planning fields needed before execution can begin.',
-				suggestedReadbackCommands: ['task:get', 'context:current']
+				suggestedReadbackCommands: taskLoopReadbackCommands('task:get', 'context:current')
 			})
 		);
 		return uniqueRecommendedActions(actions);
@@ -342,7 +346,7 @@ function buildRecommendedActions(args: {
 					'No blocking governance gate is currently open.'
 				],
 				expectedOutcome: 'Launch execution for the ready task.',
-				suggestedReadbackCommands: ['context:current', 'thread:panel']
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current', 'thread:panel')
 			})
 		);
 		if (!task.agentThreadId) {
@@ -354,7 +358,7 @@ function buildRecommendedActions(args: {
 						'No agent thread is linked yet. Resolve the best thread target before routing work.',
 					stateSignals: [`Task ${task.id} does not have an agentThreadId yet.`],
 					expectedOutcome: 'Return the best contactable thread candidate for this task context.',
-					suggestedReadbackCommands: ['context:current']
+					suggestedReadbackCommands: taskLoopReadbackCommands('context:current')
 				})
 			);
 		}
@@ -373,7 +377,7 @@ function buildRecommendedActions(args: {
 				],
 				expectedOutcome:
 					'Inspect the live thread state before sending follow-up or making task-level assumptions.',
-				suggestedReadbackCommands: ['context:current']
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current')
 			})
 		);
 		actions.push(
@@ -388,7 +392,7 @@ function buildRecommendedActions(args: {
 				],
 				expectedOutcome:
 					'Resolve a target thread, send the contact, and read back contact state in one call.',
-				suggestedReadbackCommands: ['thread:contacts', 'context:current'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('thread:contacts', 'context:current'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -406,7 +410,7 @@ function buildRecommendedActions(args: {
 				reason: 'The task is done and requires review before it can be considered complete.',
 				stateSignals: [`Task ${task.id} is done.`, 'The task still requires review.'],
 				expectedOutcome: 'Open the review workflow in one intent call and return readback context.',
-				suggestedReadbackCommands: ['context:current', 'task:get'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current', 'task:get'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:
@@ -424,7 +428,7 @@ function buildRecommendedActions(args: {
 				stateSignals: [`Task ${task.id} is done.`, `Approval mode is ${task.approvalMode}.`],
 				expectedOutcome:
 					'Open the approval workflow in one intent call and return readback context.',
-				suggestedReadbackCommands: ['context:current', 'task:get'],
+				suggestedReadbackCommands: taskLoopReadbackCommands('context:current', 'task:get'),
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason:

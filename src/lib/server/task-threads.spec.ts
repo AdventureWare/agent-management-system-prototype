@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildAgentThreadCliCommand } from './ams-cli-paths';
-import { buildTaskThreadName, buildTaskThreadPrompt, resolveTaskThreadName } from './task-threads';
+import { buildAgentThreadCliCommand, buildAmsCliCommand } from './ams-cli-paths';
+import {
+	buildTaskLaunchRunContextSummary,
+	buildTaskThreadName,
+	buildTaskThreadPrompt,
+	resolveTaskThreadName
+} from './task-threads';
 
 describe('task thread naming', () => {
 	it('builds a standardized task thread name', () => {
@@ -37,6 +42,24 @@ describe('task thread naming', () => {
 				taskId: 'task_thread_naming'
 			})
 		).toBe('Architecture review: Agent Management System Prototype');
+	});
+
+	it('summarizes launch run context with structured AMS readbacks', () => {
+		const summary = buildTaskLaunchRunContextSummary({
+			taskId: 'task_launch',
+			runId: 'run_launch',
+			promptDigest: 'abc123'
+		});
+
+		expect(summary).toContain('Launch prompt digest: abc123');
+		expect(summary).toContain(
+			buildAmsCliCommand('work-packet get_agent_work_packet --task task_launch')
+		);
+		expect(summary).toContain(
+			buildAmsCliCommand('goal-loop get_task_loop_report --task task_launch')
+		);
+		expect(summary).toContain(buildAmsCliCommand('context current --run run_launch'));
+		expect(summary).toContain('The rendered launch prompt is delivery context');
 	});
 
 	it('includes installed skill names in the task prompt when available', () => {
@@ -233,6 +256,17 @@ describe('task thread naming', () => {
 				defaultArtifactRoot: '/tmp/project/agent_output'
 			})
 		).toContain('do not claim AMS state was updated');
+		const prompt = buildTaskThreadPrompt({
+			taskName: 'Coordinate thread work',
+			taskInstructions: 'Use another thread if you need outside context.',
+			projectName: 'Agent Management System Prototype',
+			projectRootFolder: '/tmp/project',
+			defaultArtifactRoot: '/tmp/project/agent_output'
+		});
+		expect(prompt).toContain(buildAmsCliCommand('goal-loop get_task_loop_report --task <taskId>'));
+		expect(prompt).toContain(buildAmsCliCommand('work-packet get_agent_work_packet --task <taskId>'));
+		expect(prompt).not.toContain(buildAmsCliCommand('project list'));
+		expect(prompt).not.toContain(buildAmsCliCommand('goal create'));
 		expect(
 			buildTaskThreadPrompt({
 				taskName: 'Coordinate thread work',

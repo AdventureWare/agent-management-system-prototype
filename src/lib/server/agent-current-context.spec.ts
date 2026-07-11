@@ -161,7 +161,11 @@ describe('agent-current-context', () => {
 						expect.stringContaining('before_complete')
 					]),
 					expectedOutcome: expect.stringContaining('Resolve the pending approval'),
-					suggestedReadbackCommands: expect.arrayContaining(['task:get', 'context:current']),
+					suggestedReadbackCommands: expect.arrayContaining([
+						'goal-loop:get_task_loop_report',
+						'task:get',
+						'context:current'
+					]),
 					shouldValidateFirst: true,
 					validationMode: 'validateOnly',
 					validationReason: expect.stringContaining('Preview')
@@ -169,7 +173,11 @@ describe('agent-current-context', () => {
 				expect.objectContaining({
 					resource: 'task',
 					command: 'reject-approval',
-					suggestedReadbackCommands: expect.arrayContaining(['task:get', 'context:current']),
+					suggestedReadbackCommands: expect.arrayContaining([
+						'goal-loop:get_task_loop_report',
+						'task:get',
+						'context:current'
+					]),
 					shouldValidateFirst: true,
 					validationMode: 'validateOnly'
 				})
@@ -246,7 +254,11 @@ describe('agent-current-context', () => {
 					expect.stringContaining('thread_coordination')
 				]),
 				expectedOutcome: expect.stringContaining('Resolve a target thread'),
-				suggestedReadbackCommands: ['thread:contacts', 'context:current'],
+				suggestedReadbackCommands: [
+					'goal-loop:get_task_loop_report',
+					'thread:contacts',
+					'context:current'
+				],
 				shouldValidateFirst: true,
 				validationMode: 'validateOnly',
 				validationReason: expect.stringContaining('Cross-thread routing')

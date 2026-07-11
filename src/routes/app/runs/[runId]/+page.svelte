@@ -578,6 +578,20 @@
 						{data.run.summary || 'No summary recorded for this run.'}
 					</p>
 				</div>
+
+				<div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+					<p class="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+						Context readback
+					</p>
+					{#if data.run.contextSummary}
+						<pre
+							class="ui-wrap-anywhere mt-3 whitespace-pre-wrap font-mono text-xs leading-6 text-slate-200">{data.run.contextSummary}</pre>
+					{:else}
+						<p class="mt-3 text-sm text-slate-500">
+							No structured context summary recorded for this run.
+						</p>
+					{/if}
+				</div>
 			</section>
 
 			<section class="card border border-slate-800 bg-slate-950/70 p-6">

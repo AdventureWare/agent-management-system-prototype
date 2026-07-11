@@ -30,6 +30,7 @@ import {
 } from '$lib/server/agent-threads';
 import {
 	buildPromptDigest,
+	buildTaskLaunchRunContextSummary,
 	buildTaskThreadName,
 	buildTaskThreadPrompt
 } from '$lib/server/task-threads';
@@ -817,6 +818,7 @@ export const actions: Actions = {
 		}
 		const providerId = provider?.id ?? null;
 		const now = new Date().toISOString();
+		const promptDigest = buildPromptDigest(prompt);
 		const run = createRun({
 			id: controlPlaneRunId,
 			taskId: createdTask.id,
@@ -830,7 +832,12 @@ export const actions: Actions = {
 			agentThreadId: session.agentThreadId,
 			modelUsed: launchModel.model,
 			modelSource: launchModel.source,
-			promptDigest: buildPromptDigest(prompt),
+			promptDigest,
+			contextSummary: buildTaskLaunchRunContextSummary({
+				taskId: createdTask.id,
+				runId: controlPlaneRunId,
+				promptDigest
+			}),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
 					? [project.defaultArtifactRoot || project.projectRootFolder]
@@ -1356,6 +1363,7 @@ export const actions: Actions = {
 		}
 
 		const providerId = provider?.id ?? null;
+		const promptDigest = buildPromptDigest(prompt);
 		const run = createRun({
 			id: controlPlaneRunId,
 			taskId,
@@ -1369,7 +1377,12 @@ export const actions: Actions = {
 			agentThreadId,
 			modelUsed: launchModel.model,
 			modelSource: launchModel.source,
-			promptDigest: buildPromptDigest(prompt),
+			promptDigest,
+			contextSummary: buildTaskLaunchRunContextSummary({
+				taskId,
+				runId: controlPlaneRunId,
+				promptDigest
+			}),
 			artifactPaths:
 				project.defaultArtifactRoot || project.projectRootFolder
 					? [project.defaultArtifactRoot || project.projectRootFolder]

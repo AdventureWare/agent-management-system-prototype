@@ -132,6 +132,10 @@ function resolveGoal(data: ControlPlaneData, goalId: string, task: Task | null) 
 	return null;
 }
 
+function buildSuggestedReadbackCommands(packet: ReturnType<typeof buildGoalLoopWorkPacket>) {
+	return packet?.commandGuidance.readAfterMutation ?? ['goal-loop:get_next_recommended_action'];
+}
+
 export function buildAgentWorkPacketResponse(data: ControlPlaneData, input: AgentWorkPacketInput) {
 	const command = normalizeCommand(input.command);
 	const projectId = normalizeText(input.projectId);
@@ -200,12 +204,15 @@ export function buildAgentWorkPacketResponse(data: ControlPlaneData, input: Agen
 			expectedResult: {
 				shape: packet.expectedResultShape,
 				recordingHint:
-					'Record the result through structured run/task/review operations; do not treat the rendered prompt as durable state.'
+					'Record outcomes through commandGuidance.recordResult, then verify with commandGuidance.readAfterMutation.'
+			},
+			commandGuidance: {
+				readBeforeWork: packet.commandGuidance.readBeforeWork,
+				recordResult: packet.commandGuidance.recordResult,
+				readAfterMutation: packet.commandGuidance.readAfterMutation,
+				note: packet.commandGuidance.note
 			}
 		},
-		suggestedReadbackCommands: [
-			'goal-loop:get_next_recommended_action',
-			...(packet.taskId ? ['goal-loop:explain_task_eligibility'] : [])
-		]
+		suggestedReadbackCommands: buildSuggestedReadbackCommands(packet)
 	};
 }

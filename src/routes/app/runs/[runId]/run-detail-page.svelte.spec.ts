@@ -61,6 +61,8 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 					sessionCanResume: true,
 					sessionHasActiveRun: false,
 					promptDigest: 'digest: add runs index and detail',
+					contextSummary:
+						'Launch prompt digest: digest: add runs index and detail\nStructured launch context:\n- node scripts/ams-cli.mjs work-packet get_agent_work_packet --task task_1\n- node scripts/ams-cli.mjs goal-loop get_task_loop_report --task task_1\n- node scripts/ams-cli.mjs context current --run run_1',
 					artifactPaths: ['/tmp/project/agent_output/run_1/log.txt'],
 					summary: 'Run stopped during rendering.',
 					lastHeartbeatAt: '2026-03-30T12:04:30.000Z',
@@ -124,7 +126,14 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 						}
 					],
 					nextAction: 'diagnose_failure',
-					followUpTaskIds: ['task_followup']
+					followUpTaskIds: ['task_followup'],
+					projectGoalProgressPreview: {
+						proposedUpdates: [],
+						omittedUpdates: [],
+						safety: {
+							mutation: 'preview_only'
+						}
+					}
 				},
 				session: {
 					id: 'session_1',
@@ -149,6 +158,10 @@ describe('/app/runs/[runId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Proposed state updates');
 		expect(document.body.textContent).toContain('Captured execution inputs');
 		expect(document.body.textContent).toContain('digest: add runs index and detail');
+		expect(document.body.textContent).toContain('Context readback');
+		expect(document.body.textContent).toContain('work-packet get_agent_work_packet --task task_1');
+		expect(document.body.textContent).toContain('goal-loop get_task_loop_report --task task_1');
+		expect(document.body.textContent).toContain('context current --run run_1');
 		expect(document.body.textContent).toContain('thread_1');
 		expect(document.body.textContent).toContain(
 			'Route load failed on missing execution-surface filter.'

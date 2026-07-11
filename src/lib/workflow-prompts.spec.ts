@@ -139,6 +139,10 @@ describe('workflow prompts', () => {
 		expect(prompt).toContain('Effective rigor profile: Prototype (PROTOTYPE)');
 		expect(prompt).toContain('- read files');
 		expect(prompt).toContain('Stopping Conditions');
+		expect(prompt).toContain('Current state:');
+		expect(prompt).not.toContain('Project brief:');
+		expect(prompt).not.toContain('Decision log:');
+		expect(prompt).not.toContain('Important links:');
 	});
 
 	it('builds research prompts that reduce uncertainty without implementation changes', () => {
@@ -148,6 +152,9 @@ describe('workflow prompts', () => {
 		expect(prompt).toContain('Do not make implementation changes');
 		expect(prompt).toContain('Findings that answer the uncertainty or blocker');
 		expect(prompt).toContain('Recommended next task mode');
+		expect(prompt).toContain('Current state:');
+		expect(prompt).not.toContain('Project brief:');
+		expect(prompt).not.toContain('Decision log:');
 	});
 
 	it('builds reviewer prompts with run evidence and accept/reject/needs-revision decision request', () => {
@@ -158,5 +165,8 @@ describe('workflow prompts', () => {
 		expect(prompt).toContain('Artifacts: /repo/agent_output/workflow.md');
 		expect(prompt).toContain('Decision: accept, reject, or needs revision');
 		expect(prompt).toContain('Do not accept work when acceptance criteria');
+		expect(prompt).toContain('Current state:');
+		expect(prompt).not.toContain('Project brief:');
+		expect(prompt).not.toContain('Decision log:');
 	});
 });

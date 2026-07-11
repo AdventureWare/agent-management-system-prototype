@@ -103,6 +103,11 @@ export function buildTaskThreadPrompt(input: {
 		buildAmsCliCommand('context current'),
 		buildAmsCliCommand('context current --task <taskId>'),
 		buildAmsCliCommand('context current --run <runId>'),
+		'Use the goal-loop read APIs for "what next" and per-task control-loop readback before deciding whether to launch, mutate, block, or request review:',
+		buildAmsCliCommand('goal-loop get_next_recommended_action --goal <goalId>'),
+		buildAmsCliCommand('goal-loop get_task_loop_report --task <taskId>'),
+		buildAmsCliCommand('goal-loop explain_task_eligibility --task <taskId>'),
+		buildAmsCliCommand('work-packet get_agent_work_packet --task <taskId>'),
 		'Read summary.recommendedNextActions structurally: stateSignals explains why a recommendation is active now, expectedOutcome explains what it should accomplish, suggestedReadbackCommands tells you how to verify it, and shouldValidateFirst means you should use the matching validateOnly preview before mutating.',
 		'When the work matches a common AMS workflow, prefer a first-class intent command over manually sequencing each mutation:',
 		buildAmsCliCommand(
@@ -124,22 +129,8 @@ export function buildTaskThreadPrompt(input: {
 		'Use the manifest guidance as the default reliable loop: discover first, inspect current state, mutate narrowly, then read the changed state back.',
 		'Look at the manifest playbooks when the intent is ambiguous, especially for create_task, prepare_task_for_review, prepare_task_for_approval, accept_child_handoff, reject_task_approval, request_child_handoff_changes, and coordinate_with_another_thread.',
 		`For the full command map, read ${AMS_CLI_DOCS_PATH}.`,
-		'Use the AMS CLI for task, goal, and project discovery or task updates:',
 		'When only thread context is available inside a managed run, current-task commands can omit [taskId] or [parentTaskId]. The helper resolves the canonical task first and tells you to run context current if no task can be inferred.',
-		buildAmsCliCommand('project list'),
-		buildAmsCliCommand('project create --json \'{"name":"<name>","summary":"<summary>"}\''),
-		buildAmsCliCommand(
-			'project update <projectId> --json \'{"defaultArtifactRoot":"<absolute-path>"}\''
-		),
-		buildAmsCliCommand('goal list --project <projectId>'),
-		buildAmsCliCommand(
-			'goal create --json \'{"name":"<name>","summary":"<summary>","projectIds":["<projectId>"]}\''
-		),
-		buildAmsCliCommand('goal update <goalId> --json \'{"status":"running"}\''),
-		buildAmsCliCommand('task list --project <projectId>'),
-		buildAmsCliCommand(
-			'task create --json \'{"title":"<title>","summary":"<summary>","projectId":"<projectId>"}\''
-		),
+		'Use task commands only for narrow task updates or artifacts after reading the control-loop state:',
 		buildAmsCliCommand('task update [taskId] --json \'{"status":"in_progress"}\''),
 		buildAmsCliCommand('task attach [taskId] --json \'{"path":"<absolute-file-path>"}\''),
 		buildAmsCliCommand('task remove-attachment <taskId> <attachmentId>'),
@@ -375,6 +366,21 @@ export function buildTaskThreadName(input: {
 	]
 		.filter(Boolean)
 		.join(THREAD_NAME_SEPARATOR);
+}
+
+export function buildTaskLaunchRunContextSummary(input: {
+	taskId: string;
+	runId: string;
+	promptDigest: string;
+}) {
+	return [
+		`Launch prompt digest: ${input.promptDigest}`,
+		'Structured launch context:',
+		`- ${buildAmsCliCommand(`work-packet get_agent_work_packet --task ${input.taskId}`)}`,
+		`- ${buildAmsCliCommand(`goal-loop get_task_loop_report --task ${input.taskId}`)}`,
+		`- ${buildAmsCliCommand(`context current --run ${input.runId}`)}`,
+		'The rendered launch prompt is delivery context for the worker thread; use these AMS readbacks as the durable task/run context.'
+	].join('\n');
 }
 
 export function resolveTaskThreadName(input: {

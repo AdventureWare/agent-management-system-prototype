@@ -183,8 +183,24 @@ describe('buildGoalLoopWorkPacket', () => {
 		expect(packet?.prompt).toContain('Goal Loop Selected Work Packet');
 		expect(packet?.prompt).toContain('Selection reason: Execute the first actionable task');
 		expect(packet?.prompt).toContain('Autonomous Goal-Directed Work Loop v0');
-		expect(packet?.prompt).toContain('Expected Result Shape');
+		expect(packet?.prompt).toContain('Structured AMS Operations');
+		expect(packet?.prompt).toContain('Record result with: run-result:record_run_result');
+		expect(packet?.prompt).not.toContain('Expected Result Shape');
 		expect(packet?.prompt).toContain('What changed');
+		expect(packet?.commandGuidance).toEqual(
+			expect.objectContaining({
+				readBeforeWork: expect.arrayContaining([
+					'work-packet:get_agent_work_packet',
+					'goal-loop:get_task_loop_report'
+				]),
+				recordResult: expect.arrayContaining([
+					'run-result:record_run_result',
+					'run-result:request_review_from_run',
+					'run-result:create_followup_task'
+				]),
+				readAfterMutation: ['goal-loop:get_task_loop_report', 'context:current']
+			})
+		);
 		expect(packet?.prompt).not.toContain('Zulu unrelated task');
 	});
 

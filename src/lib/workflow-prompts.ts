@@ -147,6 +147,36 @@ function projectMemorySection(project: PromptProject) {
 	].join('\n');
 }
 
+function taskScopedProjectContextSection(project: PromptProject) {
+	return [
+		`Project: ${project.name} (${project.id})`,
+		`Summary: ${compact(project.summary, 240)}`,
+		`Root: ${valueOrFallback(project.projectRootFolder)}`,
+		`Artifact root: ${valueOrFallback(project.defaultArtifactRoot)}`,
+		`Instructions path: ${valueOrFallback(project.agentInstructionsPath)}`,
+		'',
+		'Current state:',
+		compact(project.currentStateMemo, 360),
+		'',
+		'Constraints:',
+		compact(project.constraints, 360),
+		'',
+		'Project non-goals:',
+		compact(project.nonGoals, 360),
+		'',
+		'Validation commands:',
+		bulletList(project.validationCommands),
+		'',
+		'Default governance:',
+		`- Autonomy: ${project.defaultAutonomyLevel ?? 'A1_AGENT_MAY_ANALYZE_AND_PROPOSE'}`,
+		`- Risk threshold: ${project.defaultRiskThreshold ?? 'medium'}`,
+		`- Review requirement: ${project.defaultReviewRequirement ?? 'SUMMARY_REVIEW'}`,
+		`- Rigor profile: ${project.defaultRigorProfile ?? 'INTERNAL'}`,
+		`- Approval requirements: ${compact(project.approvalRequirements, 240)}`,
+		`- Validation expectations: ${compact(project.defaultValidationExpectations, 240)}`
+	].join('\n');
+}
+
 function taskContractSection(task: PromptTask) {
 	return [
 		`Task: ${task.title} (${task.id})`,
@@ -277,7 +307,7 @@ export function buildExecutorPrompt(input: {
 		taskContractSection(input.task),
 		'',
 		'## Project Context',
-		projectMemorySection(input.project),
+		taskScopedProjectContextSection(input.project),
 		'',
 		'## Rigor Profile',
 		rigorGuidanceSection(input.project, input.task),
@@ -336,7 +366,7 @@ export function buildResearchPrompt(input: {
 		taskContractSection(input.task),
 		'',
 		'## Project Context',
-		projectMemorySection(input.project),
+		taskScopedProjectContextSection(input.project),
 		'',
 		'## Rigor Profile',
 		rigorGuidanceSection(input.project, input.task),
@@ -398,7 +428,7 @@ export function buildReviewerPrompt(input: {
 			: 'No open review record supplied.',
 		'',
 		'## Project Context',
-		input.project ? projectMemorySection(input.project) : 'No project context supplied.',
+		input.project ? taskScopedProjectContextSection(input.project) : 'No project context supplied.',
 		'',
 		'## Rigor Profile',
 		input.project
