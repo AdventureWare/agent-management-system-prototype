@@ -2,6 +2,7 @@ export type AppNavigationLinkId =
 	| 'governance'
 	| 'access'
 	| 'skills'
+	| 'v2Core'
 	| 'autonomousQueue'
 	| 'tasks'
 	| 'threads'
@@ -20,6 +21,7 @@ export type AppNavigationRoute =
 	| '/app/governance'
 	| '/app/access'
 	| '/app/skills'
+	| '/app/v2-core'
 	| '/app/autonomous-queue'
 	| '/app/tasks'
 	| '/app/threads'
@@ -55,6 +57,7 @@ export const appNavigationSections: AppNavigationSection[] = [
 		links: [
 			{ id: 'projects', label: 'Projects', href: '/app/projects' },
 			{ id: 'goals', label: 'Goals', href: '/app/goals' },
+			{ id: 'v2Core', label: 'V2 core', href: '/app/v2-core' },
 			{ id: 'skills', label: 'Skills', href: '/app/skills' }
 		]
 	},
