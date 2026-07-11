@@ -1,0 +1,489 @@
+<script lang="ts">
+	import { resolve } from '$app/paths';
+	import AppPage from '$lib/components/AppPage.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+
+	let { data } = $props();
+
+	let operatorConsole = $derived(data.operatorConsole);
+	let overview = $derived(operatorConsole?.overview ?? null);
+	let overviewProjects = $derived(overview?.projects ?? []);
+	let overviewTotals = $derived({
+		projects: overviewProjects.length,
+		goals: overviewProjects.reduce((total, project) => total + project.goalCount, 0),
+		tasks: overviewProjects.reduce((total, project) => total + project.taskCount, 0),
+		runs: overviewProjects.reduce((total, project) => total + project.runCount, 0),
+		artifacts: overviewProjects.reduce((total, project) => total + project.artifactCount, 0),
+		memory: overviewProjects.reduce((total, project) => total + project.memoryItemCount, 0)
+	});
+	let activeGoal = $derived(operatorConsole?.activeGoals[0] ?? null);
+	let taskStatusRows = $derived(Object.entries(overview?.taskStatusCounts ?? {}));
+	let reviewStatusRows = $derived(Object.entries(overview?.reviewStatusCounts ?? {}));
+	let memoryStatusRows = $derived(Object.entries(overview?.memoryStatusCounts ?? {}));
+	let dependencySummary = $derived(operatorConsole?.dependencyReport.summary ?? null);
+	let snapshotRows = $derived(Object.entries(operatorConsole?.snapshotStatus.tableCounts ?? {}));
+
+	function formatCount(value: number | undefined) {
+		return value ?? 0;
+	}
+
+	function taskHref(taskId: string) {
+		return resolve(`/app/v2-core/tasks/${taskId}`);
+	}
+</script>
+
+<AppPage>
+	<div class="v2-core-page">
+		<PageHeader
+			eyebrow="AMS v2 core"
+			title="Operator console"
+			description={data.dbFile}
+			density="compact"
+		/>
+
+		{#if data.status === 'unavailable'}
+			<section class="v2-core-alert" aria-label="V2 core unavailable">
+				<p class="v2-core-alert-title">V2 core database unavailable</p>
+				<p>{data.error}</p>
+			</section>
+		{:else if operatorConsole && overview}
+			<section class="v2-core-metrics" aria-label="V2 core overview">
+				<MetricCard label="Projects" value={overviewTotals.projects} density="compact" />
+				<MetricCard label="Goals" value={overviewTotals.goals} density="compact" />
+				<MetricCard label="Tasks" value={overviewTotals.tasks} density="compact" />
+				<MetricCard label="Runs" value={overviewTotals.runs} density="compact" />
+				<MetricCard label="Artifacts" value={overviewTotals.artifacts} density="compact" />
+				<MetricCard label="Memory" value={overviewTotals.memory} density="compact" />
+				<MetricCard
+					label="Review queue"
+					value={operatorConsole.reviewQueue.length}
+					density="compact"
+				/>
+				<MetricCard
+					label="Next work"
+					value={operatorConsole.nextWork.candidates.length}
+					density="compact"
+				/>
+			</section>
+
+		<section class="v2-core-grid">
+			<section class="v2-core-panel" aria-labelledby="v2-core-active-goals">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-active-goals">Active goals</h2>
+					{#if activeGoal}
+						<span>{activeGoal.projectName}</span>
+					{/if}
+				</header>
+				{#if operatorConsole.activeGoals.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.activeGoals as goal (goal.goalId)}
+							<article class="v2-core-row">
+								<div>
+									<p class="v2-core-row-title">{goal.title}</p>
+									<p class="v2-core-row-meta">{goal.goalId}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{goal.status}</span>
+									<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No active goals</p>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-next-work">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-next-work">Next work</h2>
+					<span>{operatorConsole.nextWork.candidates.length} tasks</span>
+				</header>
+				{#if operatorConsole.nextWork.candidates.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.nextWork.candidates as task (task.taskId)}
+							<article class="v2-core-row">
+								<div>
+									<a class="v2-core-row-title v2-core-row-link" href={taskHref(task.taskId)}>
+										{task.title}
+									</a>
+									<p class="v2-core-row-meta">{task.taskId} · {task.goalTitle}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{task.status}</span>
+									<span>{task.projectName}</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No next work</p>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-review-queue">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-review-queue">Review queue</h2>
+					<span>{operatorConsole.reviewQueue.length} artifacts</span>
+				</header>
+				{#if operatorConsole.reviewQueue.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.reviewQueue as artifact (artifact.artifactId)}
+							<article class="v2-core-row">
+								<div>
+									<p class="v2-core-row-title">{artifact.title}</p>
+									<p class="v2-core-row-meta">{artifact.uri}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{artifact.status}</span>
+									<span>{artifact.taskId}</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No review items</p>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-memory">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-memory">Trusted memory</h2>
+					<span>{formatCount(operatorConsole.memory?.items.length)} items</span>
+				</header>
+				{#if operatorConsole.memory?.items.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.memory.items as memory (memory.id)}
+							<article class="v2-core-row">
+								<div>
+									<p class="v2-core-row-title">{memory.title}</p>
+									<p class="v2-core-row-meta">{memory.body}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{memory.status}</span>
+									<span>{memory.scope}</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No trusted memory for current scope</p>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-recent-runs">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-recent-runs">Recent runs</h2>
+					<span>{operatorConsole.recentRuns.length} runs</span>
+				</header>
+				{#if operatorConsole.recentRuns.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.recentRuns as run (run.runId)}
+							<article class="v2-core-row">
+								<div>
+									<a class="v2-core-row-title v2-core-row-link" href={taskHref(run.taskId)}>
+										{run.taskTitle}
+									</a>
+									<p class="v2-core-row-meta">{run.resultSummary}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{run.status}</span>
+									<span>{run.modelProviderName ?? 'No provider'}</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No recent runs</p>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-artifacts">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-artifacts">Recent artifacts</h2>
+					<span>{operatorConsole.recentArtifacts.length} artifacts</span>
+				</header>
+				{#if operatorConsole.recentArtifacts.length}
+					<div class="v2-core-list">
+						{#each operatorConsole.recentArtifacts as artifact (artifact.artifactId)}
+							<article class="v2-core-row">
+								<div>
+									<p class="v2-core-row-title">{artifact.title}</p>
+									<p class="v2-core-row-meta">{artifact.uri}</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class="v2-core-badge">{artifact.status}</span>
+									<span>{artifact.role}</span>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No recent artifacts</p>
+				{/if}
+			</section>
+		</section>
+
+		<section class="v2-core-grid v2-core-grid-compact">
+			<section class="v2-core-panel" aria-labelledby="v2-core-status-counts">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-status-counts">State counts</h2>
+				</header>
+				<div class="v2-core-count-grid">
+					{#each reviewStatusRows as [status, count] (status)}
+						<div>
+							<span>Review {status}</span>
+							<strong>{count}</strong>
+						</div>
+					{/each}
+					{#each memoryStatusRows as [status, count] (status)}
+						<div>
+							<span>Memory {status}</span>
+							<strong>{count}</strong>
+						</div>
+					{/each}
+					{#each taskStatusRows as [status, count] (status)}
+						<div>
+							<span>Task {status}</span>
+							<strong>{count}</strong>
+						</div>
+					{/each}
+				</div>
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-dependencies">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-dependencies">Dependencies</h2>
+					<span>{operatorConsole.dependencyReport.modelProviders.length} providers</span>
+				</header>
+				<div class="v2-core-count-grid">
+					<div>
+						<span>Provider runs</span>
+						<strong>{dependencySummary?.providerRunCount ?? 0}</strong>
+					</div>
+					<div>
+						<span>Tool executions</span>
+						<strong>{dependencySummary?.toolExecutionCount ?? 0}</strong>
+					</div>
+				</div>
+				{#if operatorConsole.dependencyReport.modelProviders.length}
+					<div class="v2-core-list v2-core-list-tight">
+						{#each operatorConsole.dependencyReport.modelProviders as provider (provider.providerId)}
+							<div class="v2-core-mini-row">
+								<span>{provider.name}</span>
+								<strong>{provider.runCount}</strong>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
+			<section class="v2-core-panel" aria-labelledby="v2-core-snapshot">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-snapshot">Snapshot</h2>
+					<span>{operatorConsole.snapshotStatus.format}</span>
+				</header>
+				<div class="v2-core-count-grid">
+					{#each snapshotRows as [table, count] (table)}
+						<div>
+							<span>{table}</span>
+							<strong>{count}</strong>
+						</div>
+					{/each}
+				</div>
+			</section>
+		</section>
+		{/if}
+	</div>
+</AppPage>
+
+<style>
+	.v2-core-page {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.v2-core-alert,
+	.v2-core-panel {
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 18%);
+		border-radius: 0.5rem;
+		background: var(--color-surface-50);
+	}
+
+	.v2-core-alert {
+		padding: 1rem;
+		color: var(--color-error-700);
+	}
+
+	.v2-core-alert-title {
+		margin: 0 0 0.25rem;
+		font-weight: 700;
+	}
+
+	.v2-core-metrics {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	.v2-core-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.v2-core-grid-compact {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+	}
+
+	.v2-core-panel {
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.v2-core-panel-header {
+		display: flex;
+		min-height: 3.25rem;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
+		padding: 0.75rem 0.875rem;
+	}
+
+	.v2-core-panel-header h2 {
+		margin: 0;
+		font-size: 0.95rem;
+		font-weight: 700;
+	}
+
+	.v2-core-panel-header span,
+	.v2-core-row-meta,
+	.v2-core-row-side,
+	.v2-core-empty,
+	.v2-core-count-grid span,
+	.v2-core-mini-row {
+		color: var(--color-surface-700);
+		font-size: 0.78rem;
+	}
+
+	.v2-core-list {
+		display: grid;
+	}
+
+	.v2-core-list-tight {
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
+	}
+
+	.v2-core-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.75rem;
+		align-items: center;
+		min-height: 4.25rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding: 0.75rem 0.875rem;
+	}
+
+	.v2-core-row:last-child {
+		border-bottom: 0;
+	}
+
+	.v2-core-row-title {
+		display: block;
+		margin: 0;
+		font-size: 0.9rem;
+		font-weight: 650;
+		line-height: 1.25;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-row-link {
+		color: var(--color-primary-700);
+		text-decoration: none;
+	}
+
+	.v2-core-row-link:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-row-meta {
+		margin: 0.25rem 0 0;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-row-side {
+		display: grid;
+		justify-items: end;
+		gap: 0.25rem;
+		text-align: right;
+	}
+
+	.v2-core-badge {
+		display: inline-flex;
+		max-width: 10rem;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid color-mix(in srgb, var(--color-surface-400), transparent 35%);
+		border-radius: 999px;
+		padding: 0.1rem 0.45rem;
+		background: var(--color-surface-100);
+		color: var(--color-surface-900);
+		font-size: 0.72rem;
+		font-weight: 700;
+		line-height: 1.25;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-empty {
+		margin: 0;
+		padding: 1rem 0.875rem;
+	}
+
+	.v2-core-count-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+		gap: 0.5rem;
+		padding: 0.875rem;
+	}
+
+	.v2-core-count-grid div,
+	.v2-core-mini-row {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.v2-core-count-grid span,
+	.v2-core-mini-row span {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-count-grid strong,
+	.v2-core-mini-row strong {
+		color: var(--color-surface-950);
+		font-size: 0.9rem;
+	}
+
+	.v2-core-mini-row {
+		min-height: 2.25rem;
+		padding: 0.4rem 0.875rem;
+	}
+
+	@media (max-width: 44rem) {
+		.v2-core-row {
+			grid-template-columns: 1fr;
+		}
+
+		.v2-core-row-side {
+			justify-items: start;
+			text-align: left;
+		}
+	}
+</style>
