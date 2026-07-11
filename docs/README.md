@@ -6,9 +6,31 @@
 - [Domain Model Source Map](./domain-model.md): current source-of-truth locations, bounded contexts, and implementation records for the AMS model.
 - [Domain Glossary](./domain-glossary.md): accepted, candidate, experimental, deprecated, rejected, merged, and superseded concept definitions.
 - [Domain Model Rationalization Audit](./domain-model-rationalization-audit-2026-07-01.md): read-only audit of current AMS model layers, overlaps, status semantics, and cleanup backlog.
+- [AMS V2 Domain Ontology And Behavior Spec](./design/ams_v2_domain_ontology_and_behavior_spec.md): canonical v2 design source-of-truth for entities, relations, states, commands, field admission, automation boundaries, and anti-bloat rules.
+- [AMS V2 Traceability Matrix](./design/ams_v2_traceability_matrix.md): competency-question and scenario traceability from model elements to workflows and acceptance tests.
+- [AMS V2 Entity Cards](./design/ams_v2_entity_cards.md): accepted, candidate, deferred, and rejected v2 entity cards with minimal fields, invariants, and bloat risks.
+- [Prototype Audit v0.1](./prototype_audit_v0_1.md): read-only assessment of the current prototype structure, model, storage, interfaces, preserved value, debt, and v2 capability fit.
+- [V2 Rebuild Or Refactor Decision v0.1](./v2_rebuild_or_refactor_decision_v0_1.md): recommendation to build v2 in parallel while preserving the prototype, with repo evidence and tradeoffs.
+- [V2 Requirements v0.1](./v2_requirements_v0_1.md): requirements for an owned local-first agent system that manages work state, sessions, artifacts, decisions, memory, routing, tools, evaluations, and dependency reduction.
+- [V2 Domain Model v0.1](./v2_domain_model_v0_1.md): proposed v2 model for projects, goals, tasks, sessions, runs, artifacts, decisions, memory, tools, providers, evaluations, and dependency reduction.
+- [V2 Architecture v0.1](./v2_architecture_v0_1.md): proposed local-first modular monolith architecture with explicit storage, retrieval, agent tools, and v1 import adapters.
+- [V2 Minimal Vertical Slice v0.1](./v2_minimal_vertical_slice_v0_1.md): smallest end-to-end v2 slice to prove the cleaner core before broad migration.
+- [V1 To V2 Migration Plan v0.1](./v1_to_v2_migration_plan_v0_1.md): preservation, archive, import-preview, staged migration, and rollback plan.
+- [V2 Build Blueprint v0.1](./v2_build_blueprint_v0_1.md): reconciled build-orientation plan for starting v2 as a parallel cleaner system while preserving v1 as evidence and migration source.
+- [V2 Seed Slice Import Preview v0.1](./v2_seed_slice_import_preview_v0_1.md): selected AMS project/goal seed slice and first schema/import test plan.
+- [V2 Schema Contract v0.1](./v2_schema_contract_v0_1.md): draft-record contract for validating the test-only v2 import mapper before any schema or migration exists.
+- [V2 Registry Schema Boundary And Source-Label Migration Plan v0.1](./v2_registry_schema_boundary_and_source_label_migration_plan_v0_1.md): design boundary for future Capability, Tool, and Model registries plus raw source-label preservation and mapping rules.
+- [V2 SQLite Schema Proof v0.1](./v2_sqlite_schema_proof_v0_1.md): test-only in-memory SQLite proof that the validated v2 import draft can fit a relational schema without touching runtime state.
+- [V2 Persistence Boundary v0.1](./v2_persistence_boundary_v0_1.md): preview-only storage boundary that keeps v2 experiments in a separate SQLite database and refuses `data/app.sqlite`.
+- [V2 Preview Governance Console Smoke v0.1](./v2_preview_governance_console_smoke_v0_1.md): end-to-end smoke procedure for seed load, search indexing, UI inspection, review, and decision in the isolated preview console.
+- [V2 Preview Work-Loop Smoke v0.1](./v2_preview_work_loop_smoke_v0_1.md): CLI smoke procedure for preview next-action selection, task start, run evidence, review, closeout decision, done transition, and readback.
+- [V2 Preview Concept Graduation Review v0.1](./v2_preview_concept_graduation_review_v0_1.md): governance review deciding which preview concepts are acceptance candidates and which remain experimental.
+- [Autonomous Work Loop Preview v0 Readiness Review v0.1](./stack_assessment/autonomous_work_loop_preview_v0_readiness_review_v0_1.md): readiness decision closing the isolated v2 preview work-loop milestone while preserving production boundaries.
+- [V2 Preview To Owned-Agent Control Loop Integration v0.1](./stack_assessment/v2_preview_to_owned_agent_control_loop_integration_v0_1.md): comparison of the completed v2 preview loop against production AMS Goal/Task/Run APIs, with fold-in and next-slice recommendations.
 - [Model Diagram](./model-diagram.md): text-based conceptual relationship diagram.
 - [Model Golden Scenarios](./model-evals/golden-scenarios.md): representative scenarios for checking whether model changes support real workflows.
 - [Autonomous Goal-Directed Work Loop v0](./autonomous-goal-directed-work-loop-v0.md): active product direction for continuous agent work from Goal/Task/Run state, including planning-task fallback when execution is not available.
+- [Autonomous Goal-Directed Work Loop v0 Completion Audit](./autonomous-goal-directed-work-loop-v0-completion-audit.md): criteria-by-criteria audit of implemented loop capabilities, partial gaps, and the next implementation target.
 - [Agent-Facing AMS Interface v0](./agent-facing-ams-interface-v0.md): structured tool/API/MCP interface direction for agents using AMS as the source of truth.
 - [Contextual Procedural Knowledge v0](./contextual-procedural-knowledge-v0.md): placement strategy for reusable workflows, templates, skills, principles, project memory, and run lessons without context stuffing.
 - [Contextual Rigor Profiles v0](./contextual-rigor-profiles-v0.md): optional profiles that tune validation, review, safety, and work-packet guidance to the work context.

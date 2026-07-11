@@ -31,6 +31,9 @@ node scripts/ams-cli.mjs goal-loop get_blocked_work --goal <goalId>
 node scripts/ams-cli.mjs goal-loop get_awaiting_review --goal <goalId>
 node scripts/ams-cli.mjs goal-loop get_next_recommended_action --goal <goalId>
 node scripts/ams-cli.mjs goal-loop explain_task_eligibility --task <taskId> --goal <goalId>
+node scripts/ams-cli.mjs goal-loop get_task_loop_report --task <taskId> --goal <goalId>
+node scripts/ams-cli.mjs goal-loop materialize_suggested_task --json '{"goalId":"<goalId>","validateOnly":true}'
+node scripts/ams-cli.mjs goal-loop managed_continuation_runner --json '{"goalId":"<goalId>","mode":"preview"}'
 node scripts/ams-cli.mjs work-packet get_agent_work_packet --goal <goalId>
 node scripts/ams-cli.mjs run-result record_run_result --json '{"runId":"<runId>","status":"completed","resultSummary":"<what changed>","validationSummary":"<checks run>"}'
 node scripts/ams-cli.mjs run-result record_validation_result --json '{"runId":"<runId>","validationSummary":"<checks run and outcome>"}'
@@ -38,6 +41,7 @@ node scripts/ams-cli.mjs run-result record_blocker --json '{"runId":"<runId>","b
 node scripts/ams-cli.mjs run-result record_followup_recommendations --json '{"runId":"<runId>","followUpTaskIds":["<taskId>"]}'
 node scripts/ams-cli.mjs run-result create_followup_task --json '{"runId":"<runId>","title":"<follow-up title>","summary":"<why this supports the same goal>"}'
 node scripts/ams-cli.mjs run-result request_review_from_run --json '{"runId":"<runId>","validateOnly":true,"summary":"Ready for review."}'
+node scripts/ams-cli.mjs run-result request_approval_from_run --json '{"runId":"<runId>","mode":"before_complete","validateOnly":true,"summary":"Approve before closeout."}'
 node scripts/ams-cli.mjs run-result mark_task_blocked_from_run --json '{"runId":"<runId>","validateOnly":true,"blocker":"<blocking condition>"}'
 node scripts/ams-cli.mjs run-result preview_progress_updates --json '{"runId":"<runId>"}'
 node scripts/ams-cli.mjs run-result apply_progress_updates --json '{"runId":"<runId>","selectedProposalIndexes":[0],"validateOnly":true}'
@@ -105,6 +109,45 @@ Current-task CLI and MCP mutations also fall back to managed-run context when ta
 - The helper resolves the canonical task from `AMS_AGENT_THREAD_ID`, `AMS_AGENT_TASK_ID`, and `AMS_AGENT_RUN_ID` before issuing the task-scoped API call.
 - If no task can be resolved, the command fails with an explicit instruction to run `node scripts/ams-cli.mjs context current` or pass the task id manually.
 
+`goal-loop get_operator_console` also falls back to managed-run context when no
+`--project`, `--goal`, or `--task` is supplied. Inside a managed run, agents can
+run `node scripts/ams-cli.mjs goal-loop get_operator_console` to resolve the
+canonical project/goal/task scope first, then receive the shared operator path.
+If the current task is terminal but the active Goal is still running, the
+operator path follows the Goal-level continuation recommendation rather than
+stopping at task-level `no_action`.
+
+When the operator path includes a materializable suggested task draft, it also
+returns `path.continuationPolicy.mode=explicit_validate_first`. Treat that as
+policy: preview `goal-loop materialize_suggested_task` with `validateOnly=true`,
+then create the draft task only through an explicit follow-up command. Do not
+auto-launch the materialized task.
+
+`goal-loop materialize_suggested_task` also resolves missing `projectId` and
+`goalId` from managed-run context. Inside a managed run, a safe preview can use:
+
+```sh
+node scripts/ams-cli.mjs goal-loop materialize_suggested_task --json '{"validateOnly":true}'
+```
+
+The command should return `validationOnly=true` and
+`safety.taskStateChanged=false` before any non-preview materialization is run.
+
+`goal-loop managed_continuation_runner` performs exactly one guarded
+continuation step and then stops. Supported modes are:
+
+- `read_only`: read the operator path, prepare a work packet for actionable
+  tasks, and stop.
+- `preview`: read the operator path, preview a materializable fallback when one
+  exists, and stop without mutation.
+- `materialize_one`: validate first, create or dedupe at most one fallback draft
+  task through existing materialization behavior, read back the created task,
+  and stop.
+
+The runner never launches execution, approves reviews, resolves approvals, or
+continues into a second step. It returns `stop.mustStop=true` and safety fields
+showing whether task state changed.
+
 Each `summary.recommendedNextActions` item now includes:
 
 - `reason`: the short recommendation
@@ -128,7 +171,8 @@ Follow this default loop when using AMS as a tool:
 5. Prefer a first-class `intent` command when the goal matches a common AMS workflow and you want readback context returned in one call.
 6. Inspect the current project, goal, task, or thread state with `list` or `get` when no intent command fits.
 7. Run the narrowest mutation command that matches the intent.
-8. Read the changed state back with `get`, `list`, or `context current` before treating the operation as complete.
+8. When `goal-loop get_next_recommended_action` returns a fallback `suggestedTaskDraft`, use `goal-loop materialize_suggested_task` with `validateOnly: true` before explicitly creating the draft task, or use `goal-loop managed_continuation_runner` in `preview` or explicit `materialize_one` mode for the one-step guarded wrapper.
+9. Read the changed state back with `get`, `list`, `context current`, or `goal-loop get_task_loop_report` before treating the operation as complete.
 
 Agent-facing API errors now return structured guidance fields:
 

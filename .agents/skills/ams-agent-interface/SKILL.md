@@ -16,13 +16,13 @@ This skill is the high-level goal-loop procedure. Use `$ams-control-plane-operat
 2. Inspect existing work before creating anything.
    Use `goal-loop get_goal_context`, `get_goal_progress`, `get_actionable_work`, `get_blocked_work`, and `get_awaiting_review` before creating tasks. Prefer updating or linking existing tasks over creating duplicates.
 3. Choose one next action.
-   Use `goal-loop get_next_recommended_action` as the default work selector. Use `goal-loop explain_task_eligibility --task <taskId>` before launching, changing status, or marking a task blocked.
+   Use `goal-loop get_operator_console` when you need the canonical operator path and surface for the current Goal or selected task. In a managed run with `AMS_AGENT_THREAD_ID`, `AMS_AGENT_TASK_ID`, or `AMS_AGENT_RUN_ID`, this command can omit explicit `--goal`/`--task` scope and resolve the current context first. Use `goal-loop get_next_recommended_action` for the raw Goal-level recommendation. Use `goal-loop explain_task_eligibility --task <taskId>` before launching, changing status, or marking a task blocked.
 4. Get a bounded work packet.
    Use `work-packet get_agent_work_packet` for task-mode context. Treat the rendered prompt as one field in a structured packet, not as the system of record.
 5. Do or prepare only allowed work.
    Respect task readiness, autonomy, risk, rigor, review, approval, blockers, dependencies, and sandbox/tool limits. Do not bypass review or approval because chat context seems clear.
 6. Record outcomes durably.
-   Attach artifacts, request review/approval, update task status, record blockers, and create follow-up tasks through AMS operations. Read back the changed state after mutation.
+   Attach artifacts, request review/approval, update task status, record blockers, and create follow-up tasks through AMS operations. After a task-scoped mutation, read back `goal-loop get_task_loop_report --task <taskId>` before treating the operation as complete; use `task get` or `context current` as supporting detail when needed.
 7. Stop only at a real stopping condition.
    Stop when the Goal is met, work is legitimately blocked, user input or approval is required, missing access prevents progress, risk exceeds permission, or ambiguity would create duplicate architecture or contradictory state.
 
