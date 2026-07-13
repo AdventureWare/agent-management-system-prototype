@@ -208,6 +208,140 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(missingParent.stderr).toContain('Parent goal goal_v2_missing_parent');
 	});
 
+	it('groups operator-console goals by control status with parent and transition context', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_control_smoke',
+			'--name',
+			'AMS v2 Goal Control Smoke',
+			'--summary',
+			'Temporary project for proving goal-control readback.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_control_parent',
+			'--project',
+			'project_v2_goal_control_smoke',
+			'--title',
+			'Parent running goal',
+			'--success',
+			'The parent goal stays running.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_control_running_child',
+			'--project',
+			'project_v2_goal_control_smoke',
+			'--parent-goal',
+			'goal_v2_goal_control_parent',
+			'--title',
+			'Running child goal',
+			'--success',
+			'The running child reports parentGoalId.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_control_blocked',
+			'--project',
+			'project_v2_goal_control_smoke',
+			'--parent-goal',
+			'goal_v2_goal_control_parent',
+			'--title',
+			'Blocked child goal',
+			'--success',
+			'The blocked child appears in the blocked group.'
+		]);
+		runCoreCli([
+			'transition-goal',
+			...baseArgs,
+			'--goal',
+			'goal_v2_goal_control_blocked',
+			'--status',
+			'blocked',
+			'--summary',
+			'Blocked waiting for operator direction.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_control_paused',
+			'--project',
+			'project_v2_goal_control_smoke',
+			'--title',
+			'Paused goal',
+			'--success',
+			'The paused goal appears in the paused group.'
+		]);
+		runCoreCli([
+			'transition-goal',
+			...baseArgs,
+			'--goal',
+			'goal_v2_goal_control_paused',
+			'--status',
+			'paused',
+			'--summary',
+			'Paused by operator choice.'
+		]);
+
+		const operatorConsole = runCoreCli([
+			'operator-console',
+			...baseArgs,
+			'--project',
+			'project_v2_goal_control_smoke'
+		]);
+
+		expect(operatorConsole.operatorConsole.goalStatusGroups.running).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_control_parent',
+				parentGoalId: null,
+				latestGoalStatusTransition: null
+			}),
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_control_running_child',
+				parentGoalId: 'goal_v2_goal_control_parent'
+			})
+		]);
+		expect(operatorConsole.operatorConsole.goalStatusGroups.blocked).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_control_blocked',
+				parentGoalId: 'goal_v2_goal_control_parent',
+				latestGoalStatusTransition: expect.objectContaining({
+					summary: 'Blocked waiting for operator direction.',
+					rationale: 'Transitioned goal from active to blocked.'
+				})
+			})
+		]);
+		expect(operatorConsole.operatorConsole.goalStatusGroups.paused).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_control_paused',
+				parentGoalId: null,
+				latestGoalStatusTransition: expect.objectContaining({
+					summary: 'Paused by operator choice.',
+					rationale: 'Transitioned goal from active to paused.'
+				})
+			})
+		]);
+		expect(operatorConsole.operatorConsole.activeGoals.map((goal: any) => goal.goalId)).toEqual([
+			'goal_v2_goal_control_parent',
+			'goal_v2_goal_control_running_child',
+			'goal_v2_goal_control_blocked',
+			'goal_v2_goal_control_paused'
+		]);
+	}, 10_000);
+
 	it('only surfaces next work from active goals', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];

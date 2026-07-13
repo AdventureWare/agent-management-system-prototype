@@ -625,21 +625,35 @@ export type V2CoreRouteComparisonReport = {
 	}>;
 };
 
+export type V2CoreOperatorConsoleGoal = {
+	goalId: string;
+	projectId: string;
+	projectName: string;
+	parentGoalId: string | null;
+	title: string;
+	status: string;
+	openTaskCount: number;
+	doneTaskCount: number;
+	latestGoalStatusTransition: {
+		decisionId: string;
+		summary: string;
+		rationale: string;
+		decidedAt: string;
+	} | null;
+};
+
 export type V2CoreOperatorConsole = {
 	scope: {
 		projectId: string | null;
 		goalId: string | null;
 	};
 	overview: V2CoreOverview;
-	activeGoals: Array<{
-		goalId: string;
-		projectId: string;
-		projectName: string;
-		title: string;
-		status: string;
-		openTaskCount: number;
-		doneTaskCount: number;
-	}>;
+	activeGoals: V2CoreOperatorConsoleGoal[];
+	goalStatusGroups: {
+		running: V2CoreOperatorConsoleGoal[];
+		blocked: V2CoreOperatorConsoleGoal[];
+		paused: V2CoreOperatorConsoleGoal[];
+	};
 	nextWork: V2CoreNextWork;
 	reviewQueue: Array<{
 		artifactId: string;
@@ -4402,10 +4416,15 @@ export function readV2CoreOperatorConsole(
 				goal_id: string;
 				project_id: string;
 				project_name: string;
+				parent_goal_id: string | null;
 				title: string;
 				status: string;
 				open_task_count: number;
 				done_task_count: number;
+				decision_id: string | null;
+				decision_summary: string | null;
+				decision_rationale: string | null;
+				decision_decided_at: string | null;
 			}
 		>(
 			`
@@ -4413,13 +4432,26 @@ export function readV2CoreOperatorConsole(
 					goal.id as goal_id,
 					goal.project_id,
 					project.name as project_name,
+					goal.parent_goal_id,
 					goal.title,
 					goal.status,
 					count(distinct case when task.status not in ('done', 'canceled') then task.id end) as open_task_count,
-					count(distinct case when task.status = 'done' then task.id end) as done_task_count
+					count(distinct case when task.status = 'done' then task.id end) as done_task_count,
+					decision.id as decision_id,
+					decision.summary as decision_summary,
+					decision.rationale as decision_rationale,
+					decision.decided_at as decision_decided_at
 				from v2_core_goals goal
 				join v2_core_projects project on project.id = goal.project_id
 				left join v2_core_tasks task on task.goal_id = goal.id
+				left join v2_core_decisions decision on decision.id = (
+					select latest_decision.id
+					from v2_core_decisions latest_decision
+					where latest_decision.goal_id = goal.id
+						and latest_decision.decision_type = 'goal_status_transition'
+					order by latest_decision.decided_at desc, latest_decision.id desc
+					limit 1
+				)
 				where ${goalConditions.join(' and ')}
 				group by goal.id
 				order by
@@ -4437,11 +4469,25 @@ export function readV2CoreOperatorConsole(
 			goalId: goal.goal_id,
 			projectId: goal.project_id,
 			projectName: goal.project_name,
+			parentGoalId: goal.parent_goal_id,
 			title: goal.title,
 			status: goal.status,
 			openTaskCount: goal.open_task_count,
-			doneTaskCount: goal.done_task_count
+			doneTaskCount: goal.done_task_count,
+			latestGoalStatusTransition: goal.decision_id
+				? {
+						decisionId: goal.decision_id,
+						summary: goal.decision_summary ?? '',
+						rationale: goal.decision_rationale ?? '',
+						decidedAt: goal.decision_decided_at ?? ''
+					}
+				: null
 		}));
+	const goalStatusGroups = {
+		running: activeGoals.filter((goal) => goal.status === 'active'),
+		blocked: activeGoals.filter((goal) => goal.status === 'blocked'),
+		paused: activeGoals.filter((goal) => goal.status === 'paused')
+	};
 	const reviewQueue = db
 		.prepare<
 			[...string[], number],
@@ -4588,6 +4634,7 @@ export function readV2CoreOperatorConsole(
 		scope,
 		overview: readV2CoreOverview(db),
 		activeGoals,
+		goalStatusGroups,
 		nextWork: readV2CoreNextWork(db, {
 			projectId: scope.projectId,
 			goalId: scope.goalId,

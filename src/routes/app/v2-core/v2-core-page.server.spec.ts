@@ -16,6 +16,7 @@ import {
 	recordV2CoreToolExecution,
 	registerV2CoreModelProvider,
 	registerV2CoreTool,
+	transitionV2CoreGoalStatus,
 	transitionV2CoreTaskStatus
 } from '$lib/server/v2-core-service';
 import { _getV2CoreUiDbFile, load } from './+page.server';
@@ -57,6 +58,31 @@ function seedCoreDb(dbFile: string) {
 			title: 'Make v2 core inspectable',
 			summary: 'Expose governed state through a small read model.',
 			successCriteria: 'Operator can inspect next work and evidence.'
+		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_blocked',
+			projectId: 'project_ui',
+			parentGoalId: 'goal_ui',
+			title: 'Unblock v2 operator work',
+			summary: 'Blocked child goal for read-model coverage.',
+			successCriteria: 'Operator can see why the goal is blocked.'
+		});
+		transitionV2CoreGoalStatus(db, {
+			goalId: 'goal_ui_blocked',
+			status: 'blocked',
+			summary: 'Blocked waiting for operator direction.'
+		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_paused',
+			projectId: 'project_ui',
+			title: 'Paused v2 track',
+			summary: 'Paused goal for read-model coverage.',
+			successCriteria: 'Operator can see paused work separately.'
+		});
+		transitionV2CoreGoalStatus(db, {
+			goalId: 'goal_ui_paused',
+			status: 'paused',
+			summary: 'Paused while the running goal is prioritized.'
 		});
 		createV2CoreTask(db, {
 			id: 'task_ui_done',
@@ -220,6 +246,23 @@ describe('/app/v2-core page server', () => {
 		expect(result.dbFile).toBe(dbFile);
 		expect(result.scope.projectId).toBe('project_ui');
 		expect(result.operatorConsole?.activeGoals[0]?.title).toBe('Make v2 core inspectable');
+		expect(result.operatorConsole?.goalStatusGroups.running[0]?.goalId).toBe('goal_ui');
+		expect(result.operatorConsole?.goalStatusGroups.blocked[0]).toMatchObject({
+			goalId: 'goal_ui_blocked',
+			parentGoalId: 'goal_ui',
+			latestGoalStatusTransition: expect.objectContaining({
+				summary: 'Blocked waiting for operator direction.',
+				rationale: 'Transitioned goal from active to blocked.'
+			})
+		});
+		expect(result.operatorConsole?.goalStatusGroups.paused[0]).toMatchObject({
+			goalId: 'goal_ui_paused',
+			parentGoalId: null,
+			latestGoalStatusTransition: expect.objectContaining({
+				summary: 'Paused while the running goal is prioritized.',
+				rationale: 'Transitioned goal from active to paused.'
+			})
+		});
 		expect(result.operatorConsole?.nextWork.candidates[0]?.taskId).toBe('task_ui_next');
 		expect(result.operatorConsole?.reviewQueue).toEqual([]);
 		expect(result.operatorConsole?.recentRuns[0]?.modelProviderName).toBe('Codex UI');

@@ -17,7 +17,20 @@
 		artifacts: overviewProjects.reduce((total, project) => total + project.artifactCount, 0),
 		memory: overviewProjects.reduce((total, project) => total + project.memoryItemCount, 0)
 	});
-	let activeGoal = $derived(operatorConsole?.activeGoals[0] ?? null);
+	let goalStatusGroups = $derived(
+		operatorConsole?.goalStatusGroups ?? {
+			running: operatorConsole?.activeGoals ?? [],
+			blocked: [],
+			paused: []
+		}
+	);
+	let goalGroupRows = $derived([
+		{ key: 'running', label: 'Running', goals: goalStatusGroups.running },
+		{ key: 'blocked', label: 'Blocked', goals: goalStatusGroups.blocked },
+		{ key: 'paused', label: 'Paused', goals: goalStatusGroups.paused }
+	]);
+	let goalControlCount = $derived(goalGroupRows.reduce((total, group) => total + group.goals.length, 0));
+	let activeGoal = $derived(goalStatusGroups.running[0] ?? operatorConsole?.activeGoals[0] ?? null);
 	let taskStatusRows = $derived(Object.entries(overview?.taskStatusCounts ?? {}));
 	let reviewStatusRows = $derived(Object.entries(overview?.reviewStatusCounts ?? {}));
 	let memoryStatusRows = $derived(Object.entries(overview?.memoryStatusCounts ?? {}));
@@ -30,6 +43,19 @@
 
 	function taskHref(taskId: string) {
 		return resolve(`/app/v2-core/tasks/${taskId}?mode=read`);
+	}
+
+	function goalTransitionText(goal: {
+		latestGoalStatusTransition?: { summary: string; rationale: string } | null;
+	}) {
+		const transition = goal.latestGoalStatusTransition;
+		if (!transition) {
+			return '';
+		}
+
+		return transition.rationale
+			? `${transition.summary} - ${transition.rationale}`
+			: transition.summary;
 	}
 </script>
 
@@ -68,30 +94,43 @@
 			</section>
 
 			<section class="v2-core-grid">
-				<section class="v2-core-panel" aria-labelledby="v2-core-active-goals">
+				<section class="v2-core-panel" aria-labelledby="v2-core-goal-control">
 					<header class="v2-core-panel-header">
-						<h2 id="v2-core-active-goals">Active goals</h2>
+						<h2 id="v2-core-goal-control">Goal control</h2>
 						{#if activeGoal}
 							<span>{activeGoal.projectName}</span>
 						{/if}
 					</header>
-					{#if operatorConsole.activeGoals.length}
+					{#if goalControlCount}
 						<div class="v2-core-list">
-							{#each operatorConsole.activeGoals as goal (goal.goalId)}
-								<article class="v2-core-row">
-									<div>
-										<p class="v2-core-row-title">{goal.title}</p>
-										<p class="v2-core-row-meta">{goal.goalId}</p>
+							{#each goalGroupRows as group (group.key)}
+								{#if group.goals.length}
+									<div class="v2-core-group-label">
+										<span>{group.label}</span>
+										<strong>{group.goals.length}</strong>
 									</div>
-									<div class="v2-core-row-side">
-										<span class="v2-core-badge">{goal.status}</span>
-										<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
-									</div>
-								</article>
+									{#each group.goals as goal (goal.goalId)}
+										<article class="v2-core-row">
+											<div>
+												<p class="v2-core-row-title">{goal.title}</p>
+												<p class="v2-core-row-meta">
+													{goal.goalId}{goal.parentGoalId ? ` · parent ${goal.parentGoalId}` : ''}
+												</p>
+												{#if goalTransitionText(goal)}
+													<p class="v2-core-row-meta">{goalTransitionText(goal)}</p>
+												{/if}
+											</div>
+											<div class="v2-core-row-side">
+												<span class="v2-core-badge">{goal.status}</span>
+												<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
+											</div>
+										</article>
+									{/each}
+								{/if}
 							{/each}
 						</div>
 					{:else}
-						<p class="v2-core-empty">No active goals</p>
+						<p class="v2-core-empty">No running, blocked, or paused goals</p>
 					{/if}
 				</section>
 
@@ -375,6 +414,19 @@
 
 	.v2-core-list-tight {
 		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
+	}
+
+	.v2-core-group-label {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 50%);
+		padding: 0.55rem 0.875rem;
+		background: var(--color-surface-100);
+		color: var(--color-surface-800);
+		font-size: 0.76rem;
+		font-weight: 700;
 	}
 
 	.v2-core-row {

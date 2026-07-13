@@ -25,7 +25,7 @@ function renderPage() {
 							name: 'V2 Core UI',
 							summary: 'Operator console test project.',
 							status: 'active',
-							goalCount: 1,
+							goalCount: 3,
 							taskCount: 2,
 							runCount: 1,
 							artifactCount: 1,
@@ -48,12 +48,97 @@ function renderPage() {
 						goalId: 'goal_ui',
 						projectId: 'project_ui',
 						projectName: 'V2 Core UI',
+						parentGoalId: null,
 						title: 'Make v2 core inspectable',
 						status: 'active',
 						openTaskCount: 1,
-						doneTaskCount: 1
+						doneTaskCount: 1,
+						latestGoalStatusTransition: null
+					},
+					{
+						goalId: 'goal_ui_blocked',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: 'goal_ui',
+						title: 'Unblock v2 operator work',
+						status: 'blocked',
+						openTaskCount: 0,
+						doneTaskCount: 0,
+						latestGoalStatusTransition: {
+							decisionId: 'decision_goal_ui_blocked',
+							summary: 'Blocked waiting for operator direction.',
+							rationale: 'Transitioned goal from active to blocked.',
+							decidedAt: '2026-07-09T00:00:00.000Z'
+						}
+					},
+					{
+						goalId: 'goal_ui_paused',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: null,
+						title: 'Paused v2 track',
+						status: 'paused',
+						openTaskCount: 0,
+						doneTaskCount: 0,
+						latestGoalStatusTransition: {
+							decisionId: 'decision_goal_ui_paused',
+							summary: 'Paused while the running goal is prioritized.',
+							rationale: 'Transitioned goal from active to paused.',
+							decidedAt: '2026-07-09T00:00:00.000Z'
+						}
 					}
 				],
+				goalStatusGroups: {
+					running: [
+						{
+							goalId: 'goal_ui',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							parentGoalId: null,
+							title: 'Make v2 core inspectable',
+							status: 'active',
+							openTaskCount: 1,
+							doneTaskCount: 1,
+							latestGoalStatusTransition: null
+						}
+					],
+					blocked: [
+						{
+							goalId: 'goal_ui_blocked',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							parentGoalId: 'goal_ui',
+							title: 'Unblock v2 operator work',
+							status: 'blocked',
+							openTaskCount: 0,
+							doneTaskCount: 0,
+							latestGoalStatusTransition: {
+								decisionId: 'decision_goal_ui_blocked',
+								summary: 'Blocked waiting for operator direction.',
+								rationale: 'Transitioned goal from active to blocked.',
+								decidedAt: '2026-07-09T00:00:00.000Z'
+							}
+						}
+					],
+					paused: [
+						{
+							goalId: 'goal_ui_paused',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							parentGoalId: null,
+							title: 'Paused v2 track',
+							status: 'paused',
+							openTaskCount: 0,
+							doneTaskCount: 0,
+							latestGoalStatusTransition: {
+								decisionId: 'decision_goal_ui_paused',
+								summary: 'Paused while the running goal is prioritized.',
+								rationale: 'Transitioned goal from active to paused.',
+								decidedAt: '2026-07-09T00:00:00.000Z'
+							}
+						}
+					]
+				},
 				nextWork: {
 					candidates: [
 						{
@@ -144,7 +229,7 @@ function renderPage() {
 					format: 'ams-v2-core-snapshot-v1',
 					tableCounts: {
 						v2_core_projects: 1,
-						v2_core_goals: 1,
+						v2_core_goals: 3,
 						v2_core_tasks: 2,
 						v2_core_runs: 1,
 						v2_core_artifacts: 1,
@@ -181,6 +266,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Operator console');
 		expect(document.body.textContent).toContain('V2 Core UI');
 		expect(document.body.textContent).toContain('Make v2 core inspectable');
+		expect(document.body.textContent).toContain('Goal control');
+		expect(document.body.textContent).toContain('Unblock v2 operator work');
+		expect(document.body.textContent).toContain('Blocked waiting for operator direction.');
+		expect(document.body.textContent).toContain('Paused v2 track');
 		expect(document.body.textContent).toContain('Ready next step');
 		expect(document.body.textContent).toContain('No review items');
 		expect(document.body.textContent).toContain('Codex UI');
@@ -202,6 +291,7 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('heading', { name: 'Operator console' }))
 			.toBeInTheDocument();
+		await expect.element(page.getByText('Unblock v2 operator work')).toBeInTheDocument();
 		await expect.element(page.getByText('Ready next step')).toBeInTheDocument();
 		await expect.element(page.getByText('Read-only v2 core console exists')).toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
