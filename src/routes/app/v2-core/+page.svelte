@@ -319,11 +319,35 @@
 											<span>Selected next work</span>
 										{/if}
 										{#if task.currentRun}
-											<span>{task.currentRun.runId}</span>
+											<div class="v2-core-handoff" aria-label={`${task.title} current run`}>
+												<div>
+													<span>Current run</span>
+													<strong>{task.currentRun.runId}</strong>
+													<p>{task.currentRun.status} · {task.currentRun.modelProviderName ?? 'No provider'}</p>
+												</div>
+												<a href={taskHref(task.taskId)}>Open current run</a>
+											</div>
 										{:else if task.reviewArtifact}
-											<span>Review {task.reviewArtifact.artifactId}</span>
+											<div class="v2-core-handoff" aria-label={`${task.title} review handoff`}>
+												<div>
+													<span>Review {task.reviewArtifact.artifactId}</span>
+													<strong>{task.reviewArtifact.title}</strong>
+													<p>{task.reviewArtifact.status}</p>
+												</div>
+												<a href={taskHref(task.taskId)}>Review task</a>
+											</div>
+										{:else if task.selectedNextWork && operatorConsole.scope.goalId}
+											<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+												<input type="hidden" name="goalId" value={operatorConsole.scope.goalId} />
+												<input type="hidden" name="taskId" value={task.taskId} />
+												<div>
+													<span>Selected task</span>
+													<a href={taskHref(task.taskId)}>{task.title}</a>
+												</div>
+												<button type="submit">Launch task</button>
+											</form>
 										{:else}
-											<span>No active handoff</span>
+											<a href={taskHref(task.taskId)}>Open task</a>
 										{/if}
 									</div>
 								</article>

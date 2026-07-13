@@ -681,6 +681,18 @@ function expectNoHorizontalOverflow() {
 	expect(bodyOverflow).toBeLessThanOrEqual(1);
 }
 
+function taskRollupSection() {
+	const section = document.querySelector('section[aria-labelledby="v2-core-task-rollup"]');
+	expect(section).not.toBeNull();
+	return section as HTMLElement;
+}
+
+function hasTaskRollupLink(section: HTMLElement, taskId: string, label: string) {
+	return Array.from(
+		section.querySelectorAll(`a[href="/app/v2-core/tasks/${taskId}?mode=read"]`)
+	).some((link) => link.textContent === label);
+}
+
 describe('/app/v2-core/+page.svelte', () => {
 	it('renders operator console sections from the v2 core read model', () => {
 		renderPage();
@@ -768,6 +780,28 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('2 open / 1 review / 1 done');
 		expect(document.body.textContent).toContain('Review artifact_ui_review');
 		expect(document.body.textContent).toContain('Selected next work');
+		const taskRollup = taskRollupSection();
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review task')
+		).toBe(true);
+		expect(
+			taskRollup.querySelector(
+				'form[action="?/dispatchGoalWork"] input[name="goalId"][value="goal_ui"]'
+			)
+		).not.toBeNull();
+		expect(
+			taskRollup.querySelector(
+				'form[action="?/dispatchGoalWork"] input[name="taskId"][value="task_ui_next"]'
+			)
+		).not.toBeNull();
+		expect(
+			Array.from(taskRollup.querySelectorAll('button')).some(
+				(button) => button.textContent === 'Launch task'
+			)
+		).toBe(true);
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task')
+		).toBe(true);
 		expect(
 			childRollup?.querySelector(
 				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
@@ -799,6 +833,12 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('1 open / 0 review / 0 done');
 		expect(document.body.textContent).toContain('Current child goal run');
 		expect(document.body.textContent).toContain('run_ui_child_current');
+		const taskRollup = taskRollupSection();
+		expect(taskRollup.textContent).toContain('Current run');
+		expect(taskRollup.textContent).toContain('planned · Codex UI');
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_child_current', 'Open current run')
+		).toBe(true);
 		expect(
 			document.querySelector('a[href="/app/v2-core?project=project_ui"]')
 		).not.toBeNull();
@@ -840,6 +880,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Tasks in scope');
 		expect(document.body.textContent).toContain('0 open / 0 review / 0 done');
 		expect(document.body.textContent).toContain('No tasks for selected goal');
+		const taskRollup = taskRollupSection();
+		expect(taskRollup.querySelector('button')).toBeNull();
+		expect(taskRollup.querySelector('a')).toBeNull();
 	});
 
 	it('keeps the read-only operator console usable in a phone viewport', async () => {
@@ -862,7 +905,18 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Launch', exact: true }))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Launch task' })).toBeInTheDocument();
+		const taskRollup = taskRollupSection();
+		expect(
+			Array.from(taskRollup.querySelectorAll('button')).some(
+				(button) => button.textContent === 'Launch task'
+			)
+		).toBe(true);
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review task')
+		).toBe(true);
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task')
+		).toBe(true);
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		await expect
@@ -876,9 +930,6 @@ describe('/app/v2-core/+page.svelte', () => {
 				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
 			)
 		).not.toBeNull();
-		await expect
-			.element(page.getByRole('link', { name: 'Review task' }))
-			.toBeInTheDocument();
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
 		expectNoHorizontalOverflow();
