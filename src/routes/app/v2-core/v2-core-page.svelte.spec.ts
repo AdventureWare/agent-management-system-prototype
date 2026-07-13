@@ -414,6 +414,8 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Ready');
 		expect(document.body.textContent).toContain('Running');
 		expect(document.body.textContent).toContain('No open work');
+		expect(document.body.textContent).toContain('Create a continuation planning task');
+		expect(document.body.textContent).toContain('Plan next work');
 		expect(document.body.textContent).toContain('Dispatch suppressed while blocked');
 		expect(document.body.textContent).toContain('Dispatch suppressed while paused');
 		expect(document.body.textContent).toContain('run_ui_child_current');
@@ -466,6 +468,7 @@ describe('/app/v2-core/+page.svelte', () => {
 			.element(page.getByRole('button', { name: 'Launch', exact: true }))
 			.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Launch task' })).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_child_current')).toBeInTheDocument();
 		expect(

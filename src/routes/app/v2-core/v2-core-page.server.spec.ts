@@ -90,6 +90,26 @@ async function dispatchGoalWork(
 	}
 }
 
+async function createGoalContinuationTask(
+	goalId: string,
+	url = 'http://localhost/app/v2-core?project=project_ui'
+) {
+	const form = new FormData();
+	form.set('goalId', goalId);
+
+	try {
+		return await actions.createGoalContinuationTask({
+			request: new Request(url, {
+				method: 'POST',
+				body: form
+			}),
+			url: new URL(url)
+		} as never);
+	} catch (caught) {
+		return caught;
+	}
+}
+
 function readGoalStatus(dbFile: string, goalId: string) {
 	const db = openV2CoreDb({ dbFile });
 
@@ -117,6 +137,28 @@ function readGoalTransitionDecisions(dbFile: string, goalId: string) {
 					where goal_id = ?
 						and decision_type = 'goal_status_transition'
 					order by decided_at desc, id desc
+				`
+			)
+			.all(goalId);
+	} finally {
+		db.close();
+	}
+}
+
+function readTasksForGoal(dbFile: string, goalId: string) {
+	const db = openV2CoreDb({ dbFile });
+
+	try {
+		return db
+			.prepare<
+				[string],
+				{ id: string; title: string; status: string; success_criteria: string }
+			>(
+				`
+					select id, title, status, success_criteria
+					from v2_core_tasks
+					where goal_id = ?
+					order by id
 				`
 			)
 			.all(goalId);
@@ -620,5 +662,96 @@ describe('/app/v2-core page server', () => {
 			}
 		});
 		expect(readTaskRuns(dbFile, 'task_ui_next')).toHaveLength(1);
+	});
+
+	it('creates a continuation-planning task for an idle running goal', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await createGoalContinuationTask('goal_ui_empty');
+
+		expect(result).toMatchObject({
+			status: 303,
+			location: '/app/v2-core?project=project_ui'
+		});
+		const tasks = readTasksForGoal(dbFile, 'goal_ui_empty');
+		expect(tasks).toHaveLength(1);
+		expect(tasks[0]).toMatchObject({
+			title: 'Plan next work for Keep empty running goal visible',
+			status: 'ready',
+			success_criteria:
+				'Define the next concrete executable task or mark the goal blocked, paused, or complete with evidence.'
+		});
+
+		const reloaded = await loadCorePage('http://localhost/app/v2-core?project=project_ui');
+		expect(
+			reloaded.operatorConsole?.workQueue.find(
+				(item: { goalId: string }) => item.goalId === 'goal_ui_empty'
+			)
+		).toMatchObject({
+			queueState: 'ready_to_dispatch',
+			selectedTask: expect.objectContaining({
+				title: 'Plan next work for Keep empty running goal visible'
+			})
+		});
+	});
+
+	it('rejects continuation planning unless the goal is active and idle', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const blocked = await createGoalContinuationTask('goal_ui_blocked');
+		expect(blocked).toMatchObject({
+			status: 400,
+			data: {
+				action: 'createGoalContinuationTask',
+				message:
+					'Goal goal_ui_blocked is blocked; only running idle goals can create continuation work.'
+			}
+		});
+
+		const paused = await createGoalContinuationTask('goal_ui_paused');
+		expect(paused).toMatchObject({
+			status: 400,
+			data: {
+				action: 'createGoalContinuationTask',
+				message:
+					'Goal goal_ui_paused is paused; only running idle goals can create continuation work.'
+			}
+		});
+
+		const ready = await createGoalContinuationTask('goal_ui');
+		expect(ready).toMatchObject({
+			status: 400,
+			data: {
+				action: 'createGoalContinuationTask',
+				message:
+					'Goal goal_ui is not idle; continuation planning is only available when a running goal has no open work and no current run.'
+			}
+		});
+
+		const running = await createGoalContinuationTask('goal_ui_child_running');
+		expect(running).toMatchObject({
+			status: 400,
+			data: {
+				action: 'createGoalContinuationTask',
+				message:
+					'Goal goal_ui_child_running is not idle; continuation planning is only available when a running goal has no open work and no current run.'
+			}
+		});
+
+		await createGoalContinuationTask('goal_ui_empty');
+		const duplicate = await createGoalContinuationTask('goal_ui_empty');
+		expect(duplicate).toMatchObject({
+			status: 400,
+			data: {
+				action: 'createGoalContinuationTask',
+				message:
+					'Goal goal_ui_empty is not idle; continuation planning is only available when a running goal has no open work and no current run.'
+			}
+		});
+		expect(readTasksForGoal(dbFile, 'goal_ui_empty')).toHaveLength(1);
 	});
 });

@@ -212,7 +212,18 @@
 										{:else if item.queueState === 'blocked' || item.queueState === 'paused'}
 											<p class="v2-core-row-meta">Dispatch suppressed while {item.queueState}</p>
 										{:else if item.queueState === 'no_open_work'}
-											<p class="v2-core-row-meta">No open work for this goal</p>
+											<form
+												method="POST"
+												action="?/createGoalContinuationTask"
+												class="v2-core-dispatch-form"
+											>
+												<input type="hidden" name="goalId" value={item.goalId} />
+												<div>
+													<span>No open work</span>
+													<p>Create a continuation planning task</p>
+												</div>
+												<button type="submit">Plan next work</button>
+											</form>
 										{:else}
 											<p class="v2-core-row-meta">No dispatchable next work</p>
 										{/if}

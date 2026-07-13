@@ -7,9 +7,11 @@ import {
 	openV2CoreDbReadonly
 } from '$lib/server/v2-core-persistence';
 import {
+	createV2CoreTask,
 	launchV2CoreProviderRun,
 	readV2CoreNextWork,
 	readV2CoreOperatorConsole,
+	recordV2CoreDecision,
 	transitionV2CoreGoalStatus
 } from '$lib/server/v2-core-service';
 
@@ -252,6 +254,92 @@ export const actions: Actions = {
 			return fail(400, {
 				ok: false,
 				action: 'dispatchGoalWork',
+				message: caught instanceof Error ? caught.message : String(caught)
+			});
+		} finally {
+			db.close();
+		}
+
+		const redirectUrl = new URL(url);
+		throw redirect(303, `${redirectUrl.pathname}${redirectUrl.search}`);
+	},
+	createGoalContinuationTask: async ({ request, url }) => {
+		const dbFile = _getV2CoreUiDbFile();
+		const form = await request.formData();
+		const goalId = readRequiredFormText(form, 'goalId', 'Goal');
+
+		const db = openV2CoreDb({ dbFile });
+		try {
+			const goal = db
+				.prepare<[string], { id: string; project_id: string; title: string; status: string }>(
+					'select id, project_id, title, status from v2_core_goals where id = ?'
+				)
+				.get(goalId);
+			if (!goal) {
+				return fail(404, {
+					ok: false,
+					action: 'createGoalContinuationTask',
+					message: 'V2 core goal not found.'
+				});
+			}
+			if (goal.status !== 'active') {
+				return fail(400, {
+					ok: false,
+					action: 'createGoalContinuationTask',
+					message: `Goal ${goalId} is ${goal.status}; only running idle goals can create continuation work.`
+				});
+			}
+
+			const queueItem = readV2CoreOperatorConsole(db, {
+				projectId: goal.project_id,
+				goalId,
+				limit: 10
+			}).workQueue.find((item) => item.goalId === goalId);
+			if (!queueItem || queueItem.queueState !== 'no_open_work') {
+				return fail(400, {
+					ok: false,
+					action: 'createGoalContinuationTask',
+					message: `Goal ${goalId} is not idle; continuation planning is only available when a running goal has no open work and no current run.`
+				});
+			}
+
+			const title = `Plan next work for ${goal.title}`;
+			const taskId = createUiRecordId('task_ui_goal_continuation');
+			const decisionId = createUiRecordId('decision_ui_goal_continuation');
+			createV2CoreTask(db, {
+				id: taskId,
+				projectId: goal.project_id,
+				goalId,
+				title,
+				summary:
+					'Operator-created continuation planning task for a running goal with no open work.',
+				successCriteria:
+					'Define the next concrete executable task or mark the goal blocked, paused, or complete with evidence.',
+				validationPlan:
+					'Read the goal context, inspect recent artifacts/decisions/memory, and verify that the created follow-up work advances the goal before dispatch.',
+				status: 'ready',
+				source: {
+					sourceSystem: 'ams-v2-core',
+					sourceCollection: 'operator_console',
+					sourceId: goalId,
+					field: 'goalId',
+					note: 'Created from the idle-goal continuation action.'
+				}
+			});
+			recordV2CoreDecision(db, {
+				id: decisionId,
+				projectId: goal.project_id,
+				goalId,
+				taskId,
+				decisionType: 'create_task',
+				summary: `Created continuation task for idle goal ${goalId}.`,
+				rationale:
+					'The goal was active with no open work and no current run, so the operator created an explicit continuation-planning task instead of relying on a scheduler.'
+			});
+		} catch (caught) {
+			return fail(400, {
+				ok: false,
+				action: 'createGoalContinuationTask',
 				message: caught instanceof Error ? caught.message : String(caught)
 			});
 		} finally {
