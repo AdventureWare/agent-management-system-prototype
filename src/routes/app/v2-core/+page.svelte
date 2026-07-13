@@ -39,6 +39,7 @@
 	let snapshotRows = $derived(Object.entries(operatorConsole?.snapshotStatus.tableCounts ?? {}));
 	let scopedGoalSummary = $derived(operatorConsole?.scopedGoalSummary ?? null);
 	let scopedChildGoalRollup = $derived(operatorConsole?.scopedChildGoalRollup ?? []);
+	let scopedTaskRollup = $derived(operatorConsole?.scopedTaskRollup ?? null);
 
 	function formatCount(value: number | undefined) {
 		return value ?? 0;
@@ -293,6 +294,44 @@
 							</article>
 						{/each}
 					</div>
+				</section>
+			{/if}
+
+			{#if scopedTaskRollup}
+				<section class="v2-core-panel" aria-labelledby="v2-core-task-rollup">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-task-rollup">Tasks in scope</h2>
+						<span>{scopedTaskRollup.counts.open} open / {scopedTaskRollup.counts.review} review / {scopedTaskRollup.counts.done} done</span>
+					</header>
+					{#if scopedTaskRollup.tasks.length}
+						<div class="v2-core-list">
+							{#each scopedTaskRollup.tasks as task (task.taskId)}
+								<article class="v2-core-row">
+									<div>
+										<a class="v2-core-row-title v2-core-row-link" href={taskHref(task.taskId)}>
+											{task.title}
+										</a>
+										<p class="v2-core-row-meta">{task.taskId}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{task.status}</span>
+										{#if task.selectedNextWork}
+											<span>Selected next work</span>
+										{/if}
+										{#if task.currentRun}
+											<span>{task.currentRun.runId}</span>
+										{:else if task.reviewArtifact}
+											<span>Review {task.reviewArtifact.artifactId}</span>
+										{:else}
+											<span>No active handoff</span>
+										{/if}
+									</div>
+								</article>
+							{/each}
+						</div>
+					{:else}
+						<p class="v2-core-empty">No tasks for selected goal</p>
+					{/if}
 				</section>
 			{/if}
 

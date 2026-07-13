@@ -689,6 +689,30 @@ export type V2CoreOperatorConsoleScopedGoalSummary = {
 	trustedMemory: V2CoreMemoryForContext['items'][number] | null;
 };
 
+export type V2CoreOperatorConsoleScopedTaskRollup = {
+	counts: {
+		open: number;
+		review: number;
+		done: number;
+	};
+	tasks: Array<{
+		taskId: string;
+		title: string;
+		status: string;
+		currentRun: {
+			runId: string;
+			status: string;
+			modelProviderName: string | null;
+		} | null;
+		reviewArtifact: {
+			artifactId: string;
+			title: string;
+			status: string;
+		} | null;
+		selectedNextWork: boolean;
+	}>;
+};
+
 export type V2CoreOperatorConsole = {
 	scope: {
 		projectId: string | null;
@@ -704,6 +728,7 @@ export type V2CoreOperatorConsole = {
 	workQueue: V2CoreOperatorConsoleWorkQueueItem[];
 	scopedGoalSummary: V2CoreOperatorConsoleScopedGoalSummary | null;
 	scopedChildGoalRollup: V2CoreOperatorConsoleWorkQueueItem[];
+	scopedTaskRollup: V2CoreOperatorConsoleScopedTaskRollup | null;
 	nextWork: V2CoreNextWork;
 	reviewQueue: Array<{
 		artifactId: string;
@@ -4776,6 +4801,88 @@ export function readV2CoreOperatorConsole(
 		goalId: scope.goalId,
 		limit
 	});
+	const scopedTaskRows = scope.goalId
+		? db
+				.prepare<
+					[string],
+					{
+						task_id: string;
+						title: string;
+						status: string;
+					}
+				>(
+					`
+						select id as task_id, title, status
+						from v2_core_tasks
+						where goal_id = ?
+						order by
+							case status
+								when 'in_progress' then 0
+								when 'review' then 1
+								when 'ready' then 2
+								when 'blocked' then 3
+								when 'done' then 4
+								else 5
+							end,
+							id
+					`
+				)
+				.all(scope.goalId)
+		: [];
+	const scopedTaskIds = scopedTaskRows.map((task) => task.task_id);
+	const scopedTaskRuns =
+		scopedTaskIds.length > 0
+			? db
+					.prepare<
+						string[],
+						{
+							run_id: string;
+							task_id: string;
+							status: string;
+							model_provider_name: string | null;
+						}
+					>(
+						`
+							select
+								run.id as run_id,
+								task.id as task_id,
+								run.status,
+								provider.name as model_provider_name
+							from v2_core_runs run
+							join v2_core_tasks task on task.id = run.task_id
+							left join v2_core_model_providers provider on provider.id = run.model_provider_id
+							where run.ended_at is null
+								and task.id in (${scopedTaskIds.map(() => '?').join(', ')})
+							order by run.started_at desc, run.id desc
+						`
+					)
+					.all(...scopedTaskIds)
+			: [];
+	const scopedReviewArtifacts =
+		scopedTaskIds.length > 0
+			? db
+					.prepare<
+						string[],
+						{
+							artifact_id: string;
+							task_id: string;
+							title: string;
+							status: string;
+						}
+					>(
+						`
+							select artifact.id as artifact_id, artifact.task_id, artifact.title, artifact.status
+							from v2_core_artifacts artifact
+							left join v2_core_reviews review on review.artifact_id = artifact.id
+								and review.status in ('approved', 'rejected')
+							where artifact.status = 'submitted'
+								and review.id is null
+								and artifact.task_id in (${scopedTaskIds.map(() => '?').join(', ')})
+							order by artifact.id
+						`
+					)
+					.all(...scopedTaskIds)
+			: [];
 	const currentRunByGoalId = new Map<string, (typeof currentGoalRuns)[number]>();
 	for (const run of currentGoalRuns) {
 		if (!currentRunByGoalId.has(run.goal_id)) {
@@ -4809,6 +4916,60 @@ export function readV2CoreOperatorConsole(
 			selectedChildTaskByGoalId.set(goal.goalId, candidate);
 		}
 	}
+	const currentRunByTaskId = new Map<string, (typeof scopedTaskRuns)[number]>();
+	for (const run of scopedTaskRuns) {
+		if (!currentRunByTaskId.has(run.task_id)) {
+			currentRunByTaskId.set(run.task_id, run);
+		}
+	}
+	const reviewArtifactByTaskId = new Map<string, (typeof scopedReviewArtifacts)[number]>();
+	for (const artifact of scopedReviewArtifacts) {
+		if (!reviewArtifactByTaskId.has(artifact.task_id)) {
+			reviewArtifactByTaskId.set(artifact.task_id, artifact);
+		}
+	}
+	const selectedNextWorkTaskIds = new Set(
+		nextWork.candidates
+			.filter((candidate) => candidate.action === 'start_task')
+			.map((candidate) => candidate.taskId)
+	);
+	const scopedTaskRollup: V2CoreOperatorConsoleScopedTaskRollup | null = scope.goalId
+		? {
+				counts: {
+					open: scopedTaskRows.filter((task) => !['done', 'canceled'].includes(task.status)).length,
+					review: scopedTaskRows.filter((task) => task.status === 'review').length,
+					done: scopedTaskRows.filter((task) => task.status === 'done').length
+				},
+				tasks: scopedTaskRows
+					.filter((task) => task.status !== 'canceled')
+					.slice(0, limit)
+					.map((task) => {
+						const currentRun = currentRunByTaskId.get(task.task_id) ?? null;
+						const reviewArtifact = reviewArtifactByTaskId.get(task.task_id) ?? null;
+
+						return {
+							taskId: task.task_id,
+							title: task.title,
+							status: task.status,
+							currentRun: currentRun
+								? {
+										runId: currentRun.run_id,
+										status: currentRun.status,
+										modelProviderName: currentRun.model_provider_name
+									}
+								: null,
+							reviewArtifact: reviewArtifact
+								? {
+										artifactId: reviewArtifact.artifact_id,
+										title: reviewArtifact.title,
+										status: reviewArtifact.status
+									}
+								: null,
+							selectedNextWork: selectedNextWorkTaskIds.has(task.task_id)
+						};
+					})
+			}
+		: null;
 
 	function toWorkQueueItem(
 		goal: V2CoreOperatorConsoleGoal,
@@ -4894,6 +5055,7 @@ export function readV2CoreOperatorConsole(
 		workQueue,
 		scopedGoalSummary,
 		scopedChildGoalRollup,
+		scopedTaskRollup,
 		nextWork,
 		reviewQueue,
 		recentRuns,

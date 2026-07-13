@@ -581,6 +581,7 @@ describe('/app/v2-core page server', () => {
 		);
 		expect(result.operatorConsole?.scopedGoalSummary).toBeNull();
 		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([]);
+		expect(result.operatorConsole?.scopedTaskRollup).toBeNull();
 		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
 		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
@@ -625,6 +626,31 @@ describe('/app/v2-core page server', () => {
 				selectedTask: null
 			})
 		]);
+		expect(result.operatorConsole?.scopedTaskRollup).toMatchObject({
+			counts: {
+				open: 2,
+				review: 1,
+				done: 1
+			},
+			tasks: [
+				expect.objectContaining({
+					taskId: 'task_ui_review',
+					status: 'review',
+					reviewArtifact: expect.objectContaining({
+						artifactId: 'artifact_ui_review'
+					})
+				}),
+				expect.objectContaining({
+					taskId: 'task_ui_next',
+					status: 'ready',
+					selectedNextWork: true
+				}),
+				expect.objectContaining({
+					taskId: 'task_ui_done',
+					status: 'done'
+				})
+			]
+		});
 	});
 
 	it('loads a goal-scoped operator console read model', async () => {
@@ -693,6 +719,41 @@ describe('/app/v2-core page server', () => {
 		]);
 		expect(result.operatorConsole?.recentArtifacts).toEqual([]);
 		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([]);
+		expect(result.operatorConsole?.scopedTaskRollup).toMatchObject({
+			counts: {
+				open: 1,
+				review: 0,
+				done: 0
+			},
+			tasks: [
+				expect.objectContaining({
+					taskId: 'task_ui_child_current',
+					status: 'in_progress',
+					currentRun: expect.objectContaining({
+						runId: 'run_ui_child_current'
+					})
+				})
+			]
+		});
+	});
+
+	it('loads an empty scoped task rollup for a goal without tasks', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_empty'
+		);
+
+		expect(result.operatorConsole?.scopedTaskRollup).toEqual({
+			counts: {
+				open: 0,
+				review: 0,
+				done: 0
+			},
+			tasks: []
+		});
 	});
 
 	it('loads a scoped summary for blocked and paused goals without runnable work', async () => {
