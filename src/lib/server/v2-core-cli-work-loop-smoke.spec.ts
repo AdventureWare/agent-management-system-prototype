@@ -137,6 +137,205 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(failure.stderr).toContain('unsupported status waiting_for_vibes');
 	});
 
+	it('creates sub-goals through the CLI without direct database edits', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_subgoal_smoke',
+			'--name',
+			'AMS v2 Sub-goal Smoke',
+			'--summary',
+			'Temporary project for proving parent goal CLI support.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_parent_smoke',
+			'--project',
+			'project_v2_subgoal_smoke',
+			'--title',
+			'Parent goal',
+			'--summary',
+			'Parent goal for child creation.',
+			'--success',
+			'Child goals can reference this parent.'
+		]);
+
+		const childGoal = runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_child_smoke',
+			'--project',
+			'project_v2_subgoal_smoke',
+			'--parent-goal',
+			'goal_v2_parent_smoke',
+			'--title',
+			'Child goal',
+			'--summary',
+			'Child goal created through CLI support.',
+			'--success',
+			'The child goal readback includes parentGoalId.'
+		]);
+
+		expect(childGoal.goal).toMatchObject({
+			id: 'goal_v2_child_smoke',
+			project_id: 'project_v2_subgoal_smoke',
+			parent_goal_id: 'goal_v2_parent_smoke',
+			status: 'active'
+		});
+
+		const missingParent = runCoreCliFailure([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_missing_parent_smoke',
+			'--project',
+			'project_v2_subgoal_smoke',
+			'--parent-goal',
+			'goal_v2_missing_parent',
+			'--title',
+			'Missing parent child',
+			'--success',
+			'This should fail because the parent goal is missing.'
+		]);
+		expect(missingParent.stderr).toContain('Parent goal goal_v2_missing_parent');
+	});
+
+	it('only surfaces next work from active goals', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_status_next_work_smoke',
+			'--name',
+			'AMS v2 Goal Status Next Work Smoke',
+			'--summary',
+			'Temporary project for proving goal-status-aware next-work.'
+		]);
+
+		const goalStatuses = ['active', 'paused', 'blocked', 'completed', 'superseded', 'canceled'];
+		for (const status of goalStatuses) {
+			runCoreCli([
+				'create-goal',
+				...baseArgs,
+				'--id',
+				`goal_v2_next_work_${status}`,
+				'--project',
+				'project_v2_goal_status_next_work_smoke',
+				'--title',
+				`Goal ${status}`,
+				'--summary',
+				`Goal with ${status} status.`,
+				'--success',
+				'Next-work behavior is status aware.',
+				'--status',
+				status
+			]);
+			runCoreCli([
+				'create-task',
+				...baseArgs,
+				'--id',
+				`task_v2_next_work_ready_${status}`,
+				'--goal',
+				`goal_v2_next_work_${status}`,
+				'--title',
+				`Ready task under ${status} goal`,
+				'--summary',
+				'Ready task used to prove goal status filtering.',
+				'--success',
+				'Task appears only when its goal is active.',
+				'--validation',
+				'Read next-work and agent-control next.'
+			]);
+		}
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_next_work_blocked_active',
+			'--goal',
+			'goal_v2_next_work_active',
+			'--title',
+			'Blocked task under active goal',
+			'--summary',
+			'Blocked task should still appear for unblock decisions.',
+			'--success',
+			'Blocked active-goal task appears as resolve_blocker.',
+			'--validation',
+			'Read next-work.',
+			'--status',
+			'blocked'
+		]);
+
+		const nextWork = runCoreCli([
+			'next-work',
+			...baseArgs,
+			'--project',
+			'project_v2_goal_status_next_work_smoke'
+		]);
+		expect(nextWork.candidates.map((candidate: any) => candidate.taskId)).toEqual([
+			'task_v2_next_work_ready_active',
+			'task_v2_next_work_blocked_active'
+		]);
+		expect(nextWork.candidates).toEqual([
+			expect.objectContaining({
+				taskId: 'task_v2_next_work_ready_active',
+				action: 'start_task'
+			}),
+			expect.objectContaining({
+				taskId: 'task_v2_next_work_blocked_active',
+				action: 'resolve_blocker'
+			})
+		]);
+
+		for (const status of goalStatuses.filter((status) => status !== 'active')) {
+			const scopedNextWork = runCoreCli([
+				'next-work',
+				...baseArgs,
+				'--goal',
+				`goal_v2_next_work_${status}`
+			]);
+			expect(scopedNextWork.candidates).toEqual([]);
+		}
+
+		const agentNext = runCoreCli([
+			'agent-control',
+			...baseArgs,
+			'--agent-action',
+			'next',
+			'--project',
+			'project_v2_goal_status_next_work_smoke',
+			'--compact'
+		]);
+		expect(agentNext.agentControl).toMatchObject({
+			outputMode: 'compact',
+			selectedTaskId: 'task_v2_next_work_ready_active',
+			selectedPacket: {
+				taskContract: {
+					taskId: 'task_v2_next_work_ready_active',
+					goal: {
+						id: 'goal_v2_next_work_active',
+						status: 'active'
+					}
+				}
+			}
+		});
+		expect(
+			agentNext.agentControl.nextWork.candidates.map((candidate: any) => candidate.goalId)
+		).toEqual(['goal_v2_next_work_active', 'goal_v2_next_work_active']);
+	}, 10_000);
+
 	it('drives a task through the minimal agent-control surface', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];

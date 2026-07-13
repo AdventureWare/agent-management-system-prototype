@@ -2637,7 +2637,10 @@ export function readV2CoreNextWork(
 	options: { goalId?: string | null; projectId?: string | null; limit?: number } = {}
 ): V2CoreNextWork {
 	const limit = Math.min(Math.max(options.limit ?? 10, 1), 50);
-	const conditions: string[] = ["task.status in ('ready', 'review', 'blocked')"];
+	const conditions: string[] = [
+		"task.status in ('ready', 'review', 'blocked')",
+		"goal.status = 'active'"
+	];
 	const params: string[] = [];
 
 	if (options.goalId?.trim()) {

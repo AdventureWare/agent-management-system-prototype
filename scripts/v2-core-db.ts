@@ -91,6 +91,7 @@ type Options = {
 	id: string | null;
 	projectId: string | null;
 	goalId: string | null;
+	parentGoalId: string | null;
 	taskId: string | null;
 	dependsOnTaskId: string | null;
 	runId: string | null;
@@ -197,6 +198,7 @@ function printHelp() {
 			'  --id <id>            Explicit id for the created record.',
 			'  --project <id>       Project id.',
 			'  --goal <id>          Goal id.',
+			'  --parent-goal <id>   Parent goal id for create-goal.',
 			'  --task <id>          Task id.',
 			'  --depends-on <id>    Dependency task id for record-task-dependency.',
 			'  --run <id>           Run id.',
@@ -264,6 +266,7 @@ function parseArgs(argv: string[]): Options {
 		id: null,
 		projectId: null,
 		goalId: null,
+		parentGoalId: null,
 		taskId: null,
 		dependsOnTaskId: null,
 		runId: null,
@@ -351,6 +354,9 @@ function parseArgs(argv: string[]): Options {
 				break;
 			case '--goal':
 				options.goalId = next();
+				break;
+			case '--parent-goal':
+				options.parentGoalId = next();
 				break;
 			case '--task':
 				options.taskId = next();
@@ -1263,7 +1269,8 @@ function createGoal(options: Options) {
 					title: requireOption(options.title, '--title <text>'),
 					summary: options.summary ?? undefined,
 					successCriteria: requireOption(options.successCriteria, '--success <text>'),
-					status: options.status ?? undefined
+					status: options.status ?? undefined,
+					parentGoalId: options.parentGoalId ?? undefined
 				})
 			},
 			options.json
