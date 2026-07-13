@@ -46,6 +46,14 @@
 		return resolve(`/app/v2-core/tasks/${taskId}?mode=read`);
 	}
 
+	function goalHref(goalId: string, projectId: string) {
+		return resolve(`/app/v2-core?project=${encodeURIComponent(projectId)}&goal=${encodeURIComponent(goalId)}`);
+	}
+
+	function projectHref(projectId: string) {
+		return resolve(`/app/v2-core?project=${encodeURIComponent(projectId)}`);
+	}
+
 	function nextWorkForGoal(goalId: string) {
 		return (
 			operatorConsole?.nextWork.candidates.find(
@@ -167,6 +175,16 @@
 				/>
 			</section>
 
+			{#if operatorConsole.scope.goalId && operatorConsole.scope.projectId}
+				<section class="v2-core-scope" aria-label="V2 core current scope">
+					<div>
+						<span>Scoped to goal</span>
+						<strong>{operatorConsole.scope.goalId}</strong>
+					</div>
+					<a href={projectHref(operatorConsole.scope.projectId)}>Show project scope</a>
+				</section>
+			{/if}
+
 			<section class="v2-core-grid">
 				<section class="v2-core-panel" aria-labelledby="v2-core-work-queue">
 					<header class="v2-core-panel-header">
@@ -178,7 +196,9 @@
 							{#each workQueueRows as item (item.goalId)}
 								<article class="v2-core-row v2-core-queue-row">
 									<div>
-										<p class="v2-core-row-title">{item.title}</p>
+										<a class="v2-core-row-title v2-core-row-link" href={goalHref(item.goalId, item.projectId)}>
+											{item.title}
+										</a>
 										<p class="v2-core-row-meta">
 											{item.goalId}{item.parentGoalId ? ` · parent ${item.parentGoalId}` : ''}
 										</p>
@@ -255,7 +275,9 @@
 										{@const dispatch = dispatchState(goal)}
 										<article class="v2-core-row">
 											<div>
-												<p class="v2-core-row-title">{goal.title}</p>
+												<a class="v2-core-row-title v2-core-row-link" href={goalHref(goal.goalId, goal.projectId)}>
+													{goal.title}
+												</a>
 												<p class="v2-core-row-meta">
 													{goal.goalId}{goal.parentGoalId ? ` · parent ${goal.parentGoalId}` : ''}
 												</p>
@@ -569,6 +591,46 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
 		gap: 0.75rem;
+	}
+
+	.v2-core-scope {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--color-primary-300), transparent 25%);
+		border-radius: 0.5rem;
+		padding: 0.75rem 0.875rem;
+		background: var(--color-primary-50);
+		color: var(--color-surface-900);
+	}
+
+	.v2-core-scope div {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+
+	.v2-core-scope span {
+		color: var(--color-surface-700);
+		font-size: 0.76rem;
+	}
+
+	.v2-core-scope strong {
+		overflow-wrap: anywhere;
+		font-size: 0.86rem;
+	}
+
+	.v2-core-scope a {
+		flex: 0 0 auto;
+		color: var(--color-primary-800);
+		font-size: 0.82rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.v2-core-scope a:hover {
+		text-decoration: underline;
 	}
 
 	.v2-core-grid {

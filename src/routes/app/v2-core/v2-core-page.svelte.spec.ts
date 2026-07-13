@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
-function renderPage() {
+function renderPage(options: { scopedGoalId?: string | null } = {}) {
+	const scopedGoalId = options.scopedGoalId ?? null;
+
 	render(Page, {
 		form: null,
 		data: {
@@ -12,12 +14,12 @@ function renderPage() {
 			error: null,
 			scope: {
 				projectId: 'project_ui',
-				goalId: null
+				goalId: scopedGoalId
 			},
 			operatorConsole: {
 				scope: {
 					projectId: 'project_ui',
-					goalId: null
+					goalId: scopedGoalId
 				},
 				overview: {
 					projects: [
@@ -471,6 +473,30 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_review?mode=read"]')
 		).not.toBeNull();
+		expect(
+			document.querySelector('a[href="/app/v2-core?project=project_ui&goal=goal_ui"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
+			)
+		).not.toBeNull();
+		expect(document.body.textContent).not.toContain('Scoped to goal');
+	});
+
+	it('renders scoped goal state and project-scope return link', () => {
+		renderPage({ scopedGoalId: 'goal_ui_child_running' });
+
+		expect(document.body.textContent).toContain('Scoped to goal');
+		expect(document.body.textContent).toContain('goal_ui_child_running');
+		expect(
+			document.querySelector('a[href="/app/v2-core?project=project_ui"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
+			)
+		).not.toBeNull();
 	});
 
 	it('keeps the read-only operator console usable in a phone viewport', async () => {
@@ -492,6 +518,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect.element(page.getByText('run_ui_child_current')).toBeInTheDocument();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
+			)
 		).not.toBeNull();
 		await expect
 			.element(page.getByRole('link', { name: 'Review task' }))

@@ -584,6 +584,54 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
 	});
 
+	it('loads a goal-scoped operator console read model', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_child_running'
+		);
+
+		expect(result.status).toBe('ready');
+		expect(result.scope).toEqual({
+			projectId: 'project_ui',
+			goalId: 'goal_ui_child_running'
+		});
+		expect(result.operatorConsole?.scope).toEqual({
+			projectId: 'project_ui',
+			goalId: 'goal_ui_child_running'
+		});
+		expect(result.operatorConsole?.workQueue).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_ui_child_running',
+				parentGoalId: 'goal_ui',
+				queueState: 'running',
+				currentRun: expect.objectContaining({
+					runId: 'run_ui_child_current',
+					taskId: 'task_ui_child_current'
+				})
+			})
+		]);
+		expect(result.operatorConsole?.goalStatusGroups.running).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_ui_child_running'
+			})
+		]);
+		expect(result.operatorConsole?.goalStatusGroups.blocked).toEqual([]);
+		expect(result.operatorConsole?.goalStatusGroups.paused).toEqual([]);
+		expect(result.operatorConsole?.nextWork.candidates).toEqual([]);
+		expect(result.operatorConsole?.reviewQueue).toEqual([]);
+		expect(result.operatorConsole?.recentRuns).toEqual([
+			expect.objectContaining({
+				runId: 'run_ui_child_current',
+				taskId: 'task_ui_child_current',
+				goalId: 'goal_ui_child_running'
+			})
+		]);
+		expect(result.operatorConsole?.recentArtifacts).toEqual([]);
+	});
+
 	it('applies bounded goal control actions through existing goal transitions', async () => {
 		const dbFile = createTempDbFile();
 		seedCoreDb(dbFile);
