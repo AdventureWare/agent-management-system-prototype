@@ -357,12 +357,16 @@
 							{#each operatorConsole.reviewQueue as artifact (artifact.artifactId)}
 								<article class="v2-core-row">
 									<div>
-										<p class="v2-core-row-title">{artifact.title}</p>
+										<a class="v2-core-row-title v2-core-row-link" href={taskHref(artifact.taskId)}>
+											{artifact.taskTitle}
+										</a>
+										<p class="v2-core-row-meta">{artifact.title} · {artifact.goalTitle}</p>
 										<p class="v2-core-row-meta">{artifact.uri}</p>
 									</div>
 									<div class="v2-core-row-side">
 										<span class="v2-core-badge">{artifact.status}</span>
-										<span>{artifact.taskId}</span>
+										<span>{artifact.runStatus ?? 'no run'}</span>
+										<a href={taskHref(artifact.taskId)}>Review task</a>
 									</div>
 								</article>
 							{/each}

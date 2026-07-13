@@ -686,7 +686,11 @@ export type V2CoreOperatorConsole = {
 	reviewQueue: Array<{
 		artifactId: string;
 		taskId: string;
+		taskTitle: string;
+		goalId: string;
+		goalTitle: string;
 		runId: string | null;
+		runStatus: string | null;
 		title: string;
 		uri: string;
 		status: string;
@@ -2949,7 +2953,11 @@ export function readV2CoreUnreviewedOutputs(db: Database.Database) {
 			{
 				artifact_id: string;
 				task_id: string;
+				task_title: string;
+				goal_id: string;
+				goal_title: string;
 				run_id: string | null;
+				run_status: string | null;
 				title: string;
 				uri: string;
 				status: string;
@@ -4522,7 +4530,11 @@ export function readV2CoreOperatorConsole(
 			{
 				artifact_id: string;
 				task_id: string;
+				task_title: string;
+				goal_id: string;
+				goal_title: string;
 				run_id: string | null;
+				run_status: string | null;
 				title: string;
 				uri: string;
 				status: string;
@@ -4532,12 +4544,18 @@ export function readV2CoreOperatorConsole(
 				select
 					artifact.id as artifact_id,
 					artifact.task_id,
+					task.title as task_title,
+					task.goal_id,
+					goal.title as goal_title,
 					artifact.run_id,
+					run.status as run_status,
 					artifact.title,
 					artifact.uri,
 					artifact.status
 				from v2_core_artifacts artifact
 				join v2_core_tasks task on task.id = artifact.task_id
+				join v2_core_goals goal on goal.id = task.goal_id
+				left join v2_core_runs run on run.id = artifact.run_id
 				left join v2_core_reviews review on review.artifact_id = artifact.id
 					and review.status in ('approved', 'rejected')
 				where artifact.status = 'submitted'
@@ -4557,7 +4575,11 @@ export function readV2CoreOperatorConsole(
 		.map((artifact) => ({
 			artifactId: artifact.artifact_id,
 			taskId: artifact.task_id,
+			taskTitle: artifact.task_title,
+			goalId: artifact.goal_id,
+			goalTitle: artifact.goal_title,
 			runId: artifact.run_id,
+			runStatus: artifact.run_status,
 			title: artifact.title,
 			uri: artifact.uri,
 			status: artifact.status

@@ -283,7 +283,20 @@ function renderPage() {
 						}
 					]
 				},
-				reviewQueue: [],
+				reviewQueue: [
+					{
+						artifactId: 'artifact_ui_review',
+						taskId: 'task_ui_review',
+						taskTitle: 'Review submitted operator output',
+						goalId: 'goal_ui',
+						goalTitle: 'Make v2 core inspectable',
+						runId: 'run_ui_review',
+						runStatus: 'completed',
+						title: 'Reviewable operator output',
+						uri: 'repo://docs/reviewable-output.md',
+						status: 'submitted'
+					}
+				],
 				recentRuns: [
 					{
 						runId: 'run_ui_current',
@@ -435,7 +448,10 @@ describe('/app/v2-core/+page.svelte', () => {
 			'npm run v2:core-db -- agent-work-packet --task task_ui_current --json'
 		);
 		expect(document.body.textContent).toContain('Ready next step');
-		expect(document.body.textContent).toContain('No review items');
+		expect(document.body.textContent).toContain('Review submitted operator output');
+		expect(document.body.textContent).toContain('Reviewable operator output');
+		expect(document.body.textContent).toContain('Review task');
+		expect(document.body.textContent).toContain('completed');
 		expect(document.body.textContent).toContain('Codex UI');
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		expect(document.body.textContent).toContain('Snapshot');
@@ -451,6 +467,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_done?mode=read"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_review?mode=read"]')
 		).not.toBeNull();
 	});
 
@@ -474,6 +493,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
 		).not.toBeNull();
+		await expect
+			.element(page.getByRole('link', { name: 'Review task' }))
+			.toBeInTheDocument();
 		await expect.element(page.getByText('Read-only v2 core console exists')).toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
 		expectNoHorizontalOverflow();

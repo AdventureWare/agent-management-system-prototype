@@ -312,6 +312,45 @@ function seedCoreDb(dbFile: string) {
 			status: 'submitted'
 		});
 		createV2CoreTask(db, {
+			id: 'task_ui_review',
+			goalId: 'goal_ui',
+			title: 'Review submitted operator output',
+			summary: 'Submitted artifact needs operator review.',
+			successCriteria: 'Review queue links back to this task.',
+			validationPlan: 'Load operator console review queue.'
+		});
+		transitionV2CoreTaskStatus(db, {
+			taskId: 'task_ui_review',
+			status: 'in_progress',
+			summary: 'Started review queue fixture task.'
+		});
+		recordV2CoreRun(db, {
+			id: 'run_ui_review',
+			taskId: 'task_ui_review',
+			modelProviderId: 'provider_codex_ui',
+			status: 'completed',
+			inputSummary: 'Produce a reviewable artifact.',
+			actionSummary: 'Generated submitted operator output.',
+			resultSummary: 'Reviewable output is ready.',
+			validationSummary: 'Fixture validation passed.'
+		});
+		attachV2CoreArtifact(db, {
+			id: 'artifact_ui_review',
+			taskId: 'task_ui_review',
+			runId: 'run_ui_review',
+			uri: 'repo://docs/reviewable-output.md',
+			role: 'deliverable',
+			title: 'Reviewable operator output',
+			summary: 'Artifact awaiting operator review.',
+			status: 'submitted'
+		});
+		transitionV2CoreTaskStatus(db, {
+			taskId: 'task_ui_review',
+			status: 'review',
+			runId: 'run_ui_review',
+			summary: 'Reviewable operator output is submitted.'
+		});
+		createV2CoreTask(db, {
 			id: 'task_ui_child_current',
 			goalId: 'goal_ui_child_running',
 			title: 'Current child goal run',
@@ -516,15 +555,33 @@ describe('/app/v2-core page server', () => {
 				rationale: 'Transitioned goal from active to paused.'
 			})
 		});
-		expect(result.operatorConsole?.nextWork.candidates[0]?.taskId).toBe('task_ui_next');
-		expect(result.operatorConsole?.reviewQueue).toEqual([]);
+		expect(result.operatorConsole?.nextWork.candidates).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					taskId: 'task_ui_next'
+				})
+			])
+		);
+		expect(result.operatorConsole?.reviewQueue).toEqual([
+			expect.objectContaining({
+				artifactId: 'artifact_ui_review',
+				taskId: 'task_ui_review',
+				taskTitle: 'Review submitted operator output',
+				goalId: 'goal_ui',
+				goalTitle: 'Make v2 core inspectable',
+				runId: 'run_ui_review',
+				runStatus: 'completed',
+				title: 'Reviewable operator output',
+				status: 'submitted'
+			})
+		]);
 		expect(result.operatorConsole?.recentRuns[0]?.modelProviderName).toBe('Codex UI');
 		expect(result.operatorConsole?.memory?.items[0]?.title).toBe(
 			'Read-only v2 core console exists'
 		);
-		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(2);
+		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
-		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(3);
+		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
 	});
 
 	it('applies bounded goal control actions through existing goal transitions', async () => {
