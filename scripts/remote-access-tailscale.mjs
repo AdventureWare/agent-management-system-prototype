@@ -9,6 +9,8 @@ const OUTPUT_DIR = resolve(REPO_ROOT, 'agent_output', 'remote-access');
 const STATUS_PATH = resolve(OUTPUT_DIR, 'tailscale-status.json');
 const DEFAULT_PORT = Number.parseInt(process.env.AMS_APP_PORT ?? '3000', 10);
 const DEFAULT_HTTPS_PORT = Number.parseInt(process.env.AMS_TAILSCALE_HTTPS_PORT ?? '443', 10);
+const LOCAL_TARGET_HOST = '127.0.0.1';
+const TAILSCALE_STATUS_FAILURE_PATTERNS = [/failed to start/i, /failed to load preferences/i];
 
 function failWithMessage(message) {
 	process.stderr.write(`${message}\n`);
@@ -133,6 +135,17 @@ function getServeStatus() {
 	if (serveResult.status !== 0) {
 		return {
 			configured: false,
+			error: true,
+			tailnetUrl: null,
+			text: serveText,
+			source: 'serve status'
+		};
+	}
+
+	if (TAILSCALE_STATUS_FAILURE_PATTERNS.some((pattern) => pattern.test(serveText))) {
+		return {
+			configured: false,
+			error: true,
 			tailnetUrl: null,
 			text: serveText,
 			source: 'serve status'
@@ -142,6 +155,7 @@ function getServeStatus() {
 	if (serveText === 'No serve config') {
 		return {
 			configured: false,
+			error: false,
 			tailnetUrl: null,
 			text: serveText,
 			source: 'serve status'
@@ -167,7 +181,7 @@ export async function startRemoteAccess() {
 	await ensureOutputDir();
 	ensureOperatorServer();
 
-	const target = `http://127.0.0.1:${DEFAULT_PORT}`;
+	const target = `http://${LOCAL_TARGET_HOST}:${DEFAULT_PORT}`;
 	runCommand('tailscale', ['serve', '--bg', '--yes', `--https=${DEFAULT_HTTPS_PORT}`, target]);
 
 	const serveStatus = getServeStatus();
@@ -192,6 +206,8 @@ export async function startRemoteAccess() {
 	printHeader('Remote access enabled with Tailscale');
 	process.stdout.write(`Tailnet URL: ${tailnetUrl}\n`);
 	process.stdout.write(`Local target: ${target}\n`);
+	process.stdout.write('Access boundary: private tailnet URL proxying to localhost.\n');
+	process.stdout.write('Operator gate: AMS_OPERATOR_PASSWORD is configured.\n');
 	process.stdout.write(
 		'Tailscale Serve stays active until you run `npm run remote:access:stop`.\n'
 	);
@@ -213,11 +229,18 @@ export async function showRemoteStatus() {
 
 	printHeader('Remote access status');
 	process.stdout.write(`Provider: tailscale\n`);
-	process.stdout.write(`State: ${serveStatus.configured ? 'configured' : 'not configured'}\n`);
+	process.stdout.write(
+		`State: ${serveStatus.error ? 'unavailable' : serveStatus.configured ? 'configured' : 'not configured'}\n`
+	);
 	process.stdout.write(`Tailnet URL: ${liveUrl ?? cachedStatus?.tailnetUrl ?? 'not detected'}\n`);
 	process.stdout.write(
-		`Local target: ${cachedStatus?.localTarget ?? `http://127.0.0.1:${DEFAULT_PORT}`}\n`
+		`Local target: ${cachedStatus?.localTarget ?? `http://${LOCAL_TARGET_HOST}:${DEFAULT_PORT}`}\n`
 	);
+	process.stdout.write(
+		`Operator gate: ${process.env.AMS_OPERATOR_PASSWORD?.trim() ? 'password configured' : 'password missing'}\n`
+	);
+	process.stdout.write('Access boundary: private tailnet URL proxying to localhost.\n');
+	process.stdout.write('Disable command: npm run remote:access:stop\n');
 
 	if (serveStatus.text) {
 		process.stdout.write(`\nCurrent Tailscale status (${serveStatus.source}):\n`);

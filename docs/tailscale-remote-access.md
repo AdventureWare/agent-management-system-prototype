@@ -123,6 +123,24 @@ Tailscale Serve stays active until you reset it. The app server and the remote a
 - The current shared operator password is still used as a fallback app-layer gate until named-user auth exists.
 - The local app server should remain bound to localhost.
 - If you later switch to another provider, keep the app server and launchd pieces and replace only the remote-access adapter.
+- The first AMS v2 mobile slice is read-oriented access to `/app/v2-core`. The v2 task detail route has write actions and should not be treated as mobile-safe until the task-detail safety follow-up is complete.
+
+## AMS v2 mobile console validation
+
+Use this checklist when proving access from a trusted phone or another tailnet device:
+
+1. Configure `.env.local` with `AMS_OPERATOR_PASSWORD` and `AMS_OPERATOR_SESSION_SECRET`.
+2. Start remote access with `npm run remote:access:start`.
+3. Check status with `npm run remote:access:status`.
+4. Open the reported Tailnet URL from the trusted device.
+5. Confirm `/auth/login` appears before protected app routes.
+6. Log in with the operator password.
+7. Open `/app/v2-core`.
+8. Confirm the page is readable on the phone without horizontal scrolling.
+9. Confirm active goals, next work, recent runs, dependency summary, trusted memory, and snapshot status are visible.
+10. Stop exposure with `npm run remote:access:stop`.
+
+This validation proves mobile read access to the v2 operator console. It does not approve phone-based task mutation or remote command execution.
 
 ## Current environment knobs
 

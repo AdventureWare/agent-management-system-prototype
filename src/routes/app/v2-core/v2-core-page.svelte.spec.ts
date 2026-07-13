@@ -1,3 +1,4 @@
+import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
@@ -163,6 +164,16 @@ function renderPage() {
 	});
 }
 
+function expectNoHorizontalOverflow() {
+	const root = document.documentElement;
+	const body = document.body;
+	const rootOverflow = root.scrollWidth - root.clientWidth;
+	const bodyOverflow = body.scrollWidth - body.clientWidth;
+
+	expect(rootOverflow).toBeLessThanOrEqual(1);
+	expect(bodyOverflow).toBeLessThanOrEqual(1);
+}
+
 describe('/app/v2-core/+page.svelte', () => {
 	it('renders operator console sections from the v2 core read model', () => {
 		renderPage();
@@ -176,5 +187,18 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		expect(document.body.textContent).toContain('Snapshot');
 		expect(document.body.textContent).toContain('v2_core_tasks');
+	});
+
+	it('keeps the read-only operator console usable in a phone viewport', async () => {
+		await page.viewport(390, 844);
+		renderPage();
+
+		await expect
+			.element(page.getByRole('heading', { name: 'Operator console' }))
+			.toBeInTheDocument();
+		await expect.element(page.getByText('Ready next step')).toBeInTheDocument();
+		await expect.element(page.getByText('Read-only v2 core console exists')).toBeInTheDocument();
+		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
+		expectNoHorizontalOverflow();
 	});
 });
