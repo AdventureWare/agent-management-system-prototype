@@ -26,9 +26,9 @@ function renderPage() {
 							name: 'V2 Core UI',
 							summary: 'Operator console test project.',
 							status: 'active',
-							goalCount: 3,
-							taskCount: 2,
-							runCount: 1,
+							goalCount: 5,
+							taskCount: 4,
+							runCount: 2,
 							artifactCount: 1,
 							memoryItemCount: 1
 						}
@@ -54,6 +54,28 @@ function renderPage() {
 						status: 'active',
 						openTaskCount: 1,
 						doneTaskCount: 1,
+						latestGoalStatusTransition: null
+					},
+					{
+						goalId: 'goal_ui_child_running',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: 'goal_ui',
+						title: 'Run child goal work',
+						status: 'active',
+						openTaskCount: 1,
+						doneTaskCount: 0,
+						latestGoalStatusTransition: null
+					},
+					{
+						goalId: 'goal_ui_empty',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: null,
+						title: 'Keep empty running goal visible',
+						status: 'active',
+						openTaskCount: 0,
+						doneTaskCount: 0,
 						latestGoalStatusTransition: null
 					},
 					{
@@ -101,6 +123,28 @@ function renderPage() {
 							openTaskCount: 1,
 							doneTaskCount: 1,
 							latestGoalStatusTransition: null
+						},
+						{
+							goalId: 'goal_ui_child_running',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							parentGoalId: 'goal_ui',
+							title: 'Run child goal work',
+							status: 'active',
+							openTaskCount: 1,
+							doneTaskCount: 0,
+							latestGoalStatusTransition: null
+						},
+						{
+							goalId: 'goal_ui_empty',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							parentGoalId: null,
+							title: 'Keep empty running goal visible',
+							status: 'active',
+							openTaskCount: 0,
+							doneTaskCount: 0,
+							latestGoalStatusTransition: null
 						}
 					],
 					blocked: [
@@ -140,6 +184,90 @@ function renderPage() {
 						}
 					]
 				},
+				workQueue: [
+					{
+						goalId: 'goal_ui',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: null,
+						title: 'Make v2 core inspectable',
+						status: 'active',
+						openTaskCount: 1,
+						doneTaskCount: 1,
+						queueState: 'ready_to_dispatch',
+						currentRun: null,
+						selectedTask: {
+							taskId: 'task_ui_next',
+							title: 'Ready next step',
+							status: 'ready',
+							goalId: 'goal_ui',
+							goalTitle: 'Make v2 core inspectable',
+							projectId: 'project_ui',
+							projectName: 'V2 Core UI',
+							action: 'start_task',
+							reason: 'Next ready task.'
+						}
+					},
+					{
+						goalId: 'goal_ui_child_running',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: 'goal_ui',
+						title: 'Run child goal work',
+						status: 'active',
+						openTaskCount: 1,
+						doneTaskCount: 0,
+						queueState: 'running',
+						currentRun: {
+							runId: 'run_ui_child_current',
+							taskId: 'task_ui_child_current',
+							taskTitle: 'Current child goal run',
+							status: 'planned',
+							modelProviderId: 'provider_codex_ui',
+							modelProviderName: 'Codex UI'
+						},
+						selectedTask: null
+					},
+					{
+						goalId: 'goal_ui_empty',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: null,
+						title: 'Keep empty running goal visible',
+						status: 'active',
+						openTaskCount: 0,
+						doneTaskCount: 0,
+						queueState: 'no_open_work',
+						currentRun: null,
+						selectedTask: null
+					},
+					{
+						goalId: 'goal_ui_blocked',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: 'goal_ui',
+						title: 'Unblock v2 operator work',
+						status: 'blocked',
+						openTaskCount: 0,
+						doneTaskCount: 0,
+						queueState: 'blocked',
+						currentRun: null,
+						selectedTask: null
+					},
+					{
+						goalId: 'goal_ui_paused',
+						projectId: 'project_ui',
+						projectName: 'V2 Core UI',
+						parentGoalId: null,
+						title: 'Paused v2 track',
+						status: 'paused',
+						openTaskCount: 0,
+						doneTaskCount: 0,
+						queueState: 'paused',
+						currentRun: null,
+						selectedTask: null
+					}
+				],
 				nextWork: {
 					candidates: [
 						{
@@ -280,6 +408,16 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Operator console');
 		expect(document.body.textContent).toContain('V2 Core UI');
 		expect(document.body.textContent).toContain('Make v2 core inspectable');
+		expect(document.body.textContent).toContain('Work queue');
+		expect(document.body.textContent).toContain('Run child goal work');
+		expect(document.body.textContent).toContain('Keep empty running goal visible');
+		expect(document.body.textContent).toContain('Ready');
+		expect(document.body.textContent).toContain('Running');
+		expect(document.body.textContent).toContain('No open work');
+		expect(document.body.textContent).toContain('Dispatch suppressed while blocked');
+		expect(document.body.textContent).toContain('Dispatch suppressed while paused');
+		expect(document.body.textContent).toContain('run_ui_child_current');
+		expect(document.body.textContent).toContain('Launch task');
 		expect(document.body.textContent).toContain('Goal control');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
 		expect(document.body.textContent).toContain('Blocked waiting for operator direction.');
@@ -307,6 +445,9 @@ describe('/app/v2-core/+page.svelte', () => {
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_current?mode=read"]')
 		).not.toBeNull();
 		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_child_current?mode=read"]')
+		).not.toBeNull();
+		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_done?mode=read"]')
 		).not.toBeNull();
 	});
@@ -318,9 +459,15 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('heading', { name: 'Operator console' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Unblock v2 operator work')).toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Launch' })).toBeInTheDocument();
+		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
+		expect(document.body.textContent).toContain('Run child goal work');
+		expect(document.body.textContent).toContain('Unblock v2 operator work');
+		await expect
+			.element(page.getByRole('button', { name: 'Launch', exact: true }))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Launch task' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
+		await expect.element(page.getByText('run_ui_child_current')).toBeInTheDocument();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
 		).not.toBeNull();

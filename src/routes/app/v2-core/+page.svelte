@@ -29,6 +29,7 @@
 		{ key: 'blocked', label: 'Blocked', goals: goalStatusGroups.blocked },
 		{ key: 'paused', label: 'Paused', goals: goalStatusGroups.paused }
 	]);
+	let workQueueRows = $derived(operatorConsole?.workQueue ?? []);
 	let goalControlCount = $derived(goalGroupRows.reduce((total, group) => total + group.goals.length, 0));
 	let activeGoal = $derived(goalStatusGroups.running[0] ?? operatorConsole?.activeGoals[0] ?? null);
 	let taskStatusRows = $derived(Object.entries(overview?.taskStatusCounts ?? {}));
@@ -61,6 +62,25 @@
 
 	function packetCommand(taskId: string) {
 		return `npm run v2:core-db -- agent-work-packet --task ${taskId} --json`;
+	}
+
+	function queueStateLabel(state: string) {
+		switch (state) {
+			case 'running':
+				return 'Running';
+			case 'ready_to_dispatch':
+				return 'Ready';
+			case 'no_dispatchable_work':
+				return 'Needs selection';
+			case 'no_open_work':
+				return 'No open work';
+			case 'blocked':
+				return 'Blocked';
+			case 'paused':
+				return 'Paused';
+			default:
+				return state;
+		}
 	}
 
 	function goalTransitionText(goal: {
@@ -148,6 +168,63 @@
 			</section>
 
 			<section class="v2-core-grid">
+				<section class="v2-core-panel" aria-labelledby="v2-core-work-queue">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-work-queue">Work queue</h2>
+						<span>{workQueueRows.length} goals</span>
+					</header>
+					{#if workQueueRows.length}
+						<div class="v2-core-list">
+							{#each workQueueRows as item (item.goalId)}
+								<article class="v2-core-row v2-core-queue-row">
+									<div>
+										<p class="v2-core-row-title">{item.title}</p>
+										<p class="v2-core-row-meta">
+											{item.goalId}{item.parentGoalId ? ` · parent ${item.parentGoalId}` : ''}
+										</p>
+										<p class="v2-core-row-meta">
+											{item.openTaskCount} open / {item.doneTaskCount} done
+										</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class={['v2-core-badge', `v2-core-badge-${item.queueState}`]}>
+											{queueStateLabel(item.queueState)}
+										</span>
+										{#if item.currentRun}
+											<div class="v2-core-handoff" aria-label={`${item.title} queue current run`}>
+												<div>
+													<span>Current run</span>
+													<strong>{item.currentRun.runId}</strong>
+													<p>{item.currentRun.status} · {item.currentRun.modelProviderName ?? 'No provider'}</p>
+												</div>
+												<a href={taskHref(item.currentRun.taskId)}>Open task</a>
+											</div>
+										{:else if item.selectedTask}
+											<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+												<input type="hidden" name="goalId" value={item.goalId} />
+												<input type="hidden" name="taskId" value={item.selectedTask.taskId} />
+												<div>
+													<span>Selected task</span>
+													<a href={taskHref(item.selectedTask.taskId)}>{item.selectedTask.title}</a>
+												</div>
+												<button type="submit">Launch task</button>
+											</form>
+										{:else if item.queueState === 'blocked' || item.queueState === 'paused'}
+											<p class="v2-core-row-meta">Dispatch suppressed while {item.queueState}</p>
+										{:else if item.queueState === 'no_open_work'}
+											<p class="v2-core-row-meta">No open work for this goal</p>
+										{:else}
+											<p class="v2-core-row-meta">No dispatchable next work</p>
+										{/if}
+									</div>
+								</article>
+							{/each}
+						</div>
+					{:else}
+						<p class="v2-core-empty">No work queue rows</p>
+					{/if}
+				</section>
+
 				<section class="v2-core-panel" aria-labelledby="v2-core-goal-control">
 					<header class="v2-core-panel-header">
 						<h2 id="v2-core-goal-control">Goal control</h2>
@@ -587,6 +664,10 @@
 		text-align: right;
 	}
 
+	.v2-core-queue-row {
+		align-items: start;
+	}
+
 	.v2-core-goal-actions {
 		display: grid;
 		gap: 0.35rem;
@@ -747,6 +828,24 @@
 		font-weight: 700;
 		line-height: 1.25;
 		overflow-wrap: anywhere;
+	}
+
+	.v2-core-badge-running,
+	.v2-core-badge-ready_to_dispatch {
+		border-color: color-mix(in srgb, var(--color-success-500), transparent 45%);
+		background: color-mix(in srgb, var(--color-success-100), white 35%);
+	}
+
+	.v2-core-badge-blocked,
+	.v2-core-badge-no_dispatchable_work {
+		border-color: color-mix(in srgb, var(--color-warning-500), transparent 40%);
+		background: color-mix(in srgb, var(--color-warning-100), white 35%);
+	}
+
+	.v2-core-badge-paused,
+	.v2-core-badge-no_open_work {
+		border-color: color-mix(in srgb, var(--color-surface-400), transparent 35%);
+		background: var(--color-surface-100);
 	}
 
 	.v2-core-empty {

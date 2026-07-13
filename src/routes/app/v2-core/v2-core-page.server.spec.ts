@@ -201,6 +201,21 @@ function seedCoreDb(dbFile: string) {
 			status: 'paused',
 			summary: 'Paused while the running goal is prioritized.'
 		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_child_running',
+			projectId: 'project_ui',
+			parentGoalId: 'goal_ui',
+			title: 'Run child goal work',
+			summary: 'Active child goal with current provider work.',
+			successCriteria: 'Operator can see current child-goal work.'
+		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_empty',
+			projectId: 'project_ui',
+			title: 'Keep empty running goal visible',
+			summary: 'Active goal with no open tasks.',
+			successCriteria: 'Operator can see there is no open work.'
+		});
 		createV2CoreTask(db, {
 			id: 'task_ui_done',
 			goalId: 'goal_ui',
@@ -253,6 +268,27 @@ function seedCoreDb(dbFile: string) {
 			title: 'V2 core operator console page',
 			summary: 'Read-only operator console UI.',
 			status: 'submitted'
+		});
+		createV2CoreTask(db, {
+			id: 'task_ui_child_current',
+			goalId: 'goal_ui_child_running',
+			title: 'Current child goal run',
+			summary: 'Current child-goal provider work.',
+			successCriteria: 'Provider run is visible on the child goal.',
+			validationPlan: 'Load operator console queue.'
+		});
+		transitionV2CoreTaskStatus(db, {
+			taskId: 'task_ui_child_current',
+			status: 'in_progress',
+			summary: 'Started child goal provider work.'
+		});
+		recordV2CoreRun(db, {
+			id: 'run_ui_child_current',
+			taskId: 'task_ui_child_current',
+			modelProviderId: 'provider_codex_ui',
+			status: 'planned',
+			inputSummary: 'Continue child goal work.',
+			actionSummary: 'Provider is working on the child goal.'
 		});
 		transitionV2CoreTaskStatus(db, {
 			taskId: 'task_ui_done',
@@ -362,8 +398,66 @@ describe('/app/v2-core page server', () => {
 		expect(result.status).toBe('ready');
 		expect(result.dbFile).toBe(dbFile);
 		expect(result.scope.projectId).toBe('project_ui');
-		expect(result.operatorConsole?.activeGoals[0]?.title).toBe('Make v2 core inspectable');
-		expect(result.operatorConsole?.goalStatusGroups.running[0]?.goalId).toBe('goal_ui');
+		expect(result.operatorConsole?.activeGoals).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					goalId: 'goal_ui',
+					title: 'Make v2 core inspectable'
+				})
+			])
+		);
+		expect(result.operatorConsole?.goalStatusGroups.running).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					goalId: 'goal_ui'
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_child_running',
+					parentGoalId: 'goal_ui'
+				})
+			])
+		);
+		expect(result.operatorConsole?.workQueue).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					goalId: 'goal_ui',
+					queueState: 'ready_to_dispatch',
+					selectedTask: expect.objectContaining({
+						taskId: 'task_ui_next'
+					}),
+					currentRun: null
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_child_running',
+					parentGoalId: 'goal_ui',
+					queueState: 'running',
+					currentRun: expect.objectContaining({
+						runId: 'run_ui_child_current',
+						taskId: 'task_ui_child_current',
+						modelProviderName: 'Codex UI'
+					}),
+					selectedTask: null
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_empty',
+					queueState: 'no_open_work',
+					currentRun: null,
+					selectedTask: null
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_blocked',
+					queueState: 'blocked',
+					currentRun: null,
+					selectedTask: null
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_paused',
+					queueState: 'paused',
+					currentRun: null,
+					selectedTask: null
+				})
+			])
+		);
 		expect(result.operatorConsole?.goalStatusGroups.blocked[0]).toMatchObject({
 			goalId: 'goal_ui_blocked',
 			parentGoalId: 'goal_ui',
@@ -386,9 +480,9 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.memory?.items[0]?.title).toBe(
 			'Read-only v2 core console exists'
 		);
-		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(1);
+		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(2);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
-		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(2);
+		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(3);
 	});
 
 	it('applies bounded goal control actions through existing goal transitions', async () => {

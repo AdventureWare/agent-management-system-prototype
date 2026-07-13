@@ -642,6 +642,33 @@ export type V2CoreOperatorConsoleGoal = {
 	} | null;
 };
 
+export type V2CoreOperatorConsoleWorkQueueItem = {
+	goalId: string;
+	projectId: string;
+	projectName: string;
+	parentGoalId: string | null;
+	title: string;
+	status: string;
+	openTaskCount: number;
+	doneTaskCount: number;
+	queueState:
+		| 'running'
+		| 'ready_to_dispatch'
+		| 'no_dispatchable_work'
+		| 'no_open_work'
+		| 'blocked'
+		| 'paused';
+	currentRun: {
+		runId: string;
+		taskId: string;
+		taskTitle: string;
+		status: string;
+		modelProviderId: string | null;
+		modelProviderName: string | null;
+	} | null;
+	selectedTask: V2CoreNextWork['candidates'][number] | null;
+};
+
 export type V2CoreOperatorConsole = {
 	scope: {
 		projectId: string | null;
@@ -654,6 +681,7 @@ export type V2CoreOperatorConsole = {
 		blocked: V2CoreOperatorConsoleGoal[];
 		paused: V2CoreOperatorConsoleGoal[];
 	};
+	workQueue: V2CoreOperatorConsoleWorkQueueItem[];
 	nextWork: V2CoreNextWork;
 	reviewQueue: Array<{
 		artifactId: string;
@@ -4586,6 +4614,37 @@ export function readV2CoreOperatorConsole(
 			validationSummary: run.validation_summary,
 			endedAt: run.ended_at
 		}));
+	const currentGoalRuns = db
+		.prepare<
+			string[],
+			{
+				run_id: string;
+				task_id: string;
+				task_title: string;
+				goal_id: string;
+				status: string;
+				model_provider_id: string | null;
+				model_provider_name: string | null;
+			}
+		>(
+			`
+				select
+					run.id as run_id,
+					task.id as task_id,
+					task.title as task_title,
+					task.goal_id,
+					run.status,
+					run.model_provider_id,
+					provider.name as model_provider_name
+				from v2_core_runs run
+				join v2_core_tasks task on task.id = run.task_id
+				left join v2_core_model_providers provider on provider.id = run.model_provider_id
+				where run.ended_at is null
+					and ${taskConditions.join(' and ')}
+				order by run.started_at desc, run.id desc
+			`
+		)
+		.all(...taskParams);
 	const recentArtifacts = db
 		.prepare<
 			[...string[], number],
@@ -4628,6 +4687,56 @@ export function readV2CoreOperatorConsole(
 			role: artifact.role,
 			status: artifact.status
 		}));
+	const nextWork = readV2CoreNextWork(db, {
+		projectId: scope.projectId,
+		goalId: scope.goalId,
+		limit
+	});
+	const currentRunByGoalId = new Map<string, (typeof currentGoalRuns)[number]>();
+	for (const run of currentGoalRuns) {
+		if (!currentRunByGoalId.has(run.goal_id)) {
+			currentRunByGoalId.set(run.goal_id, run);
+		}
+	}
+	const selectedTaskByGoalId = new Map<string, V2CoreNextWork['candidates'][number]>();
+	for (const candidate of nextWork.candidates) {
+		if (candidate.action === 'start_task' && !selectedTaskByGoalId.has(candidate.goalId)) {
+			selectedTaskByGoalId.set(candidate.goalId, candidate);
+		}
+	}
+	const workQueue: V2CoreOperatorConsoleWorkQueueItem[] = activeGoals.map((goal) => {
+		const currentRun = currentRunByGoalId.get(goal.goalId) ?? null;
+		const selectedTask =
+			goal.status === 'active' && !currentRun ? (selectedTaskByGoalId.get(goal.goalId) ?? null) : null;
+		const queueState: V2CoreOperatorConsoleWorkQueueItem['queueState'] =
+			goal.status === 'blocked'
+				? 'blocked'
+				: goal.status === 'paused'
+					? 'paused'
+					: currentRun
+						? 'running'
+						: selectedTask
+							? 'ready_to_dispatch'
+							: goal.openTaskCount > 0
+								? 'no_dispatchable_work'
+								: 'no_open_work';
+
+		return {
+			...goal,
+			queueState,
+			currentRun: currentRun
+				? {
+						runId: currentRun.run_id,
+						taskId: currentRun.task_id,
+						taskTitle: currentRun.task_title,
+						status: currentRun.status,
+						modelProviderId: currentRun.model_provider_id,
+						modelProviderName: currentRun.model_provider_name
+					}
+				: null,
+			selectedTask
+		};
+	});
 	const snapshot = exportV2CoreSnapshot(db);
 
 	return {
@@ -4635,11 +4744,8 @@ export function readV2CoreOperatorConsole(
 		overview: readV2CoreOverview(db),
 		activeGoals,
 		goalStatusGroups,
-		nextWork: readV2CoreNextWork(db, {
-			projectId: scope.projectId,
-			goalId: scope.goalId,
-			limit
-		}),
+		workQueue,
+		nextWork,
 		reviewQueue,
 		recentRuns,
 		recentArtifacts,
