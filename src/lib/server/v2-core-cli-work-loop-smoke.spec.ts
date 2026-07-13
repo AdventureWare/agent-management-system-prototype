@@ -337,6 +337,40 @@ describe('v2 core CLI work-loop smoke', () => {
 			})
 		]);
 
+		const compactNext = runCoreCli([
+			'agent-control',
+			...baseArgs,
+			'--agent-action',
+			'next',
+			'--project',
+			'project_v2_agent_control_smoke',
+			'--compact'
+		]);
+		expect(compactNext.agentControl).toMatchObject({
+			action: 'next',
+			outputMode: 'compact',
+			selectedTaskId: 'task_v2_agent_control_smoke',
+			selectedPacket: {
+				taskContract: {
+					taskId: 'task_v2_agent_control_smoke',
+					status: 'ready'
+				},
+				readiness: {
+					actionable: true,
+					recommendedAction: 'start_task'
+				},
+				counts: expect.objectContaining({
+					contextSources: expect.any(Number),
+					sourceLinks: expect.any(Number)
+				})
+			}
+		});
+		expect(compactNext.agentControl.selectedPacket.renderedPrompt).toBeUndefined();
+		expect(compactNext.agentControl.selectedPacket.recentEvidence).toBeUndefined();
+		expect(compactNext.agentControl.selectedPacket.contextSources.length).toBeLessThanOrEqual(6);
+		expect(compactNext.agentControl.selectedPacket.sourceLinks.length).toBeLessThanOrEqual(20);
+		expect(JSON.stringify(compactNext).length).toBeLessThan(JSON.stringify(next).length);
+
 		const packet = runCoreCli([
 			'agent-control',
 			...baseArgs,
@@ -348,6 +382,32 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(packet.agentControl.selectedPacket.taskContract.taskId).toBe(
 			'task_v2_agent_control_smoke'
 		);
+		expect(packet.agentControl.outputMode).toBe('full');
+		expect(packet.agentControl.selectedPacket.renderedPrompt).toEqual(expect.any(String));
+
+		const compactPacket = runCoreCli([
+			'agent-control',
+			...baseArgs,
+			'--agent-action',
+			'packet',
+			'--task',
+			'task_v2_agent_control_smoke',
+			'--compact'
+		]);
+		expect(compactPacket.agentControl).toMatchObject({
+			action: 'packet',
+			outputMode: 'compact',
+			selectedTaskId: 'task_v2_agent_control_smoke',
+			selectedPacket: {
+				taskContract: {
+					taskId: 'task_v2_agent_control_smoke'
+				},
+				stoppingConditions: expect.arrayContaining([expect.stringContaining('Stop before schema')])
+			},
+			fullOutputHint: expect.stringContaining('without --compact')
+		});
+		expect(compactPacket.agentControl.selectedPacket.renderedPrompt).toBeUndefined();
+		expect(JSON.stringify(compactPacket).length).toBeLessThan(JSON.stringify(packet).length);
 
 		const started = runCoreCli([
 			'agent-control',
@@ -473,10 +533,7 @@ describe('v2 core CLI work-loop smoke', () => {
 						'local-model unavailable',
 						'manual-only lacks agent-control coverage'
 					],
-					evidenceLabels: [
-						'run_v2_agent_control_smoke',
-						'tool_execution_v2_agent_control_smoke'
-					]
+					evidenceLabels: ['run_v2_agent_control_smoke', 'tool_execution_v2_agent_control_smoke']
 				})
 			]
 		});
@@ -819,12 +876,7 @@ describe('v2 core CLI work-loop smoke', () => {
 			'provider_v2_lifecycle_helper_smoke'
 		]);
 
-		const dryRun = runCoreCli([
-			'managed-run-lifecycle',
-			...baseArgs,
-			'--dry-run',
-			...completeArgs
-		]);
+		const dryRun = runCoreCli(['managed-run-lifecycle', ...baseArgs, '--dry-run', ...completeArgs]);
 		expect(dryRun.managedRunLifecycle).toMatchObject({
 			mode: 'complete',
 			dryRun: true,
@@ -942,9 +994,7 @@ describe('v2 core CLI work-loop smoke', () => {
 		});
 
 		const duplicate = runCoreCliFailure(['managed-run-lifecycle', ...baseArgs, ...completeArgs]);
-		expect(duplicate.stderr).toContain(
-			'cannot complete managed-run lifecycle from status done'
-		);
+		expect(duplicate.stderr).toContain('cannot complete managed-run lifecycle from status done');
 
 		runCoreCli([
 			'create-task',
@@ -1351,10 +1401,7 @@ describe('v2 core CLI work-loop smoke', () => {
 			expect.objectContaining({
 				capabilityName: 'agent-work-packet',
 				routeSelectionDecisionCount: 2,
-				selectedProviderIds: [
-					'provider_v2_route_report_codex',
-					'provider_v2_route_report_local'
-				],
+				selectedProviderIds: ['provider_v2_route_report_codex', 'provider_v2_route_report_local'],
 				selectedModelIds: ['codex-smoke', 'local-smoke'],
 				selectedRoutes: ['external-ai', 'local-model'],
 				evaluationResultIds: ['evaluation_result_v2_route_report_packet'],
@@ -1562,13 +1609,13 @@ describe('v2 core CLI work-loop smoke', () => {
 			'CLI commands returned JSON readbacks.'
 		]);
 		expect(run.taskDetail.runs).toEqual([
-				expect.objectContaining({
-					id: 'run_v2_core_smoke',
-					status: 'completed',
-					modelProviderId: 'provider_v2_core_smoke',
-					modelProviderKind: 'external_ai'
-				})
-			]);
+			expect.objectContaining({
+				id: 'run_v2_core_smoke',
+				status: 'completed',
+				modelProviderId: 'provider_v2_core_smoke',
+				modelProviderKind: 'external_ai'
+			})
+		]);
 
 		const toolExecution = runCoreCli([
 			'record-tool-execution',
@@ -2304,7 +2351,12 @@ describe('v2 core CLI work-loop smoke', () => {
 		);
 		expect(agentWorkPacket.agentWorkPacket.renderedPrompt.length).toBeLessThanOrEqual(4000);
 
-		const nextWorkAfterFollowup = runCoreCli(['next-work', ...baseArgs, '--goal', 'goal_v2_core_smoke']);
+		const nextWorkAfterFollowup = runCoreCli([
+			'next-work',
+			...baseArgs,
+			'--goal',
+			'goal_v2_core_smoke'
+		]);
 		expect(nextWorkAfterFollowup.candidates).toEqual([
 			expect.objectContaining({
 				taskId: 'task_v2_core_smoke_followup',
@@ -2439,7 +2491,12 @@ describe('v2 core CLI work-loop smoke', () => {
 		const snapshotFile = join(dirname(dbFile), 'v2-core-snapshot.json');
 		const secondSnapshotFile = join(dirname(dbFile), 'v2-core-snapshot-again.json');
 		const exported = runCoreCli(['export-snapshot', ...baseArgs, '--file', snapshotFile]);
-		const exportedAgain = runCoreCli(['export-snapshot', ...baseArgs, '--file', secondSnapshotFile]);
+		const exportedAgain = runCoreCli([
+			'export-snapshot',
+			...baseArgs,
+			'--file',
+			secondSnapshotFile
+		]);
 		expect(exported.format).toBe('ams-v2-core-snapshot-v1');
 		expect(exported.tableCounts).toMatchObject({
 			v2_core_projects: 1,

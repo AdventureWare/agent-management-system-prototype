@@ -132,6 +132,7 @@ type Options = {
 	query: string | null;
 	score: number | null;
 	limit: number;
+	compact: boolean;
 	reset: boolean;
 	json: boolean;
 	help: boolean;
@@ -237,6 +238,7 @@ function printHelp() {
 			'  --query <text>       Local retrieval query.',
 			'  --score <number>     Scenario-scoped evaluation score.',
 			'  --limit <number>     Result limit for next-work. Default: 10.',
+			'  --compact            Return compact agent-control next/packet readbacks.',
 			'  --mode <text>        Lifecycle helper mode. Currently: complete.',
 			'  --decision <id>      Explicit decision id when --id is used for another record.',
 			'  --followup-task <id> Optional follow-up task id for lifecycle closeout.',
@@ -303,6 +305,7 @@ function parseArgs(argv: string[]): Options {
 		query: null,
 		score: null,
 		limit: 10,
+		compact: false,
 		reset: false,
 		json: false,
 		help: false,
@@ -471,6 +474,9 @@ function parseArgs(argv: string[]): Options {
 				break;
 			case '--limit':
 				options.limit = Number.parseInt(next(), 10);
+				break;
+			case '--compact':
+				options.compact = true;
 				break;
 			case '--agent-action':
 				options.agentControlAction = next();
@@ -812,6 +818,34 @@ function firstNextWorkTaskId(nextWorkResult: ReturnType<typeof readV2CoreNextWor
 	return candidate.taskId;
 }
 
+type V2CoreAgentPacket = NonNullable<ReturnType<typeof readV2CoreAgentWorkPacket>>;
+
+function compactAgentControlPacket(packet: V2CoreAgentPacket) {
+	return {
+		taskContract: packet.taskContract,
+		readiness: packet.readiness,
+		contextSources: packet.contextSources.slice(0, 6),
+		currentRunState: packet.recentEvidence.currentTaskRuns.slice(0, 3),
+		trustedMemory: packet.trustedMemory.slice(0, 5).map((item) => ({
+			id: item.id,
+			title: item.title,
+			status: item.status,
+			scope: item.scope
+		})),
+		sourceLinks: packet.sourceLinks.slice(0, 20),
+		stoppingConditions: packet.stoppingConditions,
+		counts: {
+			contextSources: packet.contextSources.length,
+			currentTaskRuns: packet.recentEvidence.currentTaskRuns.length,
+			currentTaskArtifacts: packet.recentEvidence.currentTaskArtifacts.length,
+			currentTaskReviews: packet.recentEvidence.currentTaskReviews.length,
+			relevantDecisions: packet.relevantDecisions.length,
+			trustedMemory: packet.trustedMemory.length,
+			sourceLinks: packet.sourceLinks.length
+		}
+	};
+}
+
 function agentControl(options: Options) {
 	const action = requireOption(options.agentControlAction, '--agent-action <text>');
 	const db = openForCommand(options);
@@ -828,9 +862,16 @@ function agentControl(options: Options) {
 				{
 					agentControl: {
 						action,
+						outputMode: options.compact ? 'compact' : 'full',
 						nextWork: nextWorkResult,
 						selectedTaskId,
-						selectedPacket
+						selectedPacket:
+							options.compact && selectedPacket
+								? compactAgentControlPacket(selectedPacket)
+								: selectedPacket,
+						...(options.compact
+							? { fullOutputHint: 'Run the same command without --compact for full packet output.' }
+							: {})
 					}
 				},
 				options.json
@@ -844,7 +885,22 @@ function agentControl(options: Options) {
 			if (!selectedPacket) {
 				throw new Error(`Task ${taskId} was not found in the v2 core database.`);
 			}
-			printResult({ agentControl: { action, selectedTaskId: taskId, selectedPacket } }, options.json);
+			printResult(
+				{
+					agentControl: {
+						action,
+						outputMode: options.compact ? 'compact' : 'full',
+						selectedTaskId: taskId,
+						selectedPacket: options.compact
+							? compactAgentControlPacket(selectedPacket)
+							: selectedPacket,
+						...(options.compact
+							? { fullOutputHint: 'Run the same command without --compact for full packet output.' }
+							: {})
+					}
+				},
+				options.json
+			);
 			return;
 		}
 
@@ -1019,7 +1075,10 @@ function agentControl(options: Options) {
 							taskId,
 							runId: options.runId ?? undefined,
 							status: options.status ?? undefined,
-							inputSummary: requireOption(options.inputSummary ?? options.summary, '--input <text>'),
+							inputSummary: requireOption(
+								options.inputSummary ?? options.summary,
+								'--input <text>'
+							),
 							resultSummary: options.resultSummary ?? undefined,
 							errorSummary: options.errorSummary ?? undefined
 						})
