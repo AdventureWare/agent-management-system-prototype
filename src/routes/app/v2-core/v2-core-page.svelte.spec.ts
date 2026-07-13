@@ -274,6 +274,8 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Pause');
 		expect(document.body.textContent).toContain('Resume');
 		expect(document.body.textContent).toContain('Block');
+		expect(document.body.textContent).toContain('Selected task');
+		expect(document.body.textContent).toContain('Launch');
 		expect(document.body.textContent).toContain('Ready next step');
 		expect(document.body.textContent).toContain('No review items');
 		expect(document.body.textContent).toContain('Codex UI');
@@ -296,7 +298,10 @@ describe('/app/v2-core/+page.svelte', () => {
 			.element(page.getByRole('heading', { name: 'Operator console' }))
 			.toBeInTheDocument();
 		await expect.element(page.getByText('Unblock v2 operator work')).toBeInTheDocument();
-		await expect.element(page.getByText('Ready next step')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Launch' })).toBeInTheDocument();
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
+		).not.toBeNull();
 		await expect.element(page.getByText('Read-only v2 core console exists')).toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
 		expectNoHorizontalOverflow();

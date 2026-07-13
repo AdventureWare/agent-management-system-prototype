@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
@@ -6,6 +7,8 @@ import {
 	openV2CoreDbReadonly
 } from '$lib/server/v2-core-persistence';
 import {
+	launchV2CoreProviderRun,
+	readV2CoreNextWork,
 	readV2CoreOperatorConsole,
 	transitionV2CoreGoalStatus
 } from '$lib/server/v2-core-service';
@@ -61,6 +64,37 @@ function readRequiredFormText(form: FormData, field: string, label: string) {
 function readGoalControlSummary(form: FormData, actionId: string) {
 	const summary = form.get('summary')?.toString().trim() ?? '';
 	return summary || V2_CORE_GOAL_CONTROL_ACTIONS[actionId]?.defaultSummary || '';
+}
+
+function createUiRecordId(prefix: string) {
+	return `${prefix}_${randomUUID().replaceAll('-', '_')}`;
+}
+
+function readDispatchProviderId(db: ReturnType<typeof openV2CoreDb>, form: FormData) {
+	const explicitProviderId = form.get('providerId')?.toString().trim() ?? '';
+	if (explicitProviderId) {
+		return explicitProviderId;
+	}
+
+	return (
+		db
+			.prepare<[], { id: string }>(
+				`
+					select id
+					from v2_core_model_providers
+					where status = 'available'
+					order by
+						case kind
+							when 'external_ai' then 0
+							when 'local_model' then 1
+							else 2
+						end,
+						id
+					limit 1
+				`
+			)
+			.get()?.id ?? ''
+	);
 }
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -149,6 +183,75 @@ export const actions: Actions = {
 			return fail(400, {
 				ok: false,
 				action: 'applyGoalAction',
+				message: caught instanceof Error ? caught.message : String(caught)
+			});
+		} finally {
+			db.close();
+		}
+
+		const redirectUrl = new URL(url);
+		throw redirect(303, `${redirectUrl.pathname}${redirectUrl.search}`);
+	},
+	dispatchGoalWork: async ({ request, url }) => {
+		const dbFile = _getV2CoreUiDbFile();
+		const form = await request.formData();
+		const goalId = readRequiredFormText(form, 'goalId', 'Goal');
+		const taskId = readRequiredFormText(form, 'taskId', 'Task');
+
+		const db = openV2CoreDb({ dbFile });
+		try {
+			const goal = db
+				.prepare<[string], { id: string; status: string }>(
+					'select id, status from v2_core_goals where id = ?'
+				)
+				.get(goalId);
+			if (!goal) {
+				return fail(404, {
+					ok: false,
+					action: 'dispatchGoalWork',
+					message: 'V2 core goal not found.'
+				});
+			}
+			if (goal.status !== 'active') {
+				return fail(400, {
+					ok: false,
+					action: 'dispatchGoalWork',
+					message: `Goal ${goalId} is ${goal.status}; only running goals can dispatch work.`
+				});
+			}
+
+			const selectedCandidate = readV2CoreNextWork(db, { goalId, limit: 10 }).candidates.find(
+				(candidate) => candidate.taskId === taskId
+			);
+			if (!selectedCandidate || selectedCandidate.action !== 'start_task') {
+				return fail(400, {
+					ok: false,
+					action: 'dispatchGoalWork',
+					message: `Task ${taskId} is not dispatchable next work for goal ${goalId}.`
+				});
+			}
+
+			const modelProviderId = readDispatchProviderId(db, form);
+			if (!modelProviderId) {
+				return fail(400, {
+					ok: false,
+					action: 'dispatchGoalWork',
+					message: 'No available model provider is registered for dispatch.'
+				});
+			}
+
+			launchV2CoreProviderRun(db, {
+				runId: createUiRecordId('run_ui_goal_dispatch'),
+				taskId,
+				modelProviderId,
+				inputSummary: `Dispatch next work for goal ${goalId} from the v2 core operator console.`,
+				actionSummary:
+					'Launch selected next-work task through the existing provider-run path; execution result, artifacts, review, and acceptance remain explicit follow-up actions.'
+			});
+		} catch (caught) {
+			return fail(400, {
+				ok: false,
+				action: 'dispatchGoalWork',
 				message: caught instanceof Error ? caught.message : String(caught)
 			});
 		} finally {

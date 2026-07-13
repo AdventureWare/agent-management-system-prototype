@@ -68,6 +68,28 @@ async function applyGoalAction(
 	}
 }
 
+async function dispatchGoalWork(
+	goalId: string,
+	taskId: string,
+	url = 'http://localhost/app/v2-core?project=project_ui'
+) {
+	const form = new FormData();
+	form.set('goalId', goalId);
+	form.set('taskId', taskId);
+
+	try {
+		return await actions.dispatchGoalWork({
+			request: new Request(url, {
+				method: 'POST',
+				body: form
+			}),
+			url: new URL(url)
+		} as never);
+	} catch (caught) {
+		return caught;
+	}
+}
+
 function readGoalStatus(dbFile: string, goalId: string) {
 	const db = openV2CoreDb({ dbFile });
 
@@ -98,6 +120,40 @@ function readGoalTransitionDecisions(dbFile: string, goalId: string) {
 				`
 			)
 			.all(goalId);
+	} finally {
+		db.close();
+	}
+}
+
+function readTaskStatus(dbFile: string, taskId: string) {
+	const db = openV2CoreDb({ dbFile });
+
+	try {
+		return db
+			.prepare<[string], { status: string }>('select status from v2_core_tasks where id = ?')
+			.get(taskId)?.status;
+	} finally {
+		db.close();
+	}
+}
+
+function readTaskRuns(dbFile: string, taskId: string) {
+	const db = openV2CoreDb({ dbFile });
+
+	try {
+		return db
+			.prepare<
+				[string],
+				{ id: string; status: string; model_provider_id: string | null; action_summary: string }
+			>(
+				`
+					select id, status, model_provider_id, action_summary
+					from v2_core_runs
+					where task_id = ?
+					order by started_at desc, id desc
+				`
+			)
+			.all(taskId);
 	} finally {
 		db.close();
 	}
@@ -395,5 +451,80 @@ describe('/app/v2-core page server', () => {
 			}
 		});
 		expect(readGoalStatus(dbFile, 'goal_ui_paused')).toBe('paused');
+	});
+
+	it('dispatches selected next work for a running goal through provider-run launch', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await dispatchGoalWork('goal_ui', 'task_ui_next');
+
+		expect(result).toMatchObject({
+			status: 303,
+			location: '/app/v2-core?project=project_ui'
+		});
+		expect(readTaskStatus(dbFile, 'task_ui_next')).toBe('in_progress');
+		expect(readTaskRuns(dbFile, 'task_ui_next')[0]).toMatchObject({
+			status: 'planned',
+			model_provider_id: 'provider_codex_ui',
+			action_summary:
+				'Launch selected next-work task through the existing provider-run path; execution result, artifacts, review, and acceptance remain explicit follow-up actions.'
+		});
+
+		const reloaded = await loadCorePage('http://localhost/app/v2-core?project=project_ui');
+		expect(
+			reloaded.operatorConsole?.recentRuns.find(
+				(run: { taskId: string }) => run.taskId === 'task_ui_next'
+			)
+		).toMatchObject({
+			taskId: 'task_ui_next',
+			status: 'planned',
+			endedAt: null
+		});
+	});
+
+	it('rejects dispatch for paused, blocked, missing, and already-dispatched work', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const paused = await dispatchGoalWork('goal_ui_paused', 'task_ui_next');
+		expect(paused).toMatchObject({
+			status: 400,
+			data: {
+				action: 'dispatchGoalWork',
+				message: 'Goal goal_ui_paused is paused; only running goals can dispatch work.'
+			}
+		});
+
+		const blocked = await dispatchGoalWork('goal_ui_blocked', 'task_ui_next');
+		expect(blocked).toMatchObject({
+			status: 400,
+			data: {
+				action: 'dispatchGoalWork',
+				message: 'Goal goal_ui_blocked is blocked; only running goals can dispatch work.'
+			}
+		});
+
+		const missingNextWork = await dispatchGoalWork('goal_ui', 'task_not_next');
+		expect(missingNextWork).toMatchObject({
+			status: 400,
+			data: {
+				action: 'dispatchGoalWork',
+				message: 'Task task_not_next is not dispatchable next work for goal goal_ui.'
+			}
+		});
+
+		await dispatchGoalWork('goal_ui', 'task_ui_next');
+		const alreadyInProgress = await dispatchGoalWork('goal_ui', 'task_ui_next');
+		expect(alreadyInProgress).toMatchObject({
+			status: 400,
+			data: {
+				action: 'dispatchGoalWork',
+				message: 'Task task_ui_next is not dispatchable next work for goal goal_ui.'
+			}
+		});
+		expect(readTaskRuns(dbFile, 'task_ui_next')).toHaveLength(1);
 	});
 });

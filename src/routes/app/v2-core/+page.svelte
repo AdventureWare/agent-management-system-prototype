@@ -45,6 +45,20 @@
 		return resolve(`/app/v2-core/tasks/${taskId}?mode=read`);
 	}
 
+	function nextWorkForGoal(goalId: string) {
+		return (
+			operatorConsole?.nextWork.candidates.find(
+				(candidate) => candidate.goalId === goalId && candidate.action === 'start_task'
+			) ?? null
+		);
+	}
+
+	function currentRunForGoal(goalId: string) {
+		return (
+			operatorConsole?.recentRuns.find((run) => run.goalId === goalId && run.endedAt === null) ?? null
+		);
+	}
+
 	function goalTransitionText(goal: {
 		latestGoalStatusTransition?: { summary: string; rationale: string } | null;
 	}) {
@@ -78,6 +92,14 @@
 			default:
 				return [];
 		}
+	}
+
+	function dispatchState(goal: { goalId: string; status: string }) {
+		return {
+			currentRun: currentRunForGoal(goal.goalId),
+			nextWork: nextWorkForGoal(goal.goalId),
+			canDispatch: goal.status === 'active'
+		};
 	}
 </script>
 
@@ -138,6 +160,7 @@
 										<strong>{group.goals.length}</strong>
 									</div>
 									{#each group.goals as goal (goal.goalId)}
+										{@const dispatch = dispatchState(goal)}
 										<article class="v2-core-row">
 											<div>
 												<p class="v2-core-row-title">{goal.title}</p>
@@ -167,6 +190,26 @@
 															</form>
 														{/each}
 													</div>
+												{/if}
+												{#if dispatch.currentRun}
+													<p class="v2-core-row-meta">
+														Current run: {dispatch.currentRun.runId} · {dispatch.currentRun.status}
+													</p>
+												{/if}
+												{#if dispatch.canDispatch && dispatch.nextWork}
+													<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+														<input type="hidden" name="goalId" value={goal.goalId} />
+														<input type="hidden" name="taskId" value={dispatch.nextWork.taskId} />
+														<div>
+															<span>Selected task</span>
+															<a href={taskHref(dispatch.nextWork.taskId)}>
+																{dispatch.nextWork.title}
+															</a>
+														</div>
+														<button type="submit">Launch</button>
+													</form>
+												{:else if dispatch.canDispatch}
+													<p class="v2-core-row-meta">No dispatchable next work</p>
 												{/if}
 											</div>
 										</article>
@@ -572,6 +615,54 @@
 		background: var(--color-primary-100);
 	}
 
+	.v2-core-dispatch-form {
+		display: grid;
+		grid-template-columns: minmax(10rem, 1fr) auto;
+		gap: 0.45rem;
+		align-items: center;
+		margin-top: 0.35rem;
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding-top: 0.45rem;
+	}
+
+	.v2-core-dispatch-form div {
+		display: grid;
+		gap: 0.1rem;
+	}
+
+	.v2-core-dispatch-form span {
+		color: var(--color-surface-700);
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.v2-core-dispatch-form a {
+		color: var(--color-primary-700);
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-dispatch-form a:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-dispatch-form button {
+		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 20%);
+		border-radius: 0.35rem;
+		padding: 0.4rem 0.65rem;
+		background: var(--color-primary-600);
+		color: white;
+		font-size: 0.76rem;
+		font-weight: 750;
+		cursor: pointer;
+	}
+
+	.v2-core-dispatch-form button:hover {
+		background: var(--color-primary-700);
+	}
+
 	.v2-core-badge {
 		display: inline-flex;
 		max-width: 10rem;
@@ -637,6 +728,11 @@
 		}
 
 		.v2-core-goal-form {
+			grid-template-columns: 1fr;
+			width: 100%;
+		}
+
+		.v2-core-dispatch-form {
 			grid-template-columns: 1fr;
 			width: 100%;
 		}
