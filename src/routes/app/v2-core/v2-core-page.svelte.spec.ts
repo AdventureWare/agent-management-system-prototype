@@ -65,6 +65,37 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 		};
 	}
 
+	if (scopedGoalId === 'goal_ui') {
+		return {
+			goal: {
+				goalId: 'goal_ui',
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				parentGoalId: null,
+				title: 'Make v2 core inspectable',
+				status: 'active',
+				openTaskCount: 1,
+				doneTaskCount: 1,
+				latestGoalStatusTransition: null
+			},
+			queueState: 'ready_to_dispatch',
+			currentRun: null,
+			selectedTask: {
+				taskId: 'task_ui_next',
+				title: 'Ready next step',
+				status: 'ready',
+				goalId: 'goal_ui',
+				goalTitle: 'Make v2 core inspectable',
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				action: 'start_task',
+				reason: 'Next ready task.'
+			},
+			recentAcceptedArtifact: null,
+			trustedMemory
+		};
+	}
+
 	return {
 		goal: {
 			goalId: 'goal_ui_child_running',
@@ -90,6 +121,48 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 		recentAcceptedArtifact: null,
 		trustedMemory
 	};
+}
+
+function scopedChildGoalRollupFor(scopedGoalId: string | null) {
+	if (scopedGoalId !== 'goal_ui') {
+		return [];
+	}
+
+	return [
+		{
+			goalId: 'goal_ui_child_running',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Run child goal work',
+			status: 'active',
+			openTaskCount: 1,
+			doneTaskCount: 0,
+			queueState: 'running',
+			currentRun: {
+				runId: 'run_ui_child_current',
+				taskId: 'task_ui_child_current',
+				taskTitle: 'Current child goal run',
+				status: 'planned',
+				modelProviderId: 'provider_codex_ui',
+				modelProviderName: 'Codex UI'
+			},
+			selectedTask: null
+		},
+		{
+			goalId: 'goal_ui_blocked',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Unblock v2 operator work',
+			status: 'blocked',
+			openTaskCount: 0,
+			doneTaskCount: 0,
+			queueState: 'blocked',
+			currentRun: null,
+			selectedTask: null
+		}
+	];
 }
 
 function renderPage(options: { scopedGoalId?: string | null } = {}) {
@@ -276,6 +349,7 @@ function renderPage(options: { scopedGoalId?: string | null } = {}) {
 					]
 				},
 				scopedGoalSummary: scopedGoalSummaryFor(scopedGoalId),
+				scopedChildGoalRollup: scopedChildGoalRollupFor(scopedGoalId),
 				workQueue: [
 					{
 						goalId: 'goal_ui',
@@ -573,6 +647,34 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 		expect(document.body.textContent).not.toContain('Scoped to goal');
 		expect(document.body.textContent).not.toContain('Goal summary');
+		expect(document.body.textContent).not.toContain('Child goals');
+	});
+
+	it('renders immediate child-goal rollup for a parent goal scope', () => {
+		renderPage({ scopedGoalId: 'goal_ui' });
+
+		const childRollup = document.querySelector('section[aria-labelledby="v2-core-child-goal-rollup"]');
+		expect(childRollup).not.toBeNull();
+		expect(childRollup?.textContent).toContain('Child goals');
+		expect(childRollup?.textContent).toContain('Run child goal work');
+		expect(childRollup?.textContent).toContain('Unblock v2 operator work');
+		expect(childRollup?.textContent).toContain('Running');
+		expect(childRollup?.textContent).toContain('Blocked');
+		expect(childRollup?.textContent).toContain('1 open / 0 done');
+		expect(childRollup?.textContent).toContain('run_ui_child_current');
+		expect(
+			childRollup?.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup?.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_blocked"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup?.querySelector('a[href="/app/v2-core/tasks/task_ui_child_current?mode=read"]')
+		).not.toBeNull();
 	});
 
 	it('renders scoped goal state and project-scope return link', () => {
@@ -598,6 +700,7 @@ describe('/app/v2-core/+page.svelte', () => {
 				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
 			)
 		).not.toBeNull();
+		expect(document.querySelector('section[aria-labelledby="v2-core-child-goal-rollup"]')).toBeNull();
 	});
 
 	it('renders blocked and paused scoped goal summaries without current work', () => {
@@ -623,12 +726,15 @@ describe('/app/v2-core/+page.svelte', () => {
 
 	it('keeps the read-only operator console usable in a phone viewport', async () => {
 		await page.viewport(390, 844);
-		renderPage({ scopedGoalId: 'goal_ui_child_running' });
+		renderPage({ scopedGoalId: 'goal_ui' });
 
 		await expect
 			.element(page.getByRole('heading', { name: 'Operator console' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByRole('heading', { name: 'Run child goal work' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('heading', { name: 'Make v2 core inspectable' }))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('heading', { name: 'Child goals' })).toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');

@@ -580,9 +580,51 @@ describe('/app/v2-core page server', () => {
 			'Read-only v2 core console exists'
 		);
 		expect(result.operatorConsole?.scopedGoalSummary).toBeNull();
+		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([]);
 		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
 		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
+	});
+
+	it('loads immediate child-goal rollup for a parent goal scope', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await loadCorePage('http://localhost/app/v2-core?project=project_ui&goal=goal_ui');
+
+		expect(result.status).toBe('ready');
+		expect(result.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui',
+				title: 'Make v2 core inspectable'
+			}),
+			queueState: 'ready_to_dispatch',
+			selectedTask: expect.objectContaining({
+				taskId: 'task_ui_next'
+			})
+		});
+		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_ui_child_running',
+				parentGoalId: 'goal_ui',
+				queueState: 'running',
+				openTaskCount: 1,
+				doneTaskCount: 0,
+				currentRun: expect.objectContaining({
+					runId: 'run_ui_child_current',
+					taskId: 'task_ui_child_current'
+				}),
+				selectedTask: null
+			}),
+			expect.objectContaining({
+				goalId: 'goal_ui_blocked',
+				parentGoalId: 'goal_ui',
+				queueState: 'blocked',
+				currentRun: null,
+				selectedTask: null
+			})
+		]);
 	});
 
 	it('loads a goal-scoped operator console read model', async () => {
@@ -650,6 +692,7 @@ describe('/app/v2-core page server', () => {
 			})
 		]);
 		expect(result.operatorConsole?.recentArtifacts).toEqual([]);
+		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([]);
 	});
 
 	it('loads a scoped summary for blocked and paused goals without runnable work', async () => {

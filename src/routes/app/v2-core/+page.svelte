@@ -38,6 +38,7 @@
 	let dependencySummary = $derived(operatorConsole?.dependencyReport.summary ?? null);
 	let snapshotRows = $derived(Object.entries(operatorConsole?.snapshotStatus.tableCounts ?? {}));
 	let scopedGoalSummary = $derived(operatorConsole?.scopedGoalSummary ?? null);
+	let scopedChildGoalRollup = $derived(operatorConsole?.scopedChildGoalRollup ?? []);
 
 	function formatCount(value: number | undefined) {
 		return value ?? 0;
@@ -248,6 +249,49 @@
 								<strong>None available</strong>
 							{/if}
 						</div>
+					</div>
+				</section>
+			{/if}
+
+			{#if scopedChildGoalRollup.length}
+				<section class="v2-core-panel" aria-labelledby="v2-core-child-goal-rollup">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-child-goal-rollup">Child goals</h2>
+						<span>{scopedChildGoalRollup.length} immediate</span>
+					</header>
+					<div class="v2-core-list">
+						{#each scopedChildGoalRollup as childGoal (childGoal.goalId)}
+							<article class="v2-core-row v2-core-queue-row">
+								<div>
+									<a
+										class="v2-core-row-title v2-core-row-link"
+										href={goalHref(childGoal.goalId, childGoal.projectId)}
+									>
+										{childGoal.title}
+									</a>
+									<p class="v2-core-row-meta">
+										{childGoal.goalId} · {childGoal.openTaskCount} open / {childGoal.doneTaskCount} done
+									</p>
+								</div>
+								<div class="v2-core-row-side">
+									<span class={['v2-core-badge', `v2-core-badge-${childGoal.queueState}`]}>
+										{queueStateLabel(childGoal.queueState)}
+									</span>
+									<span>{childGoal.status}</span>
+									{#if childGoal.currentRun}
+										<a href={taskHref(childGoal.currentRun.taskId)}>
+											{childGoal.currentRun.runId}
+										</a>
+									{:else if childGoal.selectedTask}
+										<a href={taskHref(childGoal.selectedTask.taskId)}>
+											{childGoal.selectedTask.title}
+										</a>
+									{:else}
+										<span>No selected work</span>
+									{/if}
+								</div>
+							</article>
+						{/each}
 					</div>
 				</section>
 			{/if}
@@ -886,6 +930,18 @@
 		justify-items: end;
 		gap: 0.25rem;
 		text-align: right;
+	}
+
+	.v2-core-row-side a {
+		color: var(--color-primary-700);
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-row-side a:hover {
+		text-decoration: underline;
 	}
 
 	.v2-core-queue-row {

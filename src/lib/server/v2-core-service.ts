@@ -703,6 +703,7 @@ export type V2CoreOperatorConsole = {
 	};
 	workQueue: V2CoreOperatorConsoleWorkQueueItem[];
 	scopedGoalSummary: V2CoreOperatorConsoleScopedGoalSummary | null;
+	scopedChildGoalRollup: V2CoreOperatorConsoleWorkQueueItem[];
 	nextWork: V2CoreNextWork;
 	reviewQueue: Array<{
 		artifactId: string;
@@ -4427,6 +4428,86 @@ function makeV2CoreRetrievalSnippet(value: string, terms: string[]) {
 	return `${prefix}${compact.slice(start, start + 220)}${suffix}`;
 }
 
+type V2CoreOperatorConsoleGoalRow = {
+	goal_id: string;
+	project_id: string;
+	project_name: string;
+	parent_goal_id: string | null;
+	title: string;
+	status: string;
+	open_task_count: number;
+	done_task_count: number;
+	decision_id: string | null;
+	decision_summary: string | null;
+	decision_rationale: string | null;
+	decision_decided_at: string | null;
+};
+
+function readV2CoreOperatorConsoleGoals(
+	db: Database.Database,
+	conditions: string[],
+	params: string[]
+): V2CoreOperatorConsoleGoal[] {
+	return db
+		.prepare<string[], V2CoreOperatorConsoleGoalRow>(
+			`
+				select
+					goal.id as goal_id,
+					goal.project_id,
+					project.name as project_name,
+					goal.parent_goal_id,
+					goal.title,
+					goal.status,
+					count(distinct case when task.status not in ('done', 'canceled') then task.id end) as open_task_count,
+					count(distinct case when task.status = 'done' then task.id end) as done_task_count,
+					decision.id as decision_id,
+					decision.summary as decision_summary,
+					decision.rationale as decision_rationale,
+					decision.decided_at as decision_decided_at
+				from v2_core_goals goal
+				join v2_core_projects project on project.id = goal.project_id
+				left join v2_core_tasks task on task.goal_id = goal.id
+				left join v2_core_decisions decision on decision.id = (
+					select latest_decision.id
+					from v2_core_decisions latest_decision
+					where latest_decision.goal_id = goal.id
+						and latest_decision.decision_type = 'goal_status_transition'
+					order by latest_decision.decided_at desc, latest_decision.id desc
+					limit 1
+				)
+				where ${conditions.join(' and ')}
+				group by goal.id
+				order by
+					case goal.status
+						when 'active' then 0
+						when 'blocked' then 1
+						when 'paused' then 2
+						else 3
+					end,
+					goal.title
+			`
+		)
+		.all(...params)
+		.map((goal) => ({
+			goalId: goal.goal_id,
+			projectId: goal.project_id,
+			projectName: goal.project_name,
+			parentGoalId: goal.parent_goal_id,
+			title: goal.title,
+			status: goal.status,
+			openTaskCount: goal.open_task_count,
+			doneTaskCount: goal.done_task_count,
+			latestGoalStatusTransition: goal.decision_id
+				? {
+						decisionId: goal.decision_id,
+						summary: goal.decision_summary ?? '',
+						rationale: goal.decision_rationale ?? '',
+						decidedAt: goal.decision_decided_at ?? ''
+					}
+				: null
+		}));
+}
+
 export function readV2CoreOperatorConsole(
 	db: Database.Database,
 	options: { projectId?: string | null; goalId?: string | null; limit?: number } = {}
@@ -4457,85 +4538,19 @@ export function readV2CoreOperatorConsole(
 		goalParams.push(scope.goalId);
 	}
 
-	const activeGoals = db
-		.prepare<
-			string[],
-			{
-				goal_id: string;
-				project_id: string;
-				project_name: string;
-				parent_goal_id: string | null;
-				title: string;
-				status: string;
-				open_task_count: number;
-				done_task_count: number;
-				decision_id: string | null;
-				decision_summary: string | null;
-				decision_rationale: string | null;
-				decision_decided_at: string | null;
-			}
-		>(
-			`
-				select
-					goal.id as goal_id,
-					goal.project_id,
-					project.name as project_name,
-					goal.parent_goal_id,
-					goal.title,
-					goal.status,
-					count(distinct case when task.status not in ('done', 'canceled') then task.id end) as open_task_count,
-					count(distinct case when task.status = 'done' then task.id end) as done_task_count,
-					decision.id as decision_id,
-					decision.summary as decision_summary,
-					decision.rationale as decision_rationale,
-					decision.decided_at as decision_decided_at
-				from v2_core_goals goal
-				join v2_core_projects project on project.id = goal.project_id
-				left join v2_core_tasks task on task.goal_id = goal.id
-				left join v2_core_decisions decision on decision.id = (
-					select latest_decision.id
-					from v2_core_decisions latest_decision
-					where latest_decision.goal_id = goal.id
-						and latest_decision.decision_type = 'goal_status_transition'
-					order by latest_decision.decided_at desc, latest_decision.id desc
-					limit 1
-				)
-				where ${goalConditions.join(' and ')}
-				group by goal.id
-				order by
-					case goal.status
-						when 'active' then 0
-						when 'blocked' then 1
-						when 'paused' then 2
-						else 3
-					end,
-					goal.title
-			`
-		)
-		.all(...goalParams)
-		.map((goal) => ({
-			goalId: goal.goal_id,
-			projectId: goal.project_id,
-			projectName: goal.project_name,
-			parentGoalId: goal.parent_goal_id,
-			title: goal.title,
-			status: goal.status,
-			openTaskCount: goal.open_task_count,
-			doneTaskCount: goal.done_task_count,
-			latestGoalStatusTransition: goal.decision_id
-				? {
-						decisionId: goal.decision_id,
-						summary: goal.decision_summary ?? '',
-						rationale: goal.decision_rationale ?? '',
-						decidedAt: goal.decision_decided_at ?? ''
-					}
-				: null
-		}));
+	const activeGoals = readV2CoreOperatorConsoleGoals(db, goalConditions, goalParams);
 	const goalStatusGroups = {
 		running: activeGoals.filter((goal) => goal.status === 'active'),
 		blocked: activeGoals.filter((goal) => goal.status === 'blocked'),
 		paused: activeGoals.filter((goal) => goal.status === 'paused')
 	};
+	const scopedChildGoals = scope.goalId
+		? readV2CoreOperatorConsoleGoals(
+				db,
+				['goal.parent_goal_id = ?', "goal.status in ('active', 'blocked', 'paused')"],
+				[scope.goalId]
+			)
+		: [];
 	const reviewQueue = db
 		.prepare<
 			[...string[], number],
@@ -4679,6 +4694,41 @@ export function readV2CoreOperatorConsole(
 			`
 		)
 		.all(...taskParams);
+	const scopedChildGoalIds = scopedChildGoals.map((goal) => goal.goalId);
+	const scopedChildGoalRuns =
+		scopedChildGoalIds.length > 0
+			? db
+					.prepare<
+						string[],
+						{
+							run_id: string;
+							task_id: string;
+							task_title: string;
+							goal_id: string;
+							status: string;
+							model_provider_id: string | null;
+							model_provider_name: string | null;
+						}
+					>(
+						`
+							select
+								run.id as run_id,
+								task.id as task_id,
+								task.title as task_title,
+								task.goal_id,
+								run.status,
+								run.model_provider_id,
+								provider.name as model_provider_name
+							from v2_core_runs run
+							join v2_core_tasks task on task.id = run.task_id
+							left join v2_core_model_providers provider on provider.id = run.model_provider_id
+							where run.ended_at is null
+								and task.goal_id in (${scopedChildGoalIds.map(() => '?').join(', ')})
+							order by run.started_at desc, run.id desc
+						`
+					)
+					.all(...scopedChildGoalIds)
+			: [];
 	const recentArtifacts = db
 		.prepare<
 			[...string[], number],
@@ -4732,16 +4782,39 @@ export function readV2CoreOperatorConsole(
 			currentRunByGoalId.set(run.goal_id, run);
 		}
 	}
+	const scopedChildRunByGoalId = new Map<string, (typeof scopedChildGoalRuns)[number]>();
+	for (const run of scopedChildGoalRuns) {
+		if (!scopedChildRunByGoalId.has(run.goal_id)) {
+			scopedChildRunByGoalId.set(run.goal_id, run);
+		}
+	}
 	const selectedTaskByGoalId = new Map<string, V2CoreNextWork['candidates'][number]>();
 	for (const candidate of nextWork.candidates) {
 		if (candidate.action === 'start_task' && !selectedTaskByGoalId.has(candidate.goalId)) {
 			selectedTaskByGoalId.set(candidate.goalId, candidate);
 		}
 	}
-	const workQueue: V2CoreOperatorConsoleWorkQueueItem[] = activeGoals.map((goal) => {
-		const currentRun = currentRunByGoalId.get(goal.goalId) ?? null;
-		const selectedTask =
-			goal.status === 'active' && !currentRun ? (selectedTaskByGoalId.get(goal.goalId) ?? null) : null;
+	const selectedChildTaskByGoalId = new Map<string, V2CoreNextWork['candidates'][number]>();
+	for (const goal of scopedChildGoals) {
+		if (goal.status !== 'active' || scopedChildRunByGoalId.has(goal.goalId)) {
+			continue;
+		}
+
+		const candidate =
+			readV2CoreNextWork(db, {
+				goalId: goal.goalId,
+				limit: 1
+			}).candidates.find((item) => item.action === 'start_task') ?? null;
+		if (candidate) {
+			selectedChildTaskByGoalId.set(goal.goalId, candidate);
+		}
+	}
+
+	function toWorkQueueItem(
+		goal: V2CoreOperatorConsoleGoal,
+		currentRun: (typeof currentGoalRuns)[number] | null,
+		selectedTask: V2CoreNextWork['candidates'][number] | null
+	): V2CoreOperatorConsoleWorkQueueItem {
 		const queueState: V2CoreOperatorConsoleWorkQueueItem['queueState'] =
 			goal.status === 'blocked'
 				? 'blocked'
@@ -4770,7 +4843,26 @@ export function readV2CoreOperatorConsole(
 				: null,
 			selectedTask
 		};
+	}
+
+	const workQueue: V2CoreOperatorConsoleWorkQueueItem[] = activeGoals.map((goal) => {
+		const currentRun = currentRunByGoalId.get(goal.goalId) ?? null;
+		const selectedTask =
+			goal.status === 'active' && !currentRun ? (selectedTaskByGoalId.get(goal.goalId) ?? null) : null;
+
+		return toWorkQueueItem(goal, currentRun, selectedTask);
 	});
+	const scopedChildGoalRollup: V2CoreOperatorConsoleWorkQueueItem[] = scopedChildGoals.map(
+		(goal) => {
+			const currentRun = scopedChildRunByGoalId.get(goal.goalId) ?? null;
+			const selectedTask =
+				goal.status === 'active' && !currentRun
+					? (selectedChildTaskByGoalId.get(goal.goalId) ?? null)
+					: null;
+
+			return toWorkQueueItem(goal, currentRun, selectedTask);
+		}
+	);
 	const memory = scope.projectId
 		? readV2CoreMemoryForContext(db, {
 				projectId: scope.projectId
@@ -4801,6 +4893,7 @@ export function readV2CoreOperatorConsole(
 		goalStatusGroups,
 		workQueue,
 		scopedGoalSummary,
+		scopedChildGoalRollup,
 		nextWork,
 		reviewQueue,
 		recentRuns,
