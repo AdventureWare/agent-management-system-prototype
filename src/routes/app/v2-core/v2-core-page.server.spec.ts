@@ -579,6 +579,7 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.memory?.items[0]?.title).toBe(
 			'Read-only v2 core console exists'
 		);
+		expect(result.operatorConsole?.scopedGoalSummary).toBeNull();
 		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
 		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
@@ -601,6 +602,25 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.scope).toEqual({
 			projectId: 'project_ui',
 			goalId: 'goal_ui_child_running'
+		});
+		expect(result.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui_child_running',
+				title: 'Run child goal work',
+				parentGoalId: 'goal_ui',
+				openTaskCount: 1,
+				doneTaskCount: 0
+			}),
+			queueState: 'running',
+			currentRun: expect.objectContaining({
+				runId: 'run_ui_child_current',
+				taskId: 'task_ui_child_current'
+			}),
+			selectedTask: null,
+			trustedMemory: expect.objectContaining({
+				id: 'memory_ui',
+				status: 'trusted'
+			})
 		});
 		expect(result.operatorConsole?.workQueue).toEqual([
 			expect.objectContaining({
@@ -630,6 +650,40 @@ describe('/app/v2-core page server', () => {
 			})
 		]);
 		expect(result.operatorConsole?.recentArtifacts).toEqual([]);
+	});
+
+	it('loads a scoped summary for blocked and paused goals without runnable work', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const blocked = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_blocked'
+		);
+		const paused = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_paused'
+		);
+
+		expect(blocked.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui_blocked',
+				status: 'blocked',
+				parentGoalId: 'goal_ui'
+			}),
+			queueState: 'blocked',
+			currentRun: null,
+			selectedTask: null
+		});
+		expect(paused.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui_paused',
+				status: 'paused',
+				parentGoalId: null
+			}),
+			queueState: 'paused',
+			currentRun: null,
+			selectedTask: null
+		});
 	});
 
 	it('applies bounded goal control actions through existing goal transitions', async () => {

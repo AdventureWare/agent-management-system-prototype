@@ -3,6 +3,95 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
+function scopedGoalSummaryFor(scopedGoalId: string | null) {
+	if (!scopedGoalId) {
+		return null;
+	}
+
+	const trustedMemory = {
+		id: 'memory_ui',
+		title: 'Read-only v2 core console exists',
+		body: 'The operator console can inspect v2 core status.',
+		scope: 'project',
+		status: 'trusted',
+		sources: [
+			{
+				sourceTable: 'v2_core_reviews',
+				sourceId: 'review_ui_done',
+				reason: 'Approved review.'
+			}
+		]
+	};
+
+	if (scopedGoalId === 'goal_ui_blocked') {
+		return {
+			goal: {
+				goalId: 'goal_ui_blocked',
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				parentGoalId: 'goal_ui',
+				title: 'Unblock v2 operator work',
+				status: 'blocked',
+				openTaskCount: 0,
+				doneTaskCount: 0,
+				latestGoalStatusTransition: null
+			},
+			queueState: 'blocked',
+			currentRun: null,
+			selectedTask: null,
+			recentAcceptedArtifact: null,
+			trustedMemory
+		};
+	}
+
+	if (scopedGoalId === 'goal_ui_paused') {
+		return {
+			goal: {
+				goalId: 'goal_ui_paused',
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				parentGoalId: null,
+				title: 'Paused v2 track',
+				status: 'paused',
+				openTaskCount: 0,
+				doneTaskCount: 0,
+				latestGoalStatusTransition: null
+			},
+			queueState: 'paused',
+			currentRun: null,
+			selectedTask: null,
+			recentAcceptedArtifact: null,
+			trustedMemory
+		};
+	}
+
+	return {
+		goal: {
+			goalId: 'goal_ui_child_running',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Run child goal work',
+			status: 'active',
+			openTaskCount: 1,
+			doneTaskCount: 0,
+			latestGoalStatusTransition: null
+		},
+		queueState: 'running',
+		currentRun: {
+			runId: 'run_ui_child_current',
+			taskId: 'task_ui_child_current',
+			taskTitle: 'Current child goal run',
+			status: 'planned',
+			modelProviderId: 'provider_codex_ui',
+			modelProviderName: 'Codex UI'
+		},
+		selectedTask: null,
+		recentAcceptedArtifact: null,
+		trustedMemory
+	};
+}
+
 function renderPage(options: { scopedGoalId?: string | null } = {}) {
 	const scopedGoalId = options.scopedGoalId ?? null;
 
@@ -186,6 +275,7 @@ function renderPage(options: { scopedGoalId?: string | null } = {}) {
 						}
 					]
 				},
+				scopedGoalSummary: scopedGoalSummaryFor(scopedGoalId),
 				workQueue: [
 					{
 						goalId: 'goal_ui',
@@ -482,6 +572,7 @@ describe('/app/v2-core/+page.svelte', () => {
 			)
 		).not.toBeNull();
 		expect(document.body.textContent).not.toContain('Scoped to goal');
+		expect(document.body.textContent).not.toContain('Goal summary');
 	});
 
 	it('renders scoped goal state and project-scope return link', () => {
@@ -489,8 +580,18 @@ describe('/app/v2-core/+page.svelte', () => {
 
 		expect(document.body.textContent).toContain('Scoped to goal');
 		expect(document.body.textContent).toContain('goal_ui_child_running');
+		expect(document.body.textContent).toContain('Goal summary');
+		expect(document.body.textContent).toContain('Run child goal work');
+		expect(document.body.textContent).toContain('1 open / 0 done');
+		expect(document.body.textContent).toContain('run_ui_child_current');
+		expect(document.body.textContent).toContain('None selected');
+		expect(document.body.textContent).toContain('None recent');
+		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		expect(
 			document.querySelector('a[href="/app/v2-core?project=project_ui"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_child_current?mode=read"]')
 		).not.toBeNull();
 		expect(
 			document.querySelector(
@@ -499,13 +600,35 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 	});
 
+	it('renders blocked and paused scoped goal summaries without current work', () => {
+		renderPage({ scopedGoalId: 'goal_ui_blocked' });
+
+		expect(document.body.textContent).toContain('Goal summary');
+		expect(document.body.textContent).toContain('Unblock v2 operator work');
+		expect(document.body.textContent).toContain('blocked');
+		expect(document.body.textContent).toContain('Blocked');
+		expect(document.body.textContent).toContain('None');
+		expect(document.body.textContent).toContain('None selected');
+
+		document.body.innerHTML = '';
+		renderPage({ scopedGoalId: 'goal_ui_paused' });
+
+		expect(document.body.textContent).toContain('Goal summary');
+		expect(document.body.textContent).toContain('Paused v2 track');
+		expect(document.body.textContent).toContain('paused');
+		expect(document.body.textContent).toContain('Paused');
+		expect(document.body.textContent).toContain('None');
+		expect(document.body.textContent).toContain('None selected');
+	});
+
 	it('keeps the read-only operator console usable in a phone viewport', async () => {
 		await page.viewport(390, 844);
-		renderPage();
+		renderPage({ scopedGoalId: 'goal_ui_child_running' });
 
 		await expect
 			.element(page.getByRole('heading', { name: 'Operator console' }))
 			.toBeInTheDocument();
+		await expect.element(page.getByRole('heading', { name: 'Run child goal work' })).toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
@@ -515,7 +638,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Launch task' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
-		await expect.element(page.getByText('run_ui_child_current')).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'run_ui_child_current' }))
+			.toBeInTheDocument();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
 		).not.toBeNull();
@@ -527,7 +652,7 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Review task' }))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Read-only v2 core console exists')).toBeInTheDocument();
+		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
 		expectNoHorizontalOverflow();
 	});

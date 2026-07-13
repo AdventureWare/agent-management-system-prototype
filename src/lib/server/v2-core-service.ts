@@ -669,6 +669,26 @@ export type V2CoreOperatorConsoleWorkQueueItem = {
 	selectedTask: V2CoreNextWork['candidates'][number] | null;
 };
 
+export type V2CoreOperatorConsoleRecentArtifact = {
+	artifactId: string;
+	taskId: string | null;
+	runId: string | null;
+	projectId: string;
+	title: string;
+	uri: string;
+	role: string;
+	status: string;
+};
+
+export type V2CoreOperatorConsoleScopedGoalSummary = {
+	goal: V2CoreOperatorConsoleGoal;
+	queueState: V2CoreOperatorConsoleWorkQueueItem['queueState'] | null;
+	currentRun: V2CoreOperatorConsoleWorkQueueItem['currentRun'];
+	selectedTask: V2CoreNextWork['candidates'][number] | null;
+	recentAcceptedArtifact: V2CoreOperatorConsoleRecentArtifact | null;
+	trustedMemory: V2CoreMemoryForContext['items'][number] | null;
+};
+
 export type V2CoreOperatorConsole = {
 	scope: {
 		projectId: string | null;
@@ -682,6 +702,7 @@ export type V2CoreOperatorConsole = {
 		paused: V2CoreOperatorConsoleGoal[];
 	};
 	workQueue: V2CoreOperatorConsoleWorkQueueItem[];
+	scopedGoalSummary: V2CoreOperatorConsoleScopedGoalSummary | null;
 	nextWork: V2CoreNextWork;
 	reviewQueue: Array<{
 		artifactId: string;
@@ -708,16 +729,7 @@ export type V2CoreOperatorConsole = {
 		validationSummary: string;
 		endedAt: string | null;
 	}>;
-	recentArtifacts: Array<{
-		artifactId: string;
-		taskId: string | null;
-		runId: string | null;
-		projectId: string;
-		title: string;
-		uri: string;
-		role: string;
-		status: string;
-	}>;
+	recentArtifacts: V2CoreOperatorConsoleRecentArtifact[];
 	memory: V2CoreMemoryForContext | null;
 	dependencyReport: V2CoreDependencyReport;
 	evaluationContext: V2CoreEvaluationContext;
@@ -4759,6 +4771,27 @@ export function readV2CoreOperatorConsole(
 			selectedTask
 		};
 	});
+	const memory = scope.projectId
+		? readV2CoreMemoryForContext(db, {
+				projectId: scope.projectId
+			})
+		: null;
+	const scopedWorkQueueItem = scope.goalId
+		? (workQueue.find((item) => item.goalId === scope.goalId) ?? null)
+		: null;
+	const scopedGoal = activeGoals.find((goal) => goal.goalId === scope.goalId) ?? null;
+	const scopedGoalSummary =
+		scope.goalId && scopedGoal
+			? {
+					goal: scopedGoal,
+					queueState: scopedWorkQueueItem?.queueState ?? null,
+					currentRun: scopedWorkQueueItem?.currentRun ?? null,
+					selectedTask: scopedWorkQueueItem?.selectedTask ?? null,
+					recentAcceptedArtifact:
+						recentArtifacts.find((artifact) => artifact.status === 'accepted') ?? null,
+					trustedMemory: memory?.items.find((item) => item.status === 'trusted') ?? null
+				}
+			: null;
 	const snapshot = exportV2CoreSnapshot(db);
 
 	return {
@@ -4767,15 +4800,12 @@ export function readV2CoreOperatorConsole(
 		activeGoals,
 		goalStatusGroups,
 		workQueue,
+		scopedGoalSummary,
 		nextWork,
 		reviewQueue,
 		recentRuns,
 		recentArtifacts,
-		memory: scope.projectId
-			? readV2CoreMemoryForContext(db, {
-					projectId: scope.projectId
-				})
-			: null,
+		memory,
 		dependencyReport: readV2CoreDependencyReport(db, {
 			projectId: scope.projectId,
 			goalId: scope.goalId

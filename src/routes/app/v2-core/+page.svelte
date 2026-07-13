@@ -37,6 +37,7 @@
 	let memoryStatusRows = $derived(Object.entries(overview?.memoryStatusCounts ?? {}));
 	let dependencySummary = $derived(operatorConsole?.dependencyReport.summary ?? null);
 	let snapshotRows = $derived(Object.entries(operatorConsole?.snapshotStatus.tableCounts ?? {}));
+	let scopedGoalSummary = $derived(operatorConsole?.scopedGoalSummary ?? null);
 
 	function formatCount(value: number | undefined) {
 		return value ?? 0;
@@ -182,6 +183,72 @@
 						<strong>{operatorConsole.scope.goalId}</strong>
 					</div>
 					<a href={projectHref(operatorConsole.scope.projectId)}>Show project scope</a>
+				</section>
+			{/if}
+
+			{#if scopedGoalSummary}
+				<section class="v2-core-scoped-summary" aria-labelledby="v2-core-scoped-summary">
+					<header>
+						<div>
+							<span>Goal summary</span>
+							<h2 id="v2-core-scoped-summary">{scopedGoalSummary.goal.title}</h2>
+							<p>
+								{scopedGoalSummary.goal.goalId}{scopedGoalSummary.goal.parentGoalId
+									? ` · parent ${scopedGoalSummary.goal.parentGoalId}`
+									: ''}
+							</p>
+						</div>
+						<div class="v2-core-scoped-summary-state">
+							<span class="v2-core-badge">{scopedGoalSummary.goal.status}</span>
+							{#if scopedGoalSummary.queueState}
+								<span>{queueStateLabel(scopedGoalSummary.queueState)}</span>
+							{/if}
+						</div>
+					</header>
+					<div class="v2-core-scoped-summary-grid">
+						<div>
+							<span>Tasks</span>
+							<strong>
+								{scopedGoalSummary.goal.openTaskCount} open / {scopedGoalSummary.goal.doneTaskCount} done
+							</strong>
+						</div>
+						<div>
+							<span>Current run</span>
+							{#if scopedGoalSummary.currentRun}
+								<a href={taskHref(scopedGoalSummary.currentRun.taskId)}>
+									{scopedGoalSummary.currentRun.runId}
+								</a>
+							{:else}
+								<strong>None</strong>
+							{/if}
+						</div>
+						<div>
+							<span>Next work</span>
+							{#if scopedGoalSummary.selectedTask}
+								<a href={taskHref(scopedGoalSummary.selectedTask.taskId)}>
+									{scopedGoalSummary.selectedTask.title}
+								</a>
+							{:else}
+								<strong>None selected</strong>
+							{/if}
+						</div>
+						<div>
+							<span>Accepted output</span>
+							{#if scopedGoalSummary.recentAcceptedArtifact}
+								<strong>{scopedGoalSummary.recentAcceptedArtifact.title}</strong>
+							{:else}
+								<strong>None recent</strong>
+							{/if}
+						</div>
+						<div>
+							<span>Trusted memory</span>
+							{#if scopedGoalSummary.trustedMemory}
+								<strong>{scopedGoalSummary.trustedMemory.title}</strong>
+							{:else}
+								<strong>None available</strong>
+							{/if}
+						</div>
+					</div>
 				</section>
 			{/if}
 
@@ -630,6 +697,86 @@
 	}
 
 	.v2-core-scope a:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-scoped-summary {
+		display: grid;
+		gap: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 18%);
+		border-radius: 0.5rem;
+		padding: 0.875rem;
+		background: var(--color-surface-50);
+		color: var(--color-surface-950);
+	}
+
+	.v2-core-scoped-summary header {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 0.875rem;
+	}
+
+	.v2-core-scoped-summary header div:first-child {
+		min-width: 0;
+	}
+
+	.v2-core-scoped-summary span,
+	.v2-core-scoped-summary p {
+		color: var(--color-surface-700);
+		font-size: 0.78rem;
+	}
+
+	.v2-core-scoped-summary h2 {
+		margin: 0.12rem 0 0;
+		font-size: 1rem;
+		line-height: 1.25;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-scoped-summary p {
+		margin: 0.25rem 0 0;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-scoped-summary-state {
+		display: grid;
+		justify-items: end;
+		gap: 0.3rem;
+		text-align: right;
+	}
+
+	.v2-core-scoped-summary-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+		gap: 0.6rem;
+	}
+
+	.v2-core-scoped-summary-grid div {
+		display: grid;
+		gap: 0.18rem;
+		min-width: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
+		border-radius: 0.45rem;
+		padding: 0.55rem 0.65rem;
+		background: var(--color-surface-0);
+	}
+
+	.v2-core-scoped-summary-grid strong,
+	.v2-core-scoped-summary-grid a {
+		color: var(--color-surface-950);
+		font-size: 0.84rem;
+		line-height: 1.25;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-scoped-summary-grid a {
+		color: var(--color-primary-700);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.v2-core-scoped-summary-grid a:hover {
 		text-decoration: underline;
 	}
 
