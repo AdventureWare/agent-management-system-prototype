@@ -5,6 +5,7 @@ import Page from './+page.svelte';
 
 function renderPage() {
 	render(Page, {
+		form: null,
 		data: {
 			status: 'ready',
 			dbFile: '/tmp/ams-v2-core-ui.sqlite',
@@ -270,6 +271,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
 		expect(document.body.textContent).toContain('Blocked waiting for operator direction.');
 		expect(document.body.textContent).toContain('Paused v2 track');
+		expect(document.body.textContent).toContain('Pause');
+		expect(document.body.textContent).toContain('Resume');
+		expect(document.body.textContent).toContain('Block');
 		expect(document.body.textContent).toContain('Ready next step');
 		expect(document.body.textContent).toContain('No review items');
 		expect(document.body.textContent).toContain('Codex UI');

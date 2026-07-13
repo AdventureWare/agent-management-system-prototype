@@ -4,7 +4,7 @@
 	import MetricCard from '$lib/components/MetricCard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
-	let { data } = $props();
+	let { data, form = null } = $props();
 
 	let operatorConsole = $derived(data.operatorConsole);
 	let overview = $derived(operatorConsole?.overview ?? null);
@@ -57,6 +57,28 @@
 			? `${transition.summary} - ${transition.rationale}`
 			: transition.summary;
 	}
+
+	function goalActions(status: string) {
+		switch (status) {
+			case 'active':
+				return [
+					{ id: 'pause_goal', label: 'Pause' },
+					{ id: 'block_goal', label: 'Block' }
+				];
+			case 'paused':
+				return [
+					{ id: 'resume_goal', label: 'Resume' },
+					{ id: 'block_goal', label: 'Block' }
+				];
+			case 'blocked':
+				return [
+					{ id: 'resume_goal', label: 'Resume' },
+					{ id: 'pause_goal', label: 'Pause' }
+				];
+			default:
+				return [];
+		}
+	}
 </script>
 
 <AppPage>
@@ -74,6 +96,12 @@
 				<p>{data.error}</p>
 			</section>
 		{:else if operatorConsole && overview}
+			{#if form?.message}
+				<p class={['v2-core-form-message', form.ok === false && 'v2-core-form-message-error']}>
+					{form.message}
+				</p>
+			{/if}
+
 			<section class="v2-core-metrics" aria-label="V2 core overview">
 				<MetricCard label="Projects" value={overviewTotals.projects} density="compact" />
 				<MetricCard label="Goals" value={overviewTotals.goals} density="compact" />
@@ -123,6 +151,23 @@
 											<div class="v2-core-row-side">
 												<span class="v2-core-badge">{goal.status}</span>
 												<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
+												{#if goalActions(goal.status).length}
+													<div class="v2-core-goal-actions" aria-label={`${goal.title} goal actions`}>
+														{#each goalActions(goal.status) as action (action.id)}
+															<form method="POST" action="?/applyGoalAction" class="v2-core-goal-form">
+																<input type="hidden" name="goalId" value={goal.goalId} />
+																<input type="hidden" name="actionId" value={action.id} />
+																<input
+																	name="summary"
+																	type="text"
+																	placeholder={`${action.label} reason`}
+																	aria-label={`${action.label} ${goal.title} reason`}
+																/>
+																<button type="submit">{action.label}</button>
+															</form>
+														{/each}
+													</div>
+												{/if}
 											</div>
 										</article>
 									{/each}
@@ -360,6 +405,21 @@
 		font-weight: 700;
 	}
 
+	.v2-core-form-message {
+		margin: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 20%);
+		border-radius: 0.5rem;
+		padding: 0.75rem 0.875rem;
+		background: var(--color-surface-50);
+		color: var(--color-surface-900);
+		font-size: 0.84rem;
+	}
+
+	.v2-core-form-message-error {
+		border-color: color-mix(in srgb, var(--color-error-700), transparent 35%);
+		color: var(--color-error-700);
+	}
+
 	.v2-core-metrics {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
@@ -474,6 +534,44 @@
 		text-align: right;
 	}
 
+	.v2-core-goal-actions {
+		display: grid;
+		gap: 0.35rem;
+		margin-top: 0.25rem;
+	}
+
+	.v2-core-goal-form {
+		display: grid;
+		grid-template-columns: minmax(8rem, 1fr) auto;
+		gap: 0.35rem;
+		align-items: center;
+	}
+
+	.v2-core-goal-form input {
+		min-width: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-400), transparent 35%);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.45rem;
+		background: var(--color-surface-0);
+		color: var(--color-surface-950);
+		font: inherit;
+	}
+
+	.v2-core-goal-form button {
+		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 25%);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.55rem;
+		background: var(--color-primary-50);
+		color: var(--color-primary-800);
+		font-size: 0.76rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.v2-core-goal-form button:hover {
+		background: var(--color-primary-100);
+	}
+
 	.v2-core-badge {
 		display: inline-flex;
 		max-width: 10rem;
@@ -536,6 +634,11 @@
 		.v2-core-row-side {
 			justify-items: start;
 			text-align: left;
+		}
+
+		.v2-core-goal-form {
+			grid-template-columns: 1fr;
+			width: 100%;
 		}
 	}
 </style>
