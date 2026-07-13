@@ -7,6 +7,7 @@ function renderPage({
 	taskStatus = 'review',
 	readinessStatus = 'review',
 	readinessReason = 'Task status is review.',
+	includeCurrentRun = false,
 	availableActions = [
 		{
 			id: 'accept_output',
@@ -48,6 +49,21 @@ function renderPage({
 					status: 'active'
 				},
 				runs: [
+					...(includeCurrentRun
+						? [
+								{
+									id: 'run_task_ui_current',
+									status: 'planned',
+									modelProviderId: 'provider_task_ui',
+									modelProviderName: 'Codex Task UI',
+									modelProviderKind: 'external_ai',
+									resultSummary: '',
+									validationSummary: 'Provider run launched; validation is pending.',
+									startedAt: '2026-07-09T00:00:00.000Z',
+									endedAt: null
+								}
+							]
+						: []),
 					{
 						id: 'run_task_ui',
 						status: 'completed',
@@ -268,6 +284,43 @@ describe('/app/v2-core/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Captured run and submitted artifact evidence');
 		expect(buttonLabels).toContain('Submit for review');
 		expect(buttonLabels).toContain('Mark blocked');
+	});
+
+	it('renders current-run handoff and closeout commands for dispatched work', () => {
+		renderPage({
+			taskStatus: 'in_progress',
+			readinessStatus: 'in_progress',
+			readinessReason: 'Task is in progress.',
+			includeCurrentRun: true,
+			availableActions: [
+				{
+					id: 'submit_for_review',
+					label: 'Submit for review',
+					status: 'blocked',
+					reason: 'Submit for review requires at least one run and one submitted artifact.'
+				},
+				{
+					id: 'mark_blocked',
+					label: 'Mark blocked',
+					status: 'available',
+					reason: 'In-progress work can be blocked if execution cannot continue.'
+				}
+			]
+		});
+
+		expect(document.body.textContent).toContain('Run handoff');
+		expect(document.body.textContent).toContain('run_task_ui_current');
+		expect(document.body.textContent).toContain('Agent work packet');
+		expect(document.body.textContent).toContain(
+			'npm run v2:core-db -- agent-work-packet --task task_detail_ui --json'
+		);
+		expect(document.body.textContent).toContain('Closeout command');
+		expect(document.body.textContent).toContain(
+			'npm run v2:core-db -- managed-run-lifecycle --mode complete --task task_detail_ui --run run_task_ui_current'
+		);
+		expect(document.body.textContent).toContain(
+			'Closeout needs result evidence, validation evidence, a submitted artifact, review, and an acceptance decision'
+		);
 	});
 
 	it('renders accept output as an action form when approved review makes it available', () => {

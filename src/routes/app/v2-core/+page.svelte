@@ -59,6 +59,10 @@
 		);
 	}
 
+	function packetCommand(taskId: string) {
+		return `npm run v2:core-db -- agent-work-packet --task ${taskId} --json`;
+	}
+
 	function goalTransitionText(goal: {
 		latestGoalStatusTransition?: { summary: string; rationale: string } | null;
 	}) {
@@ -192,9 +196,15 @@
 													</div>
 												{/if}
 												{#if dispatch.currentRun}
-													<p class="v2-core-row-meta">
-														Current run: {dispatch.currentRun.runId} · {dispatch.currentRun.status}
-													</p>
+													<div class="v2-core-handoff" aria-label={`${goal.title} current run handoff`}>
+														<div>
+															<span>Current run</span>
+															<strong>{dispatch.currentRun.runId}</strong>
+															<p>{dispatch.currentRun.status} · {dispatch.currentRun.modelProviderName ?? 'No provider'}</p>
+														</div>
+														<a href={taskHref(dispatch.currentRun.taskId)}>Open task</a>
+														<code>{packetCommand(dispatch.currentRun.taskId)}</code>
+													</div>
 												{/if}
 												{#if dispatch.canDispatch && dispatch.nextWork}
 													<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
@@ -661,6 +671,66 @@
 
 	.v2-core-dispatch-form button:hover {
 		background: var(--color-primary-700);
+	}
+
+	.v2-core-handoff {
+		display: grid;
+		justify-items: stretch;
+		gap: 0.35rem;
+		width: min(100%, 28rem);
+		margin-top: 0.35rem;
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding-top: 0.45rem;
+		text-align: left;
+	}
+
+	.v2-core-handoff div {
+		display: grid;
+		gap: 0.12rem;
+	}
+
+	.v2-core-handoff span {
+		color: var(--color-surface-700);
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.v2-core-handoff strong,
+	.v2-core-handoff p,
+	.v2-core-handoff code {
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-handoff strong {
+		color: var(--color-surface-950);
+		font-size: 0.78rem;
+	}
+
+	.v2-core-handoff p {
+		margin: 0;
+		color: var(--color-surface-700);
+		font-size: 0.76rem;
+	}
+
+	.v2-core-handoff a {
+		color: var(--color-primary-700);
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.v2-core-handoff a:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-handoff code {
+		border-radius: 0.35rem;
+		background: var(--color-surface-100);
+		padding: 0.35rem 0.45rem;
+		color: var(--color-surface-900);
+		font-size: 0.72rem;
+		line-height: 1.35;
+		white-space: normal;
 	}
 
 	.v2-core-badge {

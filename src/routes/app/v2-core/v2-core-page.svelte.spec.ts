@@ -158,6 +158,19 @@ function renderPage() {
 				reviewQueue: [],
 				recentRuns: [
 					{
+						runId: 'run_ui_current',
+						taskId: 'task_ui_current',
+						taskTitle: 'Continue dispatched work',
+						goalId: 'goal_ui',
+						projectId: 'project_ui',
+						status: 'planned',
+						modelProviderId: 'provider_codex_ui',
+						modelProviderName: 'Codex UI',
+						resultSummary: '',
+						validationSummary: 'Provider run launched; validation is pending.',
+						endedAt: null
+					},
+					{
 						runId: 'run_ui_done',
 						taskId: 'task_ui_done',
 						taskTitle: 'Ship read-only console',
@@ -276,6 +289,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Block');
 		expect(document.body.textContent).toContain('Selected task');
 		expect(document.body.textContent).toContain('Launch');
+		expect(document.body.textContent).toContain('Current run');
+		expect(document.body.textContent).toContain('run_ui_current');
+		expect(document.body.textContent).toContain(
+			'npm run v2:core-db -- agent-work-packet --task task_ui_current --json'
+		);
 		expect(document.body.textContent).toContain('Ready next step');
 		expect(document.body.textContent).toContain('No review items');
 		expect(document.body.textContent).toContain('Codex UI');
@@ -284,6 +302,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('v2_core_tasks');
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_current?mode=read"]')
 		).not.toBeNull();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_done?mode=read"]')
@@ -299,6 +320,7 @@ describe('/app/v2-core/+page.svelte', () => {
 			.toBeInTheDocument();
 		await expect.element(page.getByText('Unblock v2 operator work')).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Launch' })).toBeInTheDocument();
+		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
 		).not.toBeNull();

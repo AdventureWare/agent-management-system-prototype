@@ -12,6 +12,7 @@
 	let contextSources = $derived(data.contextBundle?.includedSources ?? []);
 	let readiness = $derived(data.contextBundle?.readiness ?? null);
 	let dependencySummary = $derived(data.dependencyReport.summary);
+	let currentRuns = $derived(detail.runs.filter((run) => run.endedAt === null));
 
 	function taskHref(taskId: string) {
 		if (isReadOnly) {
@@ -19,6 +20,14 @@
 		}
 
 		return resolve(`/app/v2-core/tasks/${taskId}`);
+	}
+
+	function packetCommand(taskId: string) {
+		return `npm run v2:core-db -- agent-work-packet --task ${taskId} --json`;
+	}
+
+	function closeoutCommand(taskId: string, runId: string) {
+		return `npm run v2:core-db -- managed-run-lifecycle --mode complete --task ${taskId} --run ${runId}`;
 	}
 </script>
 
@@ -81,6 +90,39 @@
 					</div>
 				</div>
 			</section>
+
+			{#if currentRuns.length}
+				<section class="v2-task-panel" aria-labelledby="task-run-handoff">
+					<header class="v2-task-panel-header">
+						<h2 id="task-run-handoff">Run handoff</h2>
+						<span>{currentRuns.length} current</span>
+					</header>
+					<div class="v2-task-list">
+						{#each currentRuns as run (run.id)}
+							<article class="v2-task-handoff">
+								<div class="v2-task-handoff-header">
+									<div>
+										<p class="v2-task-row-title">{run.id}</p>
+										<p class="v2-task-row-meta">{run.status} · {run.modelProviderName ?? 'No provider'}</p>
+									</div>
+									<span class="v2-task-badge">{run.modelProviderKind ?? 'provider'}</span>
+								</div>
+								<div class="v2-task-command-block">
+									<span>Agent work packet</span>
+									<code>{packetCommand(task.id)}</code>
+								</div>
+								<div class="v2-task-command-block">
+									<span>Closeout command</span>
+									<code>{closeoutCommand(task.id, run.id)}</code>
+								</div>
+								<p class="v2-task-inline-note">
+									{'Closeout needs result evidence, validation evidence, a submitted artifact, review, and an acceptance decision before this task is done.'}
+								</p>
+							</article>
+						{/each}
+					</div>
+				</section>
+			{/if}
 
 			<section class="v2-task-panel" aria-labelledby="task-actions">
 				<header class="v2-task-panel-header">
@@ -573,6 +615,48 @@
 		text-align: right;
 	}
 
+	.v2-task-handoff {
+		display: grid;
+		gap: 0.75rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding: 0.875rem;
+	}
+
+	.v2-task-handoff:last-child {
+		border-bottom: 0;
+	}
+
+	.v2-task-handoff-header {
+		display: flex;
+		min-width: 0;
+		align-items: start;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.v2-task-command-block {
+		display: grid;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.v2-task-command-block span {
+		color: var(--color-surface-700);
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.v2-task-command-block code {
+		border-radius: 0.35rem;
+		background: var(--color-surface-100);
+		padding: 0.45rem 0.55rem;
+		color: var(--color-surface-900);
+		font-size: 0.74rem;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+		white-space: normal;
+	}
+
 	.v2-task-badge {
 		display: inline-flex;
 		max-width: 12rem;
@@ -750,6 +834,10 @@
 		.v2-task-row-side {
 			justify-items: start;
 			text-align: left;
+		}
+
+		.v2-task-handoff-header {
+			display: grid;
 		}
 	}
 </style>
