@@ -118,6 +118,75 @@
 								<p class="v2-task-inline-note">
 									{'Closeout needs result evidence, validation evidence, a submitted artifact, review, and an acceptance decision before this task is done.'}
 								</p>
+								{#if !isReadOnly}
+									<form
+										method="POST"
+										action="?/closeoutDispatchedRun"
+										class="v2-task-evidence-form v2-task-closeout-form"
+									>
+										<input type="hidden" name="runId" value={run.id} />
+										<label>
+											<span>Result summary</span>
+											<textarea
+												name="resultSummary"
+												rows="3"
+												placeholder="What changed or was produced"
+												required
+											></textarea>
+										</label>
+										<label>
+											<span>Validation summary</span>
+											<textarea
+												name="validationSummary"
+												rows="2"
+												placeholder="Tests, inspection, or review evidence"
+												required
+											></textarea>
+										</label>
+										<div class="v2-task-form-grid">
+											<label>
+												<span>Artifact title</span>
+												<input name="artifactTitle" type="text" placeholder="Artifact name" required />
+											</label>
+											<label>
+												<span>Artifact role</span>
+												<select name="artifactRole">
+													{#each data.artifactRoles as role (role)}
+														<option value={role}>{role}</option>
+													{/each}
+												</select>
+											</label>
+										</div>
+										<label>
+											<span>Artifact URI</span>
+											<input name="artifactUri" type="text" placeholder="git://commit/abc123" required />
+										</label>
+										<label>
+											<span>Artifact summary</span>
+											<textarea name="artifactSummary" rows="2" placeholder="Optional artifact note"
+											></textarea>
+										</label>
+										<label>
+											<span>Review summary</span>
+											<textarea
+												name="reviewSummary"
+												rows="2"
+												placeholder="Why this output is reviewable"
+												required
+											></textarea>
+										</label>
+										<label>
+											<span>Acceptance rationale</span>
+											<textarea
+												name="acceptanceRationale"
+												rows="2"
+												placeholder="Why this satisfies the task contract"
+												required
+											></textarea>
+										</label>
+										<button type="submit">Close out run</button>
+									</form>
+								{/if}
 							</article>
 						{/each}
 					</div>

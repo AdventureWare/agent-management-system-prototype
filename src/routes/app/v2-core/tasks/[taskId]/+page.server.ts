@@ -8,6 +8,7 @@ import {
 } from '$lib/server/v2-core-persistence';
 import {
 	attachV2CoreArtifact,
+	completeV2CoreManagedRunLifecycle,
 	readV2CoreContextBundle,
 	readV2CoreDependencyReport,
 	readV2CoreTaskDetail,
@@ -199,6 +200,10 @@ function createUiRecordId(prefix: string) {
 	return `${prefix}_${randomUUID().replaceAll('-', '_')}`;
 }
 
+function hasCurrentProviderRun(taskDetail: NonNullable<ReturnType<typeof readV2CoreTaskDetail>>, runId: string) {
+	return taskDetail.runs.some((run) => run.id === runId && run.endedAt === null);
+}
+
 export const load: PageServerLoad = async ({ params, url }) => {
 	const dbFile = _getV2CoreTaskUiDbFile();
 	const mode = url.searchParams.get('mode') === 'read' ? 'read' : 'action';
@@ -380,6 +385,87 @@ export const actions: Actions = {
 			return fail(400, {
 				ok: false,
 				action: 'recordRunEvidence',
+				message: caught instanceof Error ? caught.message : String(caught)
+			});
+		} finally {
+			db.close();
+		}
+
+		throw redirect(303, `/app/v2-core/tasks/${params.taskId}`);
+	},
+	closeoutDispatchedRun: async ({ params, request }) => {
+		const dbFile = _getV2CoreTaskUiDbFile();
+		const form = await request.formData();
+
+		let runId = '';
+		let resultSummary = '';
+		let validationSummary = '';
+		let artifactTitle = '';
+		let artifactUri = '';
+		let artifactSummary = '';
+		let artifactRole = '';
+		let reviewSummary = '';
+		let acceptanceRationale = '';
+
+		try {
+			runId = readRequiredFormText(form, 'runId', 'Run');
+			resultSummary = readRequiredFormText(form, 'resultSummary', 'Result summary');
+			validationSummary = readRequiredFormText(form, 'validationSummary', 'Validation summary');
+			artifactTitle = readRequiredFormText(form, 'artifactTitle', 'Artifact title');
+			artifactUri = readRequiredFormText(form, 'artifactUri', 'Artifact URI');
+			artifactSummary = readOptionalFormText(form, 'artifactSummary');
+			artifactRole = readArtifactRole(form);
+			reviewSummary = readRequiredFormText(form, 'reviewSummary', 'Review summary');
+			acceptanceRationale = readRequiredFormText(
+				form,
+				'acceptanceRationale',
+				'Acceptance rationale'
+			);
+		} catch (caught) {
+			return fail(400, {
+				ok: false,
+				action: 'closeoutDispatchedRun',
+				message: caught instanceof Error ? caught.message : String(caught)
+			});
+		}
+
+		const db = openV2CoreDb({ dbFile });
+		try {
+			const taskDetail = readV2CoreTaskDetail(db, params.taskId);
+			if (!taskDetail) {
+				throw error(404, 'V2 core task not found.');
+			}
+			if (!hasCurrentProviderRun(taskDetail, runId)) {
+				return fail(400, {
+					ok: false,
+					action: 'closeoutDispatchedRun',
+					message: `Run ${runId} is not a current provider run for task ${params.taskId}.`
+				});
+			}
+
+			completeV2CoreManagedRunLifecycle(db, {
+				taskId: params.taskId,
+				runId,
+				artifactId: createUiRecordId('artifact_ui_run_closeout'),
+				artifactUri,
+				artifactTitle,
+				artifactSummary,
+				artifactRole,
+				resultSummary,
+				validationSummary,
+				reviewId: createUiRecordId('review_ui_run_closeout'),
+				reviewSummary,
+				acceptDecisionId: createUiRecordId('decision_ui_run_closeout_acceptance'),
+				acceptanceRationale
+			});
+		} catch (caught) {
+			if (caught && typeof caught === 'object' && 'status' in caught && 'body' in caught) {
+				throw caught;
+			}
+
+			return fail(400, {
+				ok: false,
+				action: 'closeoutDispatchedRun',
 				message: caught instanceof Error ? caught.message : String(caught)
 			});
 		} finally {

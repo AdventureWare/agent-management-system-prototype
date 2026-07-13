@@ -164,6 +164,38 @@ async function recordRunEvidence(taskId: string, overrides: Record<string, strin
 	} as never);
 }
 
+function createCloseoutForm(overrides: Record<string, string> = {}) {
+	const form = new FormData();
+	const values = {
+		runId: 'run_dispatched_closeout',
+		resultSummary: 'Dispatched provider run produced the accepted result.',
+		validationSummary: 'Focused validation passed.',
+		artifactTitle: 'Dispatched run artifact',
+		artifactUri: 'git://commit/dispatched-closeout',
+		artifactSummary: 'Closeout artifact from the existing provider run.',
+		artifactRole: 'deliverable',
+		reviewSummary: 'Reviewed dispatched output from the existing run.',
+		acceptanceRationale: 'Accepted because the output satisfies the task contract.',
+		...overrides
+	};
+
+	for (const [key, value] of Object.entries(values)) {
+		form.set(key, value);
+	}
+
+	return form;
+}
+
+async function closeoutDispatchedRun(taskId: string, overrides: Record<string, string> = {}) {
+	return actions.closeoutDispatchedRun({
+		params: { taskId },
+		request: new Request(`http://localhost/app/v2-core/tasks/${taskId}`, {
+			method: 'POST',
+			body: createCloseoutForm(overrides)
+		})
+	} as never);
+}
+
 function readTaskRuns(dbFile: string, taskId: string) {
 	const db = openV2CoreDb({ dbFile });
 
@@ -206,6 +238,28 @@ function readTaskArtifacts(dbFile: string, taskId: string) {
 				`
 					select id, run_id, uri, role, title, summary, status
 					from v2_core_artifacts
+					where task_id = ?
+					order by id
+				`
+			)
+			.all(taskId);
+	} finally {
+		db.close();
+	}
+}
+
+function readTaskReviews(dbFile: string, taskId: string) {
+	const db = openV2CoreDb({ dbFile });
+
+	try {
+		return db
+			.prepare<
+				[string],
+				{ id: string; run_id: string | null; artifact_id: string | null; status: string; summary: string }
+			>(
+				`
+					select id, run_id, artifact_id, status, summary
+					from v2_core_reviews
 					where task_id = ?
 					order by id
 				`
@@ -282,6 +336,33 @@ function seedApprovedReview(dbFile: string, taskId: string) {
 			artifactId: `artifact_${taskId}`,
 			status: 'approved',
 			summary: 'Seeded approved review.'
+		});
+	} finally {
+		db.close();
+	}
+}
+
+function seedDispatchedProviderRun(dbFile: string, taskId: string, runId = 'run_dispatched_closeout') {
+	const db = openV2CoreDb({ dbFile });
+
+	try {
+		registerV2CoreModelProvider(db, {
+			id: `provider_${taskId}`,
+			name: `Provider ${taskId}`,
+			kind: 'external_ai'
+		});
+		transitionV2CoreTaskStatus(db, {
+			taskId,
+			status: 'in_progress',
+			summary: 'Seeded dispatched provider work.'
+		});
+		recordV2CoreRun(db, {
+			id: runId,
+			taskId,
+			modelProviderId: `provider_${taskId}`,
+			status: 'planned',
+			inputSummary: 'Seeded dispatched run.',
+			actionSummary: 'Provider should complete this task.'
 		});
 	} finally {
 		db.close();
@@ -679,6 +760,52 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 		});
 	});
 
+	it('closes out an existing dispatched provider run without creating a second run', async () => {
+		const dbFile = createTempDbFile();
+		createBaseTask(dbFile, 'task_closeout_dispatched_run');
+		seedDispatchedProviderRun(dbFile, 'task_closeout_dispatched_run');
+		setCoreDbFile(dbFile);
+
+		await expect(closeoutDispatchedRun('task_closeout_dispatched_run')).rejects.toMatchObject({
+			status: 303,
+			location: '/app/v2-core/tasks/task_closeout_dispatched_run'
+		});
+
+		const runs = readTaskRuns(dbFile, 'task_closeout_dispatched_run');
+		const artifacts = readTaskArtifacts(dbFile, 'task_closeout_dispatched_run');
+		const reviews = readTaskReviews(dbFile, 'task_closeout_dispatched_run');
+		const decisions = readTaskDecisions(dbFile, 'task_closeout_dispatched_run');
+
+		expect(readTaskStatus(dbFile, 'task_closeout_dispatched_run')).toBe('done');
+		expect(runs).toHaveLength(1);
+		expect(runs[0]).toMatchObject({
+			id: 'run_dispatched_closeout',
+			status: 'completed',
+			result_summary: 'Dispatched provider run produced the accepted result.'
+		});
+		expect(artifacts).toHaveLength(1);
+		expect(artifacts[0]).toMatchObject({
+			run_id: 'run_dispatched_closeout',
+			uri: 'git://commit/dispatched-closeout',
+			role: 'deliverable',
+			title: 'Dispatched run artifact',
+			status: 'accepted'
+		});
+		expect(reviews).toContainEqual(
+			expect.objectContaining({
+				run_id: 'run_dispatched_closeout',
+				status: 'approved',
+				summary: 'Reviewed dispatched output from the existing run.'
+			})
+		);
+		expect(decisions).toContainEqual(
+			expect.objectContaining({
+				decision_type: 'accept_task_output',
+				rationale: 'Accepted because the output satisfies the task contract.'
+			})
+		);
+	});
+
 	it.each([
 		['actionSummary', 'Action summary is required.'],
 		['resultSummary', 'Result summary is required.'],
@@ -701,6 +828,57 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 		});
 		expect(readTaskRuns(dbFile, taskId)).toHaveLength(0);
 		expect(readTaskArtifacts(dbFile, taskId)).toHaveLength(0);
+	});
+
+	it.each([
+		['runId', 'Run is required.'],
+		['resultSummary', 'Result summary is required.'],
+		['validationSummary', 'Validation summary is required.'],
+		['artifactTitle', 'Artifact title is required.'],
+		['artifactUri', 'Artifact URI is required.'],
+		['reviewSummary', 'Review summary is required.'],
+		['acceptanceRationale', 'Acceptance rationale is required.']
+	])('rejects missing dispatched closeout field %s', async (field, message) => {
+		const dbFile = createTempDbFile();
+		const taskId = `task_closeout_missing_${field}`;
+		createBaseTask(dbFile, taskId);
+		seedDispatchedProviderRun(dbFile, taskId);
+		setCoreDbFile(dbFile);
+
+		const result = await closeoutDispatchedRun(taskId, { [field]: '' });
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				action: 'closeoutDispatchedRun',
+				message
+			}
+		});
+		expect(readTaskStatus(dbFile, taskId)).toBe('in_progress');
+		expect(readTaskRuns(dbFile, taskId)).toHaveLength(1);
+		expect(readTaskRuns(dbFile, taskId)[0]).toMatchObject({
+			status: 'planned'
+		});
+		expect(readTaskArtifacts(dbFile, taskId)).toHaveLength(0);
+	});
+
+	it('rejects dispatched closeout when the run is not current', async () => {
+		const dbFile = createTempDbFile();
+		createBaseTask(dbFile, 'task_closeout_no_current_run', 'in_progress');
+		setCoreDbFile(dbFile);
+
+		const result = await closeoutDispatchedRun('task_closeout_no_current_run');
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				action: 'closeoutDispatchedRun',
+				message:
+					'Run run_dispatched_closeout is not a current provider run for task task_closeout_no_current_run.'
+			}
+		});
+		expect(readTaskStatus(dbFile, 'task_closeout_no_current_run')).toBe('in_progress');
+		expect(readTaskArtifacts(dbFile, 'task_closeout_no_current_run')).toHaveLength(0);
 	});
 
 	it('rejects unsupported artifact roles without recording evidence', async () => {

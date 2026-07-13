@@ -318,6 +318,9 @@ describe('/app/v2-core/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain(
 			'npm run v2:core-db -- managed-run-lifecycle --mode complete --task task_detail_ui --run run_task_ui_current'
 		);
+		expect(document.body.textContent).toContain('Close out run');
+		expect(document.body.textContent).toContain('Review summary');
+		expect(document.body.textContent).toContain('Acceptance rationale');
 		expect(document.body.textContent).toContain(
 			'Closeout needs result evidence, validation evidence, a submitted artifact, review, and an acceptance decision'
 		);
@@ -355,15 +358,16 @@ describe('/app/v2-core/tasks/[taskId]/+page.svelte', () => {
 	it('renders task detail as read-only without mutation forms when mode is read', () => {
 		renderPage({
 			mode: 'read',
-			taskStatus: 'ready',
-			readinessStatus: 'ready',
-			readinessReason: 'Task is ready.',
+			taskStatus: 'in_progress',
+			readinessStatus: 'in_progress',
+			readinessReason: 'Task is in progress.',
+			includeCurrentRun: true,
 			availableActions: [
 				{
-					id: 'start_task',
-					label: 'Start task',
+					id: 'submit_for_review',
+					label: 'Submit for review',
 					status: 'available',
-					reason: 'Task is ready and can move to in_progress.'
+					reason: 'Captured run and submitted artifact evidence can move to review.'
 				},
 				{
 					id: 'mark_blocked',
@@ -377,13 +381,17 @@ describe('/app/v2-core/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Read-only inspection');
 		expect(document.body.textContent).toContain('Mutation controls are hidden');
 		expect(document.body.textContent).toContain('read-only');
+		expect(document.body.textContent).toContain('Run handoff');
+		expect(document.body.textContent).toContain('run_task_ui_current');
 		expect(document.querySelector('form[action="?/applyTaskAction"]')).toBeNull();
 		expect(document.querySelector('form[action="?/recordRunEvidence"]')).toBeNull();
+		expect(document.querySelector('form[action="?/closeoutDispatchedRun"]')).toBeNull();
 		const buttonLabels = Array.from(document.querySelectorAll('button')).map((button) =>
 			button.textContent?.trim()
 		);
 		expect(buttonLabels).not.toContain('Start task');
 		expect(buttonLabels).not.toContain('Record evidence');
+		expect(buttonLabels).not.toContain('Close out run');
 		expect(document.querySelector('a[href="/app/v2-core/tasks/task_detail_ui"]')).not.toBeNull();
 	});
 });
