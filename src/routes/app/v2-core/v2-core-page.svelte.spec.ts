@@ -782,7 +782,7 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Selected next work');
 		const taskRollup = taskRollupSection();
 		expect(
-			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review task')
+			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review scoped output')
 		).toBe(true);
 		expect(
 			taskRollup.querySelector(
@@ -796,11 +796,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 		expect(
 			Array.from(taskRollup.querySelectorAll('button')).some(
-				(button) => button.textContent === 'Launch task'
+				(button) => button.textContent === 'Launch scoped task'
 			)
 		).toBe(true);
 		expect(
-			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task')
+			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task detail')
 		).toBe(true);
 		expect(
 			childRollup?.querySelector(
@@ -837,7 +837,7 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(taskRollup.textContent).toContain('Current run');
 		expect(taskRollup.textContent).toContain('planned · Codex UI');
 		expect(
-			hasTaskRollupLink(taskRollup, 'task_ui_child_current', 'Open current run')
+			hasTaskRollupLink(taskRollup, 'task_ui_child_current', 'Open current-run task')
 		).toBe(true);
 		expect(
 			document.querySelector('a[href="/app/v2-core?project=project_ui"]')
@@ -899,6 +899,9 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('heading', { name: 'Tasks in scope' }))
 			.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Show project scope' }))
+			.toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
@@ -908,15 +911,17 @@ describe('/app/v2-core/+page.svelte', () => {
 		const taskRollup = taskRollupSection();
 		expect(
 			Array.from(taskRollup.querySelectorAll('button')).some(
-				(button) => button.textContent === 'Launch task'
+				(button) => button.textContent === 'Launch scoped task'
 			)
 		).toBe(true);
 		expect(
-			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review task')
+			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review scoped output')
 		).toBe(true);
 		expect(
-			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task')
+			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task detail')
 		).toBe(true);
+		expect(Array.from(document.querySelectorAll('button')).filter((button) => button.textContent === 'Launch task')).toHaveLength(1);
+		expect(Array.from(document.querySelectorAll('a')).filter((link) => link.textContent === 'Review task')).toHaveLength(1);
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		await expect
@@ -932,6 +937,24 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
+		expectNoHorizontalOverflow();
+	});
+
+	it('keeps current-run goal scope usable in a phone viewport', async () => {
+		await page.viewport(390, 844);
+		renderPage({ scopedGoalId: 'goal_ui_child_running' });
+
+		await expect
+			.element(page.getByRole('heading', { name: 'Run child goal work' }))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Show project scope' }))
+			.toBeInTheDocument();
+		const taskRollup = taskRollupSection();
+		expect(taskRollup.textContent).toContain('Current run');
+		expect(
+			hasTaskRollupLink(taskRollup, 'task_ui_child_current', 'Open current-run task')
+		).toBe(true);
 		expectNoHorizontalOverflow();
 	});
 });
