@@ -2089,6 +2089,82 @@ describe('v2 core CLI work-loop smoke', () => {
 		]);
 		expect(wrongRunEvaluation.stderr).toContain('does not belong to task');
 
+		const wrongRunArtifact = runCoreCliFailure([
+			'attach-artifact',
+			...baseArgs,
+			'--id',
+			'artifact_v2_core_smoke_wrong_run',
+			'--task',
+			'task_v2_core_smoke_followup',
+			'--run',
+			'run_v2_core_smoke',
+			'--uri',
+			'agent_output/v2-core-smoke-wrong-run.md',
+			'--title',
+			'Wrong-run artifact'
+		]);
+		expect(wrongRunArtifact.stderr).toContain('does not belong to task');
+
+		const wrongRunReview = runCoreCliFailure([
+			'record-review',
+			...baseArgs,
+			'--id',
+			'review_v2_core_smoke_wrong_run',
+			'--task',
+			'task_v2_core_smoke_followup',
+			'--run',
+			'run_v2_core_smoke',
+			'--summary',
+			'Wrong-run review should fail.'
+		]);
+		expect(wrongRunReview.stderr).toContain('does not belong to task');
+
+		const wrongArtifactReview = runCoreCliFailure([
+			'record-review',
+			...baseArgs,
+			'--id',
+			'review_v2_core_smoke_wrong_artifact',
+			'--task',
+			'task_v2_core_smoke_followup',
+			'--artifact',
+			'artifact_v2_core_smoke',
+			'--summary',
+			'Wrong-artifact review should fail.'
+		]);
+		expect(wrongArtifactReview.stderr).toContain('does not belong to task');
+
+		const wrongRunDecision = runCoreCliFailure([
+			'record-decision',
+			...baseArgs,
+			'--id',
+			'decision_v2_core_smoke_wrong_run',
+			'--task',
+			'task_v2_core_smoke_followup',
+			'--run',
+			'run_v2_core_smoke',
+			'--type',
+			'implementation_decision',
+			'--summary',
+			'Wrong-run decision should fail.'
+		]);
+		expect(wrongRunDecision.stderr).toContain('does not belong to task');
+
+		const wrongReviewDecision = runCoreCliFailure([
+			'record-decision',
+			...baseArgs,
+			'--id',
+			'decision_v2_core_smoke_wrong_review',
+			'--task',
+			'task_v2_core_smoke_followup',
+			'--review',
+			'review_v2_core_smoke',
+			'--type',
+			'implementation_decision',
+			'--summary',
+			'Wrong-review decision should fail.'
+		]);
+		expect(wrongReviewDecision.stderr).toContain('does not belong to task');
+
 		const followupArtifact = runCoreCli([
 			'attach-artifact',
 			...baseArgs,

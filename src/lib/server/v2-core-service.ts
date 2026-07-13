@@ -1012,6 +1012,48 @@ function ensureNoRow(db: Database.Database, table: string, id: string, label: st
 	}
 }
 
+function assertRunBelongsToTask(db: Database.Database, runId: string, taskId: string) {
+	const run = db
+		.prepare<[string], { task_id: string }>('select task_id from v2_core_runs where id = ?')
+		.get(runId);
+
+	if (!run) {
+		throw new Error(`Run ${runId} was not found in the v2 core database.`);
+	}
+
+	if (run.task_id !== taskId) {
+		throw new Error(`Run ${runId} does not belong to task ${taskId}.`);
+	}
+}
+
+function assertArtifactBelongsToTask(db: Database.Database, artifactId: string, taskId: string) {
+	const artifact = db
+		.prepare<[string], { task_id: string }>('select task_id from v2_core_artifacts where id = ?')
+		.get(artifactId);
+
+	if (!artifact) {
+		throw new Error(`Artifact ${artifactId} was not found in the v2 core database.`);
+	}
+
+	if (artifact.task_id !== taskId) {
+		throw new Error(`Artifact ${artifactId} does not belong to task ${taskId}.`);
+	}
+}
+
+function assertReviewBelongsToTask(db: Database.Database, reviewId: string, taskId: string) {
+	const review = db
+		.prepare<[string], { task_id: string }>('select task_id from v2_core_reviews where id = ?')
+		.get(reviewId);
+
+	if (!review) {
+		throw new Error(`Review ${reviewId} was not found in the v2 core database.`);
+	}
+
+	if (review.task_id !== taskId) {
+		throw new Error(`Review ${reviewId} does not belong to task ${taskId}.`);
+	}
+}
+
 function hasApprovedReviewForTask(db: Database.Database, taskId: string) {
 	const row = db
 		.prepare<[string], { id: string }>(
@@ -2025,15 +2067,7 @@ export function recordV2CoreToolExecution(db: Database.Database, input: V2CoreTo
 
 	const runId = optionalText(input.runId);
 	if (runId) {
-		const run = db
-			.prepare<[string], { task_id: string }>('select task_id from v2_core_runs where id = ?')
-			.get(runId);
-		if (!run) {
-			throw new Error(`Run ${runId} was not found in the v2 core database.`);
-		}
-		if (run.task_id !== taskId) {
-			throw new Error(`Run ${runId} does not belong to task ${taskId}.`);
-		}
+		assertRunBelongsToTask(db, runId, taskId);
 	}
 
 	db.transaction(() => {
@@ -2093,7 +2127,7 @@ export function attachV2CoreArtifact(db: Database.Database, input: V2CoreArtifac
 
 	const runId = optionalText(input.runId);
 	if (runId) {
-		ensureRow(db, 'v2_core_runs', runId, 'Run');
+		assertRunBelongsToTask(db, runId, taskId);
 	}
 
 	ensureNoRow(db, 'v2_core_artifacts', artifactId, 'Artifact');
@@ -2141,12 +2175,12 @@ export function recordV2CoreReview(db: Database.Database, input: V2CoreReviewInp
 
 	const runId = optionalText(input.runId);
 	if (runId) {
-		ensureRow(db, 'v2_core_runs', runId, 'Run');
+		assertRunBelongsToTask(db, runId, taskId);
 	}
 
 	const artifactId = optionalText(input.artifactId);
 	if (artifactId) {
-		ensureRow(db, 'v2_core_artifacts', artifactId, 'Artifact');
+		assertArtifactBelongsToTask(db, artifactId, taskId);
 	}
 	const reviewStatus = input.status?.trim() || 'approved';
 	const resolvedAt =
@@ -2192,9 +2226,18 @@ export function recordV2CoreDecision(db: Database.Database, input: V2CoreDecisio
 	const decisionType = input.decisionType?.trim() || 'implementation_decision';
 	const taskId = optionalText(input.taskId);
 	const runId = optionalText(input.runId);
+	const reviewId = optionalText(input.reviewId);
 
 	ensureRow(db, 'v2_core_projects', projectId, 'Project');
 	ensureNoRow(db, 'v2_core_decisions', decisionId, 'Decision');
+	if (taskId) {
+		if (runId) {
+			assertRunBelongsToTask(db, runId, taskId);
+		}
+		if (reviewId) {
+			assertReviewBelongsToTask(db, reviewId, taskId);
+		}
+	}
 
 	db.transaction(() => {
 		db.prepare(
@@ -2219,7 +2262,7 @@ export function recordV2CoreDecision(db: Database.Database, input: V2CoreDecisio
 			optionalText(input.goalId),
 			taskId,
 			runId,
-			optionalText(input.reviewId),
+			reviewId,
 			optionalText(input.supersedesDecisionId),
 			decisionType,
 			summary,
