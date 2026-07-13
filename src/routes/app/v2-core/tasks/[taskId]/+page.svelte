@@ -8,11 +8,16 @@
 
 	let detail = $derived(data.taskDetail);
 	let task = $derived(detail.task);
+	let isReadOnly = $derived(data.mode === 'read');
 	let contextSources = $derived(data.contextBundle?.includedSources ?? []);
 	let readiness = $derived(data.contextBundle?.readiness ?? null);
 	let dependencySummary = $derived(data.dependencyReport.summary);
 
 	function taskHref(taskId: string) {
+		if (isReadOnly) {
+			return resolve(`/app/v2-core/tasks/${taskId}?mode=read`);
+		}
+
 		return resolve(`/app/v2-core/tasks/${taskId}`);
 	}
 </script>
@@ -39,6 +44,16 @@
 			<p class={['v2-task-form-message', form.ok === false && 'v2-task-form-message-error']}>
 				{form.message}
 			</p>
+		{/if}
+
+		{#if isReadOnly}
+			<section class="v2-task-read-only" aria-label="Read-only task inspection">
+				<div>
+					<p>Read-only inspection</p>
+					<span>Mutation controls are hidden for remote or mobile review.</span>
+				</div>
+				<a href={resolve(`/app/v2-core/tasks/${task.id}`)}>Enable actions</a>
+			</section>
 		{/if}
 
 		<section class="v2-task-grid">
@@ -81,7 +96,7 @@
 								<p class="v2-task-row-title">{action.label}</p>
 								<p class="v2-task-row-meta">{action.reason}</p>
 							</div>
-							{#if action.status === 'available'}
+							{#if action.status === 'available' && !isReadOnly}
 								<form method="POST" action="?/applyTaskAction" class="v2-task-action-form">
 									<input type="hidden" name="actionId" value={action.id} />
 									<label>
@@ -97,7 +112,7 @@
 								</form>
 							{:else}
 								<span class={['v2-task-badge', `v2-task-badge-${action.status}`]}>
-									{action.status}
+									{isReadOnly && action.status === 'available' ? 'read-only' : action.status}
 								</span>
 							{/if}
 						</article>
@@ -105,75 +120,75 @@
 				</div>
 			</section>
 
-			<section class="v2-task-panel" aria-labelledby="task-run-evidence">
-				<header class="v2-task-panel-header">
-					<h2 id="task-run-evidence">Record run evidence</h2>
-					<span>run + artifact</span>
-				</header>
-				<form method="POST" action="?/recordRunEvidence" class="v2-task-evidence-form">
-					<label>
-						<span>Input summary</span>
-						<textarea
-							name="inputSummary"
-							rows="2"
-							placeholder="Optional context or prompt summary"
-						></textarea>
-					</label>
-					<label>
-						<span>Action summary</span>
-						<textarea
-							name="actionSummary"
-							rows="3"
-							placeholder="What work was attempted"
-							required
-						></textarea>
-					</label>
-					<label>
-						<span>Result summary</span>
-						<textarea
-							name="resultSummary"
-							rows="3"
-							placeholder="What changed or was produced"
-							required
-						></textarea>
-					</label>
-					<label>
-						<span>Validation summary</span>
-						<textarea
-							name="validationSummary"
-							rows="2"
-							placeholder="Optional test, review, or inspection result"
-						></textarea>
-					</label>
-					<div class="v2-task-form-grid">
+			{#if !isReadOnly}
+				<section class="v2-task-panel" aria-labelledby="task-run-evidence">
+					<header class="v2-task-panel-header">
+						<h2 id="task-run-evidence">Record run evidence</h2>
+						<span>run + artifact</span>
+					</header>
+					<form method="POST" action="?/recordRunEvidence" class="v2-task-evidence-form">
 						<label>
-							<span>Artifact title</span>
-							<input name="artifactTitle" type="text" placeholder="Artifact name" required />
+							<span>Input summary</span>
+							<textarea
+								name="inputSummary"
+								rows="2"
+								placeholder="Optional context or prompt summary"
+							></textarea>
 						</label>
 						<label>
-							<span>Artifact role</span>
-							<select name="artifactRole">
-								{#each data.artifactRoles as role (role)}
-									<option value={role}>{role}</option>
-								{/each}
-							</select>
+							<span>Action summary</span>
+							<textarea name="actionSummary" rows="3" placeholder="What work was attempted" required
+							></textarea>
 						</label>
-					</div>
-					<label>
-						<span>Artifact URI</span>
-						<input name="artifactUri" type="text" placeholder="repo://path/to/artifact" required />
-					</label>
-					<label>
-						<span>Artifact summary</span>
-						<textarea
-							name="artifactSummary"
-							rows="2"
-							placeholder="Optional artifact description"
-						></textarea>
-					</label>
-					<button type="submit">Record evidence</button>
-				</form>
-			</section>
+						<label>
+							<span>Result summary</span>
+							<textarea
+								name="resultSummary"
+								rows="3"
+								placeholder="What changed or was produced"
+								required
+							></textarea>
+						</label>
+						<label>
+							<span>Validation summary</span>
+							<textarea
+								name="validationSummary"
+								rows="2"
+								placeholder="Optional test, review, or inspection result"
+							></textarea>
+						</label>
+						<div class="v2-task-form-grid">
+							<label>
+								<span>Artifact title</span>
+								<input name="artifactTitle" type="text" placeholder="Artifact name" required />
+							</label>
+							<label>
+								<span>Artifact role</span>
+								<select name="artifactRole">
+									{#each data.artifactRoles as role (role)}
+										<option value={role}>{role}</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+						<label>
+							<span>Artifact URI</span>
+							<input
+								name="artifactUri"
+								type="text"
+								placeholder="repo://path/to/artifact"
+								required
+							/>
+						</label>
+						<label>
+							<span>Artifact summary</span>
+							<textarea name="artifactSummary" rows="2" placeholder="Optional artifact description"
+							></textarea>
+						</label>
+						<button type="submit">Record evidence</button>
+					</form>
+				</section>
+			{/if}
 
 			<section class="v2-task-panel" aria-labelledby="task-context">
 				<header class="v2-task-panel-header">
@@ -422,6 +437,46 @@
 	.v2-task-form-message-error {
 		border-color: color-mix(in srgb, var(--color-error-500), transparent 35%);
 		background: color-mix(in srgb, var(--color-error-100), white 35%);
+	}
+
+	.v2-task-read-only {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 38%);
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--color-primary-100), white 42%);
+		padding: 0.75rem 0.875rem;
+	}
+
+	.v2-task-read-only p,
+	.v2-task-read-only span {
+		margin: 0;
+	}
+
+	.v2-task-read-only p {
+		color: var(--color-surface-950);
+		font-size: 0.9rem;
+		font-weight: 750;
+	}
+
+	.v2-task-read-only span {
+		color: var(--color-surface-700);
+		font-size: 0.8rem;
+		line-height: 1.35;
+	}
+
+	.v2-task-read-only a {
+		flex: 0 0 auto;
+		color: var(--color-primary-700);
+		font-size: 0.82rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.v2-task-read-only a:hover {
+		text-decoration: underline;
 	}
 
 	.v2-task-panel-header {
@@ -683,6 +738,11 @@
 	}
 
 	@media (max-width: 44rem) {
+		.v2-task-read-only {
+			align-items: start;
+			flex-direction: column;
+		}
+
 		.v2-task-row {
 			grid-template-columns: 1fr;
 		}

@@ -36,7 +36,15 @@ function setCoreDbFile(dbFile: string) {
 
 async function loadTaskPage(taskId: string) {
 	return (await load({
-		params: { taskId }
+		params: { taskId },
+		url: new URL(`http://localhost/app/v2-core/tasks/${taskId}`)
+	} as never)) as V2CoreTaskPageData;
+}
+
+async function loadReadonlyTaskPage(taskId: string) {
+	return (await load({
+		params: { taskId },
+		url: new URL(`http://localhost/app/v2-core/tasks/${taskId}?mode=read`)
 	} as never)) as V2CoreTaskPageData;
 }
 
@@ -101,9 +109,9 @@ function readTaskStatus(dbFile: string, taskId: string) {
 	const db = openV2CoreDb({ dbFile });
 
 	try {
-		return db.prepare<[string], { status: string }>('select status from v2_core_tasks where id = ?').get(
-			taskId
-		)?.status;
+		return db
+			.prepare<[string], { status: string }>('select status from v2_core_tasks where id = ?')
+			.get(taskId)?.status;
 	} finally {
 		db.close();
 	}
@@ -161,7 +169,10 @@ function readTaskRuns(dbFile: string, taskId: string) {
 
 	try {
 		return db
-			.prepare<[string], { id: string; status: string; action_summary: string; result_summary: string }>(
+			.prepare<
+				[string],
+				{ id: string; status: string; action_summary: string; result_summary: string }
+			>(
 				`
 					select id, status, action_summary, result_summary
 					from v2_core_runs
@@ -418,14 +429,16 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 
 		expect(_getV2CoreTaskUiDbFile()).toBe(dbFile);
 		expect(result.dbFile).toBe(dbFile);
+		expect(result.mode).toBe('action');
 		expect(result.taskDetail.task.title).toBe('Review task detail page');
 		expect(result.contextBundle?.readiness).toMatchObject({
 			status: 'review',
 			canStart: false
 		});
 		const contextSourceTypes =
-			result.contextBundle?.includedSources.map((source: { recordType: string }) => source.recordType) ??
-			[];
+			result.contextBundle?.includedSources.map(
+				(source: { recordType: string }) => source.recordType
+			) ?? [];
 		expect(contextSourceTypes).toContain('memory');
 		expect(result.dependencyReport.summary.providerRunCount).toBe(1);
 		expect(result.dependencyReport.summary.toolExecutionCount).toBe(1);
@@ -437,6 +450,18 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 				reason: 'Approved review evidence can be accepted to close the task.'
 			})
 		);
+	});
+
+	it('loads read-only mode from the task detail query string', async () => {
+		const dbFile = createTempDbFile();
+		seedTaskDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await loadReadonlyTaskPage('task_detail_ui');
+
+		expect(result.mode).toBe('read');
+		expect(result.taskDetail.task.title).toBe('Review task detail page');
+		expect(result.availableActions.length).toBeGreaterThan(0);
 	});
 
 	it('marks submit for review available only after captured run and artifact evidence exists', async () => {
@@ -549,8 +574,7 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 		expect(result).toMatchObject({
 			status: 400,
 			data: {
-				message:
-					'Action submit_for_review is not available while task status is in_progress.'
+				message: 'Action submit_for_review is not available while task status is in_progress.'
 			}
 		});
 		expect(readTaskStatus(dbFile, 'task_submit_missing_evidence')).toBe('in_progress');
@@ -562,12 +586,12 @@ describe('/app/v2-core/tasks/[taskId] page server', () => {
 		seedCapturedReviewEvidence(dbFile, 'task_accept_reviewed_output');
 		setCoreDbFile(dbFile);
 
-		await expect(applyTaskAction('task_accept_reviewed_output', 'submit_for_review')).rejects.toMatchObject(
-			{
-				status: 303,
-				location: '/app/v2-core/tasks/task_accept_reviewed_output'
-			}
-		);
+		await expect(
+			applyTaskAction('task_accept_reviewed_output', 'submit_for_review')
+		).rejects.toMatchObject({
+			status: 303,
+			location: '/app/v2-core/tasks/task_accept_reviewed_output'
+		});
 		seedApprovedReview(dbFile, 'task_accept_reviewed_output');
 
 		await expect(

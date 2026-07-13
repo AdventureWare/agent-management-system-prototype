@@ -58,7 +58,9 @@ const V2_CORE_EXECUTABLE_TASK_ACTIONS: Record<
 
 const V2_CORE_ARTIFACT_ROLES = ['output', 'evidence', 'deliverable', 'context'] as const;
 
-function hasCapturedReviewEvidence(taskDetail: NonNullable<ReturnType<typeof readV2CoreTaskDetail>>) {
+function hasCapturedReviewEvidence(
+	taskDetail: NonNullable<ReturnType<typeof readV2CoreTaskDetail>>
+) {
 	return (
 		taskDetail.runs.length > 0 &&
 		taskDetail.artifacts.some((artifact) => artifact.status === 'submitted')
@@ -197,8 +199,9 @@ function createUiRecordId(prefix: string) {
 	return `${prefix}_${randomUUID().replaceAll('-', '_')}`;
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	const dbFile = _getV2CoreTaskUiDbFile();
+	const mode = url.searchParams.get('mode') === 'read' ? 'read' : 'action';
 	let db: ReturnType<typeof openV2CoreDbReadonly> | null = null;
 
 	try {
@@ -213,21 +216,22 @@ export const load: PageServerLoad = async ({ params }) => {
 		const dependencyReport = readV2CoreDependencyReport(db, {
 			taskId: params.taskId
 		});
-			const hasApprovedReview = taskDetail.reviews.some((review) => review.status === 'approved');
-			const hasReviewEvidence = hasCapturedReviewEvidence(taskDetail);
+		const hasApprovedReview = taskDetail.reviews.some((review) => review.status === 'approved');
+		const hasReviewEvidence = hasCapturedReviewEvidence(taskDetail);
 
-			return {
-				dbFile,
-				taskDetail,
-				contextBundle,
-				dependencyReport,
-				artifactRoles: V2_CORE_ARTIFACT_ROLES,
-				availableActions: getAvailableActions(
-					taskDetail.task.status,
-					hasApprovedReview,
-					hasReviewEvidence
-				)
-			};
+		return {
+			dbFile,
+			mode,
+			taskDetail,
+			contextBundle,
+			dependencyReport,
+			artifactRoles: V2_CORE_ARTIFACT_ROLES,
+			availableActions: getAvailableActions(
+				taskDetail.task.status,
+				hasApprovedReview,
+				hasReviewEvidence
+			)
+		};
 	} finally {
 		db?.close();
 	}

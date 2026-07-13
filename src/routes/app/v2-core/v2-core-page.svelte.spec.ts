@@ -187,6 +187,12 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		expect(document.body.textContent).toContain('Snapshot');
 		expect(document.body.textContent).toContain('v2_core_tasks');
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
+		).not.toBeNull();
+		expect(
+			document.querySelector('a[href="/app/v2-core/tasks/task_ui_done?mode=read"]')
+		).not.toBeNull();
 	});
 
 	it('keeps the read-only operator console usable in a phone viewport', async () => {

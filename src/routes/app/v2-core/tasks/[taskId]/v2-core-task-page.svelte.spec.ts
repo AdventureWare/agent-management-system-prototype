@@ -3,6 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
 function renderPage({
+	mode = 'action',
 	taskStatus = 'review',
 	readinessStatus = 'review',
 	readinessReason = 'Task status is review.',
@@ -25,6 +26,7 @@ function renderPage({
 		form: {} as never,
 		data: {
 			dbFile: '/tmp/ams-v2-core-task-ui.sqlite',
+			mode,
 			taskDetail: {
 				task: {
 					id: 'task_detail_ui',
@@ -295,5 +297,40 @@ describe('/app/v2-core/tasks/[taskId]/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Approved review evidence can be accepted');
 		expect(buttonLabels).toContain('Accept output');
 		expect(buttonLabels).toContain('Request changes');
+	});
+
+	it('renders task detail as read-only without mutation forms when mode is read', () => {
+		renderPage({
+			mode: 'read',
+			taskStatus: 'ready',
+			readinessStatus: 'ready',
+			readinessReason: 'Task is ready.',
+			availableActions: [
+				{
+					id: 'start_task',
+					label: 'Start task',
+					status: 'available',
+					reason: 'Task is ready and can move to in_progress.'
+				},
+				{
+					id: 'mark_blocked',
+					label: 'Mark blocked',
+					status: 'available',
+					reason: 'Ready work can be blocked if a missing dependency is found.'
+				}
+			]
+		});
+
+		expect(document.body.textContent).toContain('Read-only inspection');
+		expect(document.body.textContent).toContain('Mutation controls are hidden');
+		expect(document.body.textContent).toContain('read-only');
+		expect(document.querySelector('form[action="?/applyTaskAction"]')).toBeNull();
+		expect(document.querySelector('form[action="?/recordRunEvidence"]')).toBeNull();
+		const buttonLabels = Array.from(document.querySelectorAll('button')).map((button) =>
+			button.textContent?.trim()
+		);
+		expect(buttonLabels).not.toContain('Start task');
+		expect(buttonLabels).not.toContain('Record evidence');
+		expect(document.querySelector('a[href="/app/v2-core/tasks/task_detail_ui"]')).not.toBeNull();
 	});
 });

@@ -29,7 +29,7 @@
 	}
 
 	function taskHref(taskId: string) {
-		return resolve(`/app/v2-core/tasks/${taskId}`);
+		return resolve(`/app/v2-core/tasks/${taskId}?mode=read`);
 	}
 </script>
 
@@ -67,233 +67,233 @@
 				/>
 			</section>
 
-		<section class="v2-core-grid">
-			<section class="v2-core-panel" aria-labelledby="v2-core-active-goals">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-active-goals">Active goals</h2>
-					{#if activeGoal}
-						<span>{activeGoal.projectName}</span>
+			<section class="v2-core-grid">
+				<section class="v2-core-panel" aria-labelledby="v2-core-active-goals">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-active-goals">Active goals</h2>
+						{#if activeGoal}
+							<span>{activeGoal.projectName}</span>
+						{/if}
+					</header>
+					{#if operatorConsole.activeGoals.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.activeGoals as goal (goal.goalId)}
+								<article class="v2-core-row">
+									<div>
+										<p class="v2-core-row-title">{goal.title}</p>
+										<p class="v2-core-row-meta">{goal.goalId}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{goal.status}</span>
+										<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
+									</div>
+								</article>
+							{/each}
+						</div>
+					{:else}
+						<p class="v2-core-empty">No active goals</p>
 					{/if}
-				</header>
-				{#if operatorConsole.activeGoals.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.activeGoals as goal (goal.goalId)}
-							<article class="v2-core-row">
-								<div>
-									<p class="v2-core-row-title">{goal.title}</p>
-									<p class="v2-core-row-meta">{goal.goalId}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{goal.status}</span>
-									<span>{goal.openTaskCount} open / {goal.doneTaskCount} done</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No active goals</p>
-				{/if}
-			</section>
+				</section>
 
-			<section class="v2-core-panel" aria-labelledby="v2-core-next-work">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-next-work">Next work</h2>
-					<span>{operatorConsole.nextWork.candidates.length} tasks</span>
-				</header>
-				{#if operatorConsole.nextWork.candidates.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.nextWork.candidates as task (task.taskId)}
-							<article class="v2-core-row">
-								<div>
-									<a class="v2-core-row-title v2-core-row-link" href={taskHref(task.taskId)}>
-										{task.title}
-									</a>
-									<p class="v2-core-row-meta">{task.taskId} · {task.goalTitle}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{task.status}</span>
-									<span>{task.projectName}</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No next work</p>
-				{/if}
-			</section>
-
-			<section class="v2-core-panel" aria-labelledby="v2-core-review-queue">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-review-queue">Review queue</h2>
-					<span>{operatorConsole.reviewQueue.length} artifacts</span>
-				</header>
-				{#if operatorConsole.reviewQueue.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.reviewQueue as artifact (artifact.artifactId)}
-							<article class="v2-core-row">
-								<div>
-									<p class="v2-core-row-title">{artifact.title}</p>
-									<p class="v2-core-row-meta">{artifact.uri}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{artifact.status}</span>
-									<span>{artifact.taskId}</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No review items</p>
-				{/if}
-			</section>
-
-			<section class="v2-core-panel" aria-labelledby="v2-core-memory">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-memory">Trusted memory</h2>
-					<span>{formatCount(operatorConsole.memory?.items.length)} items</span>
-				</header>
-				{#if operatorConsole.memory?.items.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.memory.items as memory (memory.id)}
-							<article class="v2-core-row">
-								<div>
-									<p class="v2-core-row-title">{memory.title}</p>
-									<p class="v2-core-row-meta">{memory.body}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{memory.status}</span>
-									<span>{memory.scope}</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No trusted memory for current scope</p>
-				{/if}
-			</section>
-
-			<section class="v2-core-panel" aria-labelledby="v2-core-recent-runs">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-recent-runs">Recent runs</h2>
-					<span>{operatorConsole.recentRuns.length} runs</span>
-				</header>
-				{#if operatorConsole.recentRuns.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.recentRuns as run (run.runId)}
-							<article class="v2-core-row">
-								<div>
-									<a class="v2-core-row-title v2-core-row-link" href={taskHref(run.taskId)}>
-										{run.taskTitle}
-									</a>
-									<p class="v2-core-row-meta">{run.resultSummary}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{run.status}</span>
-									<span>{run.modelProviderName ?? 'No provider'}</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No recent runs</p>
-				{/if}
-			</section>
-
-			<section class="v2-core-panel" aria-labelledby="v2-core-artifacts">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-artifacts">Recent artifacts</h2>
-					<span>{operatorConsole.recentArtifacts.length} artifacts</span>
-				</header>
-				{#if operatorConsole.recentArtifacts.length}
-					<div class="v2-core-list">
-						{#each operatorConsole.recentArtifacts as artifact (artifact.artifactId)}
-							<article class="v2-core-row">
-								<div>
-									<p class="v2-core-row-title">{artifact.title}</p>
-									<p class="v2-core-row-meta">{artifact.uri}</p>
-								</div>
-								<div class="v2-core-row-side">
-									<span class="v2-core-badge">{artifact.status}</span>
-									<span>{artifact.role}</span>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<p class="v2-core-empty">No recent artifacts</p>
-				{/if}
-			</section>
-		</section>
-
-		<section class="v2-core-grid v2-core-grid-compact">
-			<section class="v2-core-panel" aria-labelledby="v2-core-status-counts">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-status-counts">State counts</h2>
-				</header>
-				<div class="v2-core-count-grid">
-					{#each reviewStatusRows as [status, count] (status)}
-						<div>
-							<span>Review {status}</span>
-							<strong>{count}</strong>
+				<section class="v2-core-panel" aria-labelledby="v2-core-next-work">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-next-work">Next work</h2>
+						<span>{operatorConsole.nextWork.candidates.length} tasks</span>
+					</header>
+					{#if operatorConsole.nextWork.candidates.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.nextWork.candidates as task (task.taskId)}
+								<article class="v2-core-row">
+									<div>
+										<a class="v2-core-row-title v2-core-row-link" href={taskHref(task.taskId)}>
+											{task.title}
+										</a>
+										<p class="v2-core-row-meta">{task.taskId} · {task.goalTitle}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{task.status}</span>
+										<span>{task.projectName}</span>
+									</div>
+								</article>
+							{/each}
 						</div>
-					{/each}
-					{#each memoryStatusRows as [status, count] (status)}
-						<div>
-							<span>Memory {status}</span>
-							<strong>{count}</strong>
+					{:else}
+						<p class="v2-core-empty">No next work</p>
+					{/if}
+				</section>
+
+				<section class="v2-core-panel" aria-labelledby="v2-core-review-queue">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-review-queue">Review queue</h2>
+						<span>{operatorConsole.reviewQueue.length} artifacts</span>
+					</header>
+					{#if operatorConsole.reviewQueue.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.reviewQueue as artifact (artifact.artifactId)}
+								<article class="v2-core-row">
+									<div>
+										<p class="v2-core-row-title">{artifact.title}</p>
+										<p class="v2-core-row-meta">{artifact.uri}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{artifact.status}</span>
+										<span>{artifact.taskId}</span>
+									</div>
+								</article>
+							{/each}
 						</div>
-					{/each}
-					{#each taskStatusRows as [status, count] (status)}
-						<div>
-							<span>Task {status}</span>
-							<strong>{count}</strong>
+					{:else}
+						<p class="v2-core-empty">No review items</p>
+					{/if}
+				</section>
+
+				<section class="v2-core-panel" aria-labelledby="v2-core-memory">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-memory">Trusted memory</h2>
+						<span>{formatCount(operatorConsole.memory?.items.length)} items</span>
+					</header>
+					{#if operatorConsole.memory?.items.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.memory.items as memory (memory.id)}
+								<article class="v2-core-row">
+									<div>
+										<p class="v2-core-row-title">{memory.title}</p>
+										<p class="v2-core-row-meta">{memory.body}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{memory.status}</span>
+										<span>{memory.scope}</span>
+									</div>
+								</article>
+							{/each}
 						</div>
-					{/each}
-				</div>
+					{:else}
+						<p class="v2-core-empty">No trusted memory for current scope</p>
+					{/if}
+				</section>
+
+				<section class="v2-core-panel" aria-labelledby="v2-core-recent-runs">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-recent-runs">Recent runs</h2>
+						<span>{operatorConsole.recentRuns.length} runs</span>
+					</header>
+					{#if operatorConsole.recentRuns.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.recentRuns as run (run.runId)}
+								<article class="v2-core-row">
+									<div>
+										<a class="v2-core-row-title v2-core-row-link" href={taskHref(run.taskId)}>
+											{run.taskTitle}
+										</a>
+										<p class="v2-core-row-meta">{run.resultSummary}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{run.status}</span>
+										<span>{run.modelProviderName ?? 'No provider'}</span>
+									</div>
+								</article>
+							{/each}
+						</div>
+					{:else}
+						<p class="v2-core-empty">No recent runs</p>
+					{/if}
+				</section>
+
+				<section class="v2-core-panel" aria-labelledby="v2-core-artifacts">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-artifacts">Recent artifacts</h2>
+						<span>{operatorConsole.recentArtifacts.length} artifacts</span>
+					</header>
+					{#if operatorConsole.recentArtifacts.length}
+						<div class="v2-core-list">
+							{#each operatorConsole.recentArtifacts as artifact (artifact.artifactId)}
+								<article class="v2-core-row">
+									<div>
+										<p class="v2-core-row-title">{artifact.title}</p>
+										<p class="v2-core-row-meta">{artifact.uri}</p>
+									</div>
+									<div class="v2-core-row-side">
+										<span class="v2-core-badge">{artifact.status}</span>
+										<span>{artifact.role}</span>
+									</div>
+								</article>
+							{/each}
+						</div>
+					{:else}
+						<p class="v2-core-empty">No recent artifacts</p>
+					{/if}
+				</section>
 			</section>
 
-			<section class="v2-core-panel" aria-labelledby="v2-core-dependencies">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-dependencies">Dependencies</h2>
-					<span>{operatorConsole.dependencyReport.modelProviders.length} providers</span>
-				</header>
-				<div class="v2-core-count-grid">
-					<div>
-						<span>Provider runs</span>
-						<strong>{dependencySummary?.providerRunCount ?? 0}</strong>
-					</div>
-					<div>
-						<span>Tool executions</span>
-						<strong>{dependencySummary?.toolExecutionCount ?? 0}</strong>
-					</div>
-				</div>
-				{#if operatorConsole.dependencyReport.modelProviders.length}
-					<div class="v2-core-list v2-core-list-tight">
-						{#each operatorConsole.dependencyReport.modelProviders as provider (provider.providerId)}
-							<div class="v2-core-mini-row">
-								<span>{provider.name}</span>
-								<strong>{provider.runCount}</strong>
+			<section class="v2-core-grid v2-core-grid-compact">
+				<section class="v2-core-panel" aria-labelledby="v2-core-status-counts">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-status-counts">State counts</h2>
+					</header>
+					<div class="v2-core-count-grid">
+						{#each reviewStatusRows as [status, count] (status)}
+							<div>
+								<span>Review {status}</span>
+								<strong>{count}</strong>
+							</div>
+						{/each}
+						{#each memoryStatusRows as [status, count] (status)}
+							<div>
+								<span>Memory {status}</span>
+								<strong>{count}</strong>
+							</div>
+						{/each}
+						{#each taskStatusRows as [status, count] (status)}
+							<div>
+								<span>Task {status}</span>
+								<strong>{count}</strong>
 							</div>
 						{/each}
 					</div>
-				{/if}
-			</section>
+				</section>
 
-			<section class="v2-core-panel" aria-labelledby="v2-core-snapshot">
-				<header class="v2-core-panel-header">
-					<h2 id="v2-core-snapshot">Snapshot</h2>
-					<span>{operatorConsole.snapshotStatus.format}</span>
-				</header>
-				<div class="v2-core-count-grid">
-					{#each snapshotRows as [table, count] (table)}
+				<section class="v2-core-panel" aria-labelledby="v2-core-dependencies">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-dependencies">Dependencies</h2>
+						<span>{operatorConsole.dependencyReport.modelProviders.length} providers</span>
+					</header>
+					<div class="v2-core-count-grid">
 						<div>
-							<span>{table}</span>
-							<strong>{count}</strong>
+							<span>Provider runs</span>
+							<strong>{dependencySummary?.providerRunCount ?? 0}</strong>
 						</div>
-					{/each}
-				</div>
+						<div>
+							<span>Tool executions</span>
+							<strong>{dependencySummary?.toolExecutionCount ?? 0}</strong>
+						</div>
+					</div>
+					{#if operatorConsole.dependencyReport.modelProviders.length}
+						<div class="v2-core-list v2-core-list-tight">
+							{#each operatorConsole.dependencyReport.modelProviders as provider (provider.providerId)}
+								<div class="v2-core-mini-row">
+									<span>{provider.name}</span>
+									<strong>{provider.runCount}</strong>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</section>
+
+				<section class="v2-core-panel" aria-labelledby="v2-core-snapshot">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-snapshot">Snapshot</h2>
+						<span>{operatorConsole.snapshotStatus.format}</span>
+					</header>
+					<div class="v2-core-count-grid">
+						{#each snapshotRows as [table, count] (table)}
+							<div>
+								<span>{table}</span>
+								<strong>{count}</strong>
+							</div>
+						{/each}
+					</div>
+				</section>
 			</section>
-		</section>
 		{/if}
 	</div>
 </AppPage>
