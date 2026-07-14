@@ -470,6 +470,217 @@ describe('v2 core CLI work-loop smoke', () => {
 		).toEqual(['goal_v2_next_work_active', 'goal_v2_next_work_active']);
 	}, 10_000);
 
+	it('launches an owned agent execution cycle only for dispatchable active-goal work', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_execution_cycle_smoke',
+			'--name',
+			'AMS v2 Execution Cycle Smoke',
+			'--summary',
+			'Temporary project for proving the owned agent execution-cycle command.'
+		]);
+		runCoreCli([
+			'register-provider',
+			...baseArgs,
+			'--id',
+			'provider_v2_execution_cycle_smoke',
+			'--name',
+			'Codex execution-cycle smoke provider',
+			'--kind',
+			'external_ai'
+		]);
+
+		const noWork = runCoreCli([
+			'agent-execution-cycle',
+			...baseArgs,
+			'--project',
+			'project_v2_execution_cycle_smoke',
+			'--provider',
+			'provider_v2_execution_cycle_smoke',
+			'--compact'
+		]);
+		expect(noWork.agentExecutionCycle).toMatchObject({
+			status: 'no_work',
+			selectedCandidate: null,
+			providerRunLaunch: null,
+			closeout: null
+		});
+
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_execution_cycle_active',
+			'--project',
+			'project_v2_execution_cycle_smoke',
+			'--title',
+			'Active execution-cycle goal',
+			'--summary',
+			'Goal with dispatchable work.',
+			'--success',
+			'Execution cycle launches only this goal.'
+		]);
+		for (const status of ['paused', 'blocked', 'completed']) {
+			runCoreCli([
+				'create-goal',
+				...baseArgs,
+				'--id',
+				`goal_v2_execution_cycle_${status}`,
+				'--project',
+				'project_v2_execution_cycle_smoke',
+				'--title',
+				`Non-dispatch ${status} goal`,
+				'--summary',
+				`Goal with ${status} status.`,
+				'--success',
+				'Execution cycle should not launch this goal.',
+				'--status',
+				status
+			]);
+			runCoreCli([
+				'create-task',
+				...baseArgs,
+				'--id',
+				`task_v2_execution_cycle_ready_${status}`,
+				'--goal',
+				`goal_v2_execution_cycle_${status}`,
+				'--title',
+				`Ready task under ${status} goal`,
+				'--summary',
+				'Ready task should be excluded by goal status.',
+				'--success',
+				'Task is excluded from execution-cycle dispatch.',
+				'--validation',
+				'Read execution-cycle output.'
+			]);
+		}
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_execution_cycle_ready',
+			'--goal',
+			'goal_v2_execution_cycle_active',
+			'--title',
+			'Ready execution-cycle task',
+			'--summary',
+			'Task selected by the owned agent execution cycle.',
+			'--success',
+			'Execution cycle launches a provider-linked run and packet.',
+			'--validation',
+			'Read execution-cycle output and task detail.'
+		]);
+
+		const nextWork = runCoreCli([
+			'next-work',
+			...baseArgs,
+			'--project',
+			'project_v2_execution_cycle_smoke'
+		]);
+		expect(nextWork.candidates.map((candidate: any) => candidate.taskId)).toEqual([
+			'task_v2_execution_cycle_ready'
+		]);
+
+		const launched = runCoreCli([
+			'agent-execution-cycle',
+			...baseArgs,
+			'--run',
+			'run_v2_execution_cycle_ready',
+			'--project',
+			'project_v2_execution_cycle_smoke',
+			'--provider',
+			'provider_v2_execution_cycle_smoke',
+			'--compact'
+		]);
+		expect(launched.agentExecutionCycle).toMatchObject({
+			status: 'launched',
+			selectedCandidate: {
+				taskId: 'task_v2_execution_cycle_ready',
+				action: 'start_task'
+			},
+			providerRunLaunch: {
+				runId: 'run_v2_execution_cycle_ready',
+				taskId: 'task_v2_execution_cycle_ready',
+				modelProviderId: 'provider_v2_execution_cycle_smoke',
+				taskStatusBeforeLaunch: 'ready',
+				taskStatusAfterLaunch: 'in_progress',
+				agentWorkPacket: {
+					taskContract: {
+						taskId: 'task_v2_execution_cycle_ready',
+						status: 'in_progress'
+					},
+					readiness: {
+						recommendedAction: 'continue_task'
+					}
+				}
+			},
+			closeout: {
+				command:
+					'npm run v2:core-db -- managed-run-lifecycle --task task_v2_execution_cycle_ready --run run_v2_execution_cycle_ready',
+				reviewRequiredBeforeDone: true,
+				acceptanceDecisionRequiredBeforeDone: true
+			}
+		});
+		expect(launched.agentExecutionCycle.fullOutputHint).toContain('without --compact');
+
+		const runningGuard = runCoreCli([
+			'agent-execution-cycle',
+			...baseArgs,
+			'--project',
+			'project_v2_execution_cycle_smoke',
+			'--provider',
+			'provider_v2_execution_cycle_smoke'
+		]);
+		expect(runningGuard.agentExecutionCycle).toMatchObject({
+			status: 'no_work',
+			providerRunLaunch: null
+		});
+
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_execution_cycle_review',
+			'--goal',
+			'goal_v2_execution_cycle_active',
+			'--title',
+			'Review execution-cycle task',
+			'--summary',
+			'Review-state task should stop dispatch.',
+			'--success',
+			'Execution cycle returns review guard.',
+			'--validation',
+			'Read execution-cycle output.',
+			'--status',
+			'review'
+		]);
+		const reviewGuard = runCoreCli([
+			'agent-control',
+			...baseArgs,
+			'--agent-action',
+			'execution-cycle',
+			'--project',
+			'project_v2_execution_cycle_smoke',
+			'--provider',
+			'provider_v2_execution_cycle_smoke'
+		]);
+		expect(reviewGuard.agentControl.agentExecutionCycle).toMatchObject({
+			status: 'not_dispatchable',
+			selectedCandidate: {
+				taskId: 'task_v2_execution_cycle_review',
+				action: 'review_output'
+			},
+			providerRunLaunch: null,
+			closeout: null
+		});
+	}, 10_000);
+
 	it('drives a task through the minimal agent-control surface', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];

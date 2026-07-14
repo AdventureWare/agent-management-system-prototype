@@ -16,6 +16,7 @@ import {
 	createV2CoreTask,
 	exportV2CoreSnapshot,
 	importV2CoreSnapshot,
+	launchV2CoreAgentExecutionCycle,
 	launchV2CoreProviderRun,
 	promoteV2CoreMemory,
 	readV2CoreAgentWorkPacket,
@@ -59,6 +60,7 @@ type Command =
 	| 'dependency-reduction-report'
 	| 'operator-console'
 	| 'agent-control'
+	| 'agent-execution-cycle'
 	| 'search-context'
 	| 'route-comparison-report'
 	| 'routing-evidence'
@@ -167,6 +169,7 @@ function printHelp() {
 			'  dependency-reduction-report Read capability-level external-AI dependency status.',
 			'  operator-console     Read consolidated operator state from existing v2 core records.',
 			'  agent-control        Thin agent-facing surface over the v2 core work loop.',
+			'  agent-execution-cycle Select active-goal work, launch a provider run, and return closeout guidance.',
 			'  search-context       Search existing v2 core records with source-linked results.',
 			'  route-comparison-report Read capability-level route comparison evidence.',
 			'  routing-evidence     Read route-selection Decision evidence.',
@@ -248,7 +251,7 @@ function printHelp() {
 			'  --followup-success <text> Optional follow-up success criteria.',
 			'  --followup-validation <text> Optional follow-up validation plan.',
 			'  --followup-rationale <text> Optional follow-up source reason.',
-			'  --agent-action <text> Agent-control action: next, packet, search, route-comparison-report, routing-evidence, start, launch-provider-run, complete-provider-run, managed-run-lifecycle, record-run, record-tool, attach-artifact, submit-review, accept-output, follow-up.',
+			'  --agent-action <text> Agent-control action: next, packet, search, route-comparison-report, routing-evidence, execution-cycle, start, launch-provider-run, complete-provider-run, managed-run-lifecycle, record-run, record-tool, attach-artifact, submit-review, accept-output, follow-up.',
 			'  --dry-run            Validate lifecycle helper inputs and return planned writes without mutating state.',
 			'  --reset              Delete an existing DB before init.',
 			'  --json               Print machine-readable JSON.',
@@ -852,6 +855,47 @@ function compactAgentControlPacket(packet: V2CoreAgentPacket) {
 	};
 }
 
+type V2CoreAgentExecutionCycleResult = ReturnType<typeof launchV2CoreAgentExecutionCycle>;
+
+function compactAgentExecutionCycle(cycle: V2CoreAgentExecutionCycleResult) {
+	if (cycle.status !== 'launched') {
+		return cycle;
+	}
+
+	return {
+		...cycle,
+		providerRunLaunch: {
+			...cycle.providerRunLaunch,
+			agentWorkPacket: compactAgentControlPacket(cycle.providerRunLaunch.agentWorkPacket)
+		},
+		fullOutputHint: 'Run the same command without --compact for the full work packet.'
+	};
+}
+
+function launchAgentExecutionCycle(options: Options) {
+	const db = openForCommand(options);
+	try {
+		const cycle = launchV2CoreAgentExecutionCycle(db, {
+			runId: options.runId ?? options.id ?? undefined,
+			decisionId: options.id && options.runId ? options.id : undefined,
+			projectId: options.projectId,
+			goalId: options.goalId,
+			modelProviderId: requireOption(options.providerId, '--provider <id>'),
+			inputSummary: options.inputSummary ?? undefined,
+			actionSummary: options.actionSummary ?? undefined,
+			limit: Number.isFinite(options.limit) ? options.limit : 10
+		});
+		printResult(
+			{
+				agentExecutionCycle: options.compact ? compactAgentExecutionCycle(cycle) : cycle
+			},
+			options.json
+		);
+	} finally {
+		db.close();
+	}
+}
+
 function agentControl(options: Options) {
 	const action = requireOption(options.agentControlAction, '--agent-action <text>');
 	const db = openForCommand(options);
@@ -957,6 +1001,29 @@ function agentControl(options: Options) {
 							taskId: options.taskId,
 							limit: Number.isFinite(options.limit) ? options.limit : 10
 						})
+					}
+				},
+				options.json
+			);
+			return;
+		}
+
+		if (action === 'execution-cycle') {
+			const cycle = launchV2CoreAgentExecutionCycle(db, {
+				runId: options.runId ?? options.id ?? undefined,
+				decisionId: options.id && options.runId ? options.id : undefined,
+				projectId: options.projectId,
+				goalId: options.goalId,
+				modelProviderId: requireOption(options.providerId, '--provider <id>'),
+				inputSummary: options.inputSummary ?? undefined,
+				actionSummary: options.actionSummary ?? undefined,
+				limit: Number.isFinite(options.limit) ? options.limit : 10
+			});
+			printResult(
+				{
+					agentControl: {
+						action,
+						agentExecutionCycle: options.compact ? compactAgentExecutionCycle(cycle) : cycle
 					}
 				},
 				options.json
@@ -1727,6 +1794,9 @@ function main() {
 			break;
 		case 'agent-control':
 			agentControl(options);
+			break;
+		case 'agent-execution-cycle':
+			launchAgentExecutionCycle(options);
 			break;
 		case 'search-context':
 			searchContext(options);

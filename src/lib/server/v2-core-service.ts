@@ -71,6 +71,17 @@ export type V2CoreProviderRunLaunchInput = {
 	actionSummary?: string;
 };
 
+export type V2CoreAgentExecutionCycleInput = {
+	runId?: string;
+	decisionId?: string;
+	projectId?: string | null;
+	goalId?: string | null;
+	modelProviderId: string;
+	inputSummary?: string;
+	actionSummary?: string;
+	limit?: number;
+};
+
 export type V2CoreProviderRunCompletionInput = {
 	runId: string;
 	taskId: string;
@@ -842,6 +853,37 @@ export type V2CoreProviderRunLaunch = {
 	taskStatusAfterLaunch: string;
 	agentWorkPacket: V2CoreAgentWorkPacket;
 };
+
+export type V2CoreAgentExecutionCycle =
+	| {
+			status: 'no_work';
+			reason: string;
+			nextWork: V2CoreNextWork;
+			selectedCandidate: null;
+			providerRunLaunch: null;
+			closeout: null;
+	  }
+	| {
+			status: 'not_dispatchable';
+			reason: string;
+			nextWork: V2CoreNextWork;
+			selectedCandidate: V2CoreNextWork['candidates'][number];
+			providerRunLaunch: null;
+			closeout: null;
+	  }
+	| {
+			status: 'launched';
+			reason: string;
+			nextWork: V2CoreNextWork;
+			selectedCandidate: V2CoreNextWork['candidates'][number];
+			providerRunLaunch: V2CoreProviderRunLaunch;
+			closeout: {
+				command: string;
+				requiredInputs: string[];
+				reviewRequiredBeforeDone: true;
+				acceptanceDecisionRequiredBeforeDone: true;
+			};
+	  };
 
 export type V2CoreProviderRunCompletion = {
 	taskDetail: V2CoreTaskDetail;
@@ -1670,6 +1712,78 @@ export function recordV2CoreRun(db: Database.Database, input: V2CoreRunInput) {
 	})();
 
 	return readV2CoreTaskDetail(db, taskId);
+}
+
+export function launchV2CoreAgentExecutionCycle(
+	db: Database.Database,
+	input: V2CoreAgentExecutionCycleInput
+): V2CoreAgentExecutionCycle {
+	const nextWork = readV2CoreNextWork(db, {
+		projectId: input.projectId,
+		goalId: input.goalId,
+		limit: input.limit
+	});
+	const selectedCandidate = nextWork.candidates[0] ?? null;
+
+	if (!selectedCandidate) {
+		return {
+			status: 'no_work',
+			reason: 'No eligible work exists for the current project or goal scope.',
+			nextWork,
+			selectedCandidate: null,
+			providerRunLaunch: null,
+			closeout: null
+		};
+	}
+
+	if (selectedCandidate.action !== 'start_task') {
+		return {
+			status: 'not_dispatchable',
+			reason:
+				selectedCandidate.action === 'review_output'
+					? 'The next eligible item is awaiting review; review output before dispatching more work.'
+					: 'The next eligible item is blocked; resolve the blocker before dispatching more work.',
+			nextWork,
+			selectedCandidate,
+			providerRunLaunch: null,
+			closeout: null
+		};
+	}
+
+	const providerRunLaunch = launchV2CoreProviderRun(db, {
+		runId: input.runId,
+		decisionId: input.decisionId,
+		taskId: selectedCandidate.taskId,
+		modelProviderId: input.modelProviderId,
+		inputSummary:
+			input.inputSummary ??
+			`Execute selected next work ${selectedCandidate.taskId} through the owned agent execution cycle.`,
+		actionSummary:
+			input.actionSummary ??
+			'Launch a provider-linked run from existing next-work and bounded agent-work-packet state; result, artifacts, review, and acceptance remain explicit closeout actions.'
+	});
+
+	return {
+		status: 'launched',
+		reason: 'Selected ready active-goal work and launched a provider-linked run.',
+		nextWork,
+		selectedCandidate,
+		providerRunLaunch,
+		closeout: {
+			command: `npm run v2:core-db -- managed-run-lifecycle --task ${providerRunLaunch.taskId} --run ${providerRunLaunch.runId}`,
+			requiredInputs: [
+				'--artifact <id>',
+				'--uri <artifact-uri>',
+				'--title <artifact-title>',
+				'--result <summary>',
+				'--validation <summary>',
+				'--review <id>',
+				'--decision <id>'
+			],
+			reviewRequiredBeforeDone: true,
+			acceptanceDecisionRequiredBeforeDone: true
+		}
+	};
 }
 
 export function launchV2CoreProviderRun(
