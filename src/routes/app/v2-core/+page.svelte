@@ -136,6 +136,10 @@
 			canDispatch: goal.status === 'active'
 		};
 	}
+
+	function scopedGoalActionLabel(label: string) {
+		return `${label} scoped goal`;
+	}
 </script>
 
 <AppPage>
@@ -250,6 +254,60 @@
 								<strong>None available</strong>
 							{/if}
 						</div>
+					</div>
+					<div class="v2-core-scoped-actions" aria-label={`${scopedGoalSummary.goal.title} scoped actions`}>
+						{#if goalActions(scopedGoalSummary.goal.status).length}
+							<div class="v2-core-scoped-action-group" aria-label="Scoped goal state actions">
+								{#each goalActions(scopedGoalSummary.goal.status) as action (action.id)}
+									<form method="POST" action="?/applyGoalAction" class="v2-core-goal-form">
+										<input type="hidden" name="goalId" value={scopedGoalSummary.goal.goalId} />
+										<input type="hidden" name="actionId" value={action.id} />
+										<input
+											name="summary"
+											type="text"
+											placeholder={`${action.label} reason`}
+											aria-label={`${action.label} ${scopedGoalSummary.goal.title} reason`}
+										/>
+										<button type="submit">{scopedGoalActionLabel(action.label)}</button>
+									</form>
+								{/each}
+							</div>
+						{/if}
+						{#if scopedGoalSummary.currentRun}
+							<div class="v2-core-handoff" aria-label={`${scopedGoalSummary.goal.title} scoped current run`}>
+								<div>
+									<span>Current run</span>
+									<strong>{scopedGoalSummary.currentRun.runId}</strong>
+									<p>{scopedGoalSummary.currentRun.status} · {scopedGoalSummary.currentRun.modelProviderName ?? 'No provider'}</p>
+								</div>
+								<a href={taskHref(scopedGoalSummary.currentRun.taskId)}>Open scoped current-run task</a>
+							</div>
+						{:else if scopedGoalSummary.goal.status === 'active' && scopedGoalSummary.selectedTask}
+							<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+								<input type="hidden" name="goalId" value={scopedGoalSummary.goal.goalId} />
+								<input type="hidden" name="taskId" value={scopedGoalSummary.selectedTask.taskId} />
+								<div>
+									<span>Selected task</span>
+									<a href={taskHref(scopedGoalSummary.selectedTask.taskId)}>
+										{scopedGoalSummary.selectedTask.title}
+									</a>
+								</div>
+								<button type="submit">Launch scoped goal work</button>
+							</form>
+						{:else if scopedGoalSummary.goal.status === 'active' && scopedGoalSummary.queueState === 'no_open_work'}
+							<form
+								method="POST"
+								action="?/createGoalContinuationTask"
+								class="v2-core-dispatch-form"
+							>
+								<input type="hidden" name="goalId" value={scopedGoalSummary.goal.goalId} />
+								<div>
+									<span>No open work</span>
+									<p>Create a continuation planning task</p>
+								</div>
+								<button type="submit">Plan scoped next work</button>
+							</form>
+						{/if}
 					</div>
 				</section>
 			{/if}
@@ -885,6 +943,25 @@
 
 	.v2-core-scoped-summary-grid a:hover {
 		text-decoration: underline;
+	}
+
+	.v2-core-scoped-actions {
+		display: grid;
+		gap: 0.6rem;
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding-top: 0.7rem;
+	}
+
+	.v2-core-scoped-action-group {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+		gap: 0.45rem;
+	}
+
+	.v2-core-scoped-actions .v2-core-goal-form,
+	.v2-core-scoped-actions .v2-core-dispatch-form,
+	.v2-core-scoped-actions .v2-core-handoff {
+		margin-top: 0;
 	}
 
 	.v2-core-grid {

@@ -687,7 +687,19 @@ function taskRollupSection() {
 	return section as HTMLElement;
 }
 
+function scopedSummarySection() {
+	const section = document.querySelector('section[aria-labelledby="v2-core-scoped-summary"]');
+	expect(section).not.toBeNull();
+	return section as HTMLElement;
+}
+
 function hasTaskRollupLink(section: HTMLElement, taskId: string, label: string) {
+	return Array.from(
+		section.querySelectorAll(`a[href="/app/v2-core/tasks/${taskId}?mode=read"]`)
+	).some((link) => link.textContent === label);
+}
+
+function hasScopedSummaryLink(section: HTMLElement, taskId: string, label: string) {
 	return Array.from(
 		section.querySelectorAll(`a[href="/app/v2-core/tasks/${taskId}?mode=read"]`)
 	).some((link) => link.textContent === label);
@@ -780,6 +792,30 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('2 open / 1 review / 1 done');
 		expect(document.body.textContent).toContain('Review artifact_ui_review');
 		expect(document.body.textContent).toContain('Selected next work');
+		const scopedSummary = scopedSummarySection();
+		expect(
+			scopedSummary.querySelector(
+				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui"]'
+			)
+		).not.toBeNull();
+		expect(
+			scopedSummary.querySelector(
+				'form[action="?/applyGoalAction"] input[name="actionId"][value="pause_goal"]'
+			)
+		).not.toBeNull();
+		expect(
+			scopedSummary.querySelector(
+				'form[action="?/applyGoalAction"] input[name="actionId"][value="block_goal"]'
+			)
+		).not.toBeNull();
+		expect(scopedSummary.textContent).toContain('Pause scoped goal');
+		expect(scopedSummary.textContent).toContain('Block scoped goal');
+		expect(
+			scopedSummary.querySelector(
+				'form[action="?/dispatchGoalWork"] input[name="taskId"][value="task_ui_next"]'
+			)
+		).not.toBeNull();
+		expect(scopedSummary.textContent).toContain('Launch scoped goal work');
 		const taskRollup = taskRollupSection();
 		expect(
 			hasTaskRollupLink(taskRollup, 'task_ui_review', 'Review scoped output')
@@ -833,6 +869,13 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('1 open / 0 review / 0 done');
 		expect(document.body.textContent).toContain('Current child goal run');
 		expect(document.body.textContent).toContain('run_ui_child_current');
+		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Pause scoped goal');
+		expect(scopedSummary.textContent).toContain('Block scoped goal');
+		expect(scopedSummary.textContent).toContain('Open scoped current-run task');
+		expect(
+			hasScopedSummaryLink(scopedSummary, 'task_ui_child_current', 'Open scoped current-run task')
+		).toBe(true);
 		const taskRollup = taskRollupSection();
 		expect(taskRollup.textContent).toContain('Current run');
 		expect(taskRollup.textContent).toContain('planned · Codex UI');
@@ -862,6 +905,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Blocked');
 		expect(document.body.textContent).toContain('None');
 		expect(document.body.textContent).toContain('None selected');
+		let scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Resume scoped goal');
+		expect(scopedSummary.textContent).toContain('Pause scoped goal');
+		expect(scopedSummary.textContent).not.toContain('Launch scoped goal work');
+		expect(scopedSummary.textContent).not.toContain('Plan scoped next work');
 
 		document.body.innerHTML = '';
 		renderPage({ scopedGoalId: 'goal_ui_paused' });
@@ -872,11 +920,25 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Paused');
 		expect(document.body.textContent).toContain('None');
 		expect(document.body.textContent).toContain('None selected');
+		scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Resume scoped goal');
+		expect(scopedSummary.textContent).toContain('Block scoped goal');
+		expect(scopedSummary.textContent).not.toContain('Launch scoped goal work');
+		expect(scopedSummary.textContent).not.toContain('Plan scoped next work');
 	});
 
 	it('renders empty scoped task rollup state', () => {
 		renderPage({ scopedGoalId: 'goal_ui_empty' });
 
+		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Pause scoped goal');
+		expect(scopedSummary.textContent).toContain('Block scoped goal');
+		expect(
+			scopedSummary.querySelector(
+				'form[action="?/createGoalContinuationTask"] input[name="goalId"][value="goal_ui_empty"]'
+			)
+		).not.toBeNull();
+		expect(scopedSummary.textContent).toContain('Plan scoped next work');
 		expect(document.body.textContent).toContain('Tasks in scope');
 		expect(document.body.textContent).toContain('0 open / 0 review / 0 done');
 		expect(document.body.textContent).toContain('No tasks for selected goal');
@@ -902,6 +964,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Show project scope' }))
 			.toBeInTheDocument();
+		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Launch scoped goal work');
+		expect(scopedSummary.textContent).toContain('Pause scoped goal');
+		expect(scopedSummary.textContent).toContain('Block scoped goal');
 		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
@@ -920,8 +986,19 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(
 			hasTaskRollupLink(taskRollup, 'task_ui_done', 'Open task detail')
 		).toBe(true);
-		expect(Array.from(document.querySelectorAll('button')).filter((button) => button.textContent === 'Launch task')).toHaveLength(1);
-		expect(Array.from(document.querySelectorAll('a')).filter((link) => link.textContent === 'Review task')).toHaveLength(1);
+		expect(
+			Array.from(document.querySelectorAll('button')).filter(
+				(button) => button.textContent === 'Launch task'
+			)
+		).toHaveLength(1);
+		expect(
+			Array.from(document.querySelectorAll('button')).filter(
+				(button) => button.textContent === 'Launch scoped goal work'
+			)
+		).toHaveLength(1);
+		expect(
+			Array.from(document.querySelectorAll('a')).filter((link) => link.textContent === 'Review task')
+		).toHaveLength(1);
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		await expect
@@ -950,6 +1027,8 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Show project scope' }))
 			.toBeInTheDocument();
+		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Open scoped current-run task');
 		const taskRollup = taskRollupSection();
 		expect(taskRollup.textContent).toContain('Current run');
 		expect(
