@@ -3103,7 +3103,19 @@ export function readV2CoreNextWork(
 	const limit = Math.min(Math.max(options.limit ?? 10, 1), 50);
 	const conditions: string[] = [
 		"task.status in ('ready', 'review', 'blocked')",
-		"goal.status = 'active'"
+		"goal.status = 'active'",
+		`(
+			task.status != 'ready'
+			or not exists (
+				select 1
+				from v2_core_task_dependencies dependency
+				join v2_core_tasks depends_on_task
+					on depends_on_task.id = dependency.depends_on_task_id
+				where dependency.task_id = task.id
+					and dependency.status = 'unresolved'
+					and depends_on_task.status != 'done'
+			)
+		)`
 	];
 	const params: string[] = [];
 

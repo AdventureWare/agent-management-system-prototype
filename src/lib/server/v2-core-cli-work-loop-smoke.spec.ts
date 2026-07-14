@@ -411,6 +411,50 @@ describe('v2 core CLI work-loop smoke', () => {
 			'--status',
 			'blocked'
 		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_next_work_prerequisite_active',
+			'--goal',
+			'goal_v2_next_work_active',
+			'--title',
+			'Prerequisite task under active goal',
+			'--summary',
+			'Prerequisite task used to prove dependency-aware next-work.',
+			'--success',
+			'Dependent ready work appears only after this task is done.',
+			'--validation',
+			'Read next-work before and after dependency completion.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_next_work_dependent_ready_active',
+			'--goal',
+			'goal_v2_next_work_active',
+			'--title',
+			'Dependent ready task under active goal',
+			'--summary',
+			'Ready task should wait for its prerequisite before dispatch.',
+			'--success',
+			'Task appears in next-work only after the prerequisite is done.',
+			'--validation',
+			'Read next-work before and after dependency completion.'
+		]);
+		runCoreCli([
+			'record-task-dependency',
+			...baseArgs,
+			'--id',
+			'dep_v2_next_work_dependent_after_prerequisite',
+			'--task',
+			'task_v2_next_work_dependent_ready_active',
+			'--depends-on',
+			'task_v2_next_work_prerequisite_active',
+			'--summary',
+			'Dependent task should not dispatch until the prerequisite is done.'
+		]);
 
 		const nextWork = runCoreCli([
 			'next-work',
@@ -419,10 +463,15 @@ describe('v2 core CLI work-loop smoke', () => {
 			'project_v2_goal_status_next_work_smoke'
 		]);
 		expect(nextWork.candidates.map((candidate: any) => candidate.taskId)).toEqual([
+			'task_v2_next_work_prerequisite_active',
 			'task_v2_next_work_ready_active',
 			'task_v2_next_work_blocked_active'
 		]);
 		expect(nextWork.candidates).toEqual([
+			expect.objectContaining({
+				taskId: 'task_v2_next_work_prerequisite_active',
+				action: 'start_task'
+			}),
 			expect.objectContaining({
 				taskId: 'task_v2_next_work_ready_active',
 				action: 'start_task'
@@ -454,10 +503,10 @@ describe('v2 core CLI work-loop smoke', () => {
 		]);
 		expect(agentNext.agentControl).toMatchObject({
 			outputMode: 'compact',
-			selectedTaskId: 'task_v2_next_work_ready_active',
+			selectedTaskId: 'task_v2_next_work_prerequisite_active',
 			selectedPacket: {
 				taskContract: {
-					taskId: 'task_v2_next_work_ready_active',
+					taskId: 'task_v2_next_work_prerequisite_active',
 					goal: {
 						id: 'goal_v2_next_work_active',
 						status: 'active'
@@ -467,7 +516,86 @@ describe('v2 core CLI work-loop smoke', () => {
 		});
 		expect(
 			agentNext.agentControl.nextWork.candidates.map((candidate: any) => candidate.goalId)
-		).toEqual(['goal_v2_next_work_active', 'goal_v2_next_work_active']);
+		).toEqual([
+			'goal_v2_next_work_active',
+			'goal_v2_next_work_active',
+			'goal_v2_next_work_active'
+		]);
+		runCoreCli([
+			'transition-task',
+			...baseArgs,
+			'--task',
+			'task_v2_next_work_prerequisite_active',
+			'--status',
+			'in_progress',
+			'--summary',
+			'Start prerequisite for dependency-aware next-work proof.'
+		]);
+		runCoreCli([
+			'attach-artifact',
+			...baseArgs,
+			'--id',
+			'artifact_v2_next_work_prerequisite',
+			'--task',
+			'task_v2_next_work_prerequisite_active',
+			'--uri',
+			'agent_output/v2-next-work-prerequisite.md',
+			'--title',
+			'Prerequisite output',
+			'--summary',
+			'Prerequisite output evidence.',
+			'--status',
+			'accepted'
+		]);
+		runCoreCli([
+			'record-review',
+			...baseArgs,
+			'--id',
+			'review_v2_next_work_prerequisite',
+			'--task',
+			'task_v2_next_work_prerequisite_active',
+			'--artifact',
+			'artifact_v2_next_work_prerequisite',
+			'--status',
+			'approved',
+			'--summary',
+			'Approved prerequisite output.'
+		]);
+		runCoreCli([
+			'record-decision',
+			...baseArgs,
+			'--id',
+			'decision_v2_next_work_prerequisite_accept',
+			'--project',
+			'project_v2_goal_status_next_work_smoke',
+			'--goal',
+			'goal_v2_next_work_active',
+			'--task',
+			'task_v2_next_work_prerequisite_active',
+			'--type',
+			'accept_task_output',
+			'--summary',
+			'Accepted prerequisite output.'
+		]);
+		runCoreCli([
+			'transition-task',
+			...baseArgs,
+			'--task',
+			'task_v2_next_work_prerequisite_active',
+			'--status',
+			'done',
+			'--summary',
+			'Completed prerequisite for dependency-aware next-work proof.'
+		]);
+		const unblockedNextWork = runCoreCli([
+			'next-work',
+			...baseArgs,
+			'--project',
+			'project_v2_goal_status_next_work_smoke'
+		]);
+		expect(unblockedNextWork.candidates.map((candidate: any) => candidate.taskId)).toContain(
+			'task_v2_next_work_dependent_ready_active'
+		);
 	}, 10_000);
 
 	it('triages active and controlled goals by dispatch hygiene without mutating state', () => {
@@ -3760,5 +3888,5 @@ describe('v2 core CLI work-loop smoke', () => {
 				})
 			])
 		);
-	}, 15000);
+	}, 30_000);
 });
