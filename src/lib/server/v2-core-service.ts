@@ -2057,6 +2057,16 @@ export function launchV2CoreProviderRun(
 			`Task ${taskId} cannot launch a provider run from status ${task.status}; expected ready or in_progress.`
 		);
 	}
+	if (task.status === 'ready') {
+		const unmetDependencies = readUnmetV2CoreTaskDependencies(db, taskId);
+		if (unmetDependencies.length > 0) {
+			throw new Error(
+				`Task ${taskId} cannot launch a provider run before dependencies are done: ${unmetDependencies
+					.map((dependency) => `${dependency.task_id} (${dependency.status})`)
+					.join(', ')}.`
+			);
+		}
+	}
 	ensureRow(db, 'v2_core_model_providers', modelProviderId, 'Model provider');
 	ensureNoRow(db, 'v2_core_runs', runId, 'Run');
 
@@ -3211,6 +3221,23 @@ export function readV2CoreNextWork(
 			};
 		})
 	};
+}
+
+function readUnmetV2CoreTaskDependencies(db: Database.Database, taskId: string) {
+	return db
+		.prepare<[string], { task_id: string; title: string; status: string }>(
+			`
+				select depends_on_task.id as task_id, depends_on_task.title, depends_on_task.status
+				from v2_core_task_dependencies dependency
+				join v2_core_tasks depends_on_task
+					on depends_on_task.id = dependency.depends_on_task_id
+				where dependency.task_id = ?
+					and dependency.status = 'unresolved'
+					and depends_on_task.status != 'done'
+				order by depends_on_task.id
+			`
+		)
+		.all(taskId);
 }
 
 type V2CoreGoalTriageRow = {

@@ -455,6 +455,16 @@ describe('v2 core CLI work-loop smoke', () => {
 			'--summary',
 			'Dependent task should not dispatch until the prerequisite is done.'
 		]);
+		runCoreCli([
+			'register-provider',
+			...baseArgs,
+			'--id',
+			'provider_v2_next_work_dependency_guard',
+			'--name',
+			'Dependency Guard Provider',
+			'--kind',
+			'external_ai'
+		]);
 
 		const nextWork = runCoreCli([
 			'next-work',
@@ -521,6 +531,19 @@ describe('v2 core CLI work-loop smoke', () => {
 			'goal_v2_next_work_active',
 			'goal_v2_next_work_active'
 		]);
+		const dependencyBlockedLaunch = runCoreCliFailure([
+			'launch-provider-run',
+			...baseArgs,
+			'--run',
+			'run_v2_next_work_dependent_blocked',
+			'--task',
+			'task_v2_next_work_dependent_ready_active',
+			'--provider',
+			'provider_v2_next_work_dependency_guard'
+		]);
+		expect(dependencyBlockedLaunch.stderr).toContain(
+			'cannot launch a provider run before dependencies are done'
+		);
 		runCoreCli([
 			'transition-task',
 			...baseArgs,
