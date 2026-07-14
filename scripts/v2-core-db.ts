@@ -18,6 +18,7 @@ import {
 	importV2CoreSnapshot,
 	launchV2CoreAgentExecutionCycle,
 	launchV2CoreProviderRun,
+	readV2CoreAgentPreparationPacket,
 	promoteV2CoreMemory,
 	readV2CoreAgentWorkPacket,
 	readV2CoreCloseoutPacket,
@@ -54,6 +55,7 @@ type Command =
 	| 'next-work'
 	| 'context-bundle'
 	| 'agent-work-packet'
+	| 'agent-preparation-packet'
 	| 'evaluation-context'
 	| 'memory-for-context'
 	| 'unreviewed-outputs'
@@ -164,6 +166,7 @@ function printHelp() {
 			'  next-work            Read ready/review/blocked task candidates.',
 			'  context-bundle       Build a computed source-linked context bundle for a task.',
 			'  agent-work-packet    Build a bounded source-linked agent handoff packet for a task.',
+			'  agent-preparation-packet Build a relevance-controlled agent preparation packet for a task.',
 			'  evaluation-context   Read evaluation scenarios/results for a project or task.',
 			'  memory-for-context   Read governed memory for a project or task context.',
 			'  unreviewed-outputs   List submitted artifacts without approved/rejected review.',
@@ -661,6 +664,20 @@ function agentWorkPacket(options: Options) {
 			throw new Error(`Task ${taskId} was not found in the v2 core database.`);
 		}
 		printResult({ agentWorkPacket: packet }, options.json);
+	} finally {
+		db.close();
+	}
+}
+
+function agentPreparationPacket(options: Options) {
+	const taskId = requireOption(options.taskId, '--task <id>');
+	const db = openForCommand(options);
+	try {
+		const packet = readV2CoreAgentPreparationPacket(db, taskId);
+		if (!packet) {
+			throw new Error(`Task ${taskId} was not found in the v2 core database.`);
+		}
+		printResult({ agentPreparationPacket: packet }, options.json);
 	} finally {
 		db.close();
 	}
@@ -1845,6 +1862,9 @@ function main() {
 			break;
 		case 'agent-work-packet':
 			agentWorkPacket(options);
+			break;
+		case 'agent-preparation-packet':
+			agentPreparationPacket(options);
 			break;
 		case 'evaluation-context':
 			evaluationContext(options);

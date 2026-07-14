@@ -1830,6 +1830,178 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(wrongTask.stderr).toContain('belongs to task task_v2_lifecycle_helper_smoke');
 	}, 20_000);
 
+	it('builds an agent preparation packet without new persistence', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_agent_preparation_smoke',
+			'--name',
+			'AMS v2 Agent Preparation Smoke',
+			'--summary',
+			'Temporary project for proving relevance-controlled agent preparation packets.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_agent_preparation_smoke',
+			'--project',
+			'project_v2_agent_preparation_smoke',
+			'--title',
+			'Equip agents with task-relevant context',
+			'--summary',
+			'Prepare agents with resources, tools, constraints, and validation guidance.',
+			'--success',
+			'The packet exposes requirements, selected resources, gaps, execution package, and preparation review guidance.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_agent_preparation_smoke_ams',
+			'--goal',
+			'goal_v2_agent_preparation_smoke',
+			'--title',
+			'Implement AMS agent preparation packet CLI',
+			'--summary',
+			'Build a read model for agent preparation using AMS goals, tasks, tools, evaluation, and local retrieval.',
+			'--success',
+			'CLI returns requirementsAssessment, selectedResources, gapAssessment, executionPackage, and preparationReview.',
+			'--validation',
+			'Run focused CLI smoke tests and inspect source-linked resources.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_agent_preparation_smoke_3d_property',
+			'--goal',
+			'goal_v2_agent_preparation_smoke',
+			'--title',
+			'Prepare a 3D property modeling task',
+			'--summary',
+			'Assemble context for modeling a property from measurements, floor plans, reference photos, constraints, and target output format.',
+			'--success',
+			'The agent receives the smallest sufficient package for 3D property modeling work.',
+			'--validation',
+			'Verify source material, modeling constraints, and expected output format are included or gap-classified.'
+		]);
+		runCoreCli([
+			'register-tool',
+			...baseArgs,
+			'--id',
+			'tool_v2_agent_preparation_smoke_cli',
+			'--name',
+			'Agent preparation smoke CLI',
+			'--description',
+			'Local CLI validation for agent preparation packet smoke test.',
+			'--kind',
+			'local_cli',
+			'--risk',
+			'low'
+		]);
+		runCoreCli([
+			'record-tool-execution',
+			...baseArgs,
+			'--id',
+			'tool_execution_v2_agent_preparation_smoke_cli',
+			'--tool',
+			'tool_v2_agent_preparation_smoke_cli',
+			'--task',
+			'task_v2_agent_preparation_smoke_ams',
+			'--status',
+			'completed',
+			'--input',
+			'Ran agent preparation packet smoke validation.',
+			'--result',
+			'CLI readback produced a source-linked packet.'
+		]);
+
+		const amsPacket = runCoreCli([
+			'agent-preparation-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_agent_preparation_smoke_ams'
+		]).agentPreparationPacket;
+		expect(amsPacket.taskContract).toMatchObject({
+			taskId: 'task_v2_agent_preparation_smoke_ams',
+			goal: {
+				id: 'goal_v2_agent_preparation_smoke'
+			}
+		});
+		expect(amsPacket.requirementsAssessment).toMatchObject({
+			knowledge: expect.arrayContaining([expect.stringContaining('Current task contract')]),
+			skillsOrWorkflows: expect.arrayContaining([expect.stringContaining('Agent work-packet')]),
+			tools: expect.arrayContaining([expect.stringContaining('v2 core CLI')])
+		});
+		expect(amsPacket.selectedResources).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					recordType: 'task',
+					recordId: 'task_v2_agent_preparation_smoke_ams',
+					source: 'work_packet',
+					inclusionReason: expect.any(String)
+				}),
+				expect.objectContaining({
+					recordType: 'skill_file',
+					recordId: '.agents/skills/ams-agent-interface/SKILL.md',
+					source: 'skill_file'
+				}),
+				expect.objectContaining({
+					recordType: 'tool_execution',
+					recordId: 'tool_execution_v2_agent_preparation_smoke_cli',
+					source: 'tool_evidence'
+				})
+			])
+		);
+		expect(amsPacket.gapAssessment.map((gap: any) => gap.classification)).toEqual(
+			expect.arrayContaining([
+				'helpful_non_blocking',
+				'discoverable_during_execution',
+				'deferred_or_irrelevant'
+			])
+		);
+		for (const resource of amsPacket.selectedResources) {
+			expect(resource.inclusionReason.length).toBeGreaterThan(0);
+			expect(resource.source).toMatch(
+				/^(work_packet|local_retrieval|trusted_memory|tool_evidence|evaluation_evidence|skill_file)$/
+			);
+		}
+
+		const propertyPacket = runCoreCli([
+			'agent-preparation-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_agent_preparation_smoke_3d_property'
+		]).agentPreparationPacket;
+		expect(propertyPacket.requirementsAssessment.knowledge).toEqual(
+			expect.arrayContaining([expect.stringContaining('Property-modeling source material')])
+		);
+		expect(propertyPacket.executionPackage.expectedOutputs).toEqual(
+			expect.arrayContaining([expect.stringContaining('modeling output')])
+		);
+		expect(
+			propertyPacket.gapAssessment.every((gap: any) =>
+				[
+					'blocking',
+					'helpful_non_blocking',
+					'discoverable_during_execution',
+					'deferred_or_irrelevant'
+				].includes(gap.classification)
+			)
+		).toBe(true);
+		expect(propertyPacket.preparationReview.acceptanceChecks).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining('Every selected resource has an inclusion reason')
+			])
+		);
+	}, 20_000);
+
 	it('reports route-comparison evidence by capability', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];
@@ -2504,10 +2676,17 @@ describe('v2 core CLI work-loop smoke', () => {
 			expect.objectContaining({
 				capabilityName: 'agent-work-packet',
 				status: 'unknown',
+				localReplacementStatus: 'unknown',
 				scenarioIds: ['evaluation_scenario_v2_core_smoke_packet'],
 				evaluationResultIds: [],
+				providerlessLocalToolEvaluationResultIds: [],
+				providerlessPassingLocalToolEvaluationResultIds: [],
 				evidenceGaps: expect.arrayContaining([
 					'No evaluation result has been recorded for this capability in scope.'
+				]),
+				localReplacementEvidenceGaps: expect.arrayContaining([
+					'No providerless local tool evaluation result is available in scope.',
+					'No passing providerless local tool evaluation result is available in scope.'
 				])
 			})
 		]);
@@ -2595,8 +2774,11 @@ describe('v2 core CLI work-loop smoke', () => {
 			expect.objectContaining({
 				capabilityName: 'agent-work-packet',
 				status: 'hybrid_candidate',
+				localReplacementStatus: 'unknown',
 				scenarioIds: ['evaluation_scenario_v2_core_smoke_packet'],
 				evaluationResultIds: ['evaluation_result_v2_core_smoke_packet'],
+				providerlessLocalToolEvaluationResultIds: [],
+				providerlessPassingLocalToolEvaluationResultIds: [],
 				taskIds: ['task_v2_core_smoke'],
 				externalProviderIds: ['provider_v2_core_smoke'],
 				localToolIds: ['tool_v2_core_smoke_cli'],
@@ -2608,6 +2790,57 @@ describe('v2 core CLI work-loop smoke', () => {
 						status: 'passed'
 					})
 				]
+			})
+		]);
+
+		runCoreCli([
+			'record-evaluation-result',
+			...baseArgs,
+			'--id',
+			'evaluation_result_v2_core_smoke_packet_local_only',
+			'--scenario',
+			'evaluation_scenario_v2_core_smoke_packet',
+			'--task',
+			'task_v2_core_smoke',
+			'--tool-execution',
+			'tool_execution_v2_core_smoke_cli',
+			'--status',
+			'passed',
+			'--score',
+			'0.9',
+			'--rubric',
+			'Providerless local tool evidence is sufficient for replacement readiness.',
+			'--result',
+			'The v2 core smoke capability has providerless local tool evidence.'
+		]);
+		const mixedDependencyReductionReport = runCoreCli([
+			'dependency-reduction-report',
+			...baseArgs,
+			'--project',
+			'project_v2_core_smoke'
+		]);
+		expect(mixedDependencyReductionReport.dependencyReductionReport.summary).toMatchObject({
+			capabilityCount: 1,
+			hybridCandidateCount: 1,
+			retirementCandidateCount: 0,
+			unknownCount: 0
+		});
+		expect(mixedDependencyReductionReport.dependencyReductionReport.capabilities).toEqual([
+			expect.objectContaining({
+				capabilityName: 'agent-work-packet',
+				status: 'hybrid_candidate',
+				localReplacementStatus: 'retirement_candidate',
+				evaluationResultIds: [
+					'evaluation_result_v2_core_smoke_packet',
+					'evaluation_result_v2_core_smoke_packet_local_only'
+				],
+				providerlessLocalToolEvaluationResultIds: [
+					'evaluation_result_v2_core_smoke_packet_local_only'
+				],
+				providerlessPassingLocalToolEvaluationResultIds: [
+					'evaluation_result_v2_core_smoke_packet_local_only'
+				],
+				localReplacementEvidenceGaps: []
 			})
 		]);
 
@@ -3094,14 +3327,16 @@ describe('v2 core CLI work-loop smoke', () => {
 				expect.objectContaining({
 					id: 'evaluation_scenario_v2_core_smoke_packet'
 				})
-			],
-			results: [
+			]
+		});
+		expect(agentWorkPacket.agentWorkPacket.evaluationEvidence.results).toEqual(
+			expect.arrayContaining([
 				expect.objectContaining({
 					id: 'evaluation_result_v2_core_smoke_packet',
 					status: 'passed'
 				})
-			]
-		});
+			])
+		);
 		expect(agentWorkPacket.agentWorkPacket.allowedActions).toContain(
 			'implement the bounded task contract'
 		);
@@ -3194,12 +3429,14 @@ describe('v2 core CLI work-loop smoke', () => {
 				id: 'evaluation_scenario_v2_core_smoke_packet'
 			})
 		]);
-		expect(operatorConsole.operatorConsole.evaluationContext.results).toEqual([
-			expect.objectContaining({
-				id: 'evaluation_result_v2_core_smoke_packet',
-				status: 'passed'
-			})
-		]);
+		expect(operatorConsole.operatorConsole.evaluationContext.results).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: 'evaluation_result_v2_core_smoke_packet',
+					status: 'passed'
+				})
+			])
+		);
 		expect(operatorConsole.operatorConsole.recentRuns).toEqual([
 			expect.objectContaining({
 				runId: 'run_v2_core_smoke',
@@ -3225,7 +3462,7 @@ describe('v2 core CLI work-loop smoke', () => {
 				v2_core_runs: 1,
 				v2_core_artifacts: 3,
 				v2_core_evaluation_scenarios: 1,
-				v2_core_evaluation_results: 1
+				v2_core_evaluation_results: 2
 			})
 		});
 
@@ -3297,7 +3534,7 @@ describe('v2 core CLI work-loop smoke', () => {
 			v2_core_tools: 1,
 			v2_core_tool_executions: 1,
 			v2_core_evaluation_scenarios: 1,
-			v2_core_evaluation_results: 1
+			v2_core_evaluation_results: 2
 		});
 		expect(exportedAgain.tableCounts).toEqual(exported.tableCounts);
 		expect(readFileSync(secondSnapshotFile, 'utf8')).toBe(readFileSync(snapshotFile, 'utf8'));
@@ -3352,11 +3589,13 @@ describe('v2 core CLI work-loop smoke', () => {
 			'--task',
 			'task_v2_core_smoke'
 		]);
-		expect(importedEvaluationContext.evaluationContext.results).toEqual([
-			expect.objectContaining({
-				id: 'evaluation_result_v2_core_smoke_packet',
-				status: 'passed'
-			})
-		]);
+		expect(importedEvaluationContext.evaluationContext.results).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: 'evaluation_result_v2_core_smoke_packet',
+					status: 'passed'
+				})
+			])
+		);
 	}, 15000);
 });

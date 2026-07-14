@@ -498,10 +498,14 @@ export type V2CoreDependencyReductionReport = {
 	capabilities: Array<{
 		capabilityName: string;
 		status: V2CoreDependencyReductionStatus;
+		localReplacementStatus: V2CoreDependencyReductionStatus;
 		rationale: string;
 		evidenceGaps: string[];
+		localReplacementEvidenceGaps: string[];
 		scenarioIds: string[];
 		evaluationResultIds: string[];
+		providerlessLocalToolEvaluationResultIds: string[];
+		providerlessPassingLocalToolEvaluationResultIds: string[];
 		taskIds: string[];
 		externalProviderIds: string[];
 		localToolIds: string[];
@@ -842,6 +846,56 @@ export type V2CoreAgentWorkPacket = {
 		reason: string;
 	}>;
 	renderedPrompt: string;
+};
+
+export type V2CoreAgentPreparationGapClass =
+	| 'blocking'
+	| 'helpful_non_blocking'
+	| 'discoverable_during_execution'
+	| 'deferred_or_irrelevant';
+
+export type V2CoreAgentPreparationPacket = {
+	taskContract: V2CoreAgentWorkPacket['taskContract'];
+	readiness: V2CoreAgentWorkPacket['readiness'];
+	requirementsAssessment: {
+		knowledge: string[];
+		skillsOrWorkflows: string[];
+		tools: string[];
+		sourceContext: string[];
+		constraints: string[];
+		verification: string[];
+	};
+	selectedResources: Array<{
+		recordType: string;
+		recordId: string;
+		title: string;
+		inclusionReason: string;
+		source:
+			| 'work_packet'
+			| 'local_retrieval'
+			| 'trusted_memory'
+			| 'tool_evidence'
+			| 'evaluation_evidence'
+			| 'skill_file';
+	}>;
+	gapAssessment: Array<{
+		classification: V2CoreAgentPreparationGapClass;
+		summary: string;
+		source: string;
+	}>;
+	executionPackage: {
+		goal: V2CoreTaskDetail['goal'];
+		expectedOutputs: string[];
+		allowedActions: string[];
+		constraints: string[];
+		verificationChecklist: string[];
+		selectedResourceCount: number;
+	};
+	preparationReview: {
+		questions: string[];
+		acceptanceChecks: string[];
+	};
+	sourceLinks: V2CoreAgentWorkPacket['sourceLinks'];
 };
 
 export type V2CoreProviderRunLaunch = {
@@ -2033,7 +2087,9 @@ export function completeV2CoreProviderRun(
 		throw new Error(`Run ${runId} belongs to task ${run.task_id}, not ${taskId}.`);
 	}
 	if (run.status !== 'planned') {
-		throw new Error(`Run ${runId} cannot be completed from status ${run.status}; expected planned.`);
+		throw new Error(
+			`Run ${runId} cannot be completed from status ${run.status}; expected planned.`
+		);
 	}
 
 	ensureRow(db, 'v2_core_tasks', taskId, 'Task');
@@ -2111,9 +2167,10 @@ function readManagedRunLifecyclePreflight(
 	const reviewId = requiredText(input.reviewId, 'reviewId');
 	const acceptDecisionId = requiredText(input.acceptDecisionId, 'acceptDecisionId');
 	const task = db
-		.prepare<[string], { id: string; status: string; project_id: string; goal_id: string }>(
-			'select id, status, project_id, goal_id from v2_core_tasks where id = ?'
-		)
+		.prepare<
+			[string],
+			{ id: string; status: string; project_id: string; goal_id: string }
+		>('select id, status, project_id, goal_id from v2_core_tasks where id = ?')
 		.get(taskId);
 
 	if (!task) {
@@ -2126,9 +2183,10 @@ function readManagedRunLifecyclePreflight(
 	}
 
 	const run = db
-		.prepare<[string], { id: string; task_id: string; status: string }>(
-			'select id, task_id, status from v2_core_runs where id = ?'
-		)
+		.prepare<
+			[string],
+			{ id: string; task_id: string; status: string }
+		>('select id, task_id, status from v2_core_runs where id = ?')
 		.get(runId);
 
 	if (!run) {
@@ -2138,7 +2196,9 @@ function readManagedRunLifecyclePreflight(
 		throw new Error(`Run ${runId} belongs to task ${run.task_id}, not ${taskId}.`);
 	}
 	if (run.status !== 'planned') {
-		throw new Error(`Run ${runId} cannot complete managed-run lifecycle from status ${run.status}; expected planned.`);
+		throw new Error(
+			`Run ${runId} cannot complete managed-run lifecycle from status ${run.status}; expected planned.`
+		);
 	}
 
 	ensureNoRow(db, 'v2_core_artifacts', artifactId, 'Artifact');
@@ -2278,8 +2338,7 @@ export function completeV2CoreManagedRunLifecycle(
 			artifactId,
 			status: 'approved',
 			summary:
-				input.reviewSummary?.trim() ||
-				`Approved managed-run lifecycle output for task ${taskId}.`,
+				input.reviewSummary?.trim() || `Approved managed-run lifecycle output for task ${taskId}.`,
 			source: {
 				sourceCollection: 'managed_run_lifecycle',
 				sourceId: taskId,
@@ -3524,6 +3583,10 @@ export function readV2CoreDependencyReductionReport(
 		hasEvaluationResult: boolean;
 		hasExternalProvider: boolean;
 		hasLocalTool: boolean;
+		hasProviderlessLocalToolEvaluation: boolean;
+		hasProviderlessPassingLocalToolEvaluation: boolean;
+		providerlessLocalToolEvaluationResultIds: Set<string>;
+		providerlessPassingLocalToolEvaluationResultIds: Set<string>;
 	};
 
 	const capabilities = new Map<string, CapabilityAccumulator>();
@@ -3544,7 +3607,11 @@ export function readV2CoreDependencyReductionReport(
 			hasPassingEvaluation: false,
 			hasEvaluationResult: false,
 			hasExternalProvider: false,
-			hasLocalTool: false
+			hasLocalTool: false,
+			hasProviderlessLocalToolEvaluation: false,
+			hasProviderlessPassingLocalToolEvaluation: false,
+			providerlessLocalToolEvaluationResultIds: new Set(),
+			providerlessPassingLocalToolEvaluationResultIds: new Set()
 		};
 		capabilities.set(normalizedName, created);
 		return created;
@@ -3625,6 +3692,14 @@ export function readV2CoreDependencyReductionReport(
 			capability.localToolIds.add(result.tool_id);
 			capability.hasLocalTool = true;
 		}
+		if (!result.provider_id && result.tool_id && result.tool_kind?.startsWith('local')) {
+			capability.providerlessLocalToolEvaluationResultIds.add(result.result_id);
+			capability.hasProviderlessLocalToolEvaluation = true;
+			if (result.status === 'passed') {
+				capability.providerlessPassingLocalToolEvaluationResultIds.add(result.result_id);
+				capability.hasProviderlessPassingLocalToolEvaluation = true;
+			}
+		}
 		capability.evaluationResults.push({
 			resultId: result.result_id,
 			scenarioId: result.scenario_id,
@@ -3652,6 +3727,17 @@ export function readV2CoreDependencyReductionReport(
 			if (!capability.hasLocalTool) {
 				evidenceGaps.push('No linked local tool execution evidence is available in scope.');
 			}
+			const localReplacementEvidenceGaps: string[] = [];
+			if (!capability.hasProviderlessLocalToolEvaluation) {
+				localReplacementEvidenceGaps.push(
+					'No providerless local tool evaluation result is available in scope.'
+				);
+			}
+			if (!capability.hasProviderlessPassingLocalToolEvaluation) {
+				localReplacementEvidenceGaps.push(
+					'No passing providerless local tool evaluation result is available in scope.'
+				);
+			}
 
 			let status: V2CoreDependencyReductionStatus = 'unknown';
 			if (capability.hasExternalProvider && capability.hasPassingEvaluation) {
@@ -3662,6 +3748,13 @@ export function readV2CoreDependencyReductionReport(
 				status = 'retirement_candidate';
 			} else if (capability.hasLocalTool) {
 				status = 'locally_supported';
+			}
+
+			let localReplacementStatus: V2CoreDependencyReductionStatus = 'unknown';
+			if (capability.hasProviderlessPassingLocalToolEvaluation) {
+				localReplacementStatus = 'retirement_candidate';
+			} else if (capability.hasProviderlessLocalToolEvaluation) {
+				localReplacementStatus = 'locally_supported';
 			}
 
 			const rationaleParts: string[] = [];
@@ -3682,10 +3775,18 @@ export function readV2CoreDependencyReductionReport(
 			return {
 				capabilityName: capability.capabilityName,
 				status,
+				localReplacementStatus,
 				rationale,
 				evidenceGaps,
+				localReplacementEvidenceGaps,
 				scenarioIds: Array.from(capability.scenarioIds).sort(),
 				evaluationResultIds: Array.from(capability.evaluationResultIds).sort(),
+				providerlessLocalToolEvaluationResultIds: Array.from(
+					capability.providerlessLocalToolEvaluationResultIds
+				).sort(),
+				providerlessPassingLocalToolEvaluationResultIds: Array.from(
+					capability.providerlessPassingLocalToolEvaluationResultIds
+				).sort(),
 				taskIds: Array.from(capability.taskIds).sort(),
 				externalProviderIds: Array.from(capability.externalProviderIds).sort(),
 				localToolIds: Array.from(capability.localToolIds).sort(),
@@ -5278,7 +5379,9 @@ export function readV2CoreOperatorConsole(
 	const workQueue: V2CoreOperatorConsoleWorkQueueItem[] = activeGoals.map((goal) => {
 		const currentRun = currentRunByGoalId.get(goal.goalId) ?? null;
 		const selectedTask =
-			goal.status === 'active' && !currentRun ? (selectedTaskByGoalId.get(goal.goalId) ?? null) : null;
+			goal.status === 'active' && !currentRun
+				? (selectedTaskByGoalId.get(goal.goalId) ?? null)
+				: null;
 
 		return toWorkQueueItem(goal, currentRun, selectedTask);
 	});
@@ -5353,14 +5456,16 @@ export function readV2CoreOperatorConsole(
 			return {
 				state: 'needs_next_work',
 				label: 'Select next work',
-				summary: 'This goal has open work, but no dispatchable task is selected. Clarify or prepare the next task.'
+				summary:
+					'This goal has open work, but no dispatchable task is selected. Clarify or prepare the next task.'
 			};
 		}
 
 		return {
 			state: 'ready_for_completion_assessment',
 			label: 'Assess completion',
-			summary: 'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
+			summary:
+				'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
 		};
 	}
 	const scopedGoalSummary =
@@ -5513,6 +5618,370 @@ export function readV2CoreAgentWorkPacket(
 		...packetWithoutPrompt,
 		renderedPrompt: renderV2CoreAgentWorkPacket(packetWithoutPrompt)
 	};
+}
+
+export function readV2CoreAgentPreparationPacket(
+	db: Database.Database,
+	taskId: string
+): V2CoreAgentPreparationPacket | null {
+	const workPacket = readV2CoreAgentWorkPacket(db, taskId);
+	const detail = readV2CoreTaskDetail(db, taskId);
+	if (!workPacket || !detail) {
+		return null;
+	}
+
+	const taskText = [
+		workPacket.taskContract.title,
+		workPacket.taskContract.summary,
+		workPacket.taskContract.successCriteria,
+		workPacket.taskContract.validationPlan,
+		workPacket.taskContract.goal.title
+	].join('\n');
+	const primaryTaskText = [
+		workPacket.taskContract.title,
+		workPacket.taskContract.summary,
+		workPacket.taskContract.goal.title
+	].join('\n');
+	const retrieval = readV2CoreLocalRetrieval(db, {
+		projectId: detail.project.id,
+		goalId: detail.goal.id,
+		taskId,
+		query: buildV2CoreAgentPreparationQuery(taskText, primaryTaskText),
+		limit: 10
+	});
+	const selectedResources = buildV2CoreAgentPreparationResources(workPacket, retrieval);
+	const requirementsAssessment = buildV2CoreAgentPreparationRequirements(workPacket, taskText);
+	const gapAssessment = buildV2CoreAgentPreparationGaps(
+		workPacket,
+		selectedResources,
+		requirementsAssessment,
+		taskText
+	);
+	const verificationChecklist = Array.from(
+		new Set(
+			[
+				...requirementsAssessment.verification,
+				workPacket.validationExpectations.reviewRequiredBeforeDone
+					? 'Submit output for review before closing the task.'
+					: '',
+				workPacket.validationExpectations.acceptanceDecisionRequiredBeforeDone
+					? 'Record an acceptance decision before marking the task done.'
+					: ''
+			].filter(Boolean)
+		)
+	);
+
+	return {
+		taskContract: workPacket.taskContract,
+		readiness: workPacket.readiness,
+		requirementsAssessment,
+		selectedResources,
+		gapAssessment,
+		executionPackage: {
+			goal: detail.goal,
+			expectedOutputs: buildV2CoreAgentPreparationExpectedOutputs(workPacket),
+			allowedActions: workPacket.allowedActions,
+			constraints: requirementsAssessment.constraints,
+			verificationChecklist,
+			selectedResourceCount: selectedResources.length
+		},
+		preparationReview: {
+			questions: [
+				'Did the packet include enough source-linked context to execute the task without rediscovery?',
+				'Were any blocking gaps discovered during execution that should have been identified earlier?',
+				'Did irrelevant context distract from the task contract or validation plan?',
+				'Should any repeated procedure become trusted memory, a skill update, or a follow-up task after review?'
+			],
+			acceptanceChecks: [
+				'Every selected resource has an inclusion reason and source.',
+				'Every gap is classified as blocking, helpful_non_blocking, discoverable_during_execution, or deferred_or_irrelevant.',
+				'The execution package contains the task contract, constraints, expected outputs, and verification checklist.',
+				'The packet does not create or require new persistent entities.'
+			]
+		},
+		sourceLinks: workPacket.sourceLinks
+	};
+}
+
+function buildV2CoreAgentPreparationQuery(taskText: string, primaryTaskText: string) {
+	const normalized = taskText.toLowerCase();
+	const primary = primaryTaskText.toLowerCase();
+	const terms = [
+		'context',
+		'memory',
+		'tool',
+		'evaluation',
+		'artifact',
+		'decision',
+		'validation',
+		normalized.includes('skill') || normalized.includes('workflow') ? 'skill workflow' : '',
+		primary.includes('3d') || primary.includes('property') || primary.includes('modeling')
+			? '3D property modeling floor plan source measurements'
+			: '',
+		normalized.includes('agent') || normalized.includes('preparation')
+			? 'agent preparation execution package gaps resources'
+			: ''
+	];
+
+	return terms.filter(Boolean).join(' ');
+}
+
+function buildV2CoreAgentPreparationRequirements(
+	packet: V2CoreAgentWorkPacket,
+	taskText: string
+): V2CoreAgentPreparationPacket['requirementsAssessment'] {
+	const normalized = taskText.toLowerCase();
+	const primaryText = `${packet.taskContract.title}\n${packet.taskContract.summary}`.toLowerCase();
+	const isPropertyModeling = /3d|property|modeling/.test(primaryText);
+	const knowledge = [
+		'Current task contract, parent goal, success criteria, and validation plan.',
+		...(packet.trustedMemory.length > 0
+			? ['Trusted project memory relevant to the task scope.']
+			: []),
+		...(packet.relevantDecisions.length > 0
+			? ['Prior decisions that constrain or explain the chosen path.']
+			: []),
+		...(isPropertyModeling
+			? [
+					'Property-modeling source material such as measurements, floor plans, photos, constraints, and target output format.'
+				]
+			: [])
+	];
+	const skillsOrWorkflows = [
+		...(normalized.includes('agent') || normalized.includes('preparation')
+			? ['Agent work-packet and local retrieval workflow.']
+			: []),
+		...(normalized.includes('review') || normalized.includes('acceptance')
+			? ['Managed run closeout and review-gated acceptance workflow.']
+			: []),
+		...(isPropertyModeling
+			? ['3D/property modeling procedure or domain guidance if available.']
+			: [])
+	];
+	const tools = [
+		...(packet.dependencySummary.toolExecutions.length > 0
+			? ['Previously used local tools with execution evidence.']
+			: []),
+		...(normalized.includes('cli') || normalized.includes('read model')
+			? ['v2 core CLI and focused server test runner.']
+			: [])
+	];
+
+	return {
+		knowledge,
+		skillsOrWorkflows,
+		tools,
+		sourceContext: [
+			'Source-linked context bundle records selected for this task.',
+			'Local retrieval results scoped to the task, goal, and project.',
+			'Accepted artifacts and trusted memory when they affect execution or verification.'
+		],
+		constraints: [
+			...packet.stoppingConditions,
+			'Use existing v2 core records and computed read models before adding model surface area.',
+			'Do not promote AI output to trusted memory without reviewed source evidence.'
+		],
+		verification: [
+			packet.validationExpectations.successCriteria,
+			packet.validationExpectations.validationPlan
+		].filter(Boolean)
+	};
+}
+
+function buildV2CoreAgentPreparationResources(
+	packet: V2CoreAgentWorkPacket,
+	retrieval: V2CoreLocalRetrieval
+): V2CoreAgentPreparationPacket['selectedResources'] {
+	const resources = new Map<string, V2CoreAgentPreparationPacket['selectedResources'][number]>();
+	const add = (
+		recordType: string,
+		recordId: string,
+		title: string,
+		inclusionReason: string,
+		source: V2CoreAgentPreparationPacket['selectedResources'][number]['source']
+	) => {
+		const key = `${recordType}:${recordId}`;
+		if (!resources.has(key)) {
+			resources.set(key, { recordType, recordId, title, inclusionReason, source });
+		}
+	};
+
+	for (const source of packet.contextSources.slice(0, 12)) {
+		add(source.recordType, source.recordId, source.title, source.reason, 'work_packet');
+	}
+	for (const item of packet.trustedMemory.slice(0, 8)) {
+		add(
+			'memory',
+			item.id,
+			item.title,
+			'Trusted memory selected for task context.',
+			'trusted_memory'
+		);
+	}
+	for (const result of retrieval.results.slice(0, 8)) {
+		add(
+			result.recordType,
+			result.recordId,
+			result.title,
+			result.inclusionReason,
+			'local_retrieval'
+		);
+	}
+	for (const execution of packet.dependencySummary.toolExecutions.slice(0, 5)) {
+		add(
+			'tool_execution',
+			execution.executionId,
+			execution.toolName,
+			`Tool execution evidence with status ${execution.status}.`,
+			'tool_evidence'
+		);
+	}
+	for (const result of packet.evaluationEvidence.results.slice(0, 5)) {
+		add(
+			'evaluation_result',
+			result.id,
+			result.scenarioTitle,
+			`Evaluation evidence with status ${result.status}.`,
+			'evaluation_evidence'
+		);
+	}
+	for (const skill of inferV2CoreAgentPreparationSkillFiles(packet, retrieval).slice(0, 5)) {
+		add('skill_file', skill.path, skill.name, skill.reason, 'skill_file');
+	}
+
+	return Array.from(resources.values()).slice(0, 30);
+}
+
+function inferV2CoreAgentPreparationSkillFiles(
+	packet: V2CoreAgentWorkPacket,
+	retrieval: V2CoreLocalRetrieval
+) {
+	const taskText = [
+		packet.taskContract.title,
+		packet.taskContract.summary,
+		packet.taskContract.successCriteria,
+		packet.taskContract.validationPlan,
+		...retrieval.results.map((result) => result.title)
+	]
+		.join('\n')
+		.toLowerCase();
+	const skills: Array<{ name: string; path: string; reason: string }> = [];
+	const add = (name: string, path: string, reason: string) => {
+		if (!skills.some((skill) => skill.path === path)) {
+			skills.push({ name, path, reason });
+		}
+	};
+
+	if (taskText.includes('ams') || taskText.includes('agent') || taskText.includes('goal')) {
+		add(
+			'ams-agent-interface',
+			'.agents/skills/ams-agent-interface/SKILL.md',
+			'Task concerns AMS goal/task/run workflow.'
+		);
+		add(
+			'ams-control-plane-operations',
+			'.agents/skills/ams-control-plane-operations/SKILL.md',
+			'Task may inspect or update AMS state through supported operations.'
+		);
+	}
+	if (taskText.includes('source') || taskText.includes('evidence') || taskText.includes('claim')) {
+		add(
+			'evidence-to-insight',
+			'.agents/skills/evidence-to-insight/SKILL.md',
+			'Task depends on turning evidence into proportional conclusions.'
+		);
+	}
+	if (
+		taskText.includes('organization') ||
+		taskText.includes('ontology') ||
+		taskText.includes('context')
+	) {
+		add(
+			'information-organization-design',
+			'.agents/skills/information-organization-design/SKILL.md',
+			'Task involves structuring information for human and agent use.'
+		);
+	}
+
+	return skills;
+}
+
+function buildV2CoreAgentPreparationGaps(
+	packet: V2CoreAgentWorkPacket,
+	resources: V2CoreAgentPreparationPacket['selectedResources'],
+	requirements: V2CoreAgentPreparationPacket['requirementsAssessment'],
+	taskText: string
+): V2CoreAgentPreparationPacket['gapAssessment'] {
+	const normalized = taskText.toLowerCase();
+	const primaryText = `${packet.taskContract.title}\n${packet.taskContract.summary}`.toLowerCase();
+	const gaps: V2CoreAgentPreparationPacket['gapAssessment'] = [];
+	const add = (classification: V2CoreAgentPreparationGapClass, summary: string, source: string) => {
+		if (!gaps.some((gap) => gap.classification === classification && gap.summary === summary)) {
+			gaps.push({ classification, summary, source });
+		}
+	};
+
+	if (!packet.readiness.actionable) {
+		add('blocking', packet.readiness.reason, 'task_readiness');
+	}
+	if (packet.trustedMemory.length === 0) {
+		add('helpful_non_blocking', 'No trusted memory was selected for this task.', 'trusted_memory');
+	}
+	if (
+		requirements.tools.length > 0 &&
+		!resources.some((resource) => resource.source === 'tool_evidence')
+	) {
+		add(
+			'helpful_non_blocking',
+			'No relevant prior tool-execution evidence was selected.',
+			'tool_evidence'
+		);
+	}
+	if (
+		/3d|property|modeling/.test(primaryText) &&
+		!resources.some((resource) => /3d|property|model/i.test(resource.title))
+	) {
+		add(
+			'blocking',
+			'Property-modeling work needs concrete source material or a representative fixture before execution.',
+			'domain_source_context'
+		);
+	}
+	if (packet.evaluationEvidence.results.length === 0) {
+		add(
+			'discoverable_during_execution',
+			'No prior evaluation result is available; adequacy can be assessed after this run.',
+			'evaluation_evidence'
+		);
+	}
+	add(
+		'deferred_or_irrelevant',
+		'Persistent capability taxonomy, routing policy, scheduler, local model, broad UI, and auto-promotion are outside this packet slice.',
+		'task_boundary'
+	);
+
+	return gaps;
+}
+
+function buildV2CoreAgentPreparationExpectedOutputs(packet: V2CoreAgentWorkPacket) {
+	const outputs = ['A durable task output artifact suitable for review.'];
+	const normalized = [packet.taskContract.title, packet.taskContract.summary]
+		.join('\n')
+		.toLowerCase();
+
+	if (normalized.includes('read model') || normalized.includes('cli')) {
+		outputs.push('Focused read-model/CLI behavior with server smoke coverage.');
+	}
+	if (
+		normalized.includes('3d') ||
+		normalized.includes('property') ||
+		normalized.includes('modeling')
+	) {
+		outputs.push('A source-linked modeling output or fixture validation result.');
+	}
+	outputs.push('Validation evidence mapped back to the task success criteria.');
+
+	return outputs;
 }
 
 function classifyV2CoreAgentPacketReadiness(
