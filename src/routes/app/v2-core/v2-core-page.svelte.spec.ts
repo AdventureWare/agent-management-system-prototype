@@ -3,6 +3,42 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
+function readinessForScopedGoal(scopedGoalId: string) {
+	switch (scopedGoalId) {
+		case 'goal_ui_blocked':
+			return {
+				state: 'blocked',
+				label: 'Unblock before continuing',
+				summary: 'This goal is blocked. Resolve or resume the blocker before assigning more work.'
+			};
+		case 'goal_ui_paused':
+			return {
+				state: 'paused',
+				label: 'Paused',
+				summary: 'This goal is paused. Resume it before dispatching or planning more work.'
+			};
+		case 'goal_ui':
+			return {
+				state: 'review_required',
+				label: 'Review output',
+				summary: 'This goal has work awaiting review. Review the output before selecting more work.'
+			};
+		case 'goal_ui_empty':
+			return {
+				state: 'ready_for_completion_assessment',
+				label: 'Assess completion',
+				summary:
+					'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
+			};
+		default:
+			return {
+				state: 'running_work',
+				label: 'Work is running',
+				summary: 'A current run is open for this goal. Wait for it or open the current-run task.'
+			};
+	}
+}
+
 function scopedGoalSummaryFor(scopedGoalId: string | null) {
 	if (!scopedGoalId) {
 		return null;
@@ -37,6 +73,7 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 				latestGoalStatusTransition: null
 			},
 			queueState: 'blocked',
+			readiness: readinessForScopedGoal(scopedGoalId),
 			currentRun: null,
 			selectedTask: null,
 			recentAcceptedArtifact: null,
@@ -58,6 +95,7 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 				latestGoalStatusTransition: null
 			},
 			queueState: 'paused',
+			readiness: readinessForScopedGoal(scopedGoalId),
 			currentRun: null,
 			selectedTask: null,
 			recentAcceptedArtifact: null,
@@ -79,6 +117,7 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 				latestGoalStatusTransition: null
 			},
 			queueState: 'ready_to_dispatch',
+			readiness: readinessForScopedGoal(scopedGoalId),
 			currentRun: null,
 			selectedTask: {
 				taskId: 'task_ui_next',
@@ -110,6 +149,7 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 				latestGoalStatusTransition: null
 			},
 			queueState: 'no_open_work',
+			readiness: readinessForScopedGoal(scopedGoalId),
 			currentRun: null,
 			selectedTask: null,
 			recentAcceptedArtifact: null,
@@ -130,6 +170,7 @@ function scopedGoalSummaryFor(scopedGoalId: string | null) {
 			latestGoalStatusTransition: null
 		},
 		queueState: 'running',
+		readiness: readinessForScopedGoal(scopedGoalId),
 		currentRun: {
 			runId: 'run_ui_child_current',
 			taskId: 'task_ui_child_current',
@@ -862,6 +903,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Review artifact_ui_review');
 		expect(document.body.textContent).toContain('Selected next work');
 		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Readiness');
+		expect(scopedSummary.textContent).toContain('Review output');
+		expect(scopedSummary.textContent).toContain(
+			'This goal has work awaiting review. Review the output before selecting more work.'
+		);
 		expect(
 			scopedSummary.querySelector(
 				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui"]'
@@ -980,6 +1026,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Goal summary');
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('1 open / 0 done');
+		expect(document.body.textContent).toContain('Work is running');
+		expect(document.body.textContent).toContain(
+			'A current run is open for this goal. Wait for it or open the current-run task.'
+		);
 		expect(document.body.textContent).toContain('run_ui_child_current');
 		expect(document.body.textContent).toContain('None selected');
 		expect(document.body.textContent).toContain('None recent');
@@ -1025,6 +1075,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('None');
 		expect(document.body.textContent).toContain('None selected');
 		let scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Unblock before continuing');
+		expect(scopedSummary.textContent).toContain(
+			'This goal is blocked. Resolve or resume the blocker before assigning more work.'
+		);
 		expect(scopedSummary.textContent).toContain('Resume scoped goal');
 		expect(scopedSummary.textContent).toContain('Pause scoped goal');
 		expect(scopedSummary.textContent).not.toContain('Launch scoped goal work');
@@ -1040,6 +1094,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('None');
 		expect(document.body.textContent).toContain('None selected');
 		scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Paused');
+		expect(scopedSummary.textContent).toContain(
+			'This goal is paused. Resume it before dispatching or planning more work.'
+		);
 		expect(scopedSummary.textContent).toContain('Resume scoped goal');
 		expect(scopedSummary.textContent).toContain('Block scoped goal');
 		expect(scopedSummary.textContent).not.toContain('Launch scoped goal work');
@@ -1050,6 +1108,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		renderPage({ scopedGoalId: 'goal_ui_empty' });
 
 		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Assess completion');
+		expect(scopedSummary.textContent).toContain(
+			'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
+		);
 		expect(scopedSummary.textContent).toContain('Pause scoped goal');
 		expect(scopedSummary.textContent).toContain('Block scoped goal');
 		expect(
@@ -1084,6 +1146,7 @@ describe('/app/v2-core/+page.svelte', () => {
 			.element(page.getByRole('link', { name: 'Show project scope' }))
 			.toBeInTheDocument();
 		const scopedSummary = scopedSummarySection();
+		expect(scopedSummary.textContent).toContain('Review output');
 		expect(scopedSummary.textContent).toContain('Launch scoped goal work');
 		expect(scopedSummary.textContent).toContain('Pause scoped goal');
 		expect(scopedSummary.textContent).toContain('Block scoped goal');

@@ -258,6 +258,41 @@ function seedCoreDb(dbFile: string) {
 			summary: 'Active goal with no open tasks.',
 			successCriteria: 'Operator can see there is no open work.'
 		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_ready_only',
+			projectId: 'project_ui',
+			title: 'Dispatch ready goal work',
+			summary: 'Active goal with selected ready work.',
+			successCriteria: 'Operator can see selected work is ready to launch.'
+		});
+		createV2CoreTask(db, {
+			id: 'task_ui_ready_only',
+			goalId: 'goal_ui_ready_only',
+			title: 'Ready goal-only task',
+			summary: 'Ready work for readiness readback.',
+			successCriteria: 'Readiness shows ready dispatch.',
+			validationPlan: 'Load scoped operator console.'
+		});
+		createV2CoreGoal(db, {
+			id: 'goal_ui_needs_next',
+			projectId: 'project_ui',
+			title: 'Clarify next goal work',
+			summary: 'Active goal with open work but no dispatchable task.',
+			successCriteria: 'Operator can see next work needs selection.'
+		});
+		createV2CoreTask(db, {
+			id: 'task_ui_needs_next',
+			goalId: 'goal_ui_needs_next',
+			title: 'Open unselected goal task',
+			summary: 'Open work that is not dispatchable.',
+			successCriteria: 'Readiness shows next work must be selected.',
+			validationPlan: 'Load scoped operator console.'
+		});
+		transitionV2CoreTaskStatus(db, {
+			taskId: 'task_ui_needs_next',
+			status: 'in_progress',
+			summary: 'Started work without a provider run.'
+		});
 		createV2CoreTask(db, {
 			id: 'task_ui_done',
 			goalId: 'goal_ui',
@@ -526,6 +561,20 @@ describe('/app/v2-core page server', () => {
 					selectedTask: null
 				}),
 				expect.objectContaining({
+					goalId: 'goal_ui_ready_only',
+					queueState: 'ready_to_dispatch',
+					selectedTask: expect.objectContaining({
+						taskId: 'task_ui_ready_only'
+					}),
+					currentRun: null
+				}),
+				expect.objectContaining({
+					goalId: 'goal_ui_needs_next',
+					queueState: 'no_dispatchable_work',
+					currentRun: null,
+					selectedTask: null
+				}),
+				expect.objectContaining({
 					goalId: 'goal_ui_blocked',
 					queueState: 'blocked',
 					currentRun: null,
@@ -584,7 +633,7 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.scopedTaskRollup).toBeNull();
 		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
-		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(4);
+		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(6);
 	});
 
 	it('loads immediate child-goal rollup for a parent goal scope', async () => {
@@ -601,6 +650,11 @@ describe('/app/v2-core page server', () => {
 				title: 'Make v2 core inspectable'
 			}),
 			queueState: 'ready_to_dispatch',
+			readiness: {
+				state: 'review_required',
+				label: 'Review output',
+				summary: 'This goal has work awaiting review. Review the output before selecting more work.'
+			},
 			selectedTask: expect.objectContaining({
 				taskId: 'task_ui_next'
 			})
@@ -680,6 +734,11 @@ describe('/app/v2-core page server', () => {
 				doneTaskCount: 0
 			}),
 			queueState: 'running',
+			readiness: {
+				state: 'running_work',
+				label: 'Work is running',
+				summary: 'A current run is open for this goal. Wait for it or open the current-run task.'
+			},
 			currentRun: expect.objectContaining({
 				runId: 'run_ui_child_current',
 				taskId: 'task_ui_child_current'
@@ -754,6 +813,12 @@ describe('/app/v2-core page server', () => {
 			},
 			tasks: []
 		});
+		expect(result.operatorConsole?.scopedGoalSummary?.readiness).toEqual({
+			state: 'ready_for_completion_assessment',
+			label: 'Assess completion',
+			summary:
+				'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
+		});
 	});
 
 	it('loads a scoped summary for blocked and paused goals without runnable work', async () => {
@@ -775,6 +840,11 @@ describe('/app/v2-core page server', () => {
 				parentGoalId: 'goal_ui'
 			}),
 			queueState: 'blocked',
+			readiness: {
+				state: 'blocked',
+				label: 'Unblock before continuing',
+				summary: 'This goal is blocked. Resolve or resume the blocker before assigning more work.'
+			},
 			currentRun: null,
 			selectedTask: null
 		});
@@ -785,8 +855,57 @@ describe('/app/v2-core page server', () => {
 				parentGoalId: null
 			}),
 			queueState: 'paused',
+			readiness: {
+				state: 'paused',
+				label: 'Paused',
+				summary: 'This goal is paused. Resume it before dispatching or planning more work.'
+			},
 			currentRun: null,
 			selectedTask: null
+		});
+	});
+
+	it('loads scoped readiness for ready and unselected active goals', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const ready = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_ready_only'
+		);
+		const needsNext = await loadCorePage(
+			'http://localhost/app/v2-core?project=project_ui&goal=goal_ui_needs_next'
+		);
+
+		expect(ready.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui_ready_only',
+				status: 'active'
+			}),
+			queueState: 'ready_to_dispatch',
+			selectedTask: expect.objectContaining({
+				taskId: 'task_ui_ready_only'
+			}),
+			readiness: {
+				state: 'ready_to_dispatch',
+				label: 'Ready to dispatch',
+				summary: 'This goal has selected ready work. Launch it or inspect the selected task.'
+			}
+		});
+		expect(needsNext.operatorConsole?.scopedGoalSummary).toMatchObject({
+			goal: expect.objectContaining({
+				goalId: 'goal_ui_needs_next',
+				status: 'active',
+				openTaskCount: 1
+			}),
+			queueState: 'no_dispatchable_work',
+			selectedTask: null,
+			readiness: {
+				state: 'needs_next_work',
+				label: 'Select next work',
+				summary:
+					'This goal has open work, but no dispatchable task is selected. Clarify or prepare the next task.'
+			}
 		});
 	});
 

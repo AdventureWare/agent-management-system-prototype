@@ -683,6 +683,18 @@ export type V2CoreOperatorConsoleRecentArtifact = {
 export type V2CoreOperatorConsoleScopedGoalSummary = {
 	goal: V2CoreOperatorConsoleGoal;
 	queueState: V2CoreOperatorConsoleWorkQueueItem['queueState'] | null;
+	readiness: {
+		state:
+			| 'running_work'
+			| 'review_required'
+			| 'ready_to_dispatch'
+			| 'blocked'
+			| 'paused'
+			| 'needs_next_work'
+			| 'ready_for_completion_assessment';
+		label: string;
+		summary: string;
+	};
 	currentRun: V2CoreOperatorConsoleWorkQueueItem['currentRun'];
 	selectedTask: V2CoreNextWork['candidates'][number] | null;
 	recentAcceptedArtifact: V2CoreOperatorConsoleRecentArtifact | null;
@@ -5033,11 +5045,79 @@ export function readV2CoreOperatorConsole(
 		? (workQueue.find((item) => item.goalId === scope.goalId) ?? null)
 		: null;
 	const scopedGoal = activeGoals.find((goal) => goal.goalId === scope.goalId) ?? null;
+	function scopedGoalReadiness(
+		goal: V2CoreOperatorConsoleGoal,
+		queueState: V2CoreOperatorConsoleWorkQueueItem['queueState'] | null,
+		currentRun: V2CoreOperatorConsoleWorkQueueItem['currentRun'],
+		selectedTask: V2CoreNextWork['candidates'][number] | null,
+		taskRollup: V2CoreOperatorConsoleScopedTaskRollup | null
+	): V2CoreOperatorConsoleScopedGoalSummary['readiness'] {
+		if (goal.status === 'blocked' || queueState === 'blocked') {
+			return {
+				state: 'blocked',
+				label: 'Unblock before continuing',
+				summary: 'This goal is blocked. Resolve or resume the blocker before assigning more work.'
+			};
+		}
+
+		if (goal.status === 'paused' || queueState === 'paused') {
+			return {
+				state: 'paused',
+				label: 'Paused',
+				summary: 'This goal is paused. Resume it before dispatching or planning more work.'
+			};
+		}
+
+		if (currentRun) {
+			return {
+				state: 'running_work',
+				label: 'Work is running',
+				summary: 'A current run is open for this goal. Wait for it or open the current-run task.'
+			};
+		}
+
+		if ((taskRollup?.counts.review ?? 0) > 0) {
+			return {
+				state: 'review_required',
+				label: 'Review output',
+				summary: 'This goal has work awaiting review. Review the output before selecting more work.'
+			};
+		}
+
+		if (selectedTask || queueState === 'ready_to_dispatch') {
+			return {
+				state: 'ready_to_dispatch',
+				label: 'Ready to dispatch',
+				summary: 'This goal has selected ready work. Launch it or inspect the selected task.'
+			};
+		}
+
+		if (goal.status === 'active' && goal.openTaskCount > 0) {
+			return {
+				state: 'needs_next_work',
+				label: 'Select next work',
+				summary: 'This goal has open work, but no dispatchable task is selected. Clarify or prepare the next task.'
+			};
+		}
+
+		return {
+			state: 'ready_for_completion_assessment',
+			label: 'Assess completion',
+			summary: 'This active goal has no running, review, blocked, or open work. Assess whether the goal is complete before creating more continuation work.'
+		};
+	}
 	const scopedGoalSummary =
 		scope.goalId && scopedGoal
 			? {
 					goal: scopedGoal,
 					queueState: scopedWorkQueueItem?.queueState ?? null,
+					readiness: scopedGoalReadiness(
+						scopedGoal,
+						scopedWorkQueueItem?.queueState ?? null,
+						scopedWorkQueueItem?.currentRun ?? null,
+						scopedWorkQueueItem?.selectedTask ?? null,
+						scopedTaskRollup
+					),
 					currentRun: scopedWorkQueueItem?.currentRun ?? null,
 					selectedTask: scopedWorkQueueItem?.selectedTask ?? null,
 					recentAcceptedArtifact:

@@ -219,6 +219,11 @@
 							</strong>
 						</div>
 						<div>
+							<span>Readiness</span>
+							<strong>{scopedGoalSummary.readiness.label}</strong>
+							<p>{scopedGoalSummary.readiness.summary}</p>
+						</div>
+						<div>
 							<span>Current run</span>
 							{#if scopedGoalSummary.currentRun}
 								<a href={taskHref(scopedGoalSummary.currentRun.taskId)}>
