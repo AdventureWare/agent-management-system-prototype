@@ -337,14 +337,59 @@
 										{queueStateLabel(childGoal.queueState)}
 									</span>
 									<span>{childGoal.status}</span>
+									{#if goalActions(childGoal.status).length}
+										<div class="v2-core-goal-actions" aria-label={`${childGoal.title} child-goal actions`}>
+											{#each goalActions(childGoal.status) as action (action.id)}
+												<form method="POST" action="?/applyGoalAction" class="v2-core-goal-form">
+													<input type="hidden" name="goalId" value={childGoal.goalId} />
+													<input type="hidden" name="actionId" value={action.id} />
+													<input
+														name="summary"
+														type="text"
+														placeholder={`${action.label} reason`}
+														aria-label={`${action.label} ${childGoal.title} reason`}
+													/>
+													<button type="submit">{action.label} child goal</button>
+												</form>
+											{/each}
+										</div>
+									{/if}
 									{#if childGoal.currentRun}
-										<a href={taskHref(childGoal.currentRun.taskId)}>
-											{childGoal.currentRun.runId}
-										</a>
-									{:else if childGoal.selectedTask}
-										<a href={taskHref(childGoal.selectedTask.taskId)}>
-											{childGoal.selectedTask.title}
-										</a>
+										<div class="v2-core-handoff" aria-label={`${childGoal.title} child-goal current run`}>
+											<div>
+												<span>Current run</span>
+												<strong>{childGoal.currentRun.runId}</strong>
+												<p>{childGoal.currentRun.status} · {childGoal.currentRun.modelProviderName ?? 'No provider'}</p>
+											</div>
+											<a href={taskHref(childGoal.currentRun.taskId)}>Open child current-run task</a>
+										</div>
+									{:else if childGoal.status === 'active' && childGoal.selectedTask}
+										<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+											<input type="hidden" name="goalId" value={childGoal.goalId} />
+											<input type="hidden" name="taskId" value={childGoal.selectedTask.taskId} />
+											<div>
+												<span>Selected task</span>
+												<a href={taskHref(childGoal.selectedTask.taskId)}>
+													{childGoal.selectedTask.title}
+												</a>
+											</div>
+											<button type="submit">Launch child goal work</button>
+										</form>
+									{:else if childGoal.status === 'active' && childGoal.queueState === 'no_open_work'}
+										<form
+											method="POST"
+											action="?/createGoalContinuationTask"
+											class="v2-core-dispatch-form"
+										>
+											<input type="hidden" name="goalId" value={childGoal.goalId} />
+											<div>
+												<span>No open work</span>
+												<p>Create a continuation planning task</p>
+											</div>
+											<button type="submit">Plan child next work</button>
+										</form>
+									{:else if childGoal.queueState === 'blocked' || childGoal.queueState === 'paused'}
+										<p class="v2-core-row-meta">Dispatch suppressed while {childGoal.queueState}</p>
 									{:else}
 										<span>No selected work</span>
 									{/if}

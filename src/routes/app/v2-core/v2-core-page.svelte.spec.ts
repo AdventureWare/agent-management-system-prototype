@@ -171,6 +171,42 @@ function scopedChildGoalRollupFor(scopedGoalId: string | null) {
 			selectedTask: null
 		},
 		{
+			goalId: 'goal_ui_child_ready',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Launch selected child work',
+			status: 'active',
+			openTaskCount: 1,
+			doneTaskCount: 0,
+			queueState: 'ready_to_dispatch',
+			currentRun: null,
+			selectedTask: {
+				taskId: 'task_ui_child_next',
+				title: 'Ready child next step',
+				status: 'ready',
+				goalId: 'goal_ui_child_ready',
+				goalTitle: 'Launch selected child work',
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				action: 'start_task',
+				reason: 'Next child task.'
+			}
+		},
+		{
+			goalId: 'goal_ui_child_empty',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Plan empty child work',
+			status: 'active',
+			openTaskCount: 0,
+			doneTaskCount: 0,
+			queueState: 'no_open_work',
+			currentRun: null,
+			selectedTask: null
+		},
+		{
 			goalId: 'goal_ui_blocked',
 			projectId: 'project_ui',
 			projectName: 'V2 Core UI',
@@ -180,6 +216,19 @@ function scopedChildGoalRollupFor(scopedGoalId: string | null) {
 			openTaskCount: 0,
 			doneTaskCount: 0,
 			queueState: 'blocked',
+			currentRun: null,
+			selectedTask: null
+		},
+		{
+			goalId: 'goal_ui_child_paused',
+			projectId: 'project_ui',
+			projectName: 'V2 Core UI',
+			parentGoalId: 'goal_ui',
+			title: 'Paused child goal',
+			status: 'paused',
+			openTaskCount: 0,
+			doneTaskCount: 0,
+			queueState: 'paused',
 			currentRun: null,
 			selectedTask: null
 		}
@@ -693,6 +742,12 @@ function scopedSummarySection() {
 	return section as HTMLElement;
 }
 
+function childGoalRollupSection() {
+	const section = document.querySelector('section[aria-labelledby="v2-core-child-goal-rollup"]');
+	expect(section).not.toBeNull();
+	return section as HTMLElement;
+}
+
 function hasTaskRollupLink(section: HTMLElement, taskId: string, label: string) {
 	return Array.from(
 		section.querySelectorAll(`a[href="/app/v2-core/tasks/${taskId}?mode=read"]`)
@@ -779,15 +834,29 @@ describe('/app/v2-core/+page.svelte', () => {
 	it('renders immediate child-goal rollup for a parent goal scope', () => {
 		renderPage({ scopedGoalId: 'goal_ui' });
 
-		const childRollup = document.querySelector('section[aria-labelledby="v2-core-child-goal-rollup"]');
-		expect(childRollup).not.toBeNull();
+		const childRollup = childGoalRollupSection();
 		expect(childRollup?.textContent).toContain('Child goals');
 		expect(childRollup?.textContent).toContain('Run child goal work');
+		expect(childRollup?.textContent).toContain('Launch selected child work');
+		expect(childRollup?.textContent).toContain('Plan empty child work');
 		expect(childRollup?.textContent).toContain('Unblock v2 operator work');
+		expect(childRollup?.textContent).toContain('Paused child goal');
 		expect(childRollup?.textContent).toContain('Running');
+		expect(childRollup?.textContent).toContain('Ready');
+		expect(childRollup?.textContent).toContain('No open work');
 		expect(childRollup?.textContent).toContain('Blocked');
+		expect(childRollup?.textContent).toContain('Paused');
 		expect(childRollup?.textContent).toContain('1 open / 0 done');
 		expect(childRollup?.textContent).toContain('run_ui_child_current');
+		expect(childRollup?.textContent).toContain('Open child current-run task');
+		expect(childRollup?.textContent).toContain('Ready child next step');
+		expect(childRollup?.textContent).toContain('Launch child goal work');
+		expect(childRollup?.textContent).toContain('Plan child next work');
+		expect(childRollup?.textContent).toContain('Pause child goal');
+		expect(childRollup?.textContent).toContain('Block child goal');
+		expect(childRollup?.textContent).toContain('Resume child goal');
+		expect(childRollup?.textContent).toContain('Dispatch suppressed while blocked');
+		expect(childRollup?.textContent).toContain('Dispatch suppressed while paused');
 		expect(document.body.textContent).toContain('Tasks in scope');
 		expect(document.body.textContent).toContain('2 open / 1 review / 1 done');
 		expect(document.body.textContent).toContain('Review artifact_ui_review');
@@ -849,7 +918,57 @@ describe('/app/v2-core/+page.svelte', () => {
 			)
 		).not.toBeNull();
 		expect(
-			childRollup?.querySelector('a[href="/app/v2-core/tasks/task_ui_child_current?mode=read"]')
+			childRollup.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_ready"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_empty"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_paused"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector('a[href="/app/v2-core/tasks/task_ui_child_current?mode=read"]')
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/dispatchGoalWork"] input[name="goalId"][value="goal_ui_child_ready"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/dispatchGoalWork"] input[name="taskId"][value="task_ui_child_next"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/createGoalContinuationTask"] input[name="goalId"][value="goal_ui_child_empty"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui_child_running"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/applyGoalAction"] input[name="actionId"][value="pause_goal"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui_blocked"]'
+			)
+		).not.toBeNull();
+		expect(
+			childRollup.querySelector(
+				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui_child_paused"]'
+			)
 		).not.toBeNull();
 	});
 
@@ -971,6 +1090,8 @@ describe('/app/v2-core/+page.svelte', () => {
 		await expect.element(page.getByRole('heading', { name: 'Work queue' })).toBeInTheDocument();
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Unblock v2 operator work');
+		expect(document.body.textContent).toContain('Launch selected child work');
+		expect(document.body.textContent).toContain('Plan empty child work');
 		await expect
 			.element(page.getByRole('button', { name: 'Launch', exact: true }))
 			.toBeInTheDocument();
@@ -996,13 +1117,27 @@ describe('/app/v2-core/+page.svelte', () => {
 				(button) => button.textContent === 'Launch scoped goal work'
 			)
 		).toHaveLength(1);
+		const childRollup = childGoalRollupSection();
+		expect(childRollup.textContent).toContain('Open child current-run task');
+		expect(childRollup.textContent).toContain('Launch child goal work');
+		expect(childRollup.textContent).toContain('Plan child next work');
+		expect(
+			Array.from(childRollup.querySelectorAll('button')).filter(
+				(button) => button.textContent === 'Launch child goal work'
+			)
+		).toHaveLength(1);
+		expect(
+			Array.from(childRollup.querySelectorAll('button')).filter(
+				(button) => button.textContent === 'Plan child next work'
+			)
+		).toHaveLength(1);
 		expect(
 			Array.from(document.querySelectorAll('a')).filter((link) => link.textContent === 'Review task')
 		).toHaveLength(1);
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
 		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
 		await expect
-			.element(page.getByRole('link', { name: 'run_ui_child_current' }))
+			.element(page.getByRole('link', { name: 'Open child current-run task' }))
 			.toBeInTheDocument();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
