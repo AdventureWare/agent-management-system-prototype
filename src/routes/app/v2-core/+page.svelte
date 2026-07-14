@@ -40,6 +40,24 @@
 	let scopedGoalSummary = $derived(operatorConsole?.scopedGoalSummary ?? null);
 	let scopedChildGoalRollup = $derived(operatorConsole?.scopedChildGoalRollup ?? []);
 	let scopedTaskRollup = $derived(operatorConsole?.scopedTaskRollup ?? null);
+	let dispatchBoardRows = $derived.by(() => {
+		if (!operatorConsole) {
+			return [];
+		}
+
+		const reviewByGoalId = new Map<string, (typeof operatorConsole.reviewQueue)[number]>();
+		for (const review of operatorConsole.reviewQueue) {
+			if (!reviewByGoalId.has(review.goalId)) {
+				reviewByGoalId.set(review.goalId, review);
+			}
+		}
+
+		return operatorConsole.workQueue.map((goal) => ({
+			goal,
+			currentRun: goal.currentRun ?? currentRunForGoal(goal.goalId),
+			review: reviewByGoalId.get(goal.goalId) ?? null
+		}));
+	});
 
 	function formatCount(value: number | undefined) {
 		return value ?? 0;
@@ -191,6 +209,106 @@
 					<a href={projectHref(operatorConsole.scope.projectId)}>Show project scope</a>
 				</section>
 			{/if}
+
+			<section class="v2-core-dispatch-board" aria-labelledby="v2-core-dispatch-board">
+				<header class="v2-core-panel-header">
+					<h2 id="v2-core-dispatch-board">Dispatch board</h2>
+					<span>{dispatchBoardRows.length} goals</span>
+				</header>
+				{#if dispatchBoardRows.length}
+					<div class="v2-core-dispatch-board-list">
+						{#each dispatchBoardRows as row (row.goal.goalId)}
+							<article class="v2-core-dispatch-card">
+								<header>
+									<div>
+										<a class="v2-core-row-title v2-core-row-link" href={goalHref(row.goal.goalId, row.goal.projectId)}>
+											{row.goal.title}
+										</a>
+										<p class="v2-core-row-meta">
+											{row.goal.openTaskCount} open / {row.goal.doneTaskCount} done
+										</p>
+									</div>
+									<span class={['v2-core-badge', `v2-core-badge-${row.goal.queueState}`]}>
+										{queueStateLabel(row.goal.queueState)}
+									</span>
+								</header>
+
+								{#if row.currentRun}
+									<div class="v2-core-dispatch-primary">
+										<div>
+											<span>Running</span>
+											<strong>{row.currentRun.taskTitle}</strong>
+											<p>{row.currentRun.runId} · {row.currentRun.modelProviderName ?? 'No provider'}</p>
+										</div>
+										<a href={taskHref(row.currentRun.taskId)}>Open running task</a>
+									</div>
+								{:else if row.review}
+									<div class="v2-core-dispatch-primary">
+										<div>
+											<span>Review</span>
+											<strong>{row.review.taskTitle}</strong>
+											<p>{row.review.title} · {row.review.runStatus ?? 'no run'}</p>
+										</div>
+										<a href={taskHref(row.review.taskId)}>Review output</a>
+									</div>
+								{:else if row.goal.selectedTask}
+									<form method="POST" action="?/dispatchGoalWork" class="v2-core-dispatch-form">
+										<input type="hidden" name="goalId" value={row.goal.goalId} />
+										<input type="hidden" name="taskId" value={row.goal.selectedTask.taskId} />
+										<div>
+											<span>Ready</span>
+											<a href={taskHref(row.goal.selectedTask.taskId)}>{row.goal.selectedTask.title}</a>
+										</div>
+										<button type="submit">Launch work</button>
+									</form>
+								{:else if row.goal.queueState === 'no_open_work'}
+									<form method="POST" action="?/createGoalContinuationTask" class="v2-core-dispatch-form">
+										<input type="hidden" name="goalId" value={row.goal.goalId} />
+										<div>
+											<span>No open work</span>
+											<p>Create a continuation planning task</p>
+										</div>
+										<button type="submit">Plan work</button>
+									</form>
+								{:else}
+									<p class="v2-core-dispatch-muted">
+										{row.goal.queueState === 'blocked' || row.goal.queueState === 'paused'
+											? `Dispatch suppressed while ${row.goal.queueState}`
+											: 'No dispatchable work selected'}
+									</p>
+								{/if}
+
+								{#if row.review && (row.currentRun || row.goal.selectedTask)}
+									<div class="v2-core-dispatch-secondary">
+										<span>Review waiting</span>
+										<a href={taskHref(row.review.taskId)}>Review output</a>
+									</div>
+								{/if}
+
+								{#if goalActions(row.goal.status).length}
+									<div class="v2-core-dispatch-actions" aria-label={`${row.goal.title} dispatch board goal actions`}>
+										{#each goalActions(row.goal.status) as action (action.id)}
+											<form method="POST" action="?/applyGoalAction" class="v2-core-goal-form">
+												<input type="hidden" name="goalId" value={row.goal.goalId} />
+												<input type="hidden" name="actionId" value={action.id} />
+												<input
+													name="summary"
+													type="text"
+													placeholder={`${action.label} reason`}
+													aria-label={`${action.label} ${row.goal.title} reason`}
+												/>
+												<button type="submit">{action.label}</button>
+											</form>
+										{/each}
+									</div>
+								{/if}
+							</article>
+						{/each}
+					</div>
+				{:else}
+					<p class="v2-core-empty">No managed goal work</p>
+				{/if}
+			</section>
 
 			{#if scopedGoalSummary}
 				<section class="v2-core-scoped-summary" aria-labelledby="v2-core-scoped-summary">
@@ -1014,6 +1132,122 @@
 		margin-top: 0;
 	}
 
+	.v2-core-dispatch-board {
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 18%);
+		border-radius: 0.5rem;
+		background: var(--color-surface-50);
+		color: var(--color-surface-950);
+		overflow: hidden;
+	}
+
+	.v2-core-dispatch-board-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+		gap: 0.75rem;
+		padding: 0.875rem;
+	}
+
+	.v2-core-dispatch-card {
+		display: grid;
+		align-content: start;
+		gap: 0.6rem;
+		min-width: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
+		border-radius: 0.45rem;
+		padding: 0.7rem;
+		background: var(--color-surface-0);
+	}
+
+	.v2-core-dispatch-card header {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 0.65rem;
+	}
+
+	.v2-core-dispatch-card header div {
+		min-width: 0;
+	}
+
+	.v2-core-dispatch-primary {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.5rem;
+		align-items: center;
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding-top: 0.55rem;
+	}
+
+	.v2-core-dispatch-primary div {
+		display: grid;
+		gap: 0.12rem;
+		min-width: 0;
+	}
+
+	.v2-core-dispatch-primary span,
+	.v2-core-dispatch-muted {
+		color: var(--color-surface-700);
+		font-size: 0.76rem;
+	}
+
+	.v2-core-dispatch-primary strong,
+	.v2-core-dispatch-primary p {
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-dispatch-primary strong {
+		font-size: 0.84rem;
+		line-height: 1.25;
+	}
+
+	.v2-core-dispatch-primary p,
+	.v2-core-dispatch-muted {
+		margin: 0;
+	}
+
+	.v2-core-dispatch-primary a {
+		color: var(--color-primary-700);
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.v2-core-dispatch-primary a:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-dispatch-secondary {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 55%);
+		padding-top: 0.45rem;
+	}
+
+	.v2-core-dispatch-secondary span {
+		color: var(--color-surface-700);
+		font-size: 0.74rem;
+	}
+
+	.v2-core-dispatch-secondary a {
+		color: var(--color-primary-700);
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.v2-core-dispatch-secondary a:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-dispatch-actions {
+		display: grid;
+		gap: 0.35rem;
+	}
+
 	.v2-core-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
@@ -1357,6 +1591,19 @@
 	}
 
 	@media (max-width: 44rem) {
+		.v2-core-dispatch-primary {
+			grid-template-columns: 1fr;
+		}
+
+		.v2-core-dispatch-primary a {
+			white-space: normal;
+		}
+
+		.v2-core-dispatch-secondary {
+			align-items: start;
+			flex-direction: column;
+		}
+
 		.v2-core-row {
 			grid-template-columns: 1fr;
 		}

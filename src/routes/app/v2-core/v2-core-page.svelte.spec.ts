@@ -809,6 +809,10 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('V2 Core UI');
 		expect(document.body.textContent).toContain('Make v2 core inspectable');
 		expect(document.body.textContent).toContain('Work queue');
+		expect(document.body.textContent).toContain('Dispatch board');
+		expect(document.body.textContent).toContain('Open running task');
+		expect(document.body.textContent).toContain('Review output');
+		expect(document.body.textContent).toContain('Plan work');
 		expect(document.body.textContent).toContain('Run child goal work');
 		expect(document.body.textContent).toContain('Keep empty running goal visible');
 		expect(document.body.textContent).toContain('Ready');
@@ -857,6 +861,28 @@ describe('/app/v2-core/+page.svelte', () => {
 		).not.toBeNull();
 		expect(
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_review?mode=read"]')
+		).not.toBeNull();
+		const dispatchBoard = document.querySelector('section[aria-labelledby="v2-core-dispatch-board"]');
+		expect(dispatchBoard).not.toBeNull();
+		expect(dispatchBoard?.textContent).toContain('Make v2 core inspectable');
+		expect(dispatchBoard?.textContent).toContain('Run child goal work');
+		expect(dispatchBoard?.textContent).toContain('Keep empty running goal visible');
+		expect(dispatchBoard?.textContent).toContain('Paused v2 track');
+		expect(
+			dispatchBoard?.querySelector('a[href="/app/v2-core/tasks/task_ui_current?mode=read"]')
+		).not.toBeNull();
+		expect(
+			dispatchBoard?.querySelector('a[href="/app/v2-core/tasks/task_ui_review?mode=read"]')
+		).not.toBeNull();
+		expect(
+			dispatchBoard?.querySelector(
+				'form[action="?/createGoalContinuationTask"] input[name="goalId"][value="goal_ui_empty"]'
+			)
+		).not.toBeNull();
+		expect(
+			dispatchBoard?.querySelector(
+				'form[action="?/applyGoalAction"] input[name="goalId"][value="goal_ui_paused"]'
+			)
 		).not.toBeNull();
 		expect(
 			document.querySelector('a[href="/app/v2-core?project=project_ui&goal=goal_ui"]')
@@ -1140,6 +1166,9 @@ describe('/app/v2-core/+page.svelte', () => {
 			.toBeInTheDocument();
 		await expect.element(page.getByRole('heading', { name: 'Child goals' })).toBeInTheDocument();
 		await expect
+			.element(page.getByRole('heading', { name: 'Dispatch board' }))
+			.toBeInTheDocument();
+		await expect
 			.element(page.getByRole('heading', { name: 'Tasks in scope' }))
 			.toBeInTheDocument();
 		await expect
@@ -1198,7 +1227,7 @@ describe('/app/v2-core/+page.svelte', () => {
 			Array.from(document.querySelectorAll('a')).filter((link) => link.textContent === 'Review task')
 		).toHaveLength(1);
 		await expect.element(page.getByRole('button', { name: 'Plan next work' })).toBeInTheDocument();
-		await expect.element(page.getByText('run_ui_current')).toBeInTheDocument();
+		expect(document.body.textContent).toContain('run_ui_current');
 		await expect
 			.element(page.getByRole('link', { name: 'Open child current-run task' }))
 			.toBeInTheDocument();
