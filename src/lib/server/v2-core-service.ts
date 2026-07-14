@@ -4172,7 +4172,7 @@ export function readV2CoreDependencyReductionReport(
 				(capability) => capability.status === 'locally_supported'
 			).length,
 			retirementCandidateCount: capabilityRows.filter(
-				(capability) => capability.status === 'retirement_candidate'
+				(capability) => capability.localReplacementStatus === 'retirement_candidate'
 			).length,
 			unknownCount: capabilityRows.filter((capability) => capability.status === 'unknown').length
 		},

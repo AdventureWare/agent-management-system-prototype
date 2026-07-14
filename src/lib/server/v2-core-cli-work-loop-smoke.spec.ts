@@ -3184,7 +3184,7 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(mixedDependencyReductionReport.dependencyReductionReport.summary).toMatchObject({
 			capabilityCount: 1,
 			hybridCandidateCount: 1,
-			retirementCandidateCount: 0,
+			retirementCandidateCount: 1,
 			unknownCount: 0
 		});
 		expect(mixedDependencyReductionReport.dependencyReductionReport.capabilities).toEqual([

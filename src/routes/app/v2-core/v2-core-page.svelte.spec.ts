@@ -780,6 +780,29 @@ function expectTouchSizedButtons(container: ParentNode) {
 	}
 }
 
+function expectMobileControlFormsStack(container: ParentNode) {
+	const forms = Array.from(
+		container.querySelectorAll('form.v2-core-goal-form, form.v2-core-dispatch-form')
+	);
+	expect(forms.length).toBeGreaterThan(0);
+
+	for (const form of forms) {
+		const button = form.querySelector('button');
+		expect(button).not.toBeNull();
+
+		const control =
+			form.classList.contains('v2-core-goal-form')
+				? form.querySelector('input[type="text"]')
+				: form.querySelector('div');
+		expect(control).not.toBeNull();
+
+		const controlRect = (control as HTMLElement).getBoundingClientRect();
+		const buttonRect = (button as HTMLButtonElement).getBoundingClientRect();
+		expect(buttonRect.top).toBeGreaterThanOrEqual(controlRect.bottom - 1);
+		expect(buttonRect.width).toBeGreaterThanOrEqual(controlRect.width - 1);
+	}
+}
+
 function taskRollupSection() {
 	const section = document.querySelector('section[aria-labelledby="v2-core-task-rollup"]');
 	expect(section).not.toBeNull();
@@ -1265,6 +1288,7 @@ describe('/app/v2-core/+page.svelte', () => {
 		);
 		expect(dispatchBoard).not.toBeNull();
 		expectTouchSizedButtons(dispatchBoard as HTMLElement);
+		expectMobileControlFormsStack(document);
 		expectNoHorizontalOverflow();
 	});
 

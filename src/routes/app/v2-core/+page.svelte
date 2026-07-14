@@ -1322,6 +1322,10 @@
 		padding: 0.75rem 0.875rem;
 	}
 
+	.v2-core-row > div {
+		min-width: 0;
+	}
+
 	.v2-core-row:last-child {
 		border-bottom: 0;
 	}
@@ -1354,6 +1358,7 @@
 		display: grid;
 		justify-items: end;
 		gap: 0.25rem;
+		min-width: 0;
 		text-align: right;
 	}
 
@@ -1375,15 +1380,17 @@
 
 	.v2-core-goal-actions {
 		display: grid;
-		gap: 0.35rem;
+		gap: 0.45rem;
 		margin-top: 0.25rem;
+		min-width: min(100%, 22rem);
 	}
 
 	.v2-core-goal-form {
 		display: grid;
 		grid-template-columns: minmax(8rem, 1fr) auto;
-		gap: 0.35rem;
+		gap: 0.45rem;
 		align-items: center;
+		min-width: 0;
 	}
 
 	.v2-core-goal-form input {
@@ -1398,6 +1405,7 @@
 
 	.v2-core-goal-form button {
 		min-height: 2.5rem;
+		min-width: 5.5rem;
 		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 25%);
 		border-radius: 0.35rem;
 		padding: 0.35rem 0.55rem;
@@ -1415,8 +1423,9 @@
 	.v2-core-dispatch-form {
 		display: grid;
 		grid-template-columns: minmax(10rem, 1fr) auto;
-		gap: 0.45rem;
+		gap: 0.55rem;
 		align-items: center;
+		min-width: 0;
 		margin-top: 0.35rem;
 		border-top: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
 		padding-top: 0.45rem;
@@ -1425,6 +1434,7 @@
 	.v2-core-dispatch-form div {
 		display: grid;
 		gap: 0.1rem;
+		min-width: 0;
 	}
 
 	.v2-core-dispatch-form span {
@@ -1446,7 +1456,9 @@
 	}
 
 	.v2-core-dispatch-form button {
+		justify-self: end;
 		min-height: 2.75rem;
+		min-width: 7rem;
 		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 20%);
 		border-radius: 0.35rem;
 		padding: 0.4rem 0.65rem;
@@ -1641,6 +1653,7 @@
 
 		.v2-core-goal-form {
 			grid-template-columns: 1fr;
+			gap: 0.4rem;
 			width: 100%;
 		}
 
@@ -1650,11 +1663,13 @@
 
 		.v2-core-goal-form button,
 		.v2-core-dispatch-form button {
+			justify-self: stretch;
 			width: 100%;
 		}
 
 		.v2-core-dispatch-form {
 			grid-template-columns: 1fr;
+			gap: 0.5rem;
 			width: 100%;
 		}
 
