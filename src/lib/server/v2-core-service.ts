@@ -405,6 +405,54 @@ export type V2CoreNextWork = {
 	}>;
 };
 
+export type V2CoreGoalTriageAction =
+	| 'start_ready_task'
+	| 'monitor_in_progress'
+	| 'create_next_task'
+	| 'review_or_close'
+	| 'pause_candidate'
+	| 'blocked_needs_decision';
+
+export type V2CoreGoalTriage = {
+	scope: {
+		projectId: string | null;
+		goalId: string | null;
+	};
+	summary: Record<V2CoreGoalTriageAction, number>;
+	goals: Array<{
+		goalId: string;
+		projectId: string;
+		projectName: string;
+		parentGoalId: string | null;
+		title: string;
+		status: string;
+		sourceFlags: {
+			importedFromV1: boolean;
+			generatedHoldingGoal: boolean;
+		};
+		taskCounts: {
+			ready: number;
+			inProgress: number;
+			review: number;
+			blocked: number;
+			done: number;
+			canceled: number;
+			open: number;
+			total: number;
+		};
+		currentRun: {
+			runId: string;
+			taskId: string;
+			taskTitle: string;
+			status: string;
+			modelProviderId: string | null;
+			modelProviderName: string | null;
+		} | null;
+		suggestedAction: V2CoreGoalTriageAction;
+		reason: string;
+	}>;
+};
+
 export type V2CoreContextBundle = {
 	task: V2CoreTaskDetail['task'];
 	project: V2CoreTaskDetail['project'];
@@ -3146,6 +3194,247 @@ export function readV2CoreNextWork(
 				reason: 'Task is ready and linked to a goal.'
 			};
 		})
+	};
+}
+
+type V2CoreGoalTriageRow = {
+	goal_id: string;
+	project_id: string;
+	project_name: string;
+	parent_goal_id: string | null;
+	title: string;
+	status: string;
+	ready_count: number;
+	in_progress_count: number;
+	review_count: number;
+	blocked_count: number;
+	done_count: number;
+	canceled_count: number;
+	total_count: number;
+	imported_source_count: number;
+	holding_source_count: number;
+	current_run_id: string | null;
+	current_run_task_id: string | null;
+	current_run_task_title: string | null;
+	current_run_status: string | null;
+	current_run_model_provider_id: string | null;
+	current_run_model_provider_name: string | null;
+};
+
+export function readV2CoreGoalTriage(
+	db: Database.Database,
+	options: { goalId?: string | null; projectId?: string | null; limit?: number } = {}
+): V2CoreGoalTriage {
+	const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+	const conditions: string[] = ["goal.status in ('active', 'blocked', 'paused')"];
+	const params: string[] = [];
+
+	if (options.goalId?.trim()) {
+		conditions.push('goal.id = ?');
+		params.push(options.goalId.trim());
+	}
+
+	if (options.projectId?.trim()) {
+		conditions.push('goal.project_id = ?');
+		params.push(options.projectId.trim());
+	}
+
+	const rows = db
+		.prepare<[...string[], number], V2CoreGoalTriageRow>(
+			`
+				select
+					goal.id as goal_id,
+					goal.project_id,
+					project.name as project_name,
+					goal.parent_goal_id,
+					goal.title,
+					goal.status,
+					count(distinct case when task.status = 'ready' then task.id end) as ready_count,
+					count(distinct case when task.status = 'in_progress' then task.id end) as in_progress_count,
+					count(distinct case when task.status = 'review' then task.id end) as review_count,
+					count(distinct case when task.status = 'blocked' then task.id end) as blocked_count,
+					count(distinct case when task.status = 'done' then task.id end) as done_count,
+					count(distinct case when task.status = 'canceled' then task.id end) as canceled_count,
+					count(distinct task.id) as total_count,
+					count(distinct case when goal_source.source_system = 'ams-v1' then goal_source.source_id end) as imported_source_count,
+					count(distinct case
+						when goal_source.source_collection in ('holding_goals', 'generated_holding_goals')
+							or goal.title like 'Imported holding:%'
+							or goal.title like 'Imported unscoped:%'
+						then coalesce(goal_source.source_id, goal.id)
+					end) as holding_source_count,
+					current_run.id as current_run_id,
+					current_run.task_id as current_run_task_id,
+					current_task.title as current_run_task_title,
+					current_run.status as current_run_status,
+					current_run.model_provider_id as current_run_model_provider_id,
+					provider.name as current_run_model_provider_name
+				from v2_core_goals goal
+				join v2_core_projects project on project.id = goal.project_id
+				left join v2_core_tasks task on task.goal_id = goal.id
+				left join v2_core_source_references goal_source
+					on goal_source.record_table = 'v2_core_goals'
+					and goal_source.record_id = goal.id
+				left join v2_core_runs current_run on current_run.id = (
+					select run.id
+					from v2_core_runs run
+					join v2_core_tasks run_task on run_task.id = run.task_id
+					where run_task.goal_id = goal.id
+						and run.ended_at is null
+					order by run.started_at desc, run.id desc
+					limit 1
+				)
+				left join v2_core_tasks current_task on current_task.id = current_run.task_id
+				left join v2_core_model_providers provider on provider.id = current_run.model_provider_id
+				where ${conditions.join(' and ')}
+				group by goal.id
+				order by
+					case goal.status
+						when 'active' then 0
+						when 'blocked' then 1
+						when 'paused' then 2
+						else 3
+					end,
+					case
+						when current_run.id is not null then 0
+						when count(distinct case when task.status = 'review' then task.id end) > 0 then 1
+						when count(distinct case when task.status = 'ready' then task.id end) > 0 then 2
+						when count(distinct case when task.status = 'blocked' then task.id end) > 0 then 3
+						else 4
+					end,
+					project.name,
+					goal.title
+				limit ?
+			`
+		)
+		.all(...params, limit);
+
+	function classify(row: V2CoreGoalTriageRow): { action: V2CoreGoalTriageAction; reason: string } {
+		const openCount =
+			row.ready_count + row.in_progress_count + row.review_count + row.blocked_count;
+
+		if (row.status === 'blocked') {
+			return {
+				action: 'blocked_needs_decision',
+				reason: 'Goal status is blocked; unblock, revise, or pause before dispatching more work.'
+			};
+		}
+
+		if (row.status === 'paused') {
+			return {
+				action: 'pause_candidate',
+				reason: 'Goal is already paused; leave it paused unless the operator intentionally resumes it.'
+			};
+		}
+
+		if (row.current_run_id || row.in_progress_count > 0) {
+			return {
+				action: 'monitor_in_progress',
+				reason: 'Goal has an open run or in-progress task; monitor/close that work before selecting more.'
+			};
+		}
+
+		if (row.review_count > 0) {
+			return {
+				action: 'review_or_close',
+				reason: 'Goal has task output awaiting review; evaluate that output before dispatching more work.'
+			};
+		}
+
+		if (row.ready_count > 0) {
+			return {
+				action: 'start_ready_task',
+				reason: 'Goal has ready tasks linked to it; dispatch the next ready task.'
+			};
+		}
+
+		if (row.blocked_count > 0) {
+			return {
+				action: 'blocked_needs_decision',
+				reason: 'Goal has blocked tasks and no ready/review/running work; resolve or revise blockers.'
+			};
+		}
+
+		if (openCount === 0 && row.imported_source_count > 0) {
+			return {
+				action: 'pause_candidate',
+				reason:
+					'Imported active goal has no open actionable work; review whether to pause, close, or create fresh continuation work.'
+			};
+		}
+
+		if (openCount === 0 && row.done_count > 0) {
+			return {
+				action: 'review_or_close',
+				reason:
+					'Goal has completed work but no open work; assess whether the desired state is met before creating more tasks.'
+			};
+		}
+
+		return {
+			action: 'create_next_task',
+			reason:
+				'Goal is active but has no dispatchable task; define the next executable task or pause the goal.'
+		};
+	}
+
+	const summary: Record<V2CoreGoalTriageAction, number> = {
+		start_ready_task: 0,
+		monitor_in_progress: 0,
+		create_next_task: 0,
+		review_or_close: 0,
+		pause_candidate: 0,
+		blocked_needs_decision: 0
+	};
+
+	const goals = rows.map((row) => {
+		const classification = classify(row);
+		summary[classification.action] += 1;
+
+		return {
+			goalId: row.goal_id,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			parentGoalId: row.parent_goal_id,
+			title: row.title,
+			status: row.status,
+			sourceFlags: {
+				importedFromV1: row.imported_source_count > 0,
+				generatedHoldingGoal: row.holding_source_count > 0
+			},
+			taskCounts: {
+				ready: row.ready_count,
+				inProgress: row.in_progress_count,
+				review: row.review_count,
+				blocked: row.blocked_count,
+				done: row.done_count,
+				canceled: row.canceled_count,
+				open:
+					row.ready_count + row.in_progress_count + row.review_count + row.blocked_count,
+				total: row.total_count
+			},
+			currentRun: row.current_run_id
+				? {
+						runId: row.current_run_id,
+						taskId: row.current_run_task_id ?? '',
+						taskTitle: row.current_run_task_title ?? '',
+						status: row.current_run_status ?? '',
+						modelProviderId: row.current_run_model_provider_id,
+						modelProviderName: row.current_run_model_provider_name
+					}
+				: null,
+			suggestedAction: classification.action,
+			reason: classification.reason
+		};
+	});
+
+	return {
+		scope: {
+			projectId: options.projectId?.trim() || null,
+			goalId: options.goalId?.trim() || null
+		},
+		summary,
+		goals
 	};
 }
 

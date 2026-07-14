@@ -470,6 +470,146 @@ describe('v2 core CLI work-loop smoke', () => {
 		).toEqual(['goal_v2_next_work_active', 'goal_v2_next_work_active']);
 	}, 10_000);
 
+	it('triages active and controlled goals by dispatch hygiene without mutating state', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_triage_smoke',
+			'--name',
+			'AMS v2 Goal Triage Smoke',
+			'--summary',
+			'Temporary project for proving read-only goal triage.'
+		]);
+
+		const createGoal = (id: string, title: string, status = 'active') =>
+			runCoreCli([
+				'create-goal',
+				...baseArgs,
+				'--id',
+				id,
+				'--project',
+				'project_v2_goal_triage_smoke',
+				'--title',
+				title,
+				'--summary',
+				`${title} summary.`,
+				'--success',
+				'The goal triage report classifies this goal.',
+				'--status',
+				status
+			]);
+
+		const createTask = (id: string, goalId: string, status = 'ready') =>
+			runCoreCli([
+				'create-task',
+				...baseArgs,
+				'--id',
+				id,
+				'--goal',
+				goalId,
+				'--title',
+				`${status} task`,
+				'--summary',
+				`Task used to prove ${status} triage.`,
+				'--success',
+				'Goal triage classifies the parent goal.',
+				'--validation',
+				'Run goal-triage.',
+				'--status',
+				status
+			]);
+
+		createGoal('goal_v2_triage_ready', 'Ready goal');
+		createTask('task_v2_triage_ready', 'goal_v2_triage_ready', 'ready');
+		createGoal('goal_v2_triage_running', 'Running goal');
+		createTask('task_v2_triage_running', 'goal_v2_triage_running', 'in_progress');
+		runCoreCli([
+			'record-run',
+			...baseArgs,
+			'--id',
+			'run_v2_triage_running',
+			'--task',
+			'task_v2_triage_running',
+			'--status',
+			'running',
+			'--input',
+			'Run input.',
+			'--action',
+			'Run action.'
+		]);
+		createGoal('goal_v2_triage_review', 'Review goal');
+		createTask('task_v2_triage_review', 'goal_v2_triage_review', 'review');
+		createGoal('goal_v2_triage_blocked_task', 'Blocked task goal');
+		createTask('task_v2_triage_blocked', 'goal_v2_triage_blocked_task', 'blocked');
+		createGoal('goal_v2_triage_done_imported', 'Imported finished goal');
+		createTask('task_v2_triage_done', 'goal_v2_triage_done_imported', 'done');
+		createGoal('goal_v2_triage_empty', 'Empty active goal');
+		createGoal('goal_v2_triage_blocked_goal', 'Blocked goal', 'blocked');
+		createGoal('goal_v2_triage_paused_goal', 'Paused goal', 'paused');
+
+		const triage = runCoreCli([
+			'goal-triage',
+			...baseArgs,
+			'--project',
+			'project_v2_goal_triage_smoke',
+			'--limit',
+			'20'
+		]).goalTriage;
+
+		const byGoalId = Object.fromEntries(
+			triage.goals.map((goal: any) => [goal.goalId, goal])
+		) as Record<string, any>;
+
+		expect(byGoalId.goal_v2_triage_ready).toMatchObject({
+			suggestedAction: 'start_ready_task',
+			taskCounts: { ready: 1, open: 1 }
+		});
+		expect(byGoalId.goal_v2_triage_running).toMatchObject({
+			suggestedAction: 'monitor_in_progress',
+			currentRun: {
+				runId: 'run_v2_triage_running',
+				taskId: 'task_v2_triage_running'
+			}
+		});
+		expect(byGoalId.goal_v2_triage_review).toMatchObject({
+			suggestedAction: 'review_or_close',
+			taskCounts: { review: 1 }
+		});
+		expect(byGoalId.goal_v2_triage_blocked_task).toMatchObject({
+			suggestedAction: 'blocked_needs_decision',
+			taskCounts: { blocked: 1 }
+		});
+		expect(byGoalId.goal_v2_triage_done_imported).toMatchObject({
+			suggestedAction: 'review_or_close',
+			sourceFlags: { importedFromV1: false }
+		});
+		expect(byGoalId.goal_v2_triage_empty).toMatchObject({
+			suggestedAction: 'create_next_task',
+			taskCounts: { total: 0 }
+		});
+		expect(byGoalId.goal_v2_triage_blocked_goal).toMatchObject({
+			status: 'blocked',
+			suggestedAction: 'blocked_needs_decision'
+		});
+		expect(byGoalId.goal_v2_triage_paused_goal).toMatchObject({
+			status: 'paused',
+			suggestedAction: 'pause_candidate'
+		});
+		expect(triage.summary).toMatchObject({
+			start_ready_task: 1,
+			monitor_in_progress: 1,
+			create_next_task: 1,
+			review_or_close: 2,
+			pause_candidate: 1,
+			blocked_needs_decision: 2
+		});
+	}, 10_000);
+
 	it('launches an owned agent execution cycle only for dispatchable active-goal work', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];

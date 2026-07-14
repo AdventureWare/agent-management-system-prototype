@@ -25,6 +25,7 @@ import {
 	readV2CoreDependencyReport,
 	readV2CoreDependencyReductionReport,
 	readV2CoreEvaluationContext,
+	readV2CoreGoalTriage,
 	readV2CoreContextBundle,
 	readV2CoreLocalRetrieval,
 	readV2CoreMemoryForContext,
@@ -53,6 +54,7 @@ type Command =
 	| 'overview'
 	| 'inspect-task'
 	| 'next-work'
+	| 'goal-triage'
 	| 'context-bundle'
 	| 'agent-work-packet'
 	| 'agent-preparation-packet'
@@ -164,6 +166,7 @@ function printHelp() {
 			'  overview             Read project/status counts.',
 			'  inspect-task         Read one task with run/artifact/review/decision/memory evidence.',
 			'  next-work            Read ready/review/blocked task candidates.',
+			'  goal-triage          Read goal dispatch hygiene and suggested next action.',
 			'  context-bundle       Build a computed source-linked context bundle for a task.',
 			'  agent-work-packet    Build a bounded source-linked agent handoff packet for a task.',
 			'  agent-preparation-packet Build a relevance-controlled agent preparation packet for a task.',
@@ -634,6 +637,24 @@ function nextWork(options: Options) {
 				projectId: options.projectId,
 				limit: Number.isFinite(options.limit) ? options.limit : 10
 			}),
+			options.json
+		);
+	} finally {
+		db.close();
+	}
+}
+
+function goalTriage(options: Options) {
+	const db = openForCommand(options);
+	try {
+		printResult(
+			{
+				goalTriage: readV2CoreGoalTriage(db, {
+					goalId: options.goalId,
+					projectId: options.projectId,
+					limit: Number.isFinite(options.limit) ? options.limit : 50
+				})
+			},
 			options.json
 		);
 	} finally {
@@ -1856,6 +1877,9 @@ function main() {
 			break;
 		case 'next-work':
 			nextWork(options);
+			break;
+		case 'goal-triage':
+			goalTriage(options);
 			break;
 		case 'context-bundle':
 			contextBundle(options);
