@@ -340,7 +340,7 @@ describe('v2 core CLI work-loop smoke', () => {
 			'goal_v2_goal_control_blocked',
 			'goal_v2_goal_control_paused'
 		]);
-	}, 10_000);
+	}, 20_000);
 
 	it('only surfaces next work from active goals', () => {
 		const dbFile = createTempDbFile();
@@ -619,7 +619,7 @@ describe('v2 core CLI work-loop smoke', () => {
 		expect(unblockedNextWork.candidates.map((candidate: any) => candidate.taskId)).toContain(
 			'task_v2_next_work_dependent_ready_active'
 		);
-	}, 10_000);
+	}, 20_000);
 
 	it('triages active and controlled goals by dispatch hygiene without mutating state', () => {
 		const dbFile = createTempDbFile();

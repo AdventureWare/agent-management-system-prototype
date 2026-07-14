@@ -16,6 +16,7 @@ import {
 	openV2CoreDb,
 	resolveV2CoreDbFile
 } from '$lib/server/v2-core-persistence';
+import { readV2CoreOverview } from '$lib/server/v2-core-service';
 
 const tempDirs: string[] = [];
 
@@ -121,6 +122,103 @@ describe('v2 core persistence boundary', () => {
 					'v2_core_tool_executions'
 				])
 			);
+		} finally {
+			db.close();
+		}
+	});
+
+	it('reads overview counts without multiplying one-to-many relationships', () => {
+		expect.assertions(6);
+
+		const root = createTempDir();
+		const coreDbFile = resolve(root, 'data', 'v2-core.sqlite');
+		const db = openV2CoreDb({
+			dbFile: coreDbFile,
+			appDbFile: resolve(root, 'data', 'app.sqlite')
+		});
+
+		try {
+			db.prepare(
+				`
+					insert into v2_core_projects (id, name, summary, status, workspace_root)
+					values ('project_overview_counts', 'Overview Counts', 'Count regression fixture.', 'active', '')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_goals
+						(id, project_id, parent_goal_id, title, summary, success_criteria, status)
+					values ('goal_overview_counts', 'project_overview_counts', null, 'Overview counts', '', 'Counts are exact.', 'active')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_model_providers (id, name, kind, status)
+					values ('provider_overview_counts', 'Overview provider', 'external_ai', 'available')
+				`
+			).run();
+
+			const insertTask = db.prepare(
+				`
+					insert into v2_core_tasks
+						(id, project_id, goal_id, title, summary, success_criteria, validation_plan, status)
+					values (?, 'project_overview_counts', 'goal_overview_counts', ?, '', 'Task is counted.', 'Read overview.', ?)
+				`
+			);
+			const insertRun = db.prepare(
+				`
+					insert into v2_core_runs
+						(id, task_id, model_provider_id, status, input_summary, action_summary, result_summary, validation_summary, started_at, ended_at)
+					values (?, ?, 'provider_overview_counts', 'completed', '', '', 'done', 'valid', '2026-07-14T00:00:00.000Z', '2026-07-14T00:01:00.000Z')
+				`
+			);
+			const insertArtifact = db.prepare(
+				`
+					insert into v2_core_artifacts
+						(id, project_id, task_id, run_id, uri, role, title, summary, status)
+					values (?, 'project_overview_counts', ?, ?, ?, 'deliverable', ?, '', 'accepted')
+				`
+			);
+			const insertMemory = db.prepare(
+				`
+					insert into v2_core_memory_items
+						(id, project_id, title, body, scope, status, created_at)
+					values (?, 'project_overview_counts', ?, 'Trusted memory.', 'project', 'trusted', '2026-07-14T00:00:00.000Z')
+				`
+			);
+
+			for (let index = 0; index < 12; index += 1) {
+				const taskId = `task_overview_counts_${index}`;
+				const runId = `run_overview_counts_${index}`;
+				insertTask.run(taskId, `Task ${index}`, index === 0 ? 'ready' : 'done');
+				insertRun.run(runId, taskId);
+				insertArtifact.run(
+					`artifact_overview_counts_${index}`,
+					taskId,
+					runId,
+					`repo://artifact-${index}`,
+					`Artifact ${index}`
+				);
+				insertMemory.run(`memory_overview_counts_${index}`, `Memory ${index}`);
+			}
+
+			const startedAt = performance.now();
+			const overview = readV2CoreOverview(db);
+			const durationMs = performance.now() - startedAt;
+			const project = overview.projects.find((item) => item.id === 'project_overview_counts');
+
+			expect(project).toMatchObject({
+				goalCount: 1,
+				taskCount: 12,
+				runCount: 12,
+				artifactCount: 12,
+				memoryItemCount: 12
+			});
+			expect(durationMs).toBeLessThan(1000);
+			expect(overview.taskStatusCounts).toMatchObject({ done: 11, ready: 1 });
+			expect(overview.memoryStatusCounts).toMatchObject({ trusted: 12 });
+			expect(overview.reviewStatusCounts).toEqual({});
+			expect(overview.projects).toHaveLength(1);
 		} finally {
 			db.close();
 		}

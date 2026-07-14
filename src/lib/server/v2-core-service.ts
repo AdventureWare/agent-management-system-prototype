@@ -5843,11 +5843,19 @@ export function readV2CoreOperatorConsole(
 					trustedMemory: memory?.items.find((item) => item.status === 'trusted') ?? null
 				}
 			: null;
-	const snapshot = exportV2CoreSnapshot(db);
+	const overview = readV2CoreOverview(db);
+	const dependencyReport = readV2CoreDependencyReport(db, {
+		projectId: scope.projectId,
+		goalId: scope.goalId
+	});
+	const evaluationContext = readV2CoreEvaluationContext(db, {
+		projectId: scope.projectId
+	});
+	const snapshotTableCounts = readV2CoreSnapshotTableCounts(db);
 
 	return {
 		scope,
-		overview: readV2CoreOverview(db),
+		overview,
 		activeGoals,
 		goalStatusGroups,
 		workQueue,
@@ -5859,20 +5867,22 @@ export function readV2CoreOperatorConsole(
 		recentRuns,
 		recentArtifacts,
 		memory,
-		dependencyReport: readV2CoreDependencyReport(db, {
-			projectId: scope.projectId,
-			goalId: scope.goalId
-		}),
-		evaluationContext: readV2CoreEvaluationContext(db, {
-			projectId: scope.projectId
-		}),
+		dependencyReport,
+		evaluationContext,
 		snapshotStatus: {
-			format: snapshot.format,
-			tableCounts: Object.fromEntries(
-				Object.entries(snapshot.tables).map(([table, rows]) => [table, rows.length])
-			) as Record<V2CoreSnapshotTableName, number>
+			format: V2_CORE_SNAPSHOT_FORMAT,
+			tableCounts: snapshotTableCounts
 		}
 	};
+}
+
+function readV2CoreSnapshotTableCounts(db: Database.Database): Record<V2CoreSnapshotTableName, number> {
+	return Object.fromEntries(
+		V2_CORE_SNAPSHOT_TABLES.map((table) => {
+			const row = db.prepare<[], { count: number }>(`select count(*) as count from ${table.name}`).get();
+			return [table.name, row?.count ?? 0];
+		})
+	) as Record<V2CoreSnapshotTableName, number>;
 }
 
 export function readV2CoreAgentWorkPacket(
@@ -6733,18 +6743,25 @@ export function readV2CoreOverview(db: Database.Database): V2CoreOverview {
 					project.name,
 					project.summary,
 					project.status,
-					count(distinct goal.id) as goal_count,
-					count(distinct task.id) as task_count,
-					count(distinct run.id) as run_count,
-					count(distinct artifact.id) as artifact_count,
-					count(distinct memory.id) as memory_item_count
+					(select count(*) from v2_core_goals goal where goal.project_id = project.id) as goal_count,
+					(select count(*) from v2_core_tasks task where task.project_id = project.id) as task_count,
+					(
+						select count(*)
+						from v2_core_runs run
+						join v2_core_tasks task on task.id = run.task_id
+						where task.project_id = project.id
+					) as run_count,
+					(
+						select count(*)
+						from v2_core_artifacts artifact
+						where artifact.project_id = project.id
+					) as artifact_count,
+					(
+						select count(*)
+						from v2_core_memory_items memory
+						where memory.project_id = project.id
+					) as memory_item_count
 				from v2_core_projects project
-				left join v2_core_goals goal on goal.project_id = project.id
-				left join v2_core_tasks task on task.project_id = project.id
-				left join v2_core_runs run on run.task_id = task.id
-				left join v2_core_artifacts artifact on artifact.project_id = project.id
-				left join v2_core_memory_items memory on memory.project_id = project.id
-				group by project.id
 				order by project.name
 			`
 		)
