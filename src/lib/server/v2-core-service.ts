@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 
 export type V2CoreSourceReferenceInput = {
@@ -928,6 +930,7 @@ export type V2CoreAgentPreparationPacket = {
 			| 'trusted_memory'
 			| 'tool_evidence'
 			| 'evaluation_evidence'
+			| 'source_file'
 			| 'skill_file';
 	}>;
 	gapAssessment: Array<{
@@ -6015,13 +6018,19 @@ export function readV2CoreAgentPreparationPacket(
 		query: buildV2CoreAgentPreparationQuery(taskText, primaryTaskText),
 		limit: 10
 	});
-	const selectedResources = buildV2CoreAgentPreparationResources(workPacket, retrieval);
+	const explicitFileContext = readV2CoreExplicitPreparationFiles(db, detail.project.id, taskText);
+	const selectedResources = buildV2CoreAgentPreparationResources(
+		workPacket,
+		retrieval,
+		explicitFileContext.existing
+	);
 	const requirementsAssessment = buildV2CoreAgentPreparationRequirements(workPacket, taskText);
 	const gapAssessment = buildV2CoreAgentPreparationGaps(
 		workPacket,
 		selectedResources,
 		requirementsAssessment,
-		taskText
+		taskText,
+		explicitFileContext.missing
 	);
 	const verificationChecklist = Array.from(
 		new Set(
@@ -6154,9 +6163,100 @@ function buildV2CoreAgentPreparationRequirements(
 	};
 }
 
+type V2CoreExplicitPreparationFile = {
+	relativePath: string;
+	absolutePath: string | null;
+	title: string;
+};
+
+function readV2CoreExplicitPreparationFiles(
+	db: Database.Database,
+	projectId: string,
+	taskText: string
+): { existing: V2CoreExplicitPreparationFile[]; missing: V2CoreExplicitPreparationFile[] } {
+	const project = db
+		.prepare<[string], { workspace_root: string }>(
+			'select workspace_root from v2_core_projects where id = ?'
+		)
+		.get(projectId);
+	const workspaceRoot = resolve(project?.workspace_root?.trim() || process.cwd());
+	const candidates = extractV2CoreExplicitFilePathCandidates(taskText);
+	const existing: V2CoreExplicitPreparationFile[] = [];
+	const missing: V2CoreExplicitPreparationFile[] = [];
+
+	for (const candidate of candidates) {
+		const resolved = resolveV2CoreExplicitFilePath(workspaceRoot, candidate);
+		if (!resolved) {
+			continue;
+		}
+
+		const file = {
+			relativePath: resolved.relativePath,
+			absolutePath: resolved.absolutePath,
+			title: basename(resolved.relativePath)
+		};
+
+		if (resolved.exists) {
+			existing.push(file);
+		} else {
+			missing.push({ ...file, absolutePath: null });
+		}
+	}
+
+	return { existing: existing.slice(0, 20), missing: missing.slice(0, 20) };
+}
+
+function extractV2CoreExplicitFilePathCandidates(text: string) {
+	const candidates = new Set<string>();
+	const filePathPattern =
+		/(?:^|[\s`'"])(\.{0,2}\/)?([A-Za-z0-9_@./-]+\.(?:md|csv|json|jsonl|ya?ml|txt|ts|svelte|js|mjs|py|sql|svg|png|jpe?g|webp|pdf))(?:$|[\s`'",;:)])/gi;
+
+	for (const match of text.matchAll(filePathPattern)) {
+		const candidate = `${match[1] ?? ''}${match[2] ?? ''}`
+			.trim()
+			.replace(/[.,;:)\]]+$/g, '');
+		if (
+			candidate &&
+			!candidate.startsWith('http://') &&
+			!candidate.startsWith('https://') &&
+			!candidate.includes('node_modules/')
+		) {
+			candidates.add(candidate);
+		}
+	}
+
+	return Array.from(candidates).slice(0, 40);
+}
+
+function resolveV2CoreExplicitFilePath(workspaceRoot: string, candidate: string) {
+	const cleaned = candidate.replace(/^\.\//, '');
+	if (cleaned.includes('\0') || cleaned.split('/').includes('..')) {
+		return null;
+	}
+
+	const absolutePath = isAbsolute(cleaned) ? resolve(cleaned) : resolve(workspaceRoot, cleaned);
+	const relativePath = relative(workspaceRoot, absolutePath);
+	if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+		return null;
+	}
+
+	let exists = false;
+	try {
+		exists = existsSync(absolutePath) && statSync(absolutePath).isFile();
+	} catch {
+		exists = false;
+	}
+	return {
+		absolutePath,
+		relativePath: relativePath.split(sep).join('/'),
+		exists
+	};
+}
+
 function buildV2CoreAgentPreparationResources(
 	packet: V2CoreAgentWorkPacket,
-	retrieval: V2CoreLocalRetrieval
+	retrieval: V2CoreLocalRetrieval,
+	explicitFiles: V2CoreExplicitPreparationFile[]
 ): V2CoreAgentPreparationPacket['selectedResources'] {
 	const resources = new Map<string, V2CoreAgentPreparationPacket['selectedResources'][number]>();
 	const add = (
@@ -6174,6 +6274,15 @@ function buildV2CoreAgentPreparationResources(
 
 	for (const source of packet.contextSources.slice(0, 12)) {
 		add(source.recordType, source.recordId, source.title, source.reason, 'work_packet');
+	}
+	for (const file of explicitFiles.slice(0, 8)) {
+		add(
+			'source_file',
+			file.relativePath,
+			file.title,
+			`Explicit file path referenced by task validation context: ${file.relativePath}.`,
+			'source_file'
+		);
 	}
 	for (const item of packet.trustedMemory.slice(0, 8)) {
 		add(
@@ -6276,7 +6385,8 @@ function buildV2CoreAgentPreparationGaps(
 	packet: V2CoreAgentWorkPacket,
 	resources: V2CoreAgentPreparationPacket['selectedResources'],
 	requirements: V2CoreAgentPreparationPacket['requirementsAssessment'],
-	taskText: string
+	taskText: string,
+	missingExplicitFiles: V2CoreExplicitPreparationFile[]
 ): V2CoreAgentPreparationPacket['gapAssessment'] {
 	const normalized = taskText.toLowerCase();
 	const primaryText = `${packet.taskContract.title}\n${packet.taskContract.summary}`.toLowerCase();
@@ -6289,6 +6399,16 @@ function buildV2CoreAgentPreparationGaps(
 
 	if (!packet.readiness.actionable) {
 		add('blocking', packet.readiness.reason, 'task_readiness');
+	}
+	if (missingExplicitFiles.length > 0) {
+		add(
+			'blocking',
+			`Explicit task file references were not found under the project workspace: ${missingExplicitFiles
+				.slice(0, 5)
+				.map((file) => file.relativePath)
+				.join(', ')}${missingExplicitFiles.length > 5 ? ', ...' : ''}.`,
+			'source_file'
+		);
 	}
 	if (packet.trustedMemory.length === 0) {
 		add('helpful_non_blocking', 'No trusted memory was selected for this task.', 'trusted_memory');

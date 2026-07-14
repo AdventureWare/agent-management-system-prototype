@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -2149,6 +2149,9 @@ describe('v2 core CLI work-loop smoke', () => {
 		const baseArgs = ['--db', dbFile, '--json'];
 
 		runCoreCli(['init', ...baseArgs, '--reset']);
+		const workspaceRoot = dirname(dbFile);
+		mkdirSync(join(workspaceRoot, 'docs'), { recursive: true });
+		writeFileSync(join(workspaceRoot, 'docs', 'context.md'), '# Agent preparation context\n');
 		runCoreCli([
 			'create-project',
 			...baseArgs,
@@ -2157,7 +2160,9 @@ describe('v2 core CLI work-loop smoke', () => {
 			'--name',
 			'AMS v2 Agent Preparation Smoke',
 			'--summary',
-			'Temporary project for proving relevance-controlled agent preparation packets.'
+			'Temporary project for proving relevance-controlled agent preparation packets.',
+			'--workspace-root',
+			workspaceRoot
 		]);
 		runCoreCli([
 			'create-goal',
@@ -2204,6 +2209,22 @@ describe('v2 core CLI work-loop smoke', () => {
 			'The agent receives the smallest sufficient package for 3D property modeling work.',
 			'--validation',
 			'Verify source material, modeling constraints, and expected output format are included or gap-classified.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_agent_preparation_smoke_file_context',
+			'--goal',
+			'goal_v2_agent_preparation_smoke',
+			'--title',
+			'Prepare task with explicit source files',
+			'--summary',
+			'Check source file selection from task validation text.',
+			'--success',
+			'docs/context.md is selected and docs/missing.md is reported as a gap.',
+			'--validation',
+			'Read docs/context.md and docs/missing.md before execution.'
 		]);
 		runCoreCli([
 			'register-tool',
@@ -2283,9 +2304,36 @@ describe('v2 core CLI work-loop smoke', () => {
 		for (const resource of amsPacket.selectedResources) {
 			expect(resource.inclusionReason.length).toBeGreaterThan(0);
 			expect(resource.source).toMatch(
-				/^(work_packet|local_retrieval|trusted_memory|tool_evidence|evaluation_evidence|skill_file)$/
+				/^(work_packet|local_retrieval|trusted_memory|tool_evidence|evaluation_evidence|source_file|skill_file)$/
 			);
 		}
+
+		const fileContextPacket = runCoreCli([
+			'agent-preparation-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_agent_preparation_smoke_file_context'
+		]).agentPreparationPacket;
+		expect(fileContextPacket.selectedResources).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					recordType: 'source_file',
+					recordId: 'docs/context.md',
+					title: 'context.md',
+					source: 'source_file',
+					inclusionReason: expect.stringContaining('docs/context.md')
+				})
+			])
+		);
+		expect(fileContextPacket.gapAssessment).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					classification: 'blocking',
+					source: 'source_file',
+					summary: expect.stringContaining('docs/missing.md')
+				})
+			])
+		);
 
 		const propertyPacket = runCoreCli([
 			'agent-preparation-packet',
