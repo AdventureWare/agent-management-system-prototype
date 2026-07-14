@@ -1152,6 +1152,7 @@
 		align-content: start;
 		gap: 0.6rem;
 		min-width: 0;
+		contain: inline-size;
 		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 35%);
 		border-radius: 0.45rem;
 		padding: 0.7rem;
@@ -1396,6 +1397,7 @@
 	}
 
 	.v2-core-goal-form button {
+		min-height: 2.5rem;
 		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 25%);
 		border-radius: 0.35rem;
 		padding: 0.35rem 0.55rem;
@@ -1444,6 +1446,7 @@
 	}
 
 	.v2-core-dispatch-form button {
+		min-height: 2.75rem;
 		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 20%);
 		border-radius: 0.35rem;
 		padding: 0.4rem 0.65rem;
@@ -1591,6 +1594,23 @@
 	}
 
 	@media (max-width: 44rem) {
+		.v2-core-panel-header,
+		.v2-core-scoped-summary header,
+		.v2-core-dispatch-card header {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.v2-core-scoped-summary-state {
+			justify-items: start;
+			text-align: left;
+		}
+
+		.v2-core-dispatch-board-list {
+			grid-template-columns: 1fr;
+			padding: 0.65rem;
+		}
+
 		.v2-core-dispatch-primary {
 			grid-template-columns: 1fr;
 		}
@@ -1611,6 +1631,12 @@
 		.v2-core-row-side {
 			justify-items: start;
 			text-align: left;
+			width: 100%;
+		}
+
+		.v2-core-goal-actions,
+		.v2-core-dispatch-actions {
+			width: 100%;
 		}
 
 		.v2-core-goal-form {
@@ -1618,8 +1644,21 @@
 			width: 100%;
 		}
 
+		.v2-core-goal-form input {
+			min-height: 2.5rem;
+		}
+
+		.v2-core-goal-form button,
+		.v2-core-dispatch-form button {
+			width: 100%;
+		}
+
 		.v2-core-dispatch-form {
 			grid-template-columns: 1fr;
+			width: 100%;
+		}
+
+		.v2-core-handoff {
 			width: 100%;
 		}
 	}

@@ -771,6 +771,15 @@ function expectNoHorizontalOverflow() {
 	expect(bodyOverflow).toBeLessThanOrEqual(1);
 }
 
+function expectTouchSizedButtons(container: ParentNode) {
+	const buttons = Array.from(container.querySelectorAll('button'));
+	expect(buttons.length).toBeGreaterThan(0);
+
+	for (const button of buttons) {
+		expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(40);
+	}
+}
+
 function taskRollupSection() {
 	const section = document.querySelector('section[aria-labelledby="v2-core-task-rollup"]');
 	expect(section).not.toBeNull();
@@ -874,6 +883,11 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(
 			dispatchBoard?.querySelector('a[href="/app/v2-core/tasks/task_ui_review?mode=read"]')
 		).not.toBeNull();
+		expect(
+			Array.from(dispatchBoard?.querySelectorAll('a[href^="/app/v2-core/tasks/"]') ?? []).every(
+				(link) => link.getAttribute('href')?.endsWith('?mode=read')
+			)
+		).toBe(true);
 		expect(
 			dispatchBoard?.querySelector(
 				'form[action="?/createGoalContinuationTask"] input[name="goalId"][value="goal_ui_empty"]'
@@ -1235,12 +1249,22 @@ describe('/app/v2-core/+page.svelte', () => {
 			document.querySelector('a[href="/app/v2-core/tasks/task_ui_next?mode=read"]')
 		).not.toBeNull();
 		expect(
+			Array.from(document.querySelectorAll('a[href^="/app/v2-core/tasks/"]')).every((link) =>
+				link.getAttribute('href')?.endsWith('?mode=read')
+			)
+		).toBe(true);
+		expect(
 			document.querySelector(
 				'a[href="/app/v2-core?project=project_ui&goal=goal_ui_child_running"]'
 			)
 		).not.toBeNull();
 		expect(document.body.textContent).toContain('Read-only v2 core console exists');
 		await expect.element(page.getByRole('heading', { name: 'Snapshot' })).toBeInTheDocument();
+		const dispatchBoard = document.querySelector(
+			'section[aria-labelledby="v2-core-dispatch-board"]'
+		);
+		expect(dispatchBoard).not.toBeNull();
+		expectTouchSizedButtons(dispatchBoard as HTMLElement);
 		expectNoHorizontalOverflow();
 	});
 
