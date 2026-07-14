@@ -885,6 +885,41 @@ export type V2CoreAgentExecutionCycle =
 			};
 	  };
 
+export type V2CoreCloseoutPacket = {
+	task: V2CoreTaskDetail['task'];
+	project: V2CoreTaskDetail['project'];
+	goal: V2CoreTaskDetail['goal'];
+	run: V2CoreTaskDetail['runs'][number] | null;
+	eligible: boolean;
+	blockers: string[];
+	requiredInputs: string[];
+	humanAuthoredInputs: string[];
+	suggestedRecordIds: {
+		artifactId: string;
+		reviewId: string;
+		acceptDecisionId: string;
+	};
+	gateState: {
+		reviewRequiredBeforeDone: true;
+		acceptanceDecisionRequiredBeforeDone: true;
+		taskStatus: string;
+		runStatus: string | null;
+		existingRunArtifactIds: string[];
+		existingRunReviewIds: string[];
+		acceptedOutputDecisionIds: string[];
+	};
+	validationChecklist: string[];
+	command: {
+		dryRun: string;
+		template: string;
+	};
+	sourceLinks: Array<{
+		recordType: string;
+		recordId: string;
+		reason: string;
+	}>;
+};
+
 export type V2CoreProviderRunCompletion = {
 	taskDetail: V2CoreTaskDetail;
 	runId: string;
@@ -1783,6 +1818,114 @@ export function launchV2CoreAgentExecutionCycle(
 			reviewRequiredBeforeDone: true,
 			acceptanceDecisionRequiredBeforeDone: true
 		}
+	};
+}
+
+export function readV2CoreCloseoutPacket(
+	db: Database.Database,
+	input: { taskId: string; runId: string }
+): V2CoreCloseoutPacket | null {
+	const taskId = requiredText(input.taskId, 'taskId');
+	const runId = requiredText(input.runId, 'runId');
+	const detail = readV2CoreTaskDetail(db, taskId);
+
+	if (!detail) {
+		return null;
+	}
+
+	const run = detail.runs.find((candidate) => candidate.id === runId) ?? null;
+	const existingRunArtifacts = detail.artifacts.filter((artifact) => artifact.runId === runId);
+	const existingRunReviews = detail.reviews.filter((review) => review.runId === runId);
+	const acceptedOutputDecisions = detail.decisions.filter(
+		(decision) => decision.decisionType === 'accept_task_output'
+	);
+	const suggestedRecordIds = {
+		artifactId: `artifact_${taskId}_closeout`,
+		reviewId: `review_${taskId}_closeout`,
+		acceptDecisionId: `decision_${taskId}_closeout_acceptance`
+	};
+	const blockers = [
+		...(run ? [] : [`Run ${runId} is not a current run for task ${taskId}.`]),
+		...(detail.task.status === 'in_progress'
+			? []
+			: [`Task ${taskId} has status ${detail.task.status}; expected in_progress.`]),
+		...(run && run.status === 'planned'
+			? []
+			: run
+				? [`Run ${runId} has status ${run.status}; expected planned.`]
+				: []),
+		...(run && run.modelProviderId
+			? []
+			: run
+				? [`Run ${runId} is not linked to a model provider.`]
+				: []),
+		...(existingRunReviews.some((review) => review.status === 'approved')
+			? [`Run ${runId} already has an approved review; inspect before drafting a new closeout.`]
+			: []),
+		...(acceptedOutputDecisions.length > 0
+			? [`Task ${taskId} already has an accept_task_output decision.`]
+			: [])
+	];
+	const baseCommand =
+		`npm run v2:core-db -- managed-run-lifecycle --task ${taskId} --run ${runId}` +
+		` --artifact ${suggestedRecordIds.artifactId}` +
+		" --uri '<artifact-uri>'" +
+		" --title '<artifact-title>'" +
+		" --result '<human-authored-result-summary>'" +
+		" --validation '<validation-summary>'" +
+		` --review ${suggestedRecordIds.reviewId}` +
+		` --decision ${suggestedRecordIds.acceptDecisionId}`;
+
+	return {
+		task: detail.task,
+		project: detail.project,
+		goal: detail.goal,
+		run,
+		eligible: blockers.length === 0,
+		blockers,
+		requiredInputs: [
+			'--artifact <id>',
+			'--uri <artifact-uri>',
+			'--title <artifact-title>',
+			'--result <summary>',
+			'--validation <summary>',
+			'--review <id>',
+			'--decision <id>'
+		],
+		humanAuthoredInputs: [
+			'--uri <artifact-uri>',
+			'--title <artifact-title>',
+			'--result <human-authored-result-summary>',
+			'--validation <validation-summary>'
+		],
+		suggestedRecordIds,
+		gateState: {
+			reviewRequiredBeforeDone: true,
+			acceptanceDecisionRequiredBeforeDone: true,
+			taskStatus: detail.task.status,
+			runStatus: run?.status ?? null,
+			existingRunArtifactIds: existingRunArtifacts.map((artifact) => artifact.id),
+			existingRunReviewIds: existingRunReviews.map((review) => review.id),
+			acceptedOutputDecisionIds: acceptedOutputDecisions.map((decision) => decision.id)
+		},
+		validationChecklist: [
+			`Run task validation plan: ${detail.task.validationPlan}`,
+			`Inspect task state: npm run v2:core-db -- inspect-task --task ${taskId} --json`,
+			`Preview closeout writes: ${baseCommand} --dry-run --json`,
+			'Confirm artifact URI points to the durable output being reviewed.',
+			'Keep result and validation summaries human/agent-authored from actual work evidence.',
+			'After closeout, read back inspect-task and next-work before treating the task as done.'
+		],
+		command: {
+			dryRun: `${baseCommand} --dry-run`,
+			template: baseCommand
+		},
+		sourceLinks: [
+			{ recordType: 'task', recordId: taskId, reason: 'Task being closed out.' },
+			{ recordType: 'run', recordId: runId, reason: 'Provider run being closed out.' },
+			{ recordType: 'goal', recordId: detail.goal.id, reason: 'Goal advanced by the task.' },
+			{ recordType: 'project', recordId: detail.project.id, reason: 'Project containing the task.' }
+		]
 	};
 }
 

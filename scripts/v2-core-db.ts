@@ -20,6 +20,7 @@ import {
 	launchV2CoreProviderRun,
 	promoteV2CoreMemory,
 	readV2CoreAgentWorkPacket,
+	readV2CoreCloseoutPacket,
 	readV2CoreDependencyReport,
 	readV2CoreDependencyReductionReport,
 	readV2CoreEvaluationContext,
@@ -61,6 +62,7 @@ type Command =
 	| 'operator-console'
 	| 'agent-control'
 	| 'agent-execution-cycle'
+	| 'closeout-packet'
 	| 'search-context'
 	| 'route-comparison-report'
 	| 'routing-evidence'
@@ -170,6 +172,7 @@ function printHelp() {
 			'  operator-console     Read consolidated operator state from existing v2 core records.',
 			'  agent-control        Thin agent-facing surface over the v2 core work loop.',
 			'  agent-execution-cycle Select active-goal work, launch a provider run, and return closeout guidance.',
+			'  closeout-packet      Build deterministic managed-run closeout inputs for a task/run.',
 			'  search-context       Search existing v2 core records with source-linked results.',
 			'  route-comparison-report Read capability-level route comparison evidence.',
 			'  routing-evidence     Read route-selection Decision evidence.',
@@ -251,7 +254,7 @@ function printHelp() {
 			'  --followup-success <text> Optional follow-up success criteria.',
 			'  --followup-validation <text> Optional follow-up validation plan.',
 			'  --followup-rationale <text> Optional follow-up source reason.',
-			'  --agent-action <text> Agent-control action: next, packet, search, route-comparison-report, routing-evidence, execution-cycle, start, launch-provider-run, complete-provider-run, managed-run-lifecycle, record-run, record-tool, attach-artifact, submit-review, accept-output, follow-up.',
+			'  --agent-action <text> Agent-control action: next, packet, closeout-packet, search, route-comparison-report, routing-evidence, execution-cycle, start, launch-provider-run, complete-provider-run, managed-run-lifecycle, record-run, record-tool, attach-artifact, submit-review, accept-output, follow-up.',
 			'  --dry-run            Validate lifecycle helper inputs and return planned writes without mutating state.',
 			'  --reset              Delete an existing DB before init.',
 			'  --json               Print machine-readable JSON.',
@@ -872,6 +875,55 @@ function compactAgentExecutionCycle(cycle: V2CoreAgentExecutionCycleResult) {
 	};
 }
 
+type V2CoreCloseoutPacketResult = NonNullable<ReturnType<typeof readV2CoreCloseoutPacket>>;
+
+function compactCloseoutPacket(packet: V2CoreCloseoutPacketResult) {
+	return {
+		task: {
+			id: packet.task.id,
+			title: packet.task.title,
+			status: packet.task.status
+		},
+		run: packet.run
+			? {
+					id: packet.run.id,
+					status: packet.run.status,
+					modelProviderId: packet.run.modelProviderId
+				}
+			: null,
+		eligible: packet.eligible,
+		blockers: packet.blockers,
+		requiredInputs: packet.requiredInputs,
+		humanAuthoredInputs: packet.humanAuthoredInputs,
+		suggestedRecordIds: packet.suggestedRecordIds,
+		gateState: packet.gateState,
+		command: packet.command,
+		validationChecklist: packet.validationChecklist,
+		sourceLinks: packet.sourceLinks,
+		fullOutputHint: 'Run the same command without --compact for full task/project/goal context.'
+	};
+}
+
+function closeoutPacket(options: Options) {
+	const taskId = requireOption(options.taskId, '--task <id>');
+	const runId = requireOption(options.runId, '--run <id>');
+	const db = openForCommand(options);
+	try {
+		const packet = readV2CoreCloseoutPacket(db, { taskId, runId });
+		if (!packet) {
+			throw new Error(`Task ${taskId} was not found in the v2 core database.`);
+		}
+		printResult(
+			{
+				closeoutPacket: options.compact ? compactCloseoutPacket(packet) : packet
+			},
+			options.json
+		);
+	} finally {
+		db.close();
+	}
+}
+
 function launchAgentExecutionCycle(options: Options) {
 	const db = openForCommand(options);
 	try {
@@ -947,6 +999,26 @@ function agentControl(options: Options) {
 						...(options.compact
 							? { fullOutputHint: 'Run the same command without --compact for full packet output.' }
 							: {})
+					}
+				},
+				options.json
+			);
+			return;
+		}
+
+		if (action === 'closeout-packet') {
+			const taskId = requireOption(options.taskId, '--task <id>');
+			const runId = requireOption(options.runId, '--run <id>');
+			const packet = readV2CoreCloseoutPacket(db, { taskId, runId });
+			if (!packet) {
+				throw new Error(`Task ${taskId} was not found in the v2 core database.`);
+			}
+			printResult(
+				{
+					agentControl: {
+						action,
+						outputMode: options.compact ? 'compact' : 'full',
+						closeoutPacket: options.compact ? compactCloseoutPacket(packet) : packet
 					}
 				},
 				options.json
@@ -1797,6 +1869,9 @@ function main() {
 			break;
 		case 'agent-execution-cycle':
 			launchAgentExecutionCycle(options);
+			break;
+		case 'closeout-packet':
+			closeoutPacket(options);
 			break;
 		case 'search-context':
 			searchContext(options);

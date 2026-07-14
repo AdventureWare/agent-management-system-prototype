@@ -681,6 +681,247 @@ describe('v2 core CLI work-loop smoke', () => {
 		});
 	}, 10_000);
 
+	it('builds deterministic closeout packets without completing work', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_closeout_packet_smoke',
+			'--name',
+			'AMS v2 Closeout Packet Smoke'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_closeout_packet_smoke',
+			'--project',
+			'project_v2_closeout_packet_smoke',
+			'--title',
+			'Prove closeout packet',
+			'--success',
+			'The readback drafts closeout inputs without completing work.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_closeout_packet_smoke',
+			'--goal',
+			'goal_v2_closeout_packet_smoke',
+			'--title',
+			'Exercise closeout packet',
+			'--success',
+			'Closeout packet is deterministic.',
+			'--validation',
+			'Run closeout-packet smoke assertions.'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_closeout_packet_other',
+			'--goal',
+			'goal_v2_closeout_packet_smoke',
+			'--title',
+			'Other closeout packet task',
+			'--success',
+			'Other run does not count as current.',
+			'--validation',
+			'Run closeout-packet smoke assertions.'
+		]);
+		runCoreCli([
+			'register-provider',
+			...baseArgs,
+			'--id',
+			'provider_v2_closeout_packet_smoke',
+			'--name',
+			'Codex closeout packet smoke provider',
+			'--kind',
+			'external_ai'
+		]);
+		runCoreCli([
+			'launch-provider-run',
+			...baseArgs,
+			'--run',
+			'run_v2_closeout_packet_smoke',
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--provider',
+			'provider_v2_closeout_packet_smoke'
+		]);
+		runCoreCli([
+			'launch-provider-run',
+			...baseArgs,
+			'--run',
+			'run_v2_closeout_packet_other',
+			'--task',
+			'task_v2_closeout_packet_other',
+			'--provider',
+			'provider_v2_closeout_packet_smoke'
+		]);
+
+		const packet = runCoreCli([
+			'closeout-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_smoke'
+		]);
+		expect(packet.closeoutPacket).toMatchObject({
+			eligible: true,
+			blockers: [],
+			task: {
+				id: 'task_v2_closeout_packet_smoke',
+				status: 'in_progress'
+			},
+			run: {
+				id: 'run_v2_closeout_packet_smoke',
+				status: 'planned',
+				modelProviderId: 'provider_v2_closeout_packet_smoke'
+			},
+			suggestedRecordIds: {
+				artifactId: 'artifact_task_v2_closeout_packet_smoke_closeout',
+				reviewId: 'review_task_v2_closeout_packet_smoke_closeout',
+				acceptDecisionId: 'decision_task_v2_closeout_packet_smoke_closeout_acceptance'
+			},
+			gateState: {
+				reviewRequiredBeforeDone: true,
+				acceptanceDecisionRequiredBeforeDone: true,
+				existingRunArtifactIds: [],
+				existingRunReviewIds: [],
+				acceptedOutputDecisionIds: []
+			}
+		});
+		expect(packet.closeoutPacket.humanAuthoredInputs).toContain(
+			'--result <human-authored-result-summary>'
+		);
+		expect(packet.closeoutPacket.command.dryRun).toContain('--dry-run');
+		expect(packet.closeoutPacket.command.template).toContain(
+			"--result '<human-authored-result-summary>'"
+		);
+		expect(packet.closeoutPacket.validationChecklist).toContain(
+			'Run task validation plan: Run closeout-packet smoke assertions.'
+		);
+
+		const compact = runCoreCli([
+			'agent-control',
+			...baseArgs,
+			'--agent-action',
+			'closeout-packet',
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_smoke',
+			'--compact'
+		]);
+		expect(compact.agentControl).toMatchObject({
+			action: 'closeout-packet',
+			outputMode: 'compact',
+			closeoutPacket: {
+				eligible: true,
+				fullOutputHint: 'Run the same command without --compact for full task/project/goal context.'
+			}
+		});
+		expect(compact.agentControl.closeoutPacket.project).toBeUndefined();
+
+		const missingRun = runCoreCli([
+			'closeout-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_missing'
+		]);
+		expect(missingRun.closeoutPacket).toMatchObject({
+			eligible: false,
+			run: null,
+			blockers: [
+				'Run run_v2_closeout_packet_missing is not a current run for task task_v2_closeout_packet_smoke.'
+			]
+		});
+
+		const nonCurrentRun = runCoreCli([
+			'closeout-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_other'
+		]);
+		expect(nonCurrentRun.closeoutPacket).toMatchObject({
+			eligible: false,
+			run: null,
+			blockers: [
+				'Run run_v2_closeout_packet_other is not a current run for task task_v2_closeout_packet_smoke.'
+			]
+		});
+
+		runCoreCli([
+			'managed-run-lifecycle',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_smoke',
+			'--artifact',
+			'artifact_task_v2_closeout_packet_smoke_closeout',
+			'--uri',
+			'repo://closeout-packet-smoke',
+			'--title',
+			'Closeout packet smoke artifact',
+			'--result',
+			'Closeout packet smoke result.',
+			'--validation',
+			'Closeout packet smoke validation passed.',
+			'--review',
+			'review_task_v2_closeout_packet_smoke_closeout',
+			'--decision',
+			'decision_task_v2_closeout_packet_smoke_closeout_acceptance'
+		]);
+		const closedPacket = runCoreCli([
+			'closeout-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_smoke',
+			'--run',
+			'run_v2_closeout_packet_smoke'
+		]);
+		expect(closedPacket.closeoutPacket.eligible).toBe(false);
+		expect(closedPacket.closeoutPacket.blockers).toEqual(
+			expect.arrayContaining([
+				'Task task_v2_closeout_packet_smoke has status done; expected in_progress.',
+				'Run run_v2_closeout_packet_smoke has status completed; expected planned.',
+				'Run run_v2_closeout_packet_smoke already has an approved review; inspect before drafting a new closeout.',
+				'Task task_v2_closeout_packet_smoke already has an accept_task_output decision.'
+			])
+		);
+		expect(closedPacket.closeoutPacket.gateState).toMatchObject({
+			taskStatus: 'done',
+			runStatus: 'completed',
+			existingRunArtifactIds: ['artifact_task_v2_closeout_packet_smoke_closeout'],
+			existingRunReviewIds: ['review_task_v2_closeout_packet_smoke_closeout'],
+			acceptedOutputDecisionIds: ['decision_task_v2_closeout_packet_smoke_closeout_acceptance']
+		});
+
+		const missingTask = runCoreCliFailure([
+			'closeout-packet',
+			...baseArgs,
+			'--task',
+			'task_v2_closeout_packet_missing',
+			'--run',
+			'run_v2_closeout_packet_smoke'
+		]);
+		expect(missingTask.stderr).toContain(
+			'Task task_v2_closeout_packet_missing was not found in the v2 core database.'
+		);
+	}, 10_000);
+
 	it('drives a task through the minimal agent-control surface', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];
