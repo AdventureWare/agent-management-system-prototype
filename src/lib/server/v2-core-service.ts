@@ -440,6 +440,10 @@ export type V2CoreGoalTriage = {
 			open: number;
 			total: number;
 		};
+		childGoalCounts: {
+			active: number;
+			openTasks: number;
+		};
 		currentRun: {
 			runId: string;
 			taskId: string;
@@ -3213,6 +3217,8 @@ type V2CoreGoalTriageRow = {
 	total_count: number;
 	imported_source_count: number;
 	holding_source_count: number;
+	active_child_goal_count: number;
+	active_child_open_task_count: number;
 	current_run_id: string | null;
 	current_run_task_id: string | null;
 	current_run_task_title: string | null;
@@ -3263,6 +3269,11 @@ export function readV2CoreGoalTriage(
 							or goal.title like 'Imported unscoped:%'
 						then coalesce(goal_source.source_id, goal.id)
 					end) as holding_source_count,
+					count(distinct active_child_goal.id) as active_child_goal_count,
+					count(distinct case
+						when active_child_task.status in ('ready', 'in_progress', 'review', 'blocked')
+						then active_child_task.id
+					end) as active_child_open_task_count,
 					current_run.id as current_run_id,
 					current_run.task_id as current_run_task_id,
 					current_task.title as current_run_task_title,
@@ -3275,6 +3286,11 @@ export function readV2CoreGoalTriage(
 				left join v2_core_source_references goal_source
 					on goal_source.record_table = 'v2_core_goals'
 					and goal_source.record_id = goal.id
+				left join v2_core_goals active_child_goal
+					on active_child_goal.parent_goal_id = goal.id
+					and active_child_goal.status = 'active'
+				left join v2_core_tasks active_child_task
+					on active_child_task.goal_id = active_child_goal.id
 				left join v2_core_runs current_run on current_run.id = (
 					select run.id
 					from v2_core_runs run
@@ -3355,6 +3371,14 @@ export function readV2CoreGoalTriage(
 			};
 		}
 
+		if (row.active_child_open_task_count > 0) {
+			return {
+				action: 'start_ready_task',
+				reason:
+					'Goal has active child goals with open work; dispatch or monitor the child goal work before pausing the parent.'
+			};
+		}
+
 		if (openCount === 0 && row.imported_source_count > 0) {
 			return {
 				action: 'pause_candidate',
@@ -3412,6 +3436,10 @@ export function readV2CoreGoalTriage(
 				open:
 					row.ready_count + row.in_progress_count + row.review_count + row.blocked_count,
 				total: row.total_count
+			},
+			childGoalCounts: {
+				active: row.active_child_goal_count,
+				openTasks: row.active_child_open_task_count
 			},
 			currentRun: row.current_run_id
 				? {

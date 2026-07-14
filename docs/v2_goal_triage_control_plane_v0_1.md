@@ -20,12 +20,18 @@ Useful scopes:
 ```sh
 npm run v2:core-db -- goal-triage --project <project_id> --json
 npm run v2:core-db -- goal-triage --goal <goal_id> --json
+npm run v2:core-db -- goal-triage --limit 200 --json
 ```
+
+Without `--limit`, the command returns up to 50 triage rows. Each goal includes
+direct task counts plus active child-goal/open-child-task counts so parent goals
+with runnable child work are not mistaken for stale cleanup candidates.
 
 ## Suggested Actions
 
 - `start_ready_task`: goal has ready work and can be dispatched through
-  `next-work` or `agent-execution-cycle`.
+  `next-work` or `agent-execution-cycle`, or it has active child goals with
+  open work.
 - `monitor_in_progress`: goal already has an open run or in-progress task.
 - `review_or_close`: goal has review work or completed work that should be
   evaluated before more tasks are created.

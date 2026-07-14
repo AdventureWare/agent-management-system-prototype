@@ -551,6 +551,24 @@ describe('v2 core CLI work-loop smoke', () => {
 		createGoal('goal_v2_triage_empty', 'Empty active goal');
 		createGoal('goal_v2_triage_blocked_goal', 'Blocked goal', 'blocked');
 		createGoal('goal_v2_triage_paused_goal', 'Paused goal', 'paused');
+		createGoal('goal_v2_triage_parent_with_child_work', 'Parent with child work');
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_triage_child_ready',
+			'--project',
+			'project_v2_goal_triage_smoke',
+			'--parent-goal',
+			'goal_v2_triage_parent_with_child_work',
+			'--title',
+			'Child ready goal',
+			'--summary',
+			'Child goal used to prove parent triage.',
+			'--success',
+			'Parent goal is not classified as stale while child work is open.'
+		]);
+		createTask('task_v2_triage_child_ready', 'goal_v2_triage_child_ready', 'ready');
 
 		const triage = runCoreCli([
 			'goal-triage',
@@ -600,8 +618,13 @@ describe('v2 core CLI work-loop smoke', () => {
 			status: 'paused',
 			suggestedAction: 'pause_candidate'
 		});
+		expect(byGoalId.goal_v2_triage_parent_with_child_work).toMatchObject({
+			suggestedAction: 'start_ready_task',
+			taskCounts: { open: 0 },
+			childGoalCounts: { active: 1, openTasks: 1 }
+		});
 		expect(triage.summary).toMatchObject({
-			start_ready_task: 1,
+			start_ready_task: 3,
 			monitor_in_progress: 1,
 			create_next_task: 1,
 			review_or_close: 2,

@@ -141,6 +141,7 @@ type Options = {
 	query: string | null;
 	score: number | null;
 	limit: number;
+	limitExplicit: boolean;
 	compact: boolean;
 	reset: boolean;
 	json: boolean;
@@ -320,6 +321,7 @@ function parseArgs(argv: string[]): Options {
 		query: null,
 		score: null,
 		limit: 10,
+		limitExplicit: false,
 		compact: false,
 		reset: false,
 		json: false,
@@ -492,6 +494,7 @@ function parseArgs(argv: string[]): Options {
 				break;
 			case '--limit':
 				options.limit = Number.parseInt(next(), 10);
+				options.limitExplicit = true;
 				break;
 			case '--compact':
 				options.compact = true;
@@ -652,7 +655,7 @@ function goalTriage(options: Options) {
 				goalTriage: readV2CoreGoalTriage(db, {
 					goalId: options.goalId,
 					projectId: options.projectId,
-					limit: Number.isFinite(options.limit) ? options.limit : 50
+					limit: options.limitExplicit && Number.isFinite(options.limit) ? options.limit : 50
 				})
 			},
 			options.json
