@@ -30,6 +30,18 @@
 		{ key: 'paused', label: 'Paused', goals: goalStatusGroups.paused }
 	]);
 	let crossProjectAttentionRows = $derived(operatorConsole?.crossProjectAttention ?? []);
+	let workstreamOverviewRows = $derived(
+		crossProjectAttentionRows.map((row) => ({
+			...row,
+			totalBlocked: row.counts.blockedGoals + row.counts.blockedTasks,
+			totalNeedsOperator:
+				row.counts.reviewItems +
+				row.counts.blockedGoals +
+				row.counts.blockedTasks +
+				row.counts.idleActiveGoals,
+			totalOpenSignal: row.counts.activeGoals + row.counts.readyGoals + row.counts.runningGoals
+		}))
+	);
 	let workQueueRows = $derived(operatorConsole?.workQueue ?? []);
 	let goalControlCount = $derived(goalGroupRows.reduce((total, group) => total + group.goals.length, 0));
 	let activeGoal = $derived(goalStatusGroups.running[0] ?? operatorConsole?.activeGoals[0] ?? null);
@@ -151,6 +163,23 @@
 		}
 	}
 
+	function workstreamActionTone(action: string) {
+		switch (action) {
+			case 'review_output':
+				return 'review';
+			case 'start_ready_task':
+				return 'ready';
+			case 'resolve_blocker':
+				return 'blocked';
+			case 'create_continuation_work':
+				return 'planning';
+			case 'monitor_running_work':
+				return 'running';
+			default:
+				return 'quiet';
+		}
+	}
+
 	function goalTransitionText(goal: {
 		latestGoalStatusTransition?: { summary: string; rationale: string } | null;
 	}) {
@@ -238,6 +267,82 @@
 					density="compact"
 				/>
 			</section>
+
+			{#if workstreamOverviewRows.length}
+				<section class="v2-core-workstreams" aria-labelledby="v2-core-workstreams">
+					<header class="v2-core-section-header">
+						<div>
+							<p>Command overview</p>
+							<h2 id="v2-core-workstreams">Workstreams</h2>
+						</div>
+						<span>{workstreamOverviewRows.length} active projects with attention state</span>
+					</header>
+					<div class="v2-core-workstream-grid">
+						{#each workstreamOverviewRows as row (row.projectId)}
+							<article class="v2-core-workstream-card">
+								<header>
+									<div>
+										<a class="v2-core-workstream-title" href={projectHref(row.projectId)}>
+											{row.projectName}
+										</a>
+										<p>{row.summary}</p>
+									</div>
+									<span
+										class={[
+											'v2-core-workstream-action',
+											`v2-core-workstream-action-${workstreamActionTone(row.topAction)}`
+										]}
+									>
+										{attentionActionLabel(row.topAction)}
+									</span>
+								</header>
+								<div class="v2-core-workstream-counts" aria-label={`${row.projectName} workstream counts`}>
+									<div>
+										<span>Active</span>
+										<strong>{row.counts.activeGoals}</strong>
+									</div>
+									<div>
+										<span>Ready</span>
+										<strong>{row.counts.readyGoals}</strong>
+									</div>
+									<div>
+										<span>Running</span>
+										<strong>{row.counts.runningGoals}</strong>
+									</div>
+									<div>
+										<span>Review</span>
+										<strong>{row.counts.reviewItems}</strong>
+									</div>
+									<div>
+										<span>Blocked</span>
+										<strong>{row.totalBlocked}</strong>
+									</div>
+									<div>
+										<span>Idle</span>
+										<strong>{row.counts.idleActiveGoals}</strong>
+									</div>
+								</div>
+								<div class="v2-core-workstream-footer">
+									<div>
+										<span>Needs operator</span>
+										<strong>{row.totalNeedsOperator}</strong>
+									</div>
+									<div>
+										<span>Open signal</span>
+										<strong>{row.totalOpenSignal}</strong>
+									</div>
+									<div class="v2-core-workstream-links">
+										<a href={projectHref(row.projectId)}>Open project</a>
+										{#if row.target}
+											<a href={attentionTargetHref(row.target)}>Open target</a>
+										{/if}
+									</div>
+								</div>
+							</article>
+						{/each}
+					</div>
+				</section>
+			{/if}
 
 			{#if crossProjectAttentionRows.length}
 				<section class="v2-core-attention" aria-labelledby="v2-core-attention">
@@ -1071,6 +1176,197 @@
 		gap: 0.75rem;
 	}
 
+	.v2-core-section-header {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.v2-core-section-header div {
+		min-width: 0;
+	}
+
+	.v2-core-section-header p,
+	.v2-core-section-header span {
+		margin: 0;
+		color: var(--color-surface-600);
+		font-size: 0.76rem;
+		line-height: 1.25;
+	}
+
+	.v2-core-section-header h2 {
+		margin: 0.1rem 0 0;
+		color: var(--color-surface-950);
+		font-size: 1.15rem;
+		line-height: 1.2;
+	}
+
+	.v2-core-workstreams {
+		display: grid;
+		gap: 0.7rem;
+	}
+
+	.v2-core-workstream-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+		gap: 0.75rem;
+	}
+
+	.v2-core-workstream-card {
+		display: grid;
+		gap: 0.7rem;
+		min-width: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 20%);
+		border-radius: 0.5rem;
+		padding: 0.85rem;
+		background: var(--color-surface-50);
+		color: var(--color-surface-950);
+	}
+
+	.v2-core-workstream-card header {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.v2-core-workstream-card header div {
+		min-width: 0;
+	}
+
+	.v2-core-workstream-title {
+		display: inline-block;
+		color: var(--color-primary-800);
+		font-size: 0.98rem;
+		font-weight: 800;
+		line-height: 1.2;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-workstream-title:hover {
+		text-decoration: underline;
+	}
+
+	.v2-core-workstream-card p {
+		margin: 0.25rem 0 0;
+		color: var(--color-surface-700);
+		font-size: 0.78rem;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-workstream-action {
+		flex: 0 0 auto;
+		border: 1px solid color-mix(in srgb, var(--color-surface-400), transparent 45%);
+		border-radius: 999px;
+		padding: 0.25rem 0.5rem;
+		background: var(--color-surface-0);
+		color: var(--color-surface-800);
+		font-size: 0.72rem;
+		font-weight: 800;
+		line-height: 1.15;
+		white-space: nowrap;
+	}
+
+	.v2-core-workstream-action-review {
+		border-color: color-mix(in srgb, var(--color-warning-500), transparent 35%);
+		background: color-mix(in srgb, var(--color-warning-100), white 45%);
+		color: var(--color-warning-900);
+	}
+
+	.v2-core-workstream-action-ready {
+		border-color: color-mix(in srgb, var(--color-success-500), transparent 35%);
+		background: color-mix(in srgb, var(--color-success-100), white 45%);
+		color: var(--color-success-900);
+	}
+
+	.v2-core-workstream-action-blocked {
+		border-color: color-mix(in srgb, var(--color-error-500), transparent 35%);
+		background: color-mix(in srgb, var(--color-error-100), white 45%);
+		color: var(--color-error-900);
+	}
+
+	.v2-core-workstream-action-running,
+	.v2-core-workstream-action-planning {
+		border-color: color-mix(in srgb, var(--color-primary-500), transparent 35%);
+		background: color-mix(in srgb, var(--color-primary-100), white 45%);
+		color: var(--color-primary-900);
+	}
+
+	.v2-core-workstream-counts {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.4rem;
+	}
+
+	.v2-core-workstream-counts div,
+	.v2-core-workstream-footer > div {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		border-radius: 0.42rem;
+		padding: 0.45rem 0.5rem;
+		background: var(--color-surface-0);
+	}
+
+	.v2-core-workstream-counts span,
+	.v2-core-workstream-footer span {
+		color: var(--color-surface-600);
+		font-size: 0.68rem;
+		font-weight: 700;
+		line-height: 1.1;
+	}
+
+	.v2-core-workstream-counts strong,
+	.v2-core-workstream-footer strong {
+		color: var(--color-surface-950);
+		font-size: 0.95rem;
+		line-height: 1.1;
+	}
+
+	.v2-core-workstream-footer {
+		display: grid;
+		grid-template-columns: minmax(0, 0.75fr) minmax(0, 0.75fr) minmax(9.5rem, 1fr);
+		gap: 0.45rem;
+		align-items: stretch;
+	}
+
+	.v2-core-workstream-links {
+		display: flex;
+		align-items: center;
+		justify-content: end;
+		gap: 0.35rem;
+		border: 0;
+		padding: 0;
+		background: transparent;
+	}
+
+	.v2-core-workstream-links a {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.05rem;
+		border: 1px solid color-mix(in srgb, var(--color-primary-500), transparent 35%);
+		border-radius: 0.4rem;
+		padding: 0.35rem 0.55rem;
+		background: var(--color-surface-0);
+		color: var(--color-primary-800);
+		font-size: 0.74rem;
+		font-weight: 800;
+		line-height: 1.15;
+		text-align: center;
+		text-decoration: none;
+	}
+
+	.v2-core-workstream-links a:hover {
+		background: color-mix(in srgb, var(--color-primary-100), white 45%);
+	}
+
 	.v2-core-scope {
 		display: flex;
 		align-items: center;
@@ -1760,11 +2056,39 @@
 	}
 
 	@media (max-width: 44rem) {
+		.v2-core-section-header,
+		.v2-core-workstream-card header,
 		.v2-core-panel-header,
 		.v2-core-scoped-summary header,
 		.v2-core-dispatch-card header {
 			align-items: stretch;
 			flex-direction: column;
+		}
+
+		.v2-core-section-header span {
+			max-width: 100%;
+		}
+
+		.v2-core-workstream-action {
+			width: fit-content;
+			white-space: normal;
+		}
+
+		.v2-core-workstream-counts {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.v2-core-workstream-footer {
+			grid-template-columns: 1fr;
+		}
+
+		.v2-core-workstream-links {
+			justify-content: stretch;
+		}
+
+		.v2-core-workstream-links a {
+			flex: 1 1 0;
+			min-width: 0;
 		}
 
 		.v2-core-scoped-summary-state {

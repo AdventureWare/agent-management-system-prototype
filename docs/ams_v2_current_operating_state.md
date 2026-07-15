@@ -87,6 +87,20 @@ This goal exists because external AI is still doing much of the reasoning and
 execution work. The system should learn from that dependence instead of hiding
 it or pretending it has already been replaced.
 
+### Make the v2 GUI the primary multi-workstream operator surface
+
+- Goal: `goal_ams_v2_gui_multi_workstream_operator_surface`
+- Status: active
+- Purpose: make the GUI the normal way for the operator to understand and manage
+  multiple AMS workstreams, instead of depending on Codex or CLI readbacks for
+  basic visibility.
+- Current task: `task_ams_v2_gui_workstream_command_overview`
+
+This goal exists because AMS needs to support human supervision and parallel
+workstream management directly. CLI and Codex should remain available, but they
+should not be required for ordinary awareness, selection, dispatch, review, or
+mobile operation.
+
 ## Current Owned-AI Project
 
 Owned AI is now represented as a distinct live project:
@@ -249,7 +263,11 @@ Current work should be selected from these active paths:
      ladder and first capability target.
 3. `task_ams_v2_create_external_ai_operational_profile_v0`
    - Profile current external AI use and failure modes from actual AMS evidence.
-4. `task_ams_v2_test_statement_roles_in_real_work_selection`
+4. `task_ams_v2_gui_goal_task_creation_flow`
+   - Make more ordinary goal/task setup possible from the v2 GUI.
+5. `task_ams_v2_gui_mobile_review_dispatch_flow`
+   - Improve phone-width review, dispatch, and task-detail workflows.
+6. `task_ams_v2_test_statement_roles_in_real_work_selection`
    - After the real-work selection artifact exists, test whether statement-role
      classification reduces salience fixation and generic-model reversion.
 
