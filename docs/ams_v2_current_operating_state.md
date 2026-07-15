@@ -69,6 +69,17 @@ Decision:
 The current embedded v2 routes and services are evidence, not the target
 application boundary.
 
+Phase 0 extraction is complete:
+
+- baseline manifest: `docs/design/ams_v2_extraction_baseline_manifest.md`;
+- capability dispositions:
+  `docs/design/ams_v2_prototype_capability_disposition_matrix.md`; and
+- generated migration evidence:
+  `agent_output/v2-extraction-baseline/20260715T224025Z-ca144cebfc2e/`.
+
+The ignored generated directory must be checksum-copied into the independent
+repository or another durable archive before it becomes a migration dependency.
+
 ## Current Active AMS v2 Child Goals
 
 ### Run real cross-project work through AMS v2
@@ -288,20 +299,26 @@ Selection rule:
 The clean-boundary path now takes precedence over embedded GUI work. Current
 implementation order is:
 
-1. `task_ams_v2_capture_independent_extraction_baseline`
-   - Export and checksum current state, capture deterministic readbacks, and
-     classify prototype capabilities before creating the new runtime.
-2. `task_ams_v2_create_independent_repository_foundation`
+Completed prerequisite:
+
+- `task_ams_v2_capture_independent_extraction_baseline`
+  - Accepted immutable state capture, restore proof, parity fixtures, and
+    prototype capability disposition matrix.
+
+Next:
+
+1. `task_ams_v2_create_independent_repository_foundation`
    - Create the sibling repository with core, SQLite, CLI, docs, boundary tests,
-     and a versioned initial migration.
-3. `task_ams_v2_port_minimal_independent_work_loop`
+     and a versioned initial migration. Copy and checksum-verify the canonical
+     baseline into a durable migration archive before importing it.
+2. `task_ams_v2_port_minimal_independent_work_loop`
    - Port the smallest complete goal-to-continuation loop into focused modules.
-4. `task_ams_v2_prove_revisioned_agent_continuity`
+3. `task_ams_v2_prove_revisioned_agent_continuity`
    - Prove one-authority, stale-safe, zero-chat task continuation.
-5. `task_ams_v2_build_clean_operator_ui_slice`
+4. `task_ams_v2_build_clean_operator_ui_slice`
    - Build the independent desktop/mobile operator surface after the application
      service boundary is stable.
-6. `task_ams_v2_validate_real_work_and_project_cutover`
+5. `task_ams_v2_validate_real_work_and_project_cutover`
    - Run real projects, compare against the prototype, and migrate authority one
      project at a time.
 
@@ -314,6 +331,8 @@ Use these for deeper context:
 
 - `docs/ams_goal_task_creation_guide.md`
 - `docs/design/ams_v2_clean_boundary_and_execution_plan.md`
+- `docs/design/ams_v2_extraction_baseline_manifest.md`
+- `docs/design/ams_v2_prototype_capability_disposition_matrix.md`
 - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 - `docs/ams_real_cross_project_work_requirements_from_resume_v0_1.md`
 - `docs/ams_hybrid_explicit_knowledge_intelligence_mapping_v0_1.md`
