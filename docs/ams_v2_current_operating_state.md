@@ -61,19 +61,21 @@ tracker, or a prompt library.
 This is the main proof that AMS is not becoming a self-contained planning
 exercise.
 
+## Recently Completed Alignment Work
+
 ### Make AMS v2 project state self-orienting
 
 - Goal: `goal_ams_v2_project_state_source_of_truth_alignment`
-- Status: active
+- Status: completed
 - Purpose: make current project state obvious enough that agents do not have to
   reconstruct direction from chat history or scattered milestone docs.
-- Current task: `task_ams_v2_current_docs_signal_audit`
+- Artifacts:
+  - `docs/ams_v2_current_operating_state.md`
+  - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 
-This document is the first output of that goal. It is now linked from the main
-agent entry points. The remaining work is to keep current-versus-historical docs
-signals clear without reorganizing the whole docs directory.
-
-## Recently Completed Alignment Work
+This document is linked from the main agent entry points. The docs signal audit
+classifies current, design, strategy, and historical proof documents without
+reorganizing the whole docs directory.
 
 ### Capability-system mapping
 
@@ -189,20 +191,18 @@ Selection rule:
 
 Current AMS v2 work should be:
 
-1. `task_ams_v2_current_docs_signal_audit`
-   - Audit whether current, design, proof, and historical docs are clearly
-     distinguishable enough for agents.
-2. `task_ams_v2_select_first_real_cross_project_work`
+1. `task_ams_v2_select_first_real_cross_project_work`
    - Select and run the first real non-AMS task through AMS v2.
 
-If only one task can run next, finish the docs signal audit only if it stays
-small. Then move to real cross-project work.
+Move to real cross-project work unless live AMS state surfaces a higher-priority
+blocker.
 
 ## Source Documents
 
 Use these for deeper context:
 
 - `docs/ams_goal_task_creation_guide.md`
+- `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 - `docs/design/ams_v2_domain_ontology_and_behavior_spec.md`
 - `docs/ams_capability_system_goal_project_mapping_v0_1.md`
 - `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
