@@ -74,6 +74,44 @@ This goal should use real work as evidence. It should not create new entities,
 schema, routing automation, or Superstructure-heavy prompt expansion without an
 exercised operational gap.
 
+### Use external AI effectively while replacing dependencies
+
+- Goal: `goal_ams_v2_external_ai_utilization_profile`
+- Status: active
+- Purpose: treat Codex, ChatGPT, and other external AI surfaces as current
+  delegated capabilities whose affordances, failure modes, supervision burden,
+  and replacement opportunities should be profiled from real work evidence.
+- Current task: `task_ams_v2_create_external_ai_operational_profile_v0`
+
+This goal exists because external AI is still doing much of the reasoning and
+execution work. The system should learn from that dependence instead of hiding
+it or pretending it has already been replaced.
+
+## Current Owned-AI Project
+
+Owned AI is now represented as a distinct live project:
+
+- Project: `project_owned_ai_system`
+- Goal: `goal_owned_ai_hybrid_capability_system`
+- Title: Build Colin's hybrid owned-AI capability system
+
+Purpose:
+
+Build a replaceable capability provider that combines learned models with
+explicit state, source-aware knowledge, procedures, tools, validators, retrieval,
+and AMS-managed evidence. This project is not the same thing as AMS, and it is
+not necessarily one model.
+
+Current owned-AI tasks:
+
+- `task_owned_ai_define_capability_ladder_from_source_state`
+- `task_owned_ai_define_better_ai_evaluation_criteria`
+- `task_owned_ai_inventory_explicit_knowledge_substrates`
+
+The current source-analysis artifact is:
+
+- `docs/owned_ai_hybrid_system_source_analysis_v0_1.md`
+
 ## Recently Completed Alignment Work
 
 ### Make AMS v2 project state self-orienting
@@ -153,8 +191,8 @@ real enough to test on more real work.
   document and the docs index, agents can latch onto stale context.
 - Top-level mission and personal capability-system goals are not yet explicit
   live goals.
-- Owned AI is still a future capability system, not an implemented local AI
-  replacement.
+- Owned AI is now represented as a distinct live project, but it is still a
+  future capability system, not an implemented local AI replacement.
 - External Codex/ChatGPT-style reasoning remains heavily used.
 - Current providerless/local evidence mostly proves deterministic coordination
   and readback capabilities, not replacement of broad AI reasoning.
@@ -202,11 +240,16 @@ Selection rule:
 
 ## Current Next Work
 
-Current AMS v2 work should be:
+Current work should be selected from these active paths:
 
 1. `task_ams_v2_select_first_real_cross_project_work`
    - Select and run the first real non-AMS task through AMS v2.
-2. `task_ams_v2_test_statement_roles_in_real_work_selection`
+2. `task_owned_ai_define_capability_ladder_from_source_state`
+   - Convert the hybrid owned-AI source-state note into an ordered replacement
+     ladder and first capability target.
+3. `task_ams_v2_create_external_ai_operational_profile_v0`
+   - Profile current external AI use and failure modes from actual AMS evidence.
+4. `task_ams_v2_test_statement_roles_in_real_work_selection`
    - After the real-work selection artifact exists, test whether statement-role
      classification reduces salience fixation and generic-model reversion.
 
@@ -221,6 +264,7 @@ Use these for deeper context:
 - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 - `docs/ams_real_cross_project_work_requirements_from_resume_v0_1.md`
 - `docs/ams_hybrid_explicit_knowledge_intelligence_mapping_v0_1.md`
+- `docs/owned_ai_hybrid_system_source_analysis_v0_1.md`
 - `docs/design/ams_v2_domain_ontology_and_behavior_spec.md`
 - `docs/ams_capability_system_goal_project_mapping_v0_1.md`
 - `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
