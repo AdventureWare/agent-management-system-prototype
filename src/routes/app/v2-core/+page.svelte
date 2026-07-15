@@ -29,6 +29,7 @@
 		{ key: 'blocked', label: 'Blocked', goals: goalStatusGroups.blocked },
 		{ key: 'paused', label: 'Paused', goals: goalStatusGroups.paused }
 	]);
+	let crossProjectAttentionRows = $derived(operatorConsole?.crossProjectAttention ?? []);
 	let workQueueRows = $derived(operatorConsole?.workQueue ?? []);
 	let goalControlCount = $derived(goalGroupRows.reduce((total, group) => total + group.goals.length, 0));
 	let activeGoal = $derived(goalStatusGroups.running[0] ?? operatorConsole?.activeGoals[0] ?? null);
@@ -75,6 +76,23 @@
 		return resolve(`/app/v2-core?project=${encodeURIComponent(projectId)}`);
 	}
 
+	function attentionTargetHref(target: {
+		kind: string;
+		projectId: string;
+		goalId: string | null;
+		taskId: string | null;
+	}) {
+		if (target.taskId) {
+			return taskHref(target.taskId);
+		}
+
+		if (target.goalId) {
+			return goalHref(target.goalId, target.projectId);
+		}
+
+		return projectHref(target.projectId);
+	}
+
 	function nextWorkForGoal(goalId: string) {
 		return (
 			operatorConsole?.nextWork.candidates.find(
@@ -109,6 +127,27 @@
 				return 'Paused';
 			default:
 				return state;
+		}
+	}
+
+	function attentionActionLabel(action: string) {
+		switch (action) {
+			case 'review_output':
+				return 'Review output';
+			case 'start_ready_task':
+				return 'Start ready task';
+			case 'resolve_blocker':
+				return 'Resolve blocker';
+			case 'create_continuation_work':
+				return 'Plan continuation';
+			case 'monitor_running_work':
+				return 'Monitor running work';
+			case 'inspect_project':
+				return 'Inspect project';
+			case 'no_action':
+				return 'No action';
+			default:
+				return action;
 		}
 	}
 
@@ -199,6 +238,45 @@
 					density="compact"
 				/>
 			</section>
+
+			{#if crossProjectAttentionRows.length}
+				<section class="v2-core-attention" aria-labelledby="v2-core-attention">
+					<header class="v2-core-panel-header">
+						<h2 id="v2-core-attention">Attention summary</h2>
+						<span>{crossProjectAttentionRows.length} projects</span>
+					</header>
+					<div class="v2-core-attention-list">
+						{#each crossProjectAttentionRows as row (row.projectId)}
+							<article class="v2-core-attention-row">
+								<div>
+									<a class="v2-core-row-title v2-core-row-link" href={projectHref(row.projectId)}>
+										{row.projectName}
+									</a>
+									<p class="v2-core-row-meta">{row.summary}</p>
+								</div>
+								<div class="v2-core-attention-counts" aria-label={`${row.projectName} work counts`}>
+									<span>{row.counts.activeGoals} active</span>
+									<span>{row.counts.readyGoals} ready</span>
+									<span>{row.counts.runningGoals} running</span>
+									<span>{row.counts.reviewItems} review</span>
+									<span>{row.counts.blockedGoals + row.counts.blockedTasks} blocked</span>
+									<span>{row.counts.idleActiveGoals} idle</span>
+								</div>
+								<div class="v2-core-attention-action">
+									<span class={['v2-core-badge', `v2-core-badge-attention-${row.topAction}`]}>
+										{attentionActionLabel(row.topAction)}
+									</span>
+									{#if row.target}
+										<a href={attentionTargetHref(row.target)}>{row.target.title}</a>
+									{:else}
+										<span>No target</span>
+									{/if}
+								</div>
+							</article>
+						{/each}
+					</div>
+				</section>
+			{/if}
 
 			{#if operatorConsole.scope.goalId && operatorConsole.scope.projectId}
 				<section class="v2-core-scope" aria-label="V2 core current scope">
@@ -1132,6 +1210,71 @@
 		margin-top: 0;
 	}
 
+	.v2-core-attention {
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 18%);
+		border-radius: 0.5rem;
+		background: var(--color-surface-50);
+		color: var(--color-surface-950);
+		overflow: hidden;
+	}
+
+	.v2-core-attention-list {
+		display: grid;
+	}
+
+	.v2-core-attention-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 1fr) minmax(12rem, 0.8fr);
+		gap: 0.8rem;
+		align-items: center;
+		min-height: 4.5rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 45%);
+		padding: 0.75rem 0.875rem;
+	}
+
+	.v2-core-attention-row:last-child {
+		border-bottom: 0;
+	}
+
+	.v2-core-attention-counts {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.35rem;
+	}
+
+	.v2-core-attention-counts span {
+		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 42%);
+		border-radius: 0.35rem;
+		padding: 0.25rem 0.35rem;
+		background: var(--color-surface-0);
+		color: var(--color-surface-700);
+		font-size: 0.72rem;
+		line-height: 1.2;
+		text-align: center;
+		white-space: nowrap;
+	}
+
+	.v2-core-attention-action {
+		display: grid;
+		justify-items: end;
+		gap: 0.3rem;
+		min-width: 0;
+		text-align: right;
+	}
+
+	.v2-core-attention-action a {
+		color: var(--color-primary-700);
+		font-size: 0.78rem;
+		font-weight: 700;
+		line-height: 1.25;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+
+	.v2-core-attention-action a:hover {
+		text-decoration: underline;
+	}
+
 	.v2-core-dispatch-board {
 		border: 1px solid color-mix(in srgb, var(--color-surface-300), transparent 18%);
 		border-radius: 0.5rem;
@@ -1247,6 +1390,17 @@
 	.v2-core-dispatch-actions {
 		display: grid;
 		gap: 0.35rem;
+	}
+
+	@media (max-width: 56rem) {
+		.v2-core-attention-row {
+			grid-template-columns: 1fr;
+		}
+
+		.v2-core-attention-action {
+			justify-items: start;
+			text-align: left;
+		}
 	}
 
 	.v2-core-grid {

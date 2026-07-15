@@ -541,6 +541,34 @@ function renderPage(options: { scopedGoalId?: string | null } = {}) {
 				scopedGoalSummary: scopedGoalSummaryFor(scopedGoalId),
 				scopedChildGoalRollup: scopedChildGoalRollupFor(scopedGoalId),
 				scopedTaskRollup: scopedTaskRollupFor(scopedGoalId),
+				crossProjectAttention: scopedGoalId
+					? []
+					: [
+							{
+								projectId: 'project_ui',
+								projectName: 'V2 Core UI',
+								counts: {
+									activeGoals: 3,
+									readyGoals: 1,
+									runningGoals: 1,
+									reviewItems: 1,
+									blockedGoals: 1,
+									blockedTasks: 0,
+									pausedGoals: 1,
+									idleActiveGoals: 1
+								},
+								topAction: 'review_output',
+								target: {
+									kind: 'artifact',
+									id: 'artifact_ui_review',
+									title: 'Reviewable operator output',
+									projectId: 'project_ui',
+									goalId: 'goal_ui',
+									taskId: 'task_ui_review'
+								},
+								summary: '1 output awaiting review.'
+							}
+						],
 				workQueue: [
 					{
 						goalId: 'goal_ui',
@@ -840,6 +868,8 @@ describe('/app/v2-core/+page.svelte', () => {
 		expect(document.body.textContent).toContain('Operator console');
 		expect(document.body.textContent).toContain('V2 Core UI');
 		expect(document.body.textContent).toContain('Make v2 core inspectable');
+		expect(document.body.textContent).toContain('Attention summary');
+		expect(document.body.textContent).toContain('1 output awaiting review.');
 		expect(document.body.textContent).toContain('Work queue');
 		expect(document.body.textContent).toContain('Dispatch board');
 		expect(document.body.textContent).toContain('Open running task');

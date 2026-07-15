@@ -830,6 +830,42 @@ export type V2CoreOperatorConsoleWorkQueueItem = {
 	selectedTask: V2CoreNextWork['candidates'][number] | null;
 };
 
+export type V2CoreOperatorConsoleAttentionAction =
+	| 'review_output'
+	| 'start_ready_task'
+	| 'resolve_blocker'
+	| 'create_continuation_work'
+	| 'monitor_running_work'
+	| 'inspect_project'
+	| 'no_action';
+
+export type V2CoreOperatorConsoleAttentionTarget = {
+	kind: 'project' | 'goal' | 'task' | 'artifact' | 'run';
+	id: string;
+	title: string;
+	projectId: string;
+	goalId: string | null;
+	taskId: string | null;
+};
+
+export type V2CoreOperatorConsoleAttentionRow = {
+	projectId: string;
+	projectName: string;
+	counts: {
+		activeGoals: number;
+		readyGoals: number;
+		runningGoals: number;
+		reviewItems: number;
+		blockedGoals: number;
+		blockedTasks: number;
+		pausedGoals: number;
+		idleActiveGoals: number;
+	};
+	topAction: V2CoreOperatorConsoleAttentionAction;
+	target: V2CoreOperatorConsoleAttentionTarget | null;
+	summary: string;
+};
+
 export type V2CoreOperatorConsoleRecentArtifact = {
 	artifactId: string;
 	taskId: string | null;
@@ -899,6 +935,7 @@ export type V2CoreOperatorConsole = {
 		paused: V2CoreOperatorConsoleGoal[];
 	};
 	workQueue: V2CoreOperatorConsoleWorkQueueItem[];
+	crossProjectAttention: V2CoreOperatorConsoleAttentionRow[];
 	scopedGoalSummary: V2CoreOperatorConsoleScopedGoalSummary | null;
 	scopedChildGoalRollup: V2CoreOperatorConsoleWorkQueueItem[];
 	scopedTaskRollup: V2CoreOperatorConsoleScopedTaskRollup | null;
@@ -5769,6 +5806,245 @@ function readV2CoreOperatorConsoleGoals(
 		}));
 }
 
+function buildV2CoreCrossProjectAttention(
+	db: Database.Database,
+	input: {
+		overview: V2CoreOverview;
+		activeGoals: V2CoreOperatorConsoleGoal[];
+		workQueue: V2CoreOperatorConsoleWorkQueueItem[];
+		nextWork: V2CoreNextWork;
+		limit: number;
+	}
+): V2CoreOperatorConsoleAttentionRow[] {
+	const activeProjects = input.overview.projects.filter((project) => project.status === 'active');
+	const goalsByProjectId = new Map<string, V2CoreOperatorConsoleGoal[]>();
+	const queueByProjectId = new Map<string, V2CoreOperatorConsoleWorkQueueItem[]>();
+	for (const goal of input.activeGoals) {
+		goalsByProjectId.set(goal.projectId, [...(goalsByProjectId.get(goal.projectId) ?? []), goal]);
+	}
+	for (const item of input.workQueue) {
+		queueByProjectId.set(item.projectId, [...(queueByProjectId.get(item.projectId) ?? []), item]);
+	}
+
+	const reviewCountsByProjectId = new Map<string, number>();
+	const reviewTargetsByProjectId = new Map<string, V2CoreOperatorConsoleAttentionTarget>();
+	const reviewRows = db
+		.prepare<
+			[],
+			{
+				project_id: string;
+				artifact_id: string;
+				artifact_title: string;
+				task_id: string;
+				task_title: string;
+				goal_id: string;
+			}
+		>(
+			`
+				select
+					task.project_id,
+					artifact.id as artifact_id,
+					artifact.title as artifact_title,
+					task.id as task_id,
+					task.title as task_title,
+					task.goal_id
+				from v2_core_artifacts artifact
+				join v2_core_tasks task on task.id = artifact.task_id
+				left join v2_core_reviews review on review.artifact_id = artifact.id
+					and review.status in ('approved', 'rejected')
+				where artifact.status = 'submitted'
+					and review.id is null
+					and not exists (
+						select 1
+						from v2_core_decisions decision
+						where decision.task_id = artifact.task_id
+							and decision.decision_type = 'accept_task_output'
+					)
+				order by task.project_id, artifact.id
+			`
+		)
+		.all();
+	for (const row of reviewRows) {
+		reviewCountsByProjectId.set(row.project_id, (reviewCountsByProjectId.get(row.project_id) ?? 0) + 1);
+		if (!reviewTargetsByProjectId.has(row.project_id)) {
+			reviewTargetsByProjectId.set(row.project_id, {
+				kind: 'artifact',
+				id: row.artifact_id,
+				title: row.artifact_title || row.task_title,
+				projectId: row.project_id,
+				goalId: row.goal_id,
+				taskId: row.task_id
+			});
+		}
+	}
+
+	const blockedTaskCountsByProjectId = new Map<string, number>();
+	for (const row of db
+		.prepare<[], { project_id: string; blocked_task_count: number }>(
+			`
+				select project_id, count(*) as blocked_task_count
+				from v2_core_tasks
+				where status = 'blocked'
+				group by project_id
+			`
+		)
+		.all()) {
+		blockedTaskCountsByProjectId.set(row.project_id, row.blocked_task_count);
+	}
+
+	const idleGoalsByProjectId = new Map<string, V2CoreGoalContinuityAudit['idleActiveGoals']>();
+	const continuityAudit = readV2CoreGoalContinuityAudit(db);
+	for (const idleGoal of continuityAudit.idleActiveGoals) {
+		idleGoalsByProjectId.set(idleGoal.projectId, [
+			...(idleGoalsByProjectId.get(idleGoal.projectId) ?? []),
+			idleGoal
+		]);
+	}
+
+	const nextTaskByProjectId = new Map<string, V2CoreNextWork['candidates'][number]>();
+	for (const candidate of input.nextWork.candidates) {
+		if (candidate.action === 'start_task' && !nextTaskByProjectId.has(candidate.projectId)) {
+			nextTaskByProjectId.set(candidate.projectId, candidate);
+		}
+	}
+
+	function goalTarget(goal: V2CoreOperatorConsoleGoal): V2CoreOperatorConsoleAttentionTarget {
+		return {
+			kind: 'goal',
+			id: goal.goalId,
+			title: goal.title,
+			projectId: goal.projectId,
+			goalId: goal.goalId,
+			taskId: null
+		};
+	}
+
+	function taskTarget(task: V2CoreNextWork['candidates'][number]): V2CoreOperatorConsoleAttentionTarget {
+		return {
+			kind: 'task',
+			id: task.taskId,
+			title: task.title,
+			projectId: task.projectId,
+			goalId: task.goalId,
+			taskId: task.taskId
+		};
+	}
+
+	function runTarget(
+		item: V2CoreOperatorConsoleWorkQueueItem
+	): V2CoreOperatorConsoleAttentionTarget | null {
+		if (!item.currentRun) {
+			return null;
+		}
+
+		return {
+			kind: 'run',
+			id: item.currentRun.runId,
+			title: item.currentRun.taskTitle,
+			projectId: item.projectId,
+			goalId: item.goalId,
+			taskId: item.currentRun.taskId
+		};
+	}
+
+	function projectTarget(project: V2CoreOverview['projects'][number]): V2CoreOperatorConsoleAttentionTarget {
+		return {
+			kind: 'project',
+			id: project.id,
+			title: project.name,
+			projectId: project.id,
+			goalId: null,
+			taskId: null
+		};
+	}
+
+	return activeProjects
+		.map((project) => {
+			const projectGoals = goalsByProjectId.get(project.id) ?? [];
+			const queueItems = queueByProjectId.get(project.id) ?? [];
+			const readyItems = queueItems.filter((item) => item.queueState === 'ready_to_dispatch');
+			const runningItems = queueItems.filter((item) => item.queueState === 'running');
+			const blockedGoals = projectGoals.filter((goal) => goal.status === 'blocked');
+			const pausedGoals = projectGoals.filter((goal) => goal.status === 'paused');
+			const idleGoals = idleGoalsByProjectId.get(project.id) ?? [];
+			const reviewItems = reviewCountsByProjectId.get(project.id) ?? 0;
+			const blockedTasks = blockedTaskCountsByProjectId.get(project.id) ?? 0;
+			const nextTask = nextTaskByProjectId.get(project.id) ?? readyItems[0]?.selectedTask ?? null;
+			const runningTarget = runningItems.map(runTarget).find((target) => target !== null) ?? null;
+			let topAction: V2CoreOperatorConsoleAttentionAction = 'no_action';
+			let target: V2CoreOperatorConsoleAttentionTarget | null = null;
+			let summary = 'No immediate operator action found.';
+
+			if (reviewItems > 0) {
+				topAction = 'review_output';
+				target = reviewTargetsByProjectId.get(project.id) ?? projectTarget(project);
+				summary = `${reviewItems} output${reviewItems === 1 ? '' : 's'} awaiting review.`;
+			} else if (nextTask) {
+				topAction = 'start_ready_task';
+				target = taskTarget(nextTask);
+				summary = `${readyItems.length || 1} goal${(readyItems.length || 1) === 1 ? '' : 's'} with dispatchable work.`;
+			} else if (blockedGoals.length > 0 || blockedTasks > 0) {
+				topAction = 'resolve_blocker';
+				target = blockedGoals[0] ? goalTarget(blockedGoals[0]) : projectTarget(project);
+				summary = `${blockedGoals.length} blocked goal${blockedGoals.length === 1 ? '' : 's'} and ${blockedTasks} blocked task${blockedTasks === 1 ? '' : 's'}.`;
+			} else if (idleGoals.length > 0) {
+				topAction = 'create_continuation_work';
+				target = {
+					kind: 'goal',
+					id: idleGoals[0].goalId,
+					title: idleGoals[0].title,
+					projectId: idleGoals[0].projectId,
+					goalId: idleGoals[0].goalId,
+					taskId: null
+				};
+				summary = `${idleGoals.length} active goal${idleGoals.length === 1 ? '' : 's'} with no open work.`;
+			} else if (runningItems.length > 0) {
+				topAction = 'monitor_running_work';
+				target = runningTarget;
+				summary = `${runningItems.length} goal${runningItems.length === 1 ? '' : 's'} with current work running.`;
+			} else if (projectGoals.length > 0 || project.goalCount > 0) {
+				topAction = 'inspect_project';
+				target = projectTarget(project);
+				summary = 'Project has goals but no immediate dispatch, review, blocker, or idle-goal signal.';
+			}
+
+			return {
+				projectId: project.id,
+				projectName: project.name,
+				counts: {
+					activeGoals: projectGoals.filter((goal) => goal.status === 'active').length,
+					readyGoals: readyItems.length,
+					runningGoals: runningItems.length,
+					reviewItems,
+					blockedGoals: blockedGoals.length,
+					blockedTasks,
+					pausedGoals: pausedGoals.length,
+					idleActiveGoals: idleGoals.length
+				},
+				topAction,
+				target,
+				summary
+			};
+		})
+		.sort((left, right) => {
+			const actionRank: Record<V2CoreOperatorConsoleAttentionAction, number> = {
+				review_output: 0,
+				start_ready_task: 1,
+				resolve_blocker: 2,
+				create_continuation_work: 3,
+				monitor_running_work: 4,
+				inspect_project: 5,
+				no_action: 6
+			};
+			const rankDelta = actionRank[left.topAction] - actionRank[right.topAction];
+			if (rankDelta !== 0) {
+				return rankDelta;
+			}
+			return left.projectName.localeCompare(right.projectName);
+		})
+		.slice(0, input.limit);
+}
+
 export function readV2CoreOperatorConsole(
 	db: Database.Database,
 	options: { projectId?: string | null; goalId?: string | null; limit?: number } = {}
@@ -6262,6 +6538,17 @@ export function readV2CoreOperatorConsole(
 			return toWorkQueueItem(goal, currentRun, selectedTask);
 		}
 	);
+	const overview = readV2CoreOverview(db);
+	const crossProjectAttention: V2CoreOperatorConsoleAttentionRow[] =
+		!scope.projectId && !scope.goalId
+			? buildV2CoreCrossProjectAttention(db, {
+					overview,
+					activeGoals,
+					workQueue,
+					nextWork,
+					limit
+				})
+			: [];
 	const memory = scope.projectId
 		? readV2CoreMemoryForContext(db, {
 				projectId: scope.projectId
@@ -6353,7 +6640,6 @@ export function readV2CoreOperatorConsole(
 					trustedMemory: memory?.items.find((item) => item.status === 'trusted') ?? null
 				}
 			: null;
-	const overview = readV2CoreOverview(db);
 	const dependencyReport = readV2CoreDependencyReport(db, {
 		projectId: scope.projectId,
 		goalId: scope.goalId
@@ -6369,6 +6655,7 @@ export function readV2CoreOperatorConsole(
 		activeGoals,
 		goalStatusGroups,
 		workQueue,
+		crossProjectAttention,
 		scopedGoalSummary,
 		scopedChildGoalRollup,
 		scopedTaskRollup,

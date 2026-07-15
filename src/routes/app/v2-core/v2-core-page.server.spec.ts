@@ -631,9 +631,46 @@ describe('/app/v2-core page server', () => {
 		expect(result.operatorConsole?.scopedGoalSummary).toBeNull();
 		expect(result.operatorConsole?.scopedChildGoalRollup).toEqual([]);
 		expect(result.operatorConsole?.scopedTaskRollup).toBeNull();
+		expect(result.operatorConsole?.crossProjectAttention).toEqual([]);
 		expect(result.operatorConsole?.dependencyReport.summary.providerRunCount).toBe(3);
 		expect(result.operatorConsole?.dependencyReport.summary.toolExecutionCount).toBe(1);
 		expect(result.operatorConsole?.snapshotStatus.tableCounts.v2_core_tasks).toBe(6);
+	});
+
+	it('loads a global cross-project attention summary from existing operator state', async () => {
+		const dbFile = createTempDbFile();
+		seedCoreDb(dbFile);
+		setCoreDbFile(dbFile);
+
+		const result = await loadCorePage('http://localhost/app/v2-core');
+
+		expect(result.status).toBe('ready');
+		expect(result.operatorConsole?.scope).toEqual({
+			projectId: null,
+			goalId: null
+		});
+		expect(result.operatorConsole?.crossProjectAttention).toEqual([
+			expect.objectContaining({
+				projectId: 'project_ui',
+				projectName: 'V2 Core UI',
+				topAction: 'review_output',
+				target: expect.objectContaining({
+					kind: 'artifact',
+					id: 'artifact_ui_review',
+					taskId: 'task_ui_review'
+				}),
+				counts: {
+					activeGoals: 5,
+					readyGoals: 2,
+					runningGoals: 1,
+					reviewItems: 1,
+					blockedGoals: 1,
+					blockedTasks: 0,
+					pausedGoals: 1,
+					idleActiveGoals: 1
+				}
+			})
+		]);
 	});
 
 	it('loads immediate child-goal rollup for a parent goal scope', async () => {
