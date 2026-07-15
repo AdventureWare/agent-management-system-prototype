@@ -61,6 +61,19 @@ tracker, or a prompt library.
 This is the main proof that AMS is not becoming a self-contained planning
 exercise.
 
+### Build hybrid explicit-knowledge intelligence architecture
+
+- Goal: `goal_ams_v2_hybrid_explicit_knowledge_intelligence_architecture`
+- Status: active
+- Purpose: reduce generic-model reversion and meaning reconstruction failure by
+  combining learned models with explicit ontology, current state, procedures,
+  tools, validation, evidence, and source-aware memory.
+- Current task: `task_ams_v2_test_statement_roles_in_real_work_selection`
+
+This goal should use real work as evidence. It should not create new entities,
+schema, routing automation, or Superstructure-heavy prompt expansion without an
+exercised operational gap.
+
 ## Recently Completed Alignment Work
 
 ### Make AMS v2 project state self-orienting
@@ -193,6 +206,9 @@ Current AMS v2 work should be:
 
 1. `task_ams_v2_select_first_real_cross_project_work`
    - Select and run the first real non-AMS task through AMS v2.
+2. `task_ams_v2_test_statement_roles_in_real_work_selection`
+   - After the real-work selection artifact exists, test whether statement-role
+     classification reduces salience fixation and generic-model reversion.
 
 Move to real cross-project work unless live AMS state surfaces a higher-priority
 blocker.
@@ -204,6 +220,7 @@ Use these for deeper context:
 - `docs/ams_goal_task_creation_guide.md`
 - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 - `docs/ams_real_cross_project_work_requirements_from_resume_v0_1.md`
+- `docs/ams_hybrid_explicit_knowledge_intelligence_mapping_v0_1.md`
 - `docs/design/ams_v2_domain_ontology_and_behavior_spec.md`
 - `docs/ams_capability_system_goal_project_mapping_v0_1.md`
 - `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
