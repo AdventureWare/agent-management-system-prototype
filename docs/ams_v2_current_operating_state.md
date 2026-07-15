@@ -69,7 +69,7 @@ Decision:
 The current embedded v2 routes and services are evidence, not the target
 application boundary.
 
-Phase 0 extraction is complete:
+Phase 0 extraction and the independent repository foundation are complete:
 
 - baseline manifest: `docs/design/ams_v2_extraction_baseline_manifest.md`;
 - capability dispositions:
@@ -77,8 +77,30 @@ Phase 0 extraction is complete:
 - generated migration evidence:
   `agent_output/v2-extraction-baseline/20260715T224025Z-ca144cebfc2e/`.
 
-The ignored generated directory must be checksum-copied into the independent
-repository or another durable archive before it becomes a migration dependency.
+Independent repository:
+
+- path: `../agent-management-system-v2`;
+- initial commit: `c0378fc`;
+- packages: pure `core`, versioned `sqlite`, and thin `cli` only;
+- verification: foundation gates and a fresh standalone install/build/test pass;
+- local migration archive:
+  `../agent-management-system-v2/data/migration/baselines/20260715T224025Z-ca144cebfc2e/`.
+
+New v2 implementation work belongs in that sibling repository. Do not add the
+minimal work loop or future web UI under this prototype's `/app/v2-core` routes.
+
+Current continuation task:
+
+- `task_ams_v2_port_minimal_independent_work_loop`
+- Title: Port and prove the minimal independent work loop
+
+This task should add focused application services and SQLite adapters in the
+independent repository. It must not copy the prototype service monolith or
+reintroduce universal review/Decision ceremony.
+
+The ignored generated directory has been checksum-copied into the independent
+repository's local migration archive. Both copies remain noncanonical migration
+evidence rather than writable runtime state.
 
 ## Current Active AMS v2 Child Goals
 
