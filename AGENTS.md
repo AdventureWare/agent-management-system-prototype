@@ -3,7 +3,9 @@
 ## Current Milestone
 
 - Current milestone: Autonomous Goal-Directed Work Loop v0.
+- Before broad AMS v2 work, read `docs/ams_v2_current_operating_state.md` for the current goal graph, completed capability baseline, known weaknesses, non-goals, and next-work selection path.
 - Read `docs/autonomous-goal-directed-work-loop-v0.md` plus the relevant readiness, rigor, contextual knowledge, and agent-facing interface docs before broad changes in this area.
+- Use `npm run v2:core-db -- next-work --project project_ams_v2_core --json`, `npm run v2:core-db -- goal-triage --project project_ams_v2_core --json`, and `npm run v2:core-db -- goal-continuity-audit --project project_ams_v2_core --json` to verify current AMS v2 work state before selecting or materially changing broad work.
 - Before creating, closing, superseding, decomposing, or materially changing goals/tasks, read `docs/ams_goal_task_creation_guide.md` and preserve the goal-continuity invariants.
 - Work should be continuous: agents should select or create the next planning, research, clarification, review, or execution task as needed from durable Goal/Task/Run state. Do not add batch-planning or cycle-closeout ceremonies.
 - For agent-facing AMS affordances, read `docs/agent-facing-ams-interface-v0.md` and prefer structured domain/API/MCP operations over prompt stuffing.
