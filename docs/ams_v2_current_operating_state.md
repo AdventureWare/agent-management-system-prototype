@@ -203,6 +203,7 @@ Use these for deeper context:
 
 - `docs/ams_goal_task_creation_guide.md`
 - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
+- `docs/ams_real_cross_project_work_requirements_from_resume_v0_1.md`
 - `docs/design/ams_v2_domain_ontology_and_behavior_spec.md`
 - `docs/ams_capability_system_goal_project_mapping_v0_1.md`
 - `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
