@@ -3,6 +3,8 @@
 - [In-App Assistant](./in-app-assistant.md): current V1 behavior, architecture, API flow, logging, extension points, and known limitations for the context-aware assistant create flows.
 - [Ontology v1](./ontology-v1.md): conceptual ontology for goals, tasks, work attempts, threads, actors, artifacts, context, and planning sessions.
 - [Domain Model Governance Protocol v0.1](./domain-model-governance-protocol-v0.1.md): lightweight gate for proposing, reviewing, accepting, deferring, renaming, merging, or rejecting model constructs.
+- [AMS Goal And Task Creation Guide](./ams_goal_task_creation_guide.md): active operating guidance for creating and maintaining projects, goals, tasks, runs, artifacts, decisions, memory, and continuity state without losing long-term direction.
+- [AMS Goal Continuity Audit v0.1](./ams_goal_continuity_audit_v0_1.md): corrective-action audit of current v2 project/goal continuity, stale active containers, idle goals, stale runs, and the minimum cleanup sequence.
 - [Domain Model Source Map](./domain-model.md): current source-of-truth locations, bounded contexts, and implementation records for the AMS model.
 - [Domain Glossary](./domain-glossary.md): accepted, candidate, experimental, deprecated, rejected, merged, and superseded concept definitions.
 - [Domain Model Rationalization Audit](./domain-model-rationalization-audit-2026-07-01.md): read-only audit of current AMS model layers, overlaps, status semantics, and cleanup backlog.

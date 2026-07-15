@@ -784,6 +784,198 @@ describe('v2 core CLI work-loop smoke', () => {
 		});
 	}, 10_000);
 
+	it('reports goal-continuity risks through the CLI', () => {
+		const dbFile = createTempDbFile();
+		const baseArgs = ['--db', dbFile, '--json'];
+
+		runCoreCli(['init', ...baseArgs, '--reset']);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_continuity_empty',
+			'--name',
+			'Empty continuity project',
+			'--summary',
+			'Active project intentionally left empty for audit smoke.'
+		]);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_continuity_idle',
+			'--name',
+			'Idle continuity project',
+			'--summary',
+			'Active project with an idle active goal.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_continuity_idle',
+			'--project',
+			'project_v2_goal_continuity_idle',
+			'--title',
+			'Idle active continuity goal',
+			'--summary',
+			'Goal has no open work.',
+			'--success',
+			'The audit reports this goal as needing continuation.'
+		]);
+		runCoreCli([
+			'create-project',
+			...baseArgs,
+			'--id',
+			'project_v2_goal_continuity_classified',
+			'--name',
+			'Classified closure continuity project',
+			'--summary',
+			'Active project with a classified completed goal.'
+		]);
+		runCoreCli([
+			'create-goal',
+			...baseArgs,
+			'--id',
+			'goal_v2_goal_continuity_classified',
+			'--project',
+			'project_v2_goal_continuity_classified',
+			'--title',
+			'Classified completed continuity goal',
+			'--summary',
+			'Goal should be archival after completion.',
+			'--success',
+			'The audit reports this goal as classified instead of unresolved.'
+		]);
+		runCoreCli([
+			'transition-goal',
+			...baseArgs,
+			'--goal',
+			'goal_v2_goal_continuity_classified',
+			'--status',
+			'completed',
+			'--summary',
+			'Close the classified continuity goal.'
+		]);
+		runCoreCli([
+			'record-decision',
+			...baseArgs,
+			'--id',
+			'decision_v2_goal_continuity_classified',
+			'--project',
+			'project_v2_goal_continuity_classified',
+			'--goal',
+			'goal_v2_goal_continuity_classified',
+			'--type',
+			'goal_archival_classification',
+			'--summary',
+			'Classified completed goal as intentional archival evidence.',
+			'--rationale',
+			'The completed goal has no successor work and should not be treated as a continuity gap.'
+		]);
+		runCoreCli([
+			'register-provider',
+			...baseArgs,
+			'--id',
+			'provider_v2_goal_continuity_classified_stale',
+			'--name',
+			'Continuity classified stale provider',
+			'--kind',
+			'external_ai'
+		]);
+		runCoreCli([
+			'create-task',
+			...baseArgs,
+			'--id',
+			'task_v2_goal_continuity_classified_stale',
+			'--goal',
+			'goal_v2_goal_continuity_idle',
+			'--title',
+			'Classified stale run task',
+			'--summary',
+			'Task used to prove stale run classification in audit output.',
+			'--success',
+			'The stale run is classified instead of unresolved.',
+			'--validation',
+			'Read goal-continuity audit.'
+		]);
+		runCoreCli([
+			'launch-provider-run',
+			...baseArgs,
+			'--run',
+			'run_v2_goal_continuity_classified_stale',
+			'--task',
+			'task_v2_goal_continuity_classified_stale',
+			'--provider',
+			'provider_v2_goal_continuity_classified_stale'
+		]);
+		runCoreCli([
+			'transition-task',
+			...baseArgs,
+			'--task',
+			'task_v2_goal_continuity_classified_stale',
+			'--status',
+			'canceled',
+			'--summary',
+			'Cancel the task to create a classified stale planned run fixture.'
+		]);
+		runCoreCli([
+			'record-decision',
+			...baseArgs,
+			'--id',
+			'decision_v2_goal_continuity_classified_stale',
+			'--project',
+			'project_v2_goal_continuity_idle',
+			'--goal',
+			'goal_v2_goal_continuity_idle',
+			'--task',
+			'task_v2_goal_continuity_classified_stale',
+			'--run',
+			'run_v2_goal_continuity_classified_stale',
+			'--type',
+			'stale_run_classification',
+			'--summary',
+			'Classified stale planned run as intentional fixture residue.',
+			'--rationale',
+			'The run is stale by construction and should be visible as classified, not unresolved.'
+		]);
+
+		const audit = runCoreCli(['goal-continuity-audit', ...baseArgs]).goalContinuityAudit;
+
+		expect(audit.summary).toMatchObject({
+			emptyActiveProjectCount: 1,
+			idleActiveGoalCount: 1,
+			staleCurrentRunCount: 0,
+			classifiedStaleRunCount: 1,
+			closureContinuityWarningCount: 0,
+			classifiedClosureGoalCount: 1
+		});
+		expect(audit.emptyActiveProjects).toEqual([
+			expect.objectContaining({
+				projectId: 'project_v2_goal_continuity_empty',
+				recommendedAction: expect.stringContaining('Create a real long-term/current goal')
+			})
+		]);
+		expect(audit.idleActiveGoals).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_continuity_idle',
+				recommendedAction: expect.stringContaining('Create/select continuation work')
+			})
+		]);
+		expect(audit.classifiedStaleRuns).toEqual([
+			expect.objectContaining({
+				runId: 'run_v2_goal_continuity_classified_stale',
+				classificationDecisionId: 'decision_v2_goal_continuity_classified_stale'
+			})
+		]);
+		expect(audit.classifiedClosureGoals).toEqual([
+			expect.objectContaining({
+				goalId: 'goal_v2_goal_continuity_classified',
+				classificationDecisionId: 'decision_v2_goal_continuity_classified'
+			})
+		]);
+	}, 10_000);
+
 	it('launches an owned agent execution cycle only for dispatchable active-goal work', () => {
 		const dbFile = createTempDbFile();
 		const baseArgs = ['--db', dbFile, '--json'];

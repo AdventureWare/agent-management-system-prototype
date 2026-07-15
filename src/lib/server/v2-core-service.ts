@@ -459,6 +459,98 @@ export type V2CoreGoalTriage = {
 	}>;
 };
 
+export type V2CoreGoalContinuityAudit = {
+	scope: {
+		projectId: string | null;
+	};
+	summary: {
+		emptyActiveProjectCount: number;
+		activeProjectWithoutOpenGoalPathCount: number;
+		idleActiveGoalCount: number;
+		staleCurrentRunCount: number;
+		classifiedStaleRunCount: number;
+		closureContinuityWarningCount: number;
+		classifiedClosureGoalCount: number;
+	};
+	emptyActiveProjects: Array<{
+		projectId: string;
+		projectName: string;
+		status: string;
+		reason: string;
+		recommendedAction: string;
+	}>;
+	activeProjectsWithoutOpenGoalPath: Array<{
+		projectId: string;
+		projectName: string;
+		status: string;
+		goalCount: number;
+		openGoalCount: number;
+		reason: string;
+		recommendedAction: string;
+	}>;
+	idleActiveGoals: Array<{
+		goalId: string;
+		projectId: string;
+		projectName: string;
+		parentGoalId: string | null;
+		title: string;
+		taskCount: number;
+		openTaskCount: number;
+		activeChildGoalCount: number;
+		reason: string;
+		recommendedAction: string;
+	}>;
+	staleCurrentRuns: Array<{
+		runId: string;
+		runStatus: string;
+		taskId: string;
+		taskTitle: string;
+		taskStatus: string;
+		goalId: string;
+		goalTitle: string;
+		projectId: string;
+		projectName: string;
+		reason: string;
+		recommendedAction: string;
+	}>;
+	classifiedStaleRuns: Array<{
+		runId: string;
+		runStatus: string;
+		taskId: string;
+		taskTitle: string;
+		taskStatus: string;
+		goalId: string;
+		goalTitle: string;
+		projectId: string;
+		projectName: string;
+		classificationDecisionId: string;
+		classificationSummary: string;
+	}>;
+	closureContinuityWarnings: Array<{
+		goalId: string;
+		projectId: string;
+		projectName: string;
+		parentGoalId: string | null;
+		title: string;
+		status: string;
+		activeChildGoalCount: number;
+		openTaskCount: number;
+		reason: string;
+		recommendedAction: string;
+	}>;
+	classifiedClosureGoals: Array<{
+		goalId: string;
+		projectId: string;
+		projectName: string;
+		parentGoalId: string | null;
+		title: string;
+		status: string;
+		classificationDecisionId: string;
+		classificationType: string;
+		classificationSummary: string;
+	}>;
+};
+
 export type V2CoreContextBundle = {
 	task: V2CoreTaskDetail['task'];
 	project: V2CoreTaskDetail['project'];
@@ -3505,6 +3597,421 @@ export function readV2CoreGoalTriage(
 		},
 		summary,
 		goals
+	};
+}
+
+export function readV2CoreGoalContinuityAudit(
+	db: Database.Database,
+	options: { projectId?: string | null } = {}
+): V2CoreGoalContinuityAudit {
+	const projectId = options.projectId?.trim() || null;
+	const projectCondition = projectId ? 'and project.id = @projectId' : '';
+	const goalProjectCondition = projectId ? 'and goal.project_id = @projectId' : '';
+	const runProjectCondition = projectId ? 'and task.project_id = @projectId' : '';
+	const params = projectId ? { projectId } : {};
+
+	const emptyActiveProjects = db
+		.prepare<
+			{ projectId?: string },
+			{
+				project_id: string;
+				project_name: string;
+				status: string;
+			}
+		>(
+			`
+				select project.id as project_id, project.name as project_name, project.status
+				from v2_core_projects project
+				where project.status = 'active'
+					${projectCondition}
+					and not exists (
+						select 1 from v2_core_goals goal where goal.project_id = project.id
+					)
+					and not exists (
+						select 1 from v2_core_tasks task where task.project_id = project.id
+					)
+				order by project.name
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			projectId: row.project_id,
+			projectName: row.project_name,
+			status: row.status,
+			reason: 'Active project has no goals and no tasks.',
+			recommendedAction:
+				'Create a real long-term/current goal, pause/archive the project, or record that the empty container is intentional.'
+		}));
+
+	const activeProjectsWithoutOpenGoalPath = db
+		.prepare<
+			{ projectId?: string },
+			{
+				project_id: string;
+				project_name: string;
+				status: string;
+				goal_count: number;
+				open_goal_count: number;
+			}
+		>(
+			`
+				select
+					project.id as project_id,
+					project.name as project_name,
+					project.status,
+					count(goal.id) as goal_count,
+					count(case when goal.status in ('active', 'blocked', 'paused') then goal.id end) as open_goal_count
+				from v2_core_projects project
+				left join v2_core_goals goal on goal.project_id = project.id
+				where project.status = 'active'
+					${projectCondition}
+				group by project.id
+				having open_goal_count = 0
+				order by project.name
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			projectId: row.project_id,
+			projectName: row.project_name,
+			status: row.status,
+			goalCount: row.goal_count,
+			openGoalCount: row.open_goal_count,
+			reason: 'Active project has no active, blocked, or paused goal path.',
+			recommendedAction:
+				'Create/select an active parent goal or record a project pause/archive/done decision.'
+		}));
+
+	const idleActiveGoals = db
+		.prepare<
+			{ projectId?: string },
+			{
+				goal_id: string;
+				project_id: string;
+				project_name: string;
+				parent_goal_id: string | null;
+				title: string;
+				task_count: number;
+				open_task_count: number;
+				active_child_goal_count: number;
+			}
+		>(
+			`
+				select
+					goal.id as goal_id,
+					goal.project_id,
+					project.name as project_name,
+					goal.parent_goal_id,
+					goal.title,
+					count(distinct task.id) as task_count,
+					count(distinct case
+						when task.status in ('ready', 'in_progress', 'review', 'blocked')
+						then task.id
+					end) as open_task_count,
+					count(distinct case
+						when child_goal.status = 'active'
+						then child_goal.id
+					end) as active_child_goal_count
+				from v2_core_goals goal
+				join v2_core_projects project on project.id = goal.project_id
+				left join v2_core_tasks task on task.goal_id = goal.id
+				left join v2_core_goals child_goal on child_goal.parent_goal_id = goal.id
+				where goal.status = 'active'
+					${goalProjectCondition}
+				group by goal.id
+				having open_task_count = 0 and active_child_goal_count = 0
+				order by project.name, goal.title
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			goalId: row.goal_id,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			parentGoalId: row.parent_goal_id,
+			title: row.title,
+			taskCount: row.task_count,
+			openTaskCount: row.open_task_count,
+			activeChildGoalCount: row.active_child_goal_count,
+			reason: 'Active goal has no open tasks and no active child goals.',
+			recommendedAction:
+				'Create/select continuation work, pause/block the goal, or assess completion with evidence.'
+		}));
+
+	const staleCurrentRuns = db
+		.prepare<
+			{ projectId?: string },
+			{
+				run_id: string;
+				run_status: string;
+				task_id: string;
+				task_title: string;
+				task_status: string;
+				goal_id: string;
+				goal_title: string;
+				project_id: string;
+				project_name: string;
+			}
+		>(
+			`
+				select
+					run.id as run_id,
+					run.status as run_status,
+					task.id as task_id,
+					task.title as task_title,
+					task.status as task_status,
+					goal.id as goal_id,
+					goal.title as goal_title,
+					project.id as project_id,
+					project.name as project_name
+				from v2_core_runs run
+				join v2_core_tasks task on task.id = run.task_id
+				join v2_core_goals goal on goal.id = task.goal_id
+				join v2_core_projects project on project.id = task.project_id
+				where run.status in ('planned', 'running')
+					and task.status in ('done', 'canceled')
+					${runProjectCondition}
+					and not exists (
+						select 1
+						from v2_core_decisions classification_decision
+						where classification_decision.run_id = run.id
+							and classification_decision.decision_type = 'stale_run_classification'
+					)
+				order by project.name, task.title, run.id
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			runId: row.run_id,
+			runStatus: row.run_status,
+			taskId: row.task_id,
+			taskTitle: row.task_title,
+			taskStatus: row.task_status,
+			goalId: row.goal_id,
+			goalTitle: row.goal_title,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			reason: 'Run is planned/running while its task is already closed.',
+			recommendedAction:
+				'Complete, cancel, or classify the stale run while preserving import/source evidence.'
+		}));
+
+	const classifiedStaleRuns = db
+		.prepare<
+			{ projectId?: string },
+			{
+				run_id: string;
+				run_status: string;
+				task_id: string;
+				task_title: string;
+				task_status: string;
+				goal_id: string;
+				goal_title: string;
+				project_id: string;
+				project_name: string;
+				classification_decision_id: string;
+				classification_summary: string;
+			}
+		>(
+			`
+				select
+					run.id as run_id,
+					run.status as run_status,
+					task.id as task_id,
+					task.title as task_title,
+					task.status as task_status,
+					goal.id as goal_id,
+					goal.title as goal_title,
+					project.id as project_id,
+					project.name as project_name,
+					classification_decision.id as classification_decision_id,
+					classification_decision.summary as classification_summary
+				from v2_core_runs run
+				join v2_core_tasks task on task.id = run.task_id
+				join v2_core_goals goal on goal.id = task.goal_id
+				join v2_core_projects project on project.id = task.project_id
+				join v2_core_decisions classification_decision on classification_decision.run_id = run.id
+				where run.status in ('planned', 'running')
+					and task.status in ('done', 'canceled')
+					${runProjectCondition}
+					and classification_decision.decision_type = 'stale_run_classification'
+					and classification_decision.decided_at = (
+						select max(latest_classification_decision.decided_at)
+						from v2_core_decisions latest_classification_decision
+						where latest_classification_decision.run_id = run.id
+							and latest_classification_decision.decision_type = 'stale_run_classification'
+					)
+				order by project.name, task.title, run.id
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			runId: row.run_id,
+			runStatus: row.run_status,
+			taskId: row.task_id,
+			taskTitle: row.task_title,
+			taskStatus: row.task_status,
+			goalId: row.goal_id,
+			goalTitle: row.goal_title,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			classificationDecisionId: row.classification_decision_id,
+			classificationSummary: row.classification_summary
+		}));
+
+	const closureContinuityWarnings = db
+		.prepare<
+			{ projectId?: string },
+			{
+				goal_id: string;
+				project_id: string;
+				project_name: string;
+				parent_goal_id: string | null;
+				title: string;
+				status: string;
+				active_child_goal_count: number;
+				open_task_count: number;
+			}
+		>(
+			`
+				select
+					goal.id as goal_id,
+					goal.project_id,
+					project.name as project_name,
+					goal.parent_goal_id,
+					goal.title,
+					goal.status,
+					count(distinct case
+						when child_goal.status = 'active'
+						then child_goal.id
+					end) as active_child_goal_count,
+					count(distinct case
+						when task.status in ('ready', 'in_progress', 'review', 'blocked')
+						then task.id
+					end) as open_task_count
+				from v2_core_goals goal
+				join v2_core_projects project on project.id = goal.project_id
+				left join v2_core_goals parent_goal on parent_goal.id = goal.parent_goal_id
+				left join v2_core_goals child_goal on child_goal.parent_goal_id = goal.id
+				left join v2_core_tasks task on task.goal_id = goal.id
+				where goal.status in ('completed', 'superseded')
+					${goalProjectCondition}
+					and not exists (
+						select 1
+						from v2_core_decisions classification_decision
+						where classification_decision.goal_id = goal.id
+							and classification_decision.decision_type in (
+								'goal_archival_classification',
+								'goal_successor_classification'
+							)
+					)
+				group by goal.id
+				having
+					active_child_goal_count = 0
+					and open_task_count = 0
+					and (
+						goal.parent_goal_id is null
+						or parent_goal.status not in ('active', 'blocked', 'paused')
+					)
+				order by project.name, goal.status, goal.title
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			goalId: row.goal_id,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			parentGoalId: row.parent_goal_id,
+			title: row.title,
+			status: row.status,
+			activeChildGoalCount: row.active_child_goal_count,
+			openTaskCount: row.open_task_count,
+			reason:
+				'Completed/superseded goal has no open child work and no active/blocked/paused parent path.',
+			recommendedAction:
+				'Confirm the goal is intentionally archival, link it to a live successor/parent, or create continuation work.'
+		}));
+
+	const classifiedClosureGoals = db
+		.prepare<
+			{ projectId?: string },
+			{
+				goal_id: string;
+				project_id: string;
+				project_name: string;
+				parent_goal_id: string | null;
+				title: string;
+				status: string;
+				classification_decision_id: string;
+				classification_type: string;
+				classification_summary: string;
+			}
+		>(
+			`
+				select
+					goal.id as goal_id,
+					goal.project_id,
+					project.name as project_name,
+					goal.parent_goal_id,
+					goal.title,
+					goal.status,
+					classification_decision.id as classification_decision_id,
+					classification_decision.decision_type as classification_type,
+					classification_decision.summary as classification_summary
+				from v2_core_goals goal
+				join v2_core_projects project on project.id = goal.project_id
+				join v2_core_decisions classification_decision on classification_decision.goal_id = goal.id
+				where goal.status in ('completed', 'superseded')
+					${goalProjectCondition}
+					and classification_decision.decision_type in (
+						'goal_archival_classification',
+						'goal_successor_classification'
+					)
+					and classification_decision.decided_at = (
+						select max(latest_classification_decision.decided_at)
+						from v2_core_decisions latest_classification_decision
+						where latest_classification_decision.goal_id = goal.id
+							and latest_classification_decision.decision_type in (
+								'goal_archival_classification',
+								'goal_successor_classification'
+							)
+					)
+				order by project.name, goal.status, goal.title
+			`
+		)
+		.all(params)
+		.map((row) => ({
+			goalId: row.goal_id,
+			projectId: row.project_id,
+			projectName: row.project_name,
+			parentGoalId: row.parent_goal_id,
+			title: row.title,
+			status: row.status,
+			classificationDecisionId: row.classification_decision_id,
+			classificationType: row.classification_type,
+			classificationSummary: row.classification_summary
+		}));
+
+	return {
+		scope: {
+			projectId
+		},
+		summary: {
+			emptyActiveProjectCount: emptyActiveProjects.length,
+			activeProjectWithoutOpenGoalPathCount: activeProjectsWithoutOpenGoalPath.length,
+			idleActiveGoalCount: idleActiveGoals.length,
+			staleCurrentRunCount: staleCurrentRuns.length,
+			classifiedStaleRunCount: classifiedStaleRuns.length,
+			closureContinuityWarningCount: closureContinuityWarnings.length,
+			classifiedClosureGoalCount: classifiedClosureGoals.length
+		},
+		emptyActiveProjects,
+		activeProjectsWithoutOpenGoalPath,
+		idleActiveGoals,
+		staleCurrentRuns,
+		classifiedStaleRuns,
+		closureContinuityWarnings,
+		classifiedClosureGoals
 	};
 }
 

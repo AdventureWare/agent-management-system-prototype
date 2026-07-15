@@ -4,6 +4,7 @@
 
 - Current milestone: Autonomous Goal-Directed Work Loop v0.
 - Read `docs/autonomous-goal-directed-work-loop-v0.md` plus the relevant readiness, rigor, contextual knowledge, and agent-facing interface docs before broad changes in this area.
+- Before creating, closing, superseding, decomposing, or materially changing goals/tasks, read `docs/ams_goal_task_creation_guide.md` and preserve the goal-continuity invariants.
 - Work should be continuous: agents should select or create the next planning, research, clarification, review, or execution task as needed from durable Goal/Task/Run state. Do not add batch-planning or cycle-closeout ceremonies.
 - For agent-facing AMS affordances, read `docs/agent-facing-ams-interface-v0.md` and prefer structured domain/API/MCP operations over prompt stuffing.
 - For agents using AMS as a control loop, keep `.agents/skills/ams-agent-interface/SKILL.md` aligned with the structured Goal/task/run/review workflow.

@@ -16,7 +16,10 @@ import {
 	openV2CoreDb,
 	resolveV2CoreDbFile
 } from '$lib/server/v2-core-persistence';
-import { readV2CoreOverview } from '$lib/server/v2-core-service';
+import {
+	readV2CoreGoalContinuityAudit,
+	readV2CoreOverview
+} from '$lib/server/v2-core-service';
 
 const tempDirs: string[] = [];
 
@@ -219,6 +222,148 @@ describe('v2 core persistence boundary', () => {
 			expect(overview.memoryStatusCounts).toMatchObject({ trusted: 12 });
 			expect(overview.reviewStatusCounts).toEqual({});
 			expect(overview.projects).toHaveLength(1);
+		} finally {
+			db.close();
+		}
+	});
+
+	it('reads goal-continuity audit risks from existing state', () => {
+		expect.assertions(8);
+
+		const root = createTempDir();
+		const coreDbFile = resolve(root, 'data', 'v2-core.sqlite');
+		const db = openV2CoreDb({
+			dbFile: coreDbFile,
+			appDbFile: resolve(root, 'data', 'app.sqlite')
+		});
+
+		try {
+			db.prepare(
+				`
+					insert into v2_core_projects (id, name, summary, status, workspace_root)
+					values
+						('project_audit_empty', 'Audit Empty', '', 'active', ''),
+						('project_audit_closed', 'Audit Closed', '', 'active', ''),
+						('project_audit_work', 'Audit Work', '', 'active', '')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_model_providers (id, name, kind, status)
+					values ('provider_audit', 'Audit Provider', 'external_ai', 'available')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_goals
+						(id, project_id, parent_goal_id, title, summary, success_criteria, status)
+					values
+						('goal_audit_completed_orphan', 'project_audit_closed', null, 'Completed orphan', '', 'Done.', 'completed'),
+						('goal_audit_classified_orphan', 'project_audit_closed', null, 'Classified completed orphan', '', 'Done.', 'completed'),
+						('goal_audit_idle', 'project_audit_work', null, 'Idle active goal', '', 'Needs work.', 'active'),
+						('goal_audit_ready', 'project_audit_work', null, 'Ready active goal', '', 'Has work.', 'active')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_decisions
+						(id, project_id, goal_id, task_id, run_id, review_id, supersedes_decision_id, decision_type, summary, rationale, decided_at)
+					values (
+						'decision_audit_classified_orphan',
+						'project_audit_closed',
+						'goal_audit_classified_orphan',
+						null,
+						null,
+						null,
+						null,
+						'goal_archival_classification',
+						'Classified as intentional historical evidence.',
+						'The completed goal is intentionally archival and should not create continuation work.',
+						'2026-07-15T00:00:00.000Z'
+					)
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_tasks
+						(id, project_id, goal_id, title, summary, success_criteria, validation_plan, status)
+					values
+						('task_audit_ready', 'project_audit_work', 'goal_audit_ready', 'Ready task', '', 'Ready.', 'Audit.', 'ready'),
+						('task_audit_done_with_run', 'project_audit_work', 'goal_audit_ready', 'Done with stale run', '', 'Done.', 'Audit.', 'done'),
+						('task_audit_done_with_classified_run', 'project_audit_work', 'goal_audit_ready', 'Done with classified stale run', '', 'Done.', 'Audit.', 'done')
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_runs
+						(id, task_id, model_provider_id, status, input_summary, action_summary, result_summary, validation_summary, started_at, ended_at)
+					values
+						('run_audit_stale', 'task_audit_done_with_run', 'provider_audit', 'running', '', '', '', '', '2026-07-15T00:00:00.000Z', null),
+						('run_audit_classified_stale', 'task_audit_done_with_classified_run', 'provider_audit', 'running', '', '', '', '', '2026-07-15T00:00:00.000Z', null)
+				`
+			).run();
+			db.prepare(
+				`
+					insert into v2_core_decisions
+						(id, project_id, goal_id, task_id, run_id, review_id, supersedes_decision_id, decision_type, summary, rationale, decided_at)
+					values (
+						'decision_audit_classified_stale_run',
+						'project_audit_work',
+						'goal_audit_ready',
+						'task_audit_done_with_classified_run',
+						'run_audit_classified_stale',
+						null,
+						null,
+						'stale_run_classification',
+						'Classified stale run as imported residue.',
+						'The run is a historical imported residue and should not be treated as active work.',
+						'2026-07-15T00:01:00.000Z'
+					)
+				`
+			).run();
+
+			const audit = readV2CoreGoalContinuityAudit(db);
+			expect(audit.summary).toMatchObject({
+				emptyActiveProjectCount: 1,
+				activeProjectWithoutOpenGoalPathCount: 2,
+				idleActiveGoalCount: 1,
+				staleCurrentRunCount: 1,
+				classifiedStaleRunCount: 1,
+				closureContinuityWarningCount: 1,
+				classifiedClosureGoalCount: 1
+			});
+			expect(audit.emptyActiveProjects.map((project) => project.projectId)).toEqual([
+				'project_audit_empty'
+			]);
+			expect(audit.idleActiveGoals.map((goal) => goal.goalId)).toEqual(['goal_audit_idle']);
+			expect(audit.staleCurrentRuns.map((run) => run.runId)).toEqual(['run_audit_stale']);
+			expect(audit.classifiedStaleRuns).toEqual([
+				expect.objectContaining({
+					runId: 'run_audit_classified_stale',
+					classificationDecisionId: 'decision_audit_classified_stale_run'
+				})
+			]);
+			expect(audit.closureContinuityWarnings.map((goal) => goal.goalId)).toEqual([
+				'goal_audit_completed_orphan'
+			]);
+			expect(audit.classifiedClosureGoals).toEqual([
+				expect.objectContaining({
+					goalId: 'goal_audit_classified_orphan',
+					classificationDecisionId: 'decision_audit_classified_orphan',
+					classificationType: 'goal_archival_classification'
+				})
+			]);
+
+			const scoped = readV2CoreGoalContinuityAudit(db, { projectId: 'project_audit_work' });
+			expect(scoped.summary).toMatchObject({
+				emptyActiveProjectCount: 0,
+				activeProjectWithoutOpenGoalPathCount: 0,
+				idleActiveGoalCount: 1,
+				staleCurrentRunCount: 1,
+				classifiedStaleRunCount: 1,
+				closureContinuityWarningCount: 0,
+				classifiedClosureGoalCount: 0
+			});
 		} finally {
 			db.close();
 		}
