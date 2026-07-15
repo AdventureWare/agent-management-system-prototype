@@ -7,11 +7,21 @@ description: Use when an agent is working inside the Agent Management System fro
 
 Use AMS state and AMS operations as the source of truth. Prompts, chat history, and skills can guide behavior, but goals, tasks, blockers, approvals, reviews, runs, and follow-ups should be read from and written back through structured AMS tools.
 
+Resolve the runtime authority before entering the goal loop. Prototype/v1 work
+uses `data/app.sqlite` through `scripts/ams-cli.mjs` or the prototype API/MCP.
+V2-core work uses `data/v2-core.sqlite` through `npm run v2:core-db -- ...` and
+the v2-core services. Never treat these as synchronized control planes, and
+never use the prototype tools to claim a v2 state update.
+
 This skill is the high-level goal-loop procedure. Use `$ams-control-plane-operations` when you need exact CLI/API/MCP command discipline or current control-plane mutation playbooks.
 
 ## Goal-Loop Workflow
 
 1. Resolve canonical context.
+   First name the runtime authority. For v2-core work, use `next-work`,
+   `goal-triage`, `goal-continuity-audit`, and `inspect-task` from
+   `npm run v2:core-db -- ...`. The `context current`, manifest, MCP, and
+   `goal-loop` commands below are the prototype/v1 path.
    Start with `context current` when running in a managed thread. If no task is resolved, use `manifest`, `manifest --resource goal-loop`, and `goal-loop list_active_goals` to find the active Goal and project.
 2. Inspect existing work before creating anything.
    Use `goal-loop get_goal_context`, `get_goal_progress`, `get_actionable_work`, `get_blocked_work`, and `get_awaiting_review` before creating tasks. Prefer updating or linking existing tasks over creating duplicates.

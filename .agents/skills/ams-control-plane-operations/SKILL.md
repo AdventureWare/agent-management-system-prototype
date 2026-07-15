@@ -5,6 +5,18 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 
 # AMS Control Plane Operations
 
+## Select The Runtime First
+
+This repository currently contains two control planes:
+
+- Prototype/v1 state: `data/app.sqlite`, operated through `scripts/ams-cli.mjs`, the prototype API, or the prototype MCP plugin.
+- V2-core state: `data/v2-core.sqlite`, operated through `npm run v2:core-db -- <command>` and `src/lib/server/v2-core-*` services.
+
+Name the intended authority before reading or mutating state. Do not use the
+prototype CLI/API/MCP to update a v2 task, goal, run, or project. Do not assume a
+mutation in one database is reflected in the other. Never dual-write as a
+substitute for an explicit migration.
+
 ## When to use this skill
 
 - Use this skill when the work requires reading or mutating AMS tasks, goals, or projects.
@@ -13,7 +25,11 @@ description: Use when a thread needs to inspect or update Agent Management Syste
 
 ## Workflow
 
-1. Start with capability discovery.
+1. Start with authority and capability discovery.
+   For v2-core work, run the relevant `npm run v2:core-db -- next-work`,
+   `goal-triage`, `goal-continuity-audit`, or `inspect-task` readback first.
+   The prototype `doctor`, manifest, context, CLI/API, and MCP workflow below
+   applies only when prototype/v1 is the selected authority.
    Run `node scripts/ams-cli.mjs doctor` first when the thread is in a managed run or when operator reachability is uncertain.
    If doctor reports `local_listener_permission` with `EPERM` or `EACCES`, the current worker environment cannot bind a local operator listener. Do not retry `npm run app:server:start` from that worker, do not claim AMS state was updated, and report the control-plane mismatch after finishing any safe repo/artifact work.
    Use `node scripts/ams-cli.mjs manifest` or the MCP tool `ams_manifest` before guessing which operation exists.

@@ -11,6 +11,7 @@
 - [Domain Glossary](./domain-glossary.md): accepted, candidate, experimental, deprecated, rejected, merged, and superseded concept definitions.
 - [Domain Model Rationalization Audit](./domain-model-rationalization-audit-2026-07-01.md): read-only audit of current AMS model layers, overlaps, status semantics, and cleanup backlog.
 - [AMS V2 Domain Ontology And Behavior Spec](./design/ams_v2_domain_ontology_and_behavior_spec.md): canonical v2 design source-of-truth for entities, relations, states, commands, field admission, automation boundaries, and anti-bloat rules.
+- [AMS v2 Clean Boundary And Execution Plan](./design/ams_v2_clean_boundary_and_execution_plan.md): current recovery decision and staged plan for extracting a clean independent v2 product, enforcing agent continuity, preserving prototype evidence, and rebuilding the operator UI behind a real boundary.
 - [AMS V2 Traceability Matrix](./design/ams_v2_traceability_matrix.md): competency-question and scenario traceability from model elements to workflows and acceptance tests.
 - [AMS V2 Entity Cards](./design/ams_v2_entity_cards.md): accepted, candidate, deferred, and rejected v2 entity cards with minimal fields, invariants, and bloat risks.
 - [Prototype Audit v0.1](./prototype_audit_v0_1.md): read-only assessment of the current prototype structure, model, storage, interfaces, preserved value, debt, and v2 capability fit.

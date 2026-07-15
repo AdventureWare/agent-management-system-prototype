@@ -183,6 +183,16 @@ First-slice persistence is narrower than accepted vocabulary:
   `RoutingPolicy`, persisted `ExternalAIDependency`, rich `EventLog`,
   `Approval`, model registry, and execution surfaces.
 
+Current clean-boundary correction:
+
+`docs/design/ams_v2_clean_boundary_and_execution_plan.md` narrows the first
+independent-repository foundation further to `Project`, `Goal`, `Task`,
+`TaskDependency`, `Run`, `Artifact`, optional `Review`, material `Decision`, and
+`SourceReference`. Existing v2 records and tables for other accepted concepts
+must be preserved through versioned export or staging, but they are not required
+to drive the first independent work loop or primary UI. This is a scope cut, not
+data deletion or automatic rejection of the wider accepted vocabulary.
+
 The executable first-slice guard starts in
 `src/lib/server/v2-core-contract.ts` and
 `src/lib/server/v2-core-persistence.ts`. Existing `v2-preview` tables remain
@@ -547,27 +557,29 @@ Every automation needs:
 
 Current milestone:
 
-`AMS v2 Core Runtime Boundary And Minimal Work Loop v0`
+`Clean Independent AMS v2 Foundation`
 
 Next implementation step:
 
-`Implement minimal core repositories and commands on top of the isolated v2 core schema.`
+`Capture an immutable extraction baseline, then create the independent v2 repository foundation.`
 
 Scope:
 
-- keep v2 core storage separate from v1 `data/app.sqlite`
-- keep v2 core storage separate from the experimental `v2-preview` database
-- persist accepted first-slice entities only
-- treat `ContextBundle`, `AgentWorkPacket`, operator console, external-AI
-  dependency reporting, and dependency-reduction reporting as read models first
-- add core commands before adding UI
-- prove one real low-risk work loop before broadening the model
+- preserve this prototype and its runtime data unchanged;
+- export and checksum current `data/v2-core.sqlite` state;
+- create a new `agent-management-system-v2` repository;
+- establish `core`, SQLite, and CLI boundaries with versioned migrations;
+- make prototype imports and runtime paths mechanically forbidden;
+- port the smallest complete goal-to-continuation loop through focused modules;
+- generate revisioned task context from one explicit runtime authority; and
+- add the independent operator UI only after application contracts are stable.
 
 Non-goals:
 
-- no UI
-- no migrations against v1 runtime
-- no feature implementation beyond schema/service baseline
-- no automatic launch
-- no scheduler
-- no memory publication
+- no more product work under `/app/v2-core`;
+- no in-place prototype rewrite;
+- no wholesale copy of the current v2 service or prototype UI;
+- no schema or ontology expansion;
+- no scheduler, worker pool, or general multi-agent fanout;
+- no mandatory review ceremony for low-risk work; and
+- no v1/v2 dual writes.

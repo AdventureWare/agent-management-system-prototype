@@ -2,16 +2,18 @@
 
 ## Current Milestone
 
-- Current milestone: Autonomous Goal-Directed Work Loop v0.
-- Before broad AMS v2 work, read `docs/ams_v2_current_operating_state.md` for the current goal graph, completed capability baseline, known weaknesses, non-goals, and next-work selection path.
-- Read `docs/autonomous-goal-directed-work-loop-v0.md` plus the relevant readiness, rigor, contextual knowledge, and agent-facing interface docs before broad changes in this area.
+- Current milestone: Clean Independent AMS v2 Foundation.
+- Before broad AMS v2 work, read `docs/design/ams_v2_clean_boundary_and_execution_plan.md` and `docs/ams_v2_current_operating_state.md`.
+- Do not add product features to `/app/v2-core`. It is a preserved proof surface inside the prototype, not the target v2 application.
+- Preserve this repository as the prototype, migration source, and behavioral evidence while the independent v2 repository is established.
+- Read `docs/autonomous-goal-directed-work-loop-v0.md` when changing goal-loop behavior, not as authority to bypass the current clean-boundary milestone.
 - Use `npm run v2:core-db -- next-work --project project_ams_v2_core --json`, `npm run v2:core-db -- goal-triage --project project_ams_v2_core --json`, and `npm run v2:core-db -- goal-continuity-audit --project project_ams_v2_core --json` to verify current AMS v2 work state before selecting or materially changing broad work.
 - Before creating, closing, superseding, decomposing, or materially changing goals/tasks, read `docs/ams_goal_task_creation_guide.md` and preserve the goal-continuity invariants.
 - Work should be continuous: agents should select or create the next planning, research, clarification, review, or execution task as needed from durable Goal/Task/Run state. Do not add batch-planning or cycle-closeout ceremonies.
 - For agent-facing AMS affordances, read `docs/agent-facing-ams-interface-v0.md` and prefer structured domain/API/MCP operations over prompt stuffing.
 - For agents using AMS as a control loop, keep `.agents/skills/ams-agent-interface/SKILL.md` aligned with the structured Goal/task/run/review workflow.
 - Keep simple task capture lightweight; add structure progressively when work is delegated, reviewed, closed out, or made repeatable.
-- Runtime state policy: `data/app.sqlite` is the normal writable source of truth; `data/control-plane.json` and other JSON files are explicit seed/export/import/recovery snapshots. Read `docs/runtime-data-policy.md` before changing tracked data artifacts.
+- Runtime state policy: `data/app.sqlite` is the prototype/v1 runtime; `data/v2-core.sqlite` is the current v2-core runtime. An operation must name one authority and must not dual-write. JSON files are explicit seed/export/import/recovery snapshots. Read `docs/runtime-data-policy.md` before changing data artifacts.
 
 ## Source-of-Truth Discipline
 

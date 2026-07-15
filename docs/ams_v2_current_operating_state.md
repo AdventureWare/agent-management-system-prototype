@@ -48,6 +48,27 @@ Working distinction:
 Do not conflate AMS with owned AI, Codex, ChatGPT, Superstructure, a task
 tracker, or a prompt library.
 
+## Current Recovery Decision
+
+Current active recovery goal:
+
+- `goal_ams_v2_clean_independent_foundation`
+- Title: Establish a clean independently operable AMS v2
+- Plan: `docs/design/ams_v2_clean_boundary_and_execution_plan.md`
+
+Decision:
+
+- build the target v2 product in a new `agent-management-system-v2` repository;
+- preserve this repository as the prototype, migration source, and behavioral
+  evidence;
+- preserve current `data/v2-core.sqlite` state through versioned export/import;
+- stop adding product features under `/app/v2-core`; and
+- port or rebuild capabilities only when they pass an explicit usefulness and
+  acceptance test.
+
+The current embedded v2 routes and services are evidence, not the target
+application boundary.
+
 ## Current Active AMS v2 Child Goals
 
 ### Run real cross-project work through AMS v2
@@ -90,16 +111,16 @@ it or pretending it has already been replaced.
 ### Make the v2 GUI the primary multi-workstream operator surface
 
 - Goal: `goal_ams_v2_gui_multi_workstream_operator_surface`
-- Status: active
+- Status: paused
 - Purpose: make the GUI the normal way for the operator to understand and manage
   multiple AMS workstreams, instead of depending on Codex or CLI readbacks for
   basic visibility.
-- Current task: `task_ams_v2_gui_workstream_command_overview`
+- Replacement task: `task_ams_v2_build_clean_operator_ui_slice`
 
-This goal exists because AMS needs to support human supervision and parallel
-workstream management directly. CLI and Codex should remain available, but they
-should not be required for ordinary awareness, selection, dispatch, review, or
-mobile operation.
+The desired operator capability remains valid, but implementation inside the
+prototype shell is paused. The completed workstream overview is preserved as a
+design experiment. New GUI work belongs to the independent v2 repository after
+the core application boundary is stable.
 
 ## Current Owned-AI Project
 
@@ -201,6 +222,13 @@ real enough to test on more real work.
 
 ## Current Known Weaknesses
 
+- V2 storage is isolated, but v2 code, routes, package, auth, and UI shell are
+  still embedded in the prototype application.
+- `src/lib/server/v2-core-service.ts` and `/app/v2-core` have accumulated broad
+  responsibilities that should be used as behavior evidence, not copied as the
+  new architecture.
+- Prototype/v1 and v2 previously had ambiguous control-plane instructions. The
+  runtime policy and agent skills now require selecting one authority explicitly.
 - The docs directory contains many historical milestone artifacts. Without this
   document and the docs index, agents can latch onto stale context.
 - Top-level mission and personal capability-system goals are not yet explicit
@@ -219,7 +247,10 @@ real enough to test on more real work.
 Do not do these without a specific new task and evidence:
 
 - Do not create a new `Milestone` entity.
-- Do not rewrite the v2 architecture.
+- Do not continue the embedded v2 product architecture.
+- Do not copy the prototype app or the 8,264-line v2 service wholesale into the
+  new repository.
+- Do not add product features to `/app/v2-core`.
 - Do not add schema fields or domain entities for speculative concepts.
 - Do not create all proposed top-level goals automatically.
 - Do not mass-reparent existing goals.
@@ -254,31 +285,35 @@ Selection rule:
 
 ## Current Next Work
 
-Current work should be selected from these active paths:
+The clean-boundary path now takes precedence over embedded GUI work. Current
+implementation order is:
 
-1. `task_ams_v2_select_first_real_cross_project_work`
-   - Select and run the first real non-AMS task through AMS v2.
-2. `task_owned_ai_define_capability_ladder_from_source_state`
-   - Convert the hybrid owned-AI source-state note into an ordered replacement
-     ladder and first capability target.
-3. `task_ams_v2_create_external_ai_operational_profile_v0`
-   - Profile current external AI use and failure modes from actual AMS evidence.
-4. `task_ams_v2_gui_goal_task_creation_flow`
-   - Make more ordinary goal/task setup possible from the v2 GUI.
-5. `task_ams_v2_gui_mobile_review_dispatch_flow`
-   - Improve phone-width review, dispatch, and task-detail workflows.
-6. `task_ams_v2_test_statement_roles_in_real_work_selection`
-   - After the real-work selection artifact exists, test whether statement-role
-     classification reduces salience fixation and generic-model reversion.
+1. `task_ams_v2_capture_independent_extraction_baseline`
+   - Export and checksum current state, capture deterministic readbacks, and
+     classify prototype capabilities before creating the new runtime.
+2. `task_ams_v2_create_independent_repository_foundation`
+   - Create the sibling repository with core, SQLite, CLI, docs, boundary tests,
+     and a versioned initial migration.
+3. `task_ams_v2_port_minimal_independent_work_loop`
+   - Port the smallest complete goal-to-continuation loop into focused modules.
+4. `task_ams_v2_prove_revisioned_agent_continuity`
+   - Prove one-authority, stale-safe, zero-chat task continuation.
+5. `task_ams_v2_build_clean_operator_ui_slice`
+   - Build the independent desktop/mobile operator surface after the application
+     service boundary is stable.
+6. `task_ams_v2_validate_real_work_and_project_cutover`
+   - Run real projects, compare against the prototype, and migrate authority one
+     project at a time.
 
-Move to real cross-project work unless live AMS state surfaces a higher-priority
-blocker.
+The existing real cross-project, owned-AI, and external-AI goals remain useful,
+but must not cause more product expansion inside the prototype shell.
 
 ## Source Documents
 
 Use these for deeper context:
 
 - `docs/ams_goal_task_creation_guide.md`
+- `docs/design/ams_v2_clean_boundary_and_execution_plan.md`
 - `docs/ams_current_vs_historical_documentation_signal_audit_v0_1.md`
 - `docs/ams_real_cross_project_work_requirements_from_resume_v0_1.md`
 - `docs/ams_hybrid_explicit_knowledge_intelligence_mapping_v0_1.md`

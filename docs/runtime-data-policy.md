@@ -1,11 +1,16 @@
 # Runtime Data Policy
 
-AMS uses SQLite for normal writable runtime state. JSON files are explicit snapshots for seed, export, import, and recovery workflows, not the live store.
+AMS uses SQLite for normal writable runtime state. This repository currently
+contains separate prototype/v1 and v2-core runtimes. JSON files are explicit
+snapshots for seed, export, import, and recovery workflows, not live stores.
 
 ## Runtime Sources
 
-- `data/app.sqlite` is the normal runtime source of truth for control-plane records and app-managed agent thread state.
-- Runtime mutations must go through the app server, AMS CLI/API/MCP helpers, or server-side repository helpers that persist to SQLite.
+- `data/app.sqlite` is the prototype/v1 source of truth for control-plane records and app-managed agent thread state.
+- `data/v2-core.sqlite` is the current v2-core source of truth for v2 projects, goals, tasks, runs, artifacts, reviews, decisions, and related v2 records.
+- Every operation must select one runtime authority explicitly. Do not infer that a prototype CLI/API/MCP mutation updates v2, and do not dual-write the two databases.
+- Prototype mutations must go through the prototype app server, AMS CLI/API/MCP helpers, or prototype server-side repositories.
+- V2-core mutations must go through `npm run v2:core-db -- ...` or the v2-core services that persist to `data/v2-core.sqlite`.
 - Do not patch `data/control-plane.json` to change live task, goal, run, review, approval, project, workflow, or skill state.
 
 ## JSON Snapshots
