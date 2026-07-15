@@ -1,7 +1,7 @@
 # AMS v2 Clean Boundary And Execution Plan
 
 Date: 2026-07-15
-Status: Current recovery plan; implementation not started
+Status: Current recovery plan; Phase 0 extraction baseline captured
 Decision: Build AMS v2 in a new repository by selectively extracting proven behavior and data from this prototype
 
 ## 1. Outcome

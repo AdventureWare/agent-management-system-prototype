@@ -34,7 +34,8 @@ const DEFAULT_REPRESENTATIVE_TASK_IDS = [
 	'task_ams_v2_finalize_clean_boundary_plan',
 	'task_ams_v2_capture_independent_extraction_baseline',
 	'task_ae273e23-869b-4c97-9897-b1cca6f18b40',
-	'task_silver_oak_capture_bw08_bw09_field_measurements'
+	'task_silver_oak_capture_bw08_bw09_field_measurements',
+	'task_candidate_v0_38_rc_relation_bridge_extension_v0'
 ];
 
 type Options = {
@@ -57,7 +58,7 @@ type FileState = {
 type SqliteProfile = {
 	applicationId: number;
 	userVersion: number;
-	schemaVersion: number;
+	schemaCookie: number;
 	sqliteVersion: string;
 	journalMode: string;
 	pageCount: number;
@@ -280,7 +281,7 @@ function readSqliteProfile(db: Database.Database): SqliteProfile {
 	return {
 		applicationId: pragmaNumber(db, 'application_id'),
 		userVersion: pragmaNumber(db, 'user_version'),
-		schemaVersion: pragmaNumber(db, 'schema_version'),
+		schemaCookie: pragmaNumber(db, 'schema_version'),
 		sqliteVersion: sqliteVersionRow?.version ?? 'unknown',
 		journalMode: pragmaString(db, 'journal_mode'),
 		pageCount: pragmaNumber(db, 'page_count'),
@@ -292,6 +293,10 @@ function readSqliteProfile(db: Database.Database): SqliteProfile {
 		tableCounts,
 		statusDistributions
 	};
+}
+
+function sortById<T extends { id: string }>(items: T[]) {
+	return items.toSorted((left, right) => left.id.localeCompare(right.id));
 }
 
 function readParityReadbacks(db: Database.Database, goalId: string, taskIds: string[]) {
@@ -315,43 +320,57 @@ function readParityReadbacks(db: Database.Database, goalId: string, taskIds: str
 					},
 					project: { id: detail.project.id },
 					goal: { id: detail.goal.id, status: detail.goal.status },
-					dependencies: detail.dependencies.map((dependency) => ({
-						id: dependency.id,
-						dependsOnTaskId: dependency.dependsOnTaskId,
-						status: dependency.status
-					})),
-					runs: detail.runs.map((run) => ({
-						id: run.id,
-						status: run.status,
-						modelProviderId: run.modelProviderId
-					})),
-					toolExecutions: detail.toolExecutions.map((execution) => ({
-						id: execution.id,
-						toolId: execution.toolId,
-						runId: execution.runId,
-						status: execution.status
-					})),
-					artifacts: detail.artifacts.map((artifact) => ({
-						id: artifact.id,
-						runId: artifact.runId,
-						role: artifact.role,
-						status: artifact.status
-					})),
-					reviews: detail.reviews.map((review) => ({
-						id: review.id,
-						runId: review.runId,
-						artifactId: review.artifactId,
-						status: review.status
-					})),
-					decisions: detail.decisions.map((decision) => ({
-						id: decision.id,
-						decisionType: decision.decisionType
-					})),
-					memoryItems: detail.memoryItems.map((memory) => ({
-						id: memory.id,
-						status: memory.status,
-						scope: memory.scope
-					})),
+					dependencies: sortById(
+						detail.dependencies.map((dependency) => ({
+							id: dependency.id,
+							dependsOnTaskId: dependency.dependsOnTaskId,
+							status: dependency.status
+						}))
+					),
+					runs: sortById(
+						detail.runs.map((run) => ({
+							id: run.id,
+							status: run.status,
+							modelProviderId: run.modelProviderId
+						}))
+					),
+					toolExecutions: sortById(
+						detail.toolExecutions.map((execution) => ({
+							id: execution.id,
+							toolId: execution.toolId,
+							runId: execution.runId,
+							status: execution.status
+						}))
+					),
+					artifacts: sortById(
+						detail.artifacts.map((artifact) => ({
+							id: artifact.id,
+							runId: artifact.runId,
+							role: artifact.role,
+							status: artifact.status
+						}))
+					),
+					reviews: sortById(
+						detail.reviews.map((review) => ({
+							id: review.id,
+							runId: review.runId,
+							artifactId: review.artifactId,
+							status: review.status
+						}))
+					),
+					decisions: sortById(
+						detail.decisions.map((decision) => ({
+							id: decision.id,
+							decisionType: decision.decisionType
+						}))
+					),
+					memoryItems: sortById(
+						detail.memoryItems.map((memory) => ({
+							id: memory.id,
+							status: memory.status,
+							scope: memory.scope
+						}))
+					),
 					lineage: {
 						sourceTaskId: detail.lineage.sourceTaskId,
 						followupTaskIds: detail.lineage.followupTaskIds
@@ -382,15 +401,17 @@ function readParityReadbacks(db: Database.Database, goalId: string, taskIds: str
 
 	return {
 		overview: {
-			projects: overview.projects.map((project) => ({
-				id: project.id,
-				status: project.status,
-				goalCount: project.goalCount,
-				taskCount: project.taskCount,
-				runCount: project.runCount,
-				artifactCount: project.artifactCount,
-				memoryItemCount: project.memoryItemCount
-			})),
+			projects: overview.projects
+				.map((project) => ({
+					id: project.id,
+					status: project.status,
+					goalCount: project.goalCount,
+					taskCount: project.taskCount,
+					runCount: project.runCount,
+					artifactCount: project.artifactCount,
+					memoryItemCount: project.memoryItemCount
+				}))
+				.toSorted((left, right) => left.id.localeCompare(right.id)),
 			taskStatusCounts: overview.taskStatusCounts,
 			reviewStatusCounts: overview.reviewStatusCounts,
 			memoryStatusCounts: overview.memoryStatusCounts
@@ -417,23 +438,31 @@ function readParityReadbacks(db: Database.Database, goalId: string, taskIds: str
 				suggestedAction: goal.suggestedAction
 			}))
 		},
-		unreviewedOutputs: readV2CoreUnreviewedOutputs(db).map((output) => ({
-			artifactId: output.artifactId,
-			taskId: output.taskId,
-			runId: output.runId,
-			status: output.status
-		})),
+		unreviewedOutputs: readV2CoreUnreviewedOutputs(db)
+			.map((output) => ({
+				artifactId: output.artifactId,
+				taskId: output.taskId,
+				runId: output.runId,
+				status: output.status
+			}))
+			.toSorted((left, right) => left.artifactId.localeCompare(right.artifactId)),
 		goalContinuityAudit: {
 			summary: continuity.summary,
-			emptyActiveProjectIds: continuity.emptyActiveProjects.map((project) => project.projectId),
-			activeProjectIdsWithoutOpenGoalPath: continuity.activeProjectsWithoutOpenGoalPath.map(
-				(project) => project.projectId
-			),
-			idleActiveGoalIds: continuity.idleActiveGoals.map((goal) => goal.goalId),
-			staleCurrentRunIds: continuity.staleCurrentRuns.map((run) => run.runId),
-			classifiedStaleRunIds: continuity.classifiedStaleRuns.map((run) => run.runId),
-			closureContinuityGoalIds: continuity.closureContinuityWarnings.map((goal) => goal.goalId),
-			classifiedClosureGoalIds: continuity.classifiedClosureGoals.map((goal) => goal.goalId)
+			emptyActiveProjectIds: continuity.emptyActiveProjects
+				.map((project) => project.projectId)
+				.toSorted(),
+			activeProjectIdsWithoutOpenGoalPath: continuity.activeProjectsWithoutOpenGoalPath
+				.map((project) => project.projectId)
+				.toSorted(),
+			idleActiveGoalIds: continuity.idleActiveGoals.map((goal) => goal.goalId).toSorted(),
+			staleCurrentRunIds: continuity.staleCurrentRuns.map((run) => run.runId).toSorted(),
+			classifiedStaleRunIds: continuity.classifiedStaleRuns.map((run) => run.runId).toSorted(),
+			closureContinuityGoalIds: continuity.closureContinuityWarnings
+				.map((goal) => goal.goalId)
+				.toSorted(),
+			classifiedClosureGoalIds: continuity.classifiedClosureGoals
+				.map((goal) => goal.goalId)
+				.toSorted()
 		},
 		crossProjectAttention: crossProjectAttention.map((row) => ({
 			projectId: row.projectId,
@@ -507,6 +536,7 @@ async function capture(options: Options) {
 	const sourceDb = openV2CoreDbReadonly({ dbFile });
 	let sourceProfile: SqliteProfile;
 	let sourceReadbacks: ReturnType<typeof readParityReadbacks>;
+	let sourceSnapshot: ReturnType<typeof exportV2CoreSnapshot>;
 	let sourceDataVersionBefore: number;
 	let sourceDataVersionAfter: number;
 	let sourceTotalChangesBefore: number;
@@ -521,6 +551,7 @@ async function capture(options: Options) {
 		sourceProfile = readSqliteProfile(sourceDb);
 		assertHealthyProfile('Source database', sourceProfile);
 		sourceReadbacks = readParityReadbacks(sourceDb, options.goalId, taskIds);
+		sourceSnapshot = exportV2CoreSnapshot(sourceDb);
 		await sourceDb.backup(sqliteBackupFile);
 		sourceDataVersionAfter = pragmaNumber(sourceDb, 'data_version');
 		sourceTotalChangesAfter = readTotalChanges(sourceDb);
@@ -567,6 +598,7 @@ async function capture(options: Options) {
 		sourceProfile.tableCounts,
 		backupProfile.tableCounts
 	);
+	assertParity('Source-to-backup exact snapshot', sourceSnapshot, snapshot);
 	if (sourceProfile.schemaSha256 !== backupProfile.schemaSha256) {
 		throw new Error('Source-to-backup schema hash parity failed.');
 	}
@@ -639,6 +671,12 @@ async function capture(options: Options) {
 			sha256(stableJson(rows))
 		])
 	);
+	const readbackFixtureSha256 = Object.fromEntries(
+		Object.entries(backupReadbacks).map(([fixtureName, fixture]) => [
+			fixtureName,
+			sha256(stableJson(fixture))
+		])
+	);
 	const betterSqlitePackageFile = resolve(
 		repositoryRoot,
 		'node_modules/better-sqlite3/package.json'
@@ -675,7 +713,7 @@ async function capture(options: Options) {
 		schema: {
 			applicationId: backupProfile.applicationId,
 			userVersion: backupProfile.userVersion,
-			schemaVersion: backupProfile.schemaVersion,
+			schemaCookie: backupProfile.schemaCookie,
 			schemaSha256: backupProfile.schemaSha256,
 			tableCounts: backupProfile.tableCounts,
 			snapshotTableSha256,
@@ -704,16 +742,24 @@ async function capture(options: Options) {
 			restoreForeignKeyViolationCount: restoreProfile.foreignKeyViolations.length,
 			sourceToBackupTableCountParity: true,
 			sourceToBackupReadbackParity: true,
+			sourceToBackupExactSnapshotParity: true,
 			snapshotRestoreTableCountParity: true,
 			snapshotRestoreReadbackParity: true,
 			snapshotRestoreExactReexportParity: true,
-			readbacksSha256: readbacksState.sha256
+			readbacksSha256: readbacksState.sha256,
+			readbackFixtureSha256,
+			readbackParameters: {
+				nextWorkLimitPerGoal: 20,
+				goalTriageLimit: 20,
+				crossProjectAttentionLimit: 25,
+				preservedSemanticOrder: ['nextWorkByGoal.*', 'crossProjectAttention']
+			}
 		},
 		knownLimitations: [
 			'PRAGMA user_version is captured but the prototype currently reports 0; schemaSha256 is the operative schema fingerprint.',
 			'The backup preserves all current v2 tables, including concepts deferred from the clean v2 foundation domain.',
 			'The logical snapshot stores artifact URI records but does not embed the files referenced by those URIs.',
-			'Opening a SQLite WAL database read-only can create or touch empty WAL/SHM coordination files; durable mutation checks compare main-database and nonempty-WAL content, while exact metadata remains recorded.',
+			'Opening a SQLite WAL database read-only can create or touch empty WAL/SHM coordination files; durable mutation checks compare main-database and nonempty-WAL content. SHM metadata is transient and intentionally omitted.',
 			'Dependency relation status is preserved literally; eligibility is computed from both relation and predecessor task state.',
 			'Task/run closeout records created after this capture are intentionally outside this immutable baseline.'
 		]

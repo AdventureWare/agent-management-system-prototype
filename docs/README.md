@@ -12,6 +12,8 @@
 - [Domain Model Rationalization Audit](./domain-model-rationalization-audit-2026-07-01.md): read-only audit of current AMS model layers, overlaps, status semantics, and cleanup backlog.
 - [AMS V2 Domain Ontology And Behavior Spec](./design/ams_v2_domain_ontology_and_behavior_spec.md): canonical v2 design source-of-truth for entities, relations, states, commands, field admission, automation boundaries, and anti-bloat rules.
 - [AMS v2 Clean Boundary And Execution Plan](./design/ams_v2_clean_boundary_and_execution_plan.md): current recovery decision and staged plan for extracting a clean independent v2 product, enforcing agent continuity, preserving prototype evidence, and rebuilding the operator UI behind a real boundary.
+- [AMS v2 Extraction Baseline Manifest](./design/ams_v2_extraction_baseline_manifest.md): canonical Phase 0 source commit, hashes, counts, integrity/restore evidence, and generated snapshot location for the independent-v2 handoff.
+- [AMS v2 Prototype Capability Disposition Matrix](./design/ams_v2_prototype_capability_disposition_matrix.md): explicit port/rebuild/archive/defer/reject decisions that prevent both wholesale prototype inheritance and accidental loss of proven behavior.
 - [AMS V2 Traceability Matrix](./design/ams_v2_traceability_matrix.md): competency-question and scenario traceability from model elements to workflows and acceptance tests.
 - [AMS V2 Entity Cards](./design/ams_v2_entity_cards.md): accepted, candidate, deferred, and rejected v2 entity cards with minimal fields, invariants, and bloat risks.
 - [Prototype Audit v0.1](./prototype_audit_v0_1.md): read-only assessment of the current prototype structure, model, storage, interfaces, preserved value, debt, and v2 capability fit.
