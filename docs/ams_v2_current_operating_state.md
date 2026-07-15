@@ -1,0 +1,208 @@
+# AMS v2 Current Operating State
+
+Date: 2026-07-15
+Status: Current orientation source
+
+## Purpose
+
+This is the first-read operating-state document for AMS v2 work.
+
+Use it to orient before broad AMS changes. It does not replace the design docs,
+goal/task creation guide, or live AMS database. The live source of truth for
+goals, tasks, runs, artifacts, reviews, decisions, and memory is still AMS v2
+state in `data/v2-core.sqlite`.
+
+## Long-Term Direction
+
+Current live long-term AMS goal:
+
+- `goal_ams_v2_owned_agent_system_long_term`
+- Title: Build an owned local-first agent operating layer
+
+Desired direction:
+
+AMS should become a persistent coordination and control system that helps one
+human agent coordinate projects, goals, sub-goals, tasks, evidence, context,
+tools, external AI, future owned AI, Superstructure, and real-world action.
+
+AMS is not the AI model. AMS owns durable work state, authority, evidence,
+review, decisions, and continuation. External or owned AI systems provide
+delegated capability.
+
+## Current Conceptual Boundary
+
+The current boundary source is:
+
+- `docs/ams_owned_ai_external_ai_boundary_v0_1.md`
+
+Working distinction:
+
+- Colin: principal agent and final goal/risk authority.
+- AMS: persistent coordination and control state.
+- External AI providers: current delegated capability.
+- Owned AI system: future owned/local capability provider.
+- Individual models: replaceable components.
+- Superstructure: shared representational/world-modeling foundation.
+- Projects: concrete desired outcomes and execution environments.
+
+Do not conflate AMS with owned AI, Codex, ChatGPT, Superstructure, a task
+tracker, or a prompt library.
+
+## Current Active AMS v2 Child Goals
+
+### Run real cross-project work through AMS v2
+
+- Goal: `goal_ams_v2_real_cross_project_work_loop`
+- Status: active
+- Purpose: prove AMS v2 can select, prepare, execute, review, and close useful
+  work from non-AMS projects.
+- Current task: `task_ams_v2_select_first_real_cross_project_work`
+
+This is the main proof that AMS is not becoming a self-contained planning
+exercise.
+
+### Make AMS v2 project state self-orienting
+
+- Goal: `goal_ams_v2_project_state_source_of_truth_alignment`
+- Status: active
+- Purpose: make current project state obvious enough that agents do not have to
+  reconstruct direction from chat history or scattered milestone docs.
+- Current task: `task_ams_v2_write_current_operating_state_source`
+
+This document is the first output of that goal.
+
+## Recently Completed Alignment Work
+
+### Capability-system mapping
+
+- Goal: `goal_ams_v2_align_capability_system_strategy`
+- Status: completed
+- Artifact: `docs/ams_capability_system_goal_project_mapping_v0_1.md`
+
+Result:
+
+The proposed larger capability-system architecture was mapped against actual
+AMS state. Strong matches already exist for AMS and Superstructure. Top-level
+mission/capability goals and the owned-AI/external-AI distinction needed
+clearer documentation and future operator decisions.
+
+### Top-level mission/capability decision packet
+
+- Artifact: `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
+
+Result:
+
+Recommended adding explicit top-level Goal 0 and Goal 1 only after operator
+approval. No top-level mission/capability goals were created in that task.
+
+### Responsibility boundary note
+
+- Artifact: `docs/ams_owned_ai_external_ai_boundary_v0_1.md`
+
+Result:
+
+Clarified AMS, owned AI, external AI, models, Superstructure, and project
+responsibilities. Recommended that the next concrete evidence should come from
+real cross-project work, not more terminology.
+
+## Completed Capability Baseline
+
+AMS v2 already has accepted proof or implementation evidence for:
+
+- minimal v2 work loop;
+- SQLite-backed v2 core state;
+- v1 import and curation passes;
+- goal/task/run/artifact/review/decision/memory core records;
+- next-work and goal-triage readbacks;
+- goal-continuity audit;
+- operator console and cross-project attention summary;
+- managed provider-run lifecycle;
+- agent-control surface;
+- agent work packet;
+- agent preparation packet;
+- closeout packet;
+- local retrieval/search over v2 records;
+- dependency and dependency-reduction reports;
+- route/evaluation evidence for several coordination capabilities;
+- mobile-safe operator control surfaces;
+- review backlog cleanup for stale imported artifacts.
+
+This does not mean the system is complete. It means the current foundation is
+real enough to test on more real work.
+
+## Current Known Weaknesses
+
+- The docs directory contains many historical milestone artifacts. Without this
+  document and the docs index, agents can latch onto stale context.
+- Top-level mission and personal capability-system goals are not yet explicit
+  live goals.
+- Owned AI is still a future capability system, not an implemented local AI
+  replacement.
+- External Codex/ChatGPT-style reasoning remains heavily used.
+- Current providerless/local evidence mostly proves deterministic coordination
+  and readback capabilities, not replacement of broad AI reasoning.
+- Some imported projects still have sparse current-state charters.
+- AMS can still over-focus on AMS maintenance unless real project work is run
+  through it regularly.
+
+## Explicit Non-Goals Right Now
+
+Do not do these without a specific new task and evidence:
+
+- Do not create a new `Milestone` entity.
+- Do not rewrite the v2 architecture.
+- Do not add schema fields or domain entities for speculative concepts.
+- Do not create all proposed top-level goals automatically.
+- Do not mass-reparent existing goals.
+- Do not build a scheduler, worker pool, or multi-agent fanout yet.
+- Do not build more dashboards before the current loop proves value.
+- Do not claim owned AI exists just because providerless local tools exist.
+- Do not promote AI output to memory without review.
+
+## How To Decide What To Work On Next
+
+Use live AMS readbacks, not chat memory:
+
+```sh
+npm run v2:core-db -- next-work --project project_ams_v2_core --json
+npm run v2:core-db -- goal-triage --project project_ams_v2_core --json
+npm run v2:core-db -- goal-continuity-audit --project project_ams_v2_core --json
+git status --short
+```
+
+Selection rule:
+
+1. If there is in-progress work, close it with run/artifact/review/decision
+   evidence or mark it blocked.
+2. If the current operating-state orientation path has open work, keep it small
+   and finish it.
+3. Prefer the real cross-project work proof over more internal alignment once
+   the current orientation source is available.
+4. Create new goals/tasks only after searching current state and confirming the
+   work is not already represented.
+5. If a completed goal has no open child work, either close the goal with
+   evidence or create/select the next active path.
+
+## Current Next Work
+
+After this document is accepted, the next AMS v2 work should be:
+
+1. `task_ams_v2_link_current_state_orientation`
+   - Link this document from `docs/README.md` and project instructions.
+2. `task_ams_v2_select_first_real_cross_project_work`
+   - Select and run the first real non-AMS task through AMS v2.
+
+If only one task can run next, prefer linking this document first because it
+reduces agent drift immediately. Then move to real cross-project work.
+
+## Source Documents
+
+Use these for deeper context:
+
+- `docs/ams_goal_task_creation_guide.md`
+- `docs/design/ams_v2_domain_ontology_and_behavior_spec.md`
+- `docs/ams_capability_system_goal_project_mapping_v0_1.md`
+- `docs/ams_top_level_mission_capability_goal_decision_v0_1.md`
+- `docs/ams_owned_ai_external_ai_boundary_v0_1.md`
+- `docs/v2_next_milestone_after_review_backlog_cleanup_v0_1.md`
+- `docs/runtime-data-policy.md`
