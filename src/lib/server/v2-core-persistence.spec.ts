@@ -17,6 +17,8 @@ import {
 	resolveV2CoreDbFile
 } from '$lib/server/v2-core-persistence';
 import {
+	exportV2CoreSnapshot,
+	importV2CoreSnapshot,
 	readV2CoreGoalContinuityAudit,
 	readV2CoreOverview
 } from '$lib/server/v2-core-service';
@@ -65,6 +67,68 @@ afterEach(() => {
 });
 
 describe('v2 core persistence boundary', () => {
+	it('restores deterministic snapshots with self-referential rows ordered before their targets', () => {
+		const root = createTempDir();
+		const sourceDb = openV2CoreDb({
+			dbFile: resolve(root, 'data', 'source.sqlite'),
+			appDbFile: resolve(root, 'data', 'app.sqlite')
+		});
+		const restoredDb = openV2CoreDb({
+			dbFile: resolve(root, 'data', 'restored.sqlite'),
+			appDbFile: resolve(root, 'data', 'app.sqlite')
+		});
+
+		try {
+			sourceDb
+				.prepare(
+					`insert into v2_core_projects (id, name, summary, status, workspace_root)
+					 values ('project_snapshot_order', 'Snapshot Order', '', 'active', '')`
+				)
+				.run();
+			sourceDb
+				.prepare(
+					`insert into v2_core_goals
+					 (id, project_id, parent_goal_id, title, summary, success_criteria, status)
+					 values ('goal_z_parent', 'project_snapshot_order', null, 'Parent', '', 'Parent exists.', 'active')`
+				)
+				.run();
+			sourceDb
+				.prepare(
+					`insert into v2_core_goals
+					 (id, project_id, parent_goal_id, title, summary, success_criteria, status)
+					 values ('goal_a_child', 'project_snapshot_order', 'goal_z_parent', 'Child', '', 'Child exists.', 'active')`
+				)
+				.run();
+			sourceDb
+				.prepare(
+					`insert into v2_core_decisions
+					 (id, project_id, goal_id, task_id, run_id, review_id, supersedes_decision_id,
+					  decision_type, summary, rationale, decided_at)
+					 values ('decision_z_base', 'project_snapshot_order', 'goal_z_parent', null, null, null,
+					  null, 'design', 'Base', '', '2026-07-15T00:00:00.000Z')`
+				)
+				.run();
+			sourceDb
+				.prepare(
+					`insert into v2_core_decisions
+					 (id, project_id, goal_id, task_id, run_id, review_id, supersedes_decision_id,
+					  decision_type, summary, rationale, decided_at)
+					 values ('decision_a_replacement', 'project_snapshot_order', 'goal_a_child', null, null, null,
+					  'decision_z_base', 'design', 'Replacement', '', '2026-07-15T00:01:00.000Z')`
+				)
+				.run();
+
+			const snapshot = exportV2CoreSnapshot(sourceDb);
+			importV2CoreSnapshot(restoredDb, snapshot);
+
+			expect(exportV2CoreSnapshot(restoredDb)).toEqual(snapshot);
+			expect(restoredDb.pragma('foreign_key_check')).toEqual([]);
+		} finally {
+			sourceDb.close();
+			restoredDb.close();
+		}
+	});
+
 	it('defaults to a separate core sqlite file', () => {
 		expect.assertions(2);
 

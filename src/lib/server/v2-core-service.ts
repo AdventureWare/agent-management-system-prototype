@@ -7525,6 +7525,9 @@ export function importV2CoreSnapshot(db: Database.Database, snapshot: unknown) {
 	assertV2CoreSnapshotTargetEmpty(db);
 
 	db.transaction(() => {
+		// Deterministic ID ordering is not dependency ordering for self-referential
+		// goal and decision rows. Validate all foreign keys when the full import commits.
+		db.pragma('defer_foreign_keys = ON');
 		for (const table of V2_CORE_SNAPSHOT_TABLES) {
 			const placeholders = table.columns.map(() => '?').join(', ');
 			const statement = db.prepare(

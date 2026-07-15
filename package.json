@@ -36,6 +36,7 @@
 		"db:import-json": "node scripts/app-db.mjs import-json",
 		"db:migrate": "node scripts/app-db.mjs migrate",
 		"v2:core-db": "node --experimental-strip-types scripts/v2-core-db.ts",
+		"v2:capture-baseline": "node --experimental-strip-types scripts/capture-v2-extraction-baseline.ts",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest --project server",
