@@ -67,9 +67,11 @@ exercise.
 - Status: active
 - Purpose: make current project state obvious enough that agents do not have to
   reconstruct direction from chat history or scattered milestone docs.
-- Current task: `task_ams_v2_write_current_operating_state_source`
+- Current task: `task_ams_v2_current_docs_signal_audit`
 
-This document is the first output of that goal.
+This document is the first output of that goal. It is now linked from the main
+agent entry points. The remaining work is to keep current-versus-historical docs
+signals clear without reorganizing the whole docs directory.
 
 ## Recently Completed Alignment Work
 
@@ -185,15 +187,16 @@ Selection rule:
 
 ## Current Next Work
 
-After this document is accepted, the next AMS v2 work should be:
+Current AMS v2 work should be:
 
-1. `task_ams_v2_link_current_state_orientation`
-   - Link this document from `docs/README.md` and project instructions.
+1. `task_ams_v2_current_docs_signal_audit`
+   - Audit whether current, design, proof, and historical docs are clearly
+     distinguishable enough for agents.
 2. `task_ams_v2_select_first_real_cross_project_work`
    - Select and run the first real non-AMS task through AMS v2.
 
-If only one task can run next, prefer linking this document first because it
-reduces agent drift immediately. Then move to real cross-project work.
+If only one task can run next, finish the docs signal audit only if it stays
+small. Then move to real cross-project work.
 
 ## Source Documents
 
