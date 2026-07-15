@@ -557,6 +557,9 @@ async function capture(options: Options) {
 	} finally {
 		backupDb.close();
 	}
+	for (const suffix of ['-wal', '-shm']) {
+		rmSync(`${sqliteBackupFile}${suffix}`, { force: true });
+	}
 
 	assertParity('Source-to-backup readback', sourceReadbacks, backupReadbacks);
 	assertParity(
