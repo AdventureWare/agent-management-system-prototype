@@ -8,9 +8,11 @@ Status: Current orientation source
 This is the first-read operating-state document for AMS v2 work.
 
 Use it to orient before broad AMS changes. It does not replace the design docs,
-goal/task creation guide, or live AMS database. The live source of truth for
-goals, tasks, runs, artifacts, reviews, decisions, and memory is still AMS v2
-state in `data/v2-core.sqlite`.
+goal/task creation guide, or live AMS databases. `data/v2-core.sqlite` remains
+the transition-planning and migration source of truth in this prototype. New
+product work state belongs to the independent repository's
+`data/local/ams-v2.sqlite`; the two authorities are not synchronized and must
+not be dual-written.
 
 ## Long-Term Direction
 
@@ -69,8 +71,8 @@ Decision:
 The current embedded v2 routes and services are evidence, not the target
 application boundary.
 
-Phase 0 extraction, the independent repository foundation, and the minimal
-independent work loop are complete:
+Phase 0 extraction, the independent repository foundation, the minimal
+independent work loop, and revisioned agent continuity are complete:
 
 - baseline manifest: `docs/design/ams_v2_extraction_baseline_manifest.md`;
 - capability dispositions:
@@ -81,28 +83,43 @@ independent work loop are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `0324d77`;
-- packages: pure `core`, versioned `sqlite`, and thin `cli` only;
+- current commit: `ca73e14`;
+- packages: pure `core`, versioned `sqlite`, focused `repository-context`, and
+  thin `cli`;
 - implemented capability: focused project/goal/task/dependency, deterministic
   next-work, rolling runs, artifacts, proportional completion/review, material
-  decisions, continuation, and deterministic native snapshots;
-- verification: 18 tests plus format, lint, package-boundary, type, immutable
+  decisions, continuation, deterministic native snapshots, and guarded
+  task-ID-only agent work packets bound to exact database, Git, working-tree,
+  and selected-source state;
+- verification: 21 tests plus format, lint, package-boundary, type, immutable
   baseline, fixture, post-merge, and fresh standalone install/build/test gates;
+- operational proof: the independent local authority contains one completed
+  continuity Task, two completed external-AI Runs on that same Task, and one
+  accepted evidence Artifact, with zero Reviews or Decisions;
 - local migration archive:
   `../agent-management-system-v2/data/migration/baselines/20260715T224025Z-ca144cebfc2e/`.
 
 New v2 implementation work belongs in that sibling repository. Do not add the
 minimal work loop or future web UI under this prototype's `/app/v2-core` routes.
 
-Current continuation task:
+Completed continuity task:
 
 - `task_ams_v2_prove_revisioned_agent_continuity`
 - Title: Prove revisioned agent context and cross-session continuity
 
-This task should prove that a fresh agent can resume one real Task from durable
-state without chat history, while stale or contradictory packets and
-unauthorized protected changes are rejected. It must build on the focused work
-loop rather than copying the prototype context/service machinery.
+This task proved that a fresh agent can resume one rolling Task from durable
+state without chat history. Computed packets reject stale, contradictory,
+tampered, wrong-authority, and unauthorized launches without adding a persisted
+packet, approval subsystem, provider registry, scheduler, or schema migration.
+
+Current continuation task:
+
+- `task_ams_v2_build_clean_operator_ui_slice`
+- Title: Build the independent desktop/mobile operator UI slice
+
+This task should make the existing independent work loop visible and operable
+through a clean responsive surface. It must consume focused application APIs
+and must not copy the prototype shell, route structure, or broad v2 service.
 
 The ignored generated directory has been checksum-copied into the independent
 repository's local migration archive. Both copies remain noncanonical migration
@@ -261,11 +278,9 @@ real enough to test on more real work.
 
 ## Current Known Weaknesses
 
-- V2 storage is isolated, but v2 code, routes, package, auth, and UI shell are
-  still embedded in the prototype application.
-- `src/lib/server/v2-core-service.ts` and `/app/v2-core` have accumulated broad
-  responsibilities that should be used as behavior evidence, not copied as the
-  new architecture.
+- The independent v2 has no operator UI yet; normal use still requires its CLI.
+- The prototype's embedded v2 routes and broad service remain migration and
+  behavior evidence only. They are not part of the target product architecture.
 - Prototype/v1 and v2 previously had ambiguous control-plane instructions. The
   runtime policy and agent skills now require selecting one authority explicitly.
 - The docs directory contains many historical milestone artifacts. Without this
@@ -343,16 +358,18 @@ Completed:
    - Ported and proved the smallest complete goal-to-continuation loop in
      focused modules at independent-repository commit `0324d77`.
 
+3. `task_ams_v2_prove_revisioned_agent_continuity`
+   - Implemented and operationally proved one-authority, stale-safe, zero-chat
+     task continuation at independent-repository commit `ca73e14`.
+
 Current:
 
-3. `task_ams_v2_prove_revisioned_agent_continuity`
-   - Prove one-authority, stale-safe, zero-chat task continuation.
+4. `task_ams_v2_build_clean_operator_ui_slice`
+   - Build the independent desktop/mobile operator surface on the now-stable
+     focused application-service boundary.
 
 Then:
 
-4. `task_ams_v2_build_clean_operator_ui_slice`
-   - Build the independent desktop/mobile operator surface after the application
-     service boundary is stable.
 5. `task_ams_v2_validate_real_work_and_project_cutover`
    - Run real projects, compare against the prototype, and migrate authority one
      project at a time.
