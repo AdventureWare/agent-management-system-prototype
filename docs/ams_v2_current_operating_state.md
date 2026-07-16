@@ -69,7 +69,8 @@ Decision:
 The current embedded v2 routes and services are evidence, not the target
 application boundary.
 
-Phase 0 extraction and the independent repository foundation are complete:
+Phase 0 extraction, the independent repository foundation, and the minimal
+independent work loop are complete:
 
 - baseline manifest: `docs/design/ams_v2_extraction_baseline_manifest.md`;
 - capability dispositions:
@@ -80,9 +81,13 @@ Phase 0 extraction and the independent repository foundation are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- initial commit: `c0378fc`;
+- current commit: `0324d77`;
 - packages: pure `core`, versioned `sqlite`, and thin `cli` only;
-- verification: foundation gates and a fresh standalone install/build/test pass;
+- implemented capability: focused project/goal/task/dependency, deterministic
+  next-work, rolling runs, artifacts, proportional completion/review, material
+  decisions, continuation, and deterministic native snapshots;
+- verification: 18 tests plus format, lint, package-boundary, type, immutable
+  baseline, fixture, post-merge, and fresh standalone install/build/test gates;
 - local migration archive:
   `../agent-management-system-v2/data/migration/baselines/20260715T224025Z-ca144cebfc2e/`.
 
@@ -91,12 +96,13 @@ minimal work loop or future web UI under this prototype's `/app/v2-core` routes.
 
 Current continuation task:
 
-- `task_ams_v2_port_minimal_independent_work_loop`
-- Title: Port and prove the minimal independent work loop
+- `task_ams_v2_prove_revisioned_agent_continuity`
+- Title: Prove revisioned agent context and cross-session continuity
 
-This task should add focused application services and SQLite adapters in the
-independent repository. It must not copy the prototype service monolith or
-reintroduce universal review/Decision ceremony.
+This task should prove that a fresh agent can resume one real Task from durable
+state without chat history, while stale or contradictory packets and
+unauthorized protected changes are rejected. It must build on the focused work
+loop rather than copying the prototype context/service machinery.
 
 The ignored generated directory has been checksum-copied into the independent
 repository's local migration archive. Both copies remain noncanonical migration
@@ -327,16 +333,23 @@ Completed prerequisite:
   - Accepted immutable state capture, restore proof, parity fixtures, and
     prototype capability disposition matrix.
 
-Next:
+Completed:
 
 1. `task_ams_v2_create_independent_repository_foundation`
-   - Create the sibling repository with core, SQLite, CLI, docs, boundary tests,
-     and a versioned initial migration. Copy and checksum-verify the canonical
-     baseline into a durable migration archive before importing it.
+   - Created the sibling repository with core, SQLite, CLI, docs, boundary
+     tests, a versioned initial migration, and a checksum-verified local
+     migration archive.
 2. `task_ams_v2_port_minimal_independent_work_loop`
-   - Port the smallest complete goal-to-continuation loop into focused modules.
+   - Ported and proved the smallest complete goal-to-continuation loop in
+     focused modules at independent-repository commit `0324d77`.
+
+Current:
+
 3. `task_ams_v2_prove_revisioned_agent_continuity`
    - Prove one-authority, stale-safe, zero-chat task continuation.
+
+Then:
+
 4. `task_ams_v2_build_clean_operator_ui_slice`
    - Build the independent desktop/mobile operator surface after the application
      service boundary is stable.
