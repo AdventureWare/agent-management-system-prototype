@@ -83,7 +83,7 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `bd464f7`;
+- current commit: `2560a84`;
 - packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
   `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
@@ -94,7 +94,7 @@ Independent repository:
 - implemented operator view: focused read-only Work, Workstream, Goal, Task,
   and Activity routes computed from the same SQLite authority, with no copied
   prototype UI and no new domain entities or schema;
-- verification: 22 core/integration tests and 2 desktop/mobile Playwright
+- verification: 25 core/integration tests and 2 desktop/mobile Playwright
   workflows plus format, lint, package-boundary, type, immutable baseline,
   fixture, production build, dependency audit, post-merge, and fresh standalone
   install/build/test gates;
@@ -126,7 +126,8 @@ This task should make the existing independent work loop visible and operable
 through a clean responsive surface. It must consume focused application APIs
 and must not copy the prototype shell, route structure, or broad v2 service.
 
-The first read-through increment is complete at independent commit `bd464f7`.
+The first read-through increment is complete at independent commit `bd464f7`,
+with live default-authority launch hardening through commit `2560a84`.
 It provides desktop and 390px orientation, attention, simultaneous running
 work, ready-next work, workstream/goal/task detail, continuation, evidence,
 selected context, and activity. The same rolling Task remains active for the
@@ -379,7 +380,8 @@ Completed:
 Current:
 
 4. `task_ams_v2_build_clean_operator_ui_slice`
-   - Read-through operator views are complete at independent commit `bd464f7`.
+   - Read-through operator views and live launch hardening are complete through
+     independent commit `2560a84`.
    - Next: add explicit goal/task steering and guarded run dispatch/result
      handling on the existing focused application-service boundary, then close
      the Task only after browser proof against the full acceptance criteria.
