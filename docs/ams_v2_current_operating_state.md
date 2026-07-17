@@ -83,16 +83,21 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `ca73e14`;
-- packages: pure `core`, versioned `sqlite`, focused `repository-context`, and
-  thin `cli`;
+- current commit: `bd464f7`;
+- packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
+  `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
   next-work, rolling runs, artifacts, proportional completion/review, material
   decisions, continuation, deterministic native snapshots, and guarded
   task-ID-only agent work packets bound to exact database, Git, working-tree,
   and selected-source state;
-- verification: 21 tests plus format, lint, package-boundary, type, immutable
-  baseline, fixture, post-merge, and fresh standalone install/build/test gates;
+- implemented operator view: focused read-only Work, Workstream, Goal, Task,
+  and Activity routes computed from the same SQLite authority, with no copied
+  prototype UI and no new domain entities or schema;
+- verification: 22 core/integration tests and 2 desktop/mobile Playwright
+  workflows plus format, lint, package-boundary, type, immutable baseline,
+  fixture, production build, dependency audit, post-merge, and fresh standalone
+  install/build/test gates;
 - operational proof: the independent local authority contains one completed
   continuity Task, two completed external-AI Runs on that same Task, and one
   accepted evidence Artifact, with zero Reviews or Decisions;
@@ -120,6 +125,13 @@ Current continuation task:
 This task should make the existing independent work loop visible and operable
 through a clean responsive surface. It must consume focused application APIs
 and must not copy the prototype shell, route structure, or broad v2 service.
+
+The first read-through increment is complete at independent commit `bd464f7`.
+It provides desktop and 390px orientation, attention, simultaneous running
+work, ready-next work, workstream/goal/task detail, continuation, evidence,
+selected context, and activity. The same rolling Task remains active for the
+next increment: explicit goal/task steering and guarded run dispatch/result
+handling through application commands rather than route SQL or generic CRUD.
 
 The ignored generated directory has been checksum-copied into the independent
 repository's local migration archive. Both copies remain noncanonical migration
@@ -278,7 +290,9 @@ real enough to test on more real work.
 
 ## Current Known Weaknesses
 
-- The independent v2 has no operator UI yet; normal use still requires its CLI.
+- The independent v2 operator UI is read-only. Goal/task steering and run
+  dispatch/result handling still require the CLI until guarded web commands are
+  implemented.
 - The prototype's embedded v2 routes and broad service remain migration and
   behavior evidence only. They are not part of the target product architecture.
 - Prototype/v1 and v2 previously had ambiguous control-plane instructions. The
@@ -365,8 +379,10 @@ Completed:
 Current:
 
 4. `task_ams_v2_build_clean_operator_ui_slice`
-   - Build the independent desktop/mobile operator surface on the now-stable
-     focused application-service boundary.
+   - Read-through operator views are complete at independent commit `bd464f7`.
+   - Next: add explicit goal/task steering and guarded run dispatch/result
+     handling on the existing focused application-service boundary, then close
+     the Task only after browser proof against the full acceptance criteria.
 
 Then:
 
