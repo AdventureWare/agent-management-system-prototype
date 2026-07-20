@@ -83,7 +83,7 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `2560a84`;
+- current commit: `840443c`;
 - packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
   `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
@@ -98,17 +98,31 @@ Independent repository:
   workflows plus format, lint, package-boundary, type, immutable baseline,
   fixture, production build, dependency audit, post-merge, and fresh standalone
   install/build/test gates;
-- operational proof: the independent local authority contains one completed
-  continuity Task, two completed external-AI Runs on that same Task, and one
-  accepted evidence Artifact, with zero Reviews or Decisions;
-- selective project cutover: the Animal Welfare Monitoring System now exists in
-  the independent authority with one paused contest Goal, seven completed
-  historical Tasks, 13 verified local Artifacts, one migration Decision, and 23
-  source references. The generated holding Goal, duplicate/missing artifacts,
-  historical Runs, canceled/rejected Reviews, and routine transition Decisions
-  remain preserved only in the transition source and rollback archive;
+- operational proof: the original continuity proof remains present with one
+  completed Task, two completed external-AI Runs, and one accepted evidence
+  Artifact. After selective project migration, the live authority contains 19
+  Projects, 46 Goals, 200 Tasks, 20 Runs, 36 Artifacts, 17 Reviews, 19 Decisions,
+  and 331 source references;
+- selective project cutover: the independent authority now contains 19
+  projects total. Animal Welfare was migrated first; 16 additional real project
+  containers were then selectively migrated with 35 real Goals, 174
+  non-canceled Tasks, 33 valid intra-project dependencies, four canonical local
+  Artifacts, 18 material/migration Decisions, and 280 source references. The
+  inherited Animal Welfare project status was corrected from active to paused
+  because its only Goal is paused and it has no open work;
+- migration cleanup: generated holding Goals, canceled Tasks, copied attachment
+  history, historical Runs and Reviews, routine transition Decisions, and one
+  Content_OS Task without a defensible real Goal remain in the preserved source
+  authority and rollback archives. The prototype, transition AMS v2 Core,
+  superseded Superstructure/RMI containers, already-reconciled Superstructure
+  Program, and imported-unassigned holding bucket were not duplicated as live
+  projects;
 - local migration archive:
   `../agent-management-system-v2/data/migration/baselines/20260715T224025Z-ca144cebfc2e/`.
+- latest selective-project migration evidence:
+  `../agent-management-system-v2/data/local/migrations/remaining-projects-selective-migration-20260720T235733Z.json`
+  and its paired snapshot; rollback database:
+  `../agent-management-system-v2/data/local/backups/ams-v2-before-remaining-projects-20260720T234719Z.sqlite`.
 
 New v2 implementation work belongs in that sibling repository. Do not add the
 minimal work loop or future web UI under this prototype's `/app/v2-core` routes.
@@ -336,12 +350,13 @@ Do not do these without a specific new task and evidence:
 
 ## How To Decide What To Work On Next
 
-Use live AMS readbacks, not chat memory:
+Use the independent live AMS readbacks, not chat memory or the transition
+database:
 
 ```sh
-npm run v2:core-db -- next-work --project project_ams_v2_core --json
-npm run v2:core-db -- goal-triage --project project_ams_v2_core --json
-npm run v2:core-db -- goal-continuity-audit --project project_ams_v2_core --json
+cd ../agent-management-system-v2
+npm run ams -- health --db data/local/ams-v2.sqlite
+npm run ams -- next-work --db data/local/ams-v2.sqlite
 git status --short
 ```
 
@@ -397,9 +412,14 @@ Then:
 5. `task_ams_v2_validate_real_work_and_project_cutover`
    - Run real projects, compare against the prototype, and migrate authority one
      project at a time.
-   - The Animal Welfare Monitoring System selective data cutover is complete;
-     validated new work and a second materially different project are still
-     required before this Task is complete.
+   - Selective data cutover is complete for Animal Welfare and the 16 remaining
+     real project containers. The independent authority passes SQLite integrity
+     and foreign-key checks and exposes the migrated work in the operator UI.
+   - Next: selectively reconcile still-relevant AMS control goals/tasks from the
+     transition `AMS v2 Core` project into `Independent AMS v2`, then execute and
+     close fresh work in at least two materially different imported projects.
+     Do not duplicate the transition project or bulk-import its administrative
+     history.
 
 The existing real cross-project, owned-AI, and external-AI goals remain useful,
 but must not cause more product expansion inside the prototype shell.
