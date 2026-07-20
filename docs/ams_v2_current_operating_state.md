@@ -101,6 +101,12 @@ Independent repository:
 - operational proof: the independent local authority contains one completed
   continuity Task, two completed external-AI Runs on that same Task, and one
   accepted evidence Artifact, with zero Reviews or Decisions;
+- selective project cutover: the Animal Welfare Monitoring System now exists in
+  the independent authority with one paused contest Goal, seven completed
+  historical Tasks, 13 verified local Artifacts, one migration Decision, and 23
+  source references. The generated holding Goal, duplicate/missing artifacts,
+  historical Runs, canceled/rejected Reviews, and routine transition Decisions
+  remain preserved only in the transition source and rollback archive;
 - local migration archive:
   `../agent-management-system-v2/data/migration/baselines/20260715T224025Z-ca144cebfc2e/`.
 
@@ -391,6 +397,9 @@ Then:
 5. `task_ams_v2_validate_real_work_and_project_cutover`
    - Run real projects, compare against the prototype, and migrate authority one
      project at a time.
+   - The Animal Welfare Monitoring System selective data cutover is complete;
+     validated new work and a second materially different project are still
+     required before this Task is complete.
 
 The existing real cross-project, owned-AI, and external-AI goals remain useful,
 but must not cause more product expansion inside the prototype shell.
