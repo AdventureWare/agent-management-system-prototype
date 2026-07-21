@@ -86,7 +86,7 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `840443c`;
+- current commit: `9d0d3ad`;
 - packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
   `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
@@ -94,10 +94,11 @@ Independent repository:
   decisions, continuation, deterministic native snapshots, and guarded
   task-ID-only agent work packets bound to exact database, Git, working-tree,
   and selected-source state;
-- implemented operator view: focused read-only Work, Workstream, Goal, Task,
-  and Activity routes computed from the same SQLite authority, with no copied
-  prototype UI and no new domain entities or schema;
-- verification: 25 core/integration tests and 2 desktop/mobile Playwright
+- implemented operator view: focused Work, Workstream, Goal, Task, and Activity
+  routes computed from the same SQLite authority, plus bounded ready-Task
+  creation from active Goal pages through the existing core application
+  service, with no copied prototype UI and no new domain entities or schema;
+- verification: 26 core/integration tests and 3 desktop/mobile Playwright
   workflows plus format, lint, package-boundary, type, immutable baseline,
   fixture, production build, dependency audit, post-merge, and fresh standalone
   install/build/test gates;
@@ -163,12 +164,14 @@ through a clean responsive surface. It must consume focused application APIs
 and must not copy the prototype shell, route structure, or broad v2 service.
 
 The first read-through increment is complete at independent commit `bd464f7`,
-with live default-authority launch hardening through commit `2560a84`.
+with live default-authority launch hardening through commit `2560a84` and
+bounded Task creation through commit `9d0d3ad`.
 It provides desktop and 390px orientation, attention, simultaneous running
 work, ready-next work, workstream/goal/task detail, continuation, evidence,
-selected context, and activity. The same rolling Task remains active for the
-next increment: explicit goal/task steering and guarded run dispatch/result
-handling through application commands rather than route SQL or generic CRUD.
+selected context, activity, and active-Goal creation of authoritative ready
+Tasks. The same rolling Task remains active for the next increment: guarded
+Goal pause/resume, followed by real dispatch and result handling through
+application commands rather than route SQL or generic CRUD.
 
 The ignored generated directory has been checksum-copied into the independent
 repository's local migration archive. Both copies remain noncanonical migration
@@ -325,9 +328,9 @@ real enough to test on more real work.
 
 ## Current Known Weaknesses
 
-- The independent v2 operator UI is read-only. Goal/task steering and run
-  dispatch/result handling still require the CLI until guarded web commands are
-  implemented.
+- The independent v2 operator UI can create bounded ready Tasks, but Goal
+  pause/resume and run dispatch/result handling still require the CLI until
+  guarded web commands are implemented.
 - The prototype's embedded v2 routes and broad service remain migration and
   behavior evidence only. They are not part of the target product architecture.
 - Prototype/v1 and v2 previously had ambiguous control-plane instructions. The
@@ -415,11 +418,12 @@ Completed:
 Current:
 
 4. `task_ams_v2_build_clean_operator_ui_slice`
-   - Read-through operator views and live launch hardening are complete through
-     independent commit `2560a84`.
-   - Next: add explicit goal/task steering and guarded run dispatch/result
-     handling on the existing focused application-service boundary, then close
-     the Task only after browser proof against the full acceptance criteria.
+   - Read-through operator views, live launch hardening, and bounded ready-Task
+     creation are complete through independent commit `9d0d3ad`.
+   - Next: implement guarded Goal pause/resume with explicit active-descendant
+     Run handling, then add real dispatch and result handling on the existing
+     focused application-service boundary. Close the Task only after browser
+     proof against the full acceptance criteria.
 
 Then:
 
