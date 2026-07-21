@@ -1,6 +1,6 @@
 # AMS v2 Current Operating State
 
-Date: 2026-07-20
+Date: 2026-07-21
 Status: Current orientation source
 
 ## Purpose
@@ -86,7 +86,7 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `9d0d3ad`;
+- current commit: `2089a81`;
 - packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
   `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
@@ -96,17 +96,17 @@ Independent repository:
   and selected-source state;
 - implemented operator view: focused Work, Workstream, Goal, Task, and Activity
   routes computed from the same SQLite authority, plus bounded ready-Task
-  creation from active Goal pages through the existing core application
-  service, with no copied prototype UI and no new domain entities or schema;
-- verification: 26 core/integration tests and 3 desktop/mobile Playwright
+  creation and guarded Goal pause/resume through focused core application
+  services, with no copied prototype UI and no new domain entities or schema;
+- verification: 27 core/integration tests and 4 desktop/mobile Playwright
   workflows plus format, lint, package-boundary, type, immutable baseline,
   fixture, production build, dependency audit, post-merge, and fresh standalone
   install/build/test gates;
 - operational proof: the original continuity proof remains present with one
   completed Task, two completed external-AI Runs, and one accepted evidence
   Artifact. After selective project and AMS control-graph reconciliation, the
-  live authority contains 19 Projects, 51 Goals, 211 Tasks, 21 Runs, 40
-  Artifacts, 18 Reviews, 24 Decisions, and 363 source references;
+  live authority contains 19 Projects, 51 Goals, 233 Tasks, 45 Runs, 64
+  Artifacts, 40 Reviews, 24 Decisions, and 381 source references;
 - selective project cutover: the independent authority now contains 19
   projects total. Animal Welfare was migrated first; 16 additional real project
   containers were then selectively migrated with 35 real Goals, 174
@@ -164,13 +164,16 @@ through a clean responsive surface. It must consume focused application APIs
 and must not copy the prototype shell, route structure, or broad v2 service.
 
 The first read-through increment is complete at independent commit `bd464f7`,
-with live default-authority launch hardening through commit `2560a84` and
-bounded Task creation through commit `9d0d3ad`.
+with live default-authority launch hardening through commit `2560a84`, bounded
+Task creation through commit `9d0d3ad`, and guarded Goal pause/resume through
+commit `2089a81`.
 It provides desktop and 390px orientation, attention, simultaneous running
 work, ready-next work, workstream/goal/task detail, continuation, evidence,
-selected context, activity, and active-Goal creation of authoritative ready
-Tasks. The same rolling Task remains active for the next increment: guarded
-Goal pause/resume, followed by real dispatch and result handling through
+selected context, activity, active-Goal creation of authoritative ready Tasks,
+and revision-checked Goal pause/resume. Pause rejects running Runs in the whole
+descendant branch, suppresses descendant next work and direct Run launch, and
+requires active ancestors before resume. The same rolling Task remains active
+for the next increment: real authorized dispatch and result handling through
 application commands rather than route SQL or generic CRUD.
 
 The ignored generated directory has been checksum-copied into the independent
