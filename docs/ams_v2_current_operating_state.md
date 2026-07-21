@@ -1,6 +1,6 @@
 # AMS v2 Current Operating State
 
-Date: 2026-07-15
+Date: 2026-07-20
 Status: Current orientation source
 
 ## Purpose
@@ -8,9 +8,9 @@ Status: Current orientation source
 This is the first-read operating-state document for AMS v2 work.
 
 Use it to orient before broad AMS changes. It does not replace the design docs,
-goal/task creation guide, or live AMS databases. `data/v2-core.sqlite` remains
-the transition-planning and migration source of truth in this prototype. New
-product work state belongs to the independent repository's
+goal/task creation guide, or live AMS databases. `data/v2-core.sqlite` is the
+preserved transition-planning and migration source in this prototype. Current
+AMS v2 product and control state belongs to the independent repository's
 `data/local/ams-v2.sqlite`; the two authorities are not synchronized and must
 not be dual-written.
 
@@ -20,6 +20,9 @@ Current live long-term AMS goal:
 
 - `goal_ams_v2_owned_agent_system_long_term`
 - Title: Build an owned local-first agent operating layer
+
+This Goal and its active control-graph children are now represented in the
+independent v2 authority. They are no longer transition-database-only plans.
 
 Desired direction:
 
@@ -100,9 +103,9 @@ Independent repository:
   install/build/test gates;
 - operational proof: the original continuity proof remains present with one
   completed Task, two completed external-AI Runs, and one accepted evidence
-  Artifact. After selective project migration, the live authority contains 19
-  Projects, 46 Goals, 200 Tasks, 20 Runs, 36 Artifacts, 17 Reviews, 19 Decisions,
-  and 331 source references;
+  Artifact. After selective project and AMS control-graph reconciliation, the
+  live authority contains 19 Projects, 51 Goals, 211 Tasks, 21 Runs, 40
+  Artifacts, 18 Reviews, 24 Decisions, and 363 source references;
 - selective project cutover: the independent authority now contains 19
   projects total. Animal Welfare was migrated first; 16 additional real project
   containers were then selectively migrated with 35 real Goals, 174
@@ -123,6 +126,19 @@ Independent repository:
   `../agent-management-system-v2/data/local/migrations/remaining-projects-selective-migration-20260720T235733Z.json`
   and its paired snapshot; rollback database:
   `../agent-management-system-v2/data/local/backups/ams-v2-before-remaining-projects-20260720T234719Z.sqlite`.
+- AMS control-graph reconciliation: the transition `AMS v2 Core` project was
+  inspected rather than copied wholesale. Five still-active Goals, ten selected
+  Tasks, four dependencies, three canonical Artifacts, five material Decisions,
+  and 31 source references were reconciled into `Independent AMS v2`. The
+  independent Project charter was revised and its existing continuity Goal was
+  completed and placed under the clean-foundation Goal. Thirty-six completed
+  Goals, 230 historical Tasks, three canceled Tasks, historical Runs and
+  Reviews, and routine transition Decisions remain available in the preserved
+  transition authority and migration archives;
+- latest control-graph reconciliation evidence:
+  `../agent-management-system-v2/data/local/migrations/ams-control-graph-reconciliation-20260721T001324Z.json`
+  and its paired snapshot; rollback database:
+  `../agent-management-system-v2/data/local/backups/ams-v2-before-control-graph-reconciliation-20260721T001324Z.sqlite`.
 
 New v2 implementation work belongs in that sibling repository. Do not add the
 minimal work loop or future web UI under this prototype's `/app/v2-core` routes.
@@ -171,18 +187,21 @@ evidence rather than writable runtime state.
 This is the main proof that AMS is not becoming a self-contained planning
 exercise.
 
-### Build hybrid explicit-knowledge intelligence architecture
+### Provide model-independent explicit task context
 
 - Goal: `goal_ams_v2_hybrid_explicit_knowledge_intelligence_architecture`
 - Status: active
 - Purpose: reduce generic-model reversion and meaning reconstruction failure by
-  combining learned models with explicit ontology, current state, procedures,
-  tools, validation, evidence, and source-aware memory.
+  giving delegated agents explicit current state, statement roles, procedures,
+  selected sources, validation criteria, and other task-relevant context.
 - Current task: `task_ams_v2_test_statement_roles_in_real_work_selection`
 
-This goal should use real work as evidence. It should not create new entities,
-schema, routing automation, or Superstructure-heavy prompt expansion without an
-exercised operational gap.
+The source Goal ID was retained for traceability, but its title and boundary
+were narrowed during reconciliation. This AMS Goal owns provider-independent
+task context; it does not duplicate the separate Owned AI project's broader
+hybrid-intelligence architecture. It should use real work as evidence and must
+not create new entities, schema, routing automation, or Superstructure-heavy
+prompt expansion without an exercised operational gap.
 
 ### Use external AI effectively while replacing dependencies
 
@@ -197,19 +216,14 @@ This goal exists because external AI is still doing much of the reasoning and
 execution work. The system should learn from that dependence instead of hiding
 it or pretending it has already been replaced.
 
-### Make the v2 GUI the primary multi-workstream operator surface
+### GUI capability merged into the clean independent foundation
 
-- Goal: `goal_ams_v2_gui_multi_workstream_operator_surface`
-- Status: paused
-- Purpose: make the GUI the normal way for the operator to understand and manage
-  multiple AMS workstreams, instead of depending on Codex or CLI readbacks for
-  basic visibility.
-- Replacement task: `task_ams_v2_build_clean_operator_ui_slice`
-
-The desired operator capability remains valid, but implementation inside the
-prototype shell is paused. The completed workstream overview is preserved as a
-design experiment. New GUI work belongs to the independent v2 repository after
-the core application boundary is stable.
+No separate GUI Goal was imported. The desired operator capability is owned by
+`goal_ams_v2_clean_independent_foundation` through
+`task_ams_v2_build_clean_operator_ui_slice`. This avoids preserving a duplicate
+Goal while retaining the requirement that the independent GUI become the normal
+desktop/mobile surface for understanding and steering multiple workstreams.
+The prototype GUI remains design evidence only.
 
 ## Current Owned-AI Project
 
@@ -415,11 +429,12 @@ Then:
    - Selective data cutover is complete for Animal Welfare and the 16 remaining
      real project containers. The independent authority passes SQLite integrity
      and foreign-key checks and exposes the migrated work in the operator UI.
-   - Next: selectively reconcile still-relevant AMS control goals/tasks from the
-     transition `AMS v2 Core` project into `Independent AMS v2`, then execute and
-     close fresh work in at least two materially different imported projects.
-     Do not duplicate the transition project or bulk-import its administrative
-     history.
+   - AMS control-graph reconciliation is complete. The long-term Goal and its
+     still-actionable clean-foundation, external-AI, model-independent-context,
+     and real-cross-project children now live in the independent authority.
+   - Next: execute and close fresh work in at least two materially different
+     imported projects. Use the reconciled real-work selection Task and do not
+     revive the transition project's administrative history.
 
 The existing real cross-project, owned-AI, and external-AI goals remain useful,
 but must not cause more product expansion inside the prototype shell.
