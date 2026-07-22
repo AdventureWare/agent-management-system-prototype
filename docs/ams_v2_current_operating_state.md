@@ -86,7 +86,7 @@ independent work loop, and revisioned agent continuity are complete:
 Independent repository:
 
 - path: `../agent-management-system-v2`;
-- current commit: `2089a81`;
+- current commit: `1cb1f37`;
 - packages: pure `core`, versioned `sqlite`, focused `repository-context`, thin
   `cli`, and an independent responsive SvelteKit `web` composition root;
 - implemented capability: focused project/goal/task/dependency, deterministic
@@ -102,11 +102,11 @@ Independent repository:
   workflows plus format, lint, package-boundary, type, immutable baseline,
   fixture, production build, dependency audit, post-merge, and fresh standalone
   install/build/test gates;
-- operational proof: the original continuity proof remains present with one
-  completed Task, two completed external-AI Runs, and one accepted evidence
-  Artifact. After selective project and AMS control-graph reconciliation, the
-  live authority contains 19 Projects, 51 Goals, 233 Tasks, 45 Runs, 64
-  Artifacts, 40 Reviews, 24 Decisions, and 381 source references;
+- operational proof: the original continuity proof remains present, and the
+  first real cross-project Kwipoo Task has now been executed through two
+  external-AI Runs and closed with accepted Git evidence. The live authority
+  contains 19 Projects, 52 Goals, 254 Tasks, 55 Runs, 80 Artifacts, 47 Reviews,
+  24 Decisions, and 403 source references;
 - selective project cutover: the independent authority now contains 19
   projects total. Animal Welfare was migrated first; 16 additional real project
   containers were then selectively migrated with 35 real Goals, 174
@@ -165,8 +165,9 @@ and must not copy the prototype shell, route structure, or broad v2 service.
 
 The first read-through increment is complete at independent commit `bd464f7`,
 with live default-authority launch hardening through commit `2560a84`, bounded
-Task creation through commit `9d0d3ad`, and guarded Goal pause/resume through
-commit `2089a81`.
+Task creation through commit `9d0d3ad`, guarded Goal pause/resume through
+commit `2089a81`, active-ancestor next-work filtering through commit `30af0da`,
+and first real cross-project selection through commit `1cb1f37`.
 It provides desktop and 390px orientation, attention, simultaneous running
 work, ready-next work, workstream/goal/task detail, continuation, evidence,
 selected context, activity, active-Goal creation of authoritative ready Tasks,
@@ -188,10 +189,17 @@ evidence rather than writable runtime state.
 - Status: active
 - Purpose: prove AMS v2 can select, prepare, execute, review, and close useful
   work from non-AMS projects.
-- Current task: `task_ams_v2_select_first_real_cross_project_work`
+- Completed selection task: `task_ams_v2_select_first_real_cross_project_work`
+- First completed real-work task:
+  `task_ffde1c0b-3f41-4bf0-9e89-3f7672ffd527`
+- Accepted external-project commit: `f8889759` in Kwipoo
+- Ready evidence-derived follow-up:
+  `task_kwipoo_restore_place_destinations_after_route_transition_20260721`
 
 This is the main proof that AMS is not becoming a self-contained planning
-exercise.
+exercise. The completed Kwipoo Task added bounded analytics to two real move
+workflows, closed its Run, accepted its Artifact, and preserved a discovered
+Place-destination state defect as separate actionable work.
 
 ### Provide model-independent explicit task context
 
@@ -350,6 +358,9 @@ real enough to test on more real work.
 - Some imported projects still have sparse current-state charters.
 - AMS can still over-focus on AMS maintenance unless real project work is run
   through it regularly.
+- Kwipoo's unrelated dirty dependency refresh currently causes seven server
+  test suites to fail while importing `sveltekit-superforms` against TypeBox;
+  the move-flow Task did not alter or stage that lockfile.
 
 ## Explicit Non-Goals Right Now
 
@@ -421,12 +432,13 @@ Completed:
 Current:
 
 4. `task_ams_v2_build_clean_operator_ui_slice`
-   - Read-through operator views, live launch hardening, and bounded ready-Task
-     creation are complete through independent commit `9d0d3ad`.
-   - Next: implement guarded Goal pause/resume with explicit active-descendant
-     Run handling, then add real dispatch and result handling on the existing
-     focused application-service boundary. Close the Task only after browser
-     proof against the full acceptance criteria.
+   - Read-through operator views, live launch hardening, bounded ready-Task
+     creation, and guarded Goal pause/resume are complete through independent
+     commit `2089a81`.
+   - Next: implement authorized dispatch from a ready Task using the guarded
+     work-packet contract, including an explicit handoff state when the current
+     process cannot launch the executor. Close the Task only after browser proof
+     against the full acceptance criteria.
 
 Then:
 
@@ -439,9 +451,13 @@ Then:
    - AMS control-graph reconciliation is complete. The long-term Goal and its
      still-actionable clean-foundation, external-AI, model-independent-context,
      and real-cross-project children now live in the independent authority.
-   - Next: execute and close fresh work in at least two materially different
-     imported projects. Use the reconciled real-work selection Task and do not
-     revive the transition project's administrative history.
+   - The first real imported-project Task is complete: Kwipoo move-flow
+     instrumentation was committed at `f8889759`, its Run was closed, and its
+     evidence Artifact was accepted. A Place-destination route-transition
+     defect found during validation is preserved as ready follow-up work.
+   - Next: complete the operator-UI dependency, then execute and close fresh
+     work in a second materially different imported project and record the
+     comparison. Do not revive the transition project's administrative history.
 
 The existing real cross-project, owned-AI, and external-AI goals remain useful,
 but must not cause more product expansion inside the prototype shell.
