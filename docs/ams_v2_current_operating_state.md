@@ -105,7 +105,7 @@ Independent repository:
 - operational proof: the original continuity proof remains present, and the
   first real cross-project Kwipoo Task has now been executed through two
   external-AI Runs and closed with accepted Git evidence. The live authority
-  contains 19 Projects, 52 Goals, 254 Tasks, 55 Runs, 80 Artifacts, 47 Reviews,
+  contains 19 Projects, 52 Goals, 255 Tasks, 55 Runs, 80 Artifacts, 47 Reviews,
   24 Decisions, and 403 source references;
 - selective project cutover: the independent authority now contains 19
   projects total. Animal Welfare was migrated first; 16 additional real project
@@ -360,7 +360,8 @@ real enough to test on more real work.
   through it regularly.
 - Kwipoo's unrelated dirty dependency refresh currently causes seven server
   test suites to fail while importing `sveltekit-superforms` against TypeBox;
-  the move-flow Task did not alter or stage that lockfile.
+  the move-flow Task did not alter or stage that lockfile. Recovery is tracked
+  by `task_kwipoo_reconcile_dependency_refresh_and_restore_server_tests_20260721`.
 
 ## Explicit Non-Goals Right Now
 
